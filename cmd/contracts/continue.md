@@ -17,7 +17,7 @@
 | --verification-timeout | duration | no | 0 | Override deterministic verification timeout |
 | --skip-watchers | bool | no | false | Skip watcher agent spawn, rely on verification commands only |
 | --synthetic | bool | no | false | Mark as synthetic (skip real agents, use provided results) |
-| --no-learn | bool | no | false | Disable learning capture for this run |
+| --no-learn | bool | no | false | Skip only the legacy learning-entry capture for this run; observations and failure records are still written so a blocked check still records what broke |
 
 ### Arguments
 None

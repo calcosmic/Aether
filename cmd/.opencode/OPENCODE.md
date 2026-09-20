@@ -53,16 +53,15 @@ Agent definitions live in `.opencode/agents/*.md` (Markdown with YAML frontmatte
 
 | Command | Purpose |
 |---------|---------|
-| `/ant-resume` | Quick session restore |
-| `/ant-resume-colony` | Full recovery view |
-| `/ant-pause-colony` | Save state and create handoff |
+| `/ant-pause` | Stop at a safe boundary and save one resumable handoff |
+| `/ant-resume` | Validate and restore the safest honest recovery point |
 
 ### Lifecycle
 
 | Command | Purpose |
 |---------|---------|
-| `/ant-seal` | Seal completed colony |
-| `/ant-entomb` | Archive completed colony |
+| `/ant-seal` | Seal colony and retain active state for review |
+| `/ant-entomb` | Optional explicit owner-invoked archive-and-clear alternative |
 | `/ant-update` | Update system files from hub |
 
 ---
@@ -92,9 +91,25 @@ Agent definitions live in `.opencode/agents/*.md` (Markdown with YAML frontmatte
 /ant-run                           # Or autopilot all phases
 
 # After completing:
-/ant-seal                          # Mark colony complete
-/ant-entomb                        # Archive
+/ant-seal                          # Seal and retain active state for review
+/ant-status                        # Review the retained sealed state first
+/ant-entomb                        # Optional explicit owner-invoked archive-and-clear alternative
+/ant-init "next project goal"      # Only after a successful archive-and-clear receipt
 ```
+
+### Sealed colony: review before archive
+
+After `/ant-seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `/ant-status` to review the retained sealed state.
+2. `/ant-entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `/ant-status` and optional
+   `/ant-entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `/ant-init` for a new goal.
 
 ---
 

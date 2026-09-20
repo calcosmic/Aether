@@ -5,7 +5,199 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.82] - 2026-09-20
+
+### Added
+
+- **Codex gets the nine `$ant-*` skills.** They were built in Phase 204.1 but had
+  never been published; this is the first release that installs them.
+
+### Changed
+
+- **Codex builds use the proven direct route by default.** `$ant-build` runs
+  `aether build <phase>` and the Go runtime starts the Codex workers itself. The
+  unfinished native-helper bridge (Phase 204.2, parked 2026-09-20) stays in the
+  tree and is reachable only with `AETHER_CODEX_NATIVE_BUILD=1`. A direct Codex
+  build has no blocking team check-in; the runtime prints its own heads-up when a
+  forced reviewer or an owner question is pending.
+
+### Fixed
+
+- Carries the 1.0.80/1.0.81 local repairs into the main line: reviewer result
+  schema, dependency-gated waves, honest timeout figures, accurate rollback
+  message, superseded blocked closeouts, and host-pinned worker platform.
+
+## [1.0.79] - 2026-09-16
+
+### Changed
+
+- **Phase 203 — worker and runtime changes:** additional workers use shared
+  admission limits and recorded handoffs. Worker requests, progress and results
+  can be traced through the run, and guidance is adjusted using recorded outcomes.
+- **Phase 204 — learning changes:** durable run records support checks before
+  learned guidance is promoted, rollback when a change causes harm, and reports
+  showing what helped and where the owner had to intervene.
+
+### Fixed
+
+- **Phase 205 — finishing and archiving:** archiving a finished colony handles
+  missing handoff notes, and resuming refreshes those notes. Finish and archive
+  messages reach the chat while machine-readable results remain valid. Completion
+  checks reject claims that name tests which never ran.
+
+## [1.0.63] - 2026-08-21
+
+### Added
+
+- **An honest "nothing needed changing" is now a first-class success.** A
+  worker that proves the required behavior already exists reports
+  `completed_no_change` (disposition `verified_existing`) instead of being
+  forced to fabricate an edit or getting coerced to `failed`. Evidence is
+  mandatory — a summary, a passing handoff verification, and the commands
+  actually run — enforced at result merge
+  (`TestNoChangeResultWithEvidenceIsAccepted` /
+  `TestNoChangeResultWithoutEvidenceIsRejected`), build and continue
+  provenance (`TestProvenanceAcceptsEvidencedNoChangeBuild`,
+  `TestContinueProvenanceAcceptsNoChangeDispatch`), covered-task credit,
+  task completion, and the in-process claims path
+  (`TestClaimsNormalizationKeepsHonestStatuses`). Rate-limit/quota stops
+  are now `interrupted` — terminal but resumable, never a code failure
+  (`TestInterruptedIsTerminalButNotSuccess`). The worker contract teaches
+  both outcomes on every lane, Go and TypeScript host alike
+  (`TestResponseContractOffersNoChangeOutcome`); the completion-packet
+  schema is regenerated in lockstep.
+- **Team check-in before every build.** After the Queen shows her spawn plan,
+  the build pauses and asks the owner to proceed, trim optional workers, or
+  redirect — with a one-line reason per worker and safety workers marked as
+  fixed (the runtime re-adds required castes regardless, so the card never
+  offers a removal it would silently undo). Skippable with
+  `aether build --no-checkin`; autopilot is unaffected. Rendered by the new
+  `aether ceremony team-checkin` (locked read-only by
+  `TestTeamCheckinDoesNotMutate`; card contents by
+  `TestTeamCheckinCardShowsReasonAndRequiredMarking`).
+- **Workers' open questions now reach the owner, not another agent.** Every
+  worker handoff already carried `open_decisions`; they were delivered only
+  into the next worker's prompt. New `aether handoff-decisions` lists the
+  unanswered ones and `aether decision-answer` records the owner's ruling as
+  a resolved clarification — which the context assembler already injects
+  into every later worker prompt as CLARIFIED INTENT. Build wrappers ask at
+  wave boundaries and the post-build checkpoint; continue asks before its
+  steering checkpoint. An unanswered question never blocks a build. End to
+  end relay locked by `TestResolvedOpenDecisionReachesNextWorkerPrompt`;
+  workers are told to route judgement calls there instead of guessing
+  (`TestResponseContractTellsWorkersToRouteJudgementCalls`).
+
+### Fixed
+
+- **The honest "nothing needed changing" result now actually works
+  everywhere.** The `completed_no_change` and `interrupted` statuses were
+  taught to the build path and left unknown to every other place that judges
+  a worker's status, so a worker that followed the new contract truthfully
+  was punished for it: the continue review gate blocked phase advance on it
+  (`TestContinueWatcherPassesOnAnHonestNoChange`), the finalizer routed it
+  into recovery and asked for the work to be redone, its wave counted it as
+  a failure, the seal gate treated a required reviewer as absent, closeout
+  dropped it from the tally, the status dashboard showed it as neither
+  running nor finished, and finalization reported it as an unexpected
+  status. Every one of those decision points now reads the vocabulary from
+  one place, asserted as an invariant across all of them
+  (`TestNoChangeSuccessIsHonouredWhereverStatusIsJudged`,
+  `TestFinishedWorkerStatusesAreRecognisedNotDropped`,
+  `TestInterruptedIsTerminalButNeverCountedAsSuccess`), with a ratchet that
+  fails when a new hand-rolled success list appears
+  (`TestNoHandRolledWorkerSuccessLists`). The same three fixes landed on the
+  TypeScript host lane, which had its own copies. The 55 agent definitions
+  across Claude, OpenCode and Codex that still listed only
+  `completed | failed | blocked` now name the no-change outcome too.
+- **The no-change evidence rule was enforced on one lane only.** A
+  `completed_no_change` claim buys an exemption from the "show me the files
+  you changed" requirement, and that exemption was granted on the in-process
+  dispatch lane without checking anything — reopening the phantom-build
+  loophole for any worker that simply said the words. Both lanes now apply
+  one shared rule — a summary, a passing handoff verification, and the
+  commands actually run — and the gate is asserted at its call site, not
+  just as a function that exists
+  (`TestRuntimeLaneDemandsNoChangeEvidence`,
+  `TestRuntimeNoChangeEvidenceGateIsWiredIntoDispatch`).
+- **The worker contract no longer promises a resume that does not exist.**
+  Workers stopped by a quota limit were told "the colony will resume the
+  unfinished slice"; nothing resumes a worker. The contract now describes
+  what actually happens — the handoff is kept and passed to whoever picks
+  the work up next, and the phase is restarted by the operator.
+- Restored `gofmt` compliance to three Go sources committed unformatted.
+- **A failed worker now has to say why.** A real build halted on
+  "Keen-6=failed" with an empty reason, an empty summary, no blockers, and a
+  worker report still saying "spawned" — nothing anywhere recorded what the
+  worker had actually reported. Any status outside the recognised list was
+  overwritten with a bare "failed" and the word the worker used was thrown
+  away. The coercion stays (an unknown answer cannot be trusted as success),
+  but what it displaced is now written down and shown
+  (`TestUnrecognizedWorkerStatusSaysWhatItWas`, `TestMissingWorkerStatusSaysSo`).
+- **Configuring one check no longer switches off the others.** Adding a
+  "## Verification Commands" section naming a build command made the test
+  command the same file had been supplying all along disappear, because the
+  scan narrowed to the section and discarded everything outside it. A section
+  may now add precision, never remove a command the file already provided
+  (`TestAddingAVerificationSectionDoesNotUnresolveOtherCommands`).
+- **A blocked build no longer points at a place you are not allowed to
+  write.** The halt guidance offered `.aether/data/codebase.md` as somewhere
+  to configure a command; that path is guarded and the write is refused,
+  leaving no exit at all. It now names only the files anyone can edit
+  (`TestBlockedVerificationGuidanceOnlyNamesWritablePlaces`).
+- **Tasks folded into another worker are now named.** When dependent tasks are
+  merged into one worker the plan said "(+2 more steps)" without saying which
+  tasks those were, so a nine-task phase showing six workers looked like three
+  tasks had been dropped — and a real colony hand-reconciled work that already
+  had a claimant. The plan now names them and states the arithmetic
+  (`TestSpawnPlanNamesTheTasksAMergedWorkerCovers`).
+- **The build summary no longer claims a repair it did not make.** A column
+  headed "Recovered" counted the recovery actions the system *decided on*, not
+  workers that actually recovered — so a real build reported "1 recovered" for
+  a worker that was still failed when it halted seconds later. The column now
+  reads "Recovery Planned" and says what it counts
+  (`TestWaveSummaryDoesNotClaimARepairItDidNotMake`). The underlying gap is
+  unchanged and deliberate: deciding on a retry and carrying one out are still
+  two different things, and nothing in this lane re-dispatches.
+- **The four surveyors no longer look identical.** All four collapsed to one
+  glyph and the word "Surveyor", so a codebase survey printed four
+  indistinguishable lines; each now says what it surveys
+  (`TestEachSurveyorSaysWhatItSurveys`).
+- **A light codebase survey wrote nothing at all.** Choosing the cheaper
+  survey correctly sent two surveyors instead of four, then the survey
+  refused to save because four documents it had deliberately not asked for
+  were missing — so `/ant-colonize` aborted and produced no artifacts. The
+  requirement is now what this survey's own team promised, while a surveyor
+  that was sent still owes every one of its files, and a survey with no
+  surveyors is still rejected (`TestLightColonizeStillWritesItsSurvey`).
+- **A worker crediting another worker's already-done task got the wrong
+  stamp.** When one worker verified tasks belonging to several dispatches,
+  the credited dispatches were recorded as ordinary completions with no
+  files — and the next step then halted them as suspected phantom builds.
+  They now inherit the claimant's actual outcome.
+- **Manually reconciled work no longer reads as a phantom build.** Counting
+  it as a success meant it was also asked for file outputs it cannot have by
+  definition, which halted the manual recovery path.
+- **The word "document" belonged to no worker.** A note said it had been
+  handed from the knowledge-keeper to the documentation writer, but the
+  documentation writer's keyword was "documentation", which never matches the
+  bare word — so a phase asking to document something summoned neither
+  (`TestChroniclerOwnsTheWordDocument`).
+- **Five useless-spawn leaks closed.** Sealing a colony no longer requires a
+  test-coverage Probe when the final phase produced no testable code
+  (`TestSealProbeRequiresTestableCode`); a bug swarm no longer always
+  summons a researcher and a git-history digger — they now ride on keyword
+  relevance like every other specialist
+  (`TestSwarmTrivialBugSkipsHistoryAndResearch`); a caste with no build
+  dispatch path can no longer be selected onto a build team, where it
+  consumed a budget slot and silently displaced a real specialist
+  (`TestEveryBuildSelectableCasteCanDispatch`); the everyday continue path
+  now honours the Queen's `--castes` proposal instead of only the heavy
+  plan-only path (`TestContinueFastPathHonoursCasteProposal`), and the
+  Keeper no longer arrives on incidental words like "standard" or
+  "document" (`TestContinueDoesNotSummonKeeperOnIncidentalWords`); and
+  `--verification-depth light` finally means something for colonize — two
+  surveyors instead of a fixed four
+  (`TestColonizeLightDepthTrimsSurveyors`).
 
 ## [1.0.58] - 2026-08-17
 

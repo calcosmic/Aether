@@ -1,0 +1,465 @@
+{
+  "base_source_revision": "3afab37fdb22f0389bedf575fe8919ac23d48e9c",
+  "changes": {
+    "cmd/codex_native_context.go": "Specify the exact passive wait allowed before parent release.",
+    "cmd/codex_native_context_fetch_evidence_test.go": "Recognize only the corroborated passive wait; distinguish exact stdout from a typed full command result while requiring read then separate ACK.",
+    "cmd/codex_native_gap_attribution_test.go": "Add focused controls for observed forms and refusals; include missing strconv import.",
+    "cmd/codex_native_worker_live_test.go": "Recognize demonstrated literal output wrappers, bounded literal command batches, patch calls and allowed fixture inspection commands while retaining attribution gates.",
+    "cmd/codex_native_worker_test.go": "Use current committed snapshot HEAD for the synthetic Claude profile control instead of unrelated historical commit."
+  },
+  "correction_commit": "850ea7f0bfac2edef6e6106d774b22668aaa6fb2",
+  "correction_commit_status": "committed exact five-file tested source",
+  "draft": false,
+  "failed_focused_attempts": [
+    {
+      "available_bytes": 10471022592,
+      "error": "insufficient storage before after-committed-snapshot-before-Go: {'stage': 'after-committed-snapshot-before-Go', 'free_bytes': 10471022592, 'required_bytes': 10471960576, 'passed': False}",
+      "kind": "storage-before-Go",
+      "original_outcome_unchanged": true,
+      "passed": false,
+      "race_launched": false,
+      "raw_runs": {},
+      "required_bytes": 10471960576,
+      "shortfall_bytes": 937984,
+      "snapshot_revision": "5a116f652feb1163d84ee975727b34279abc41df",
+      "summary": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-20260918T235806Z-gpf6vydl/summary.json",
+        "sha256": "sha256:8e85537aa9a3b8e20e30e3d1157944fc981add5bb50718ed3d119aec9fb4f207"
+      },
+      "tests_started": false
+    },
+    {
+      "diagnostic": "cmd/codex_native_gap_attribution_test.go:798:30: undefined: strconv",
+      "error": "focused case failed or skipped: None",
+      "kind": "compile-before-tests",
+      "original_outcome_unchanged": true,
+      "passed": false,
+      "race_launched": false,
+      "raw_runs": {
+        "normal-cmd": {
+          "exit_code": 1,
+          "stderr": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-continuation-20260919T001103Z-s6buof2n/normal-cmd.stderr",
+            "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdout": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-continuation-20260919T001103Z-s6buof2n/normal-cmd.stdout",
+            "sha256": "sha256:caaa91b4643cfc46ef203fbb797ad5863ce7fc9aee979b16b26137f9f7aa1edc"
+          }
+        }
+      },
+      "snapshot_revision": "5a116f652feb1163d84ee975727b34279abc41df",
+      "summary": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-continuation-20260919T001103Z-s6buof2n/summary.json",
+        "sha256": "sha256:4b27c808121e81850a2fa92ab1d38212f73ff32ff2dbab2c8bf86f8a25f90351"
+      },
+      "test_terminals": 0
+    },
+    {
+      "error": "focused case failed or skipped: TestCodexNativeGapObservedSingleQuoteCapture",
+      "failure": {
+        "reason": "git show of unavailable historical commit exited 128",
+        "test": "TestCodexNativeSecondReviewControls/claude_mixed_helpers_and_prefixed_failure"
+      },
+      "kind": "fixture-skip-and-failure",
+      "original_outcome_unchanged": true,
+      "passed": false,
+      "race_launched": false,
+      "raw_runs": {
+        "normal-cmd": {
+          "exit_code": 1,
+          "stderr": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-retry-20260919T002127Z-tdqo8u_h/normal-cmd.stderr",
+            "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stdout": {
+            "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-retry-20260919T002127Z-tdqo8u_h/normal-cmd.stdout",
+            "sha256": "sha256:0cad0eb205f4bc02955524f8735536abe4f00b17d0e01ca8286047f5a9441d33"
+          }
+        }
+      },
+      "skip": {
+        "reason": "explicit immutable capture required",
+        "test": "TestCodexNativeGapObservedSingleQuoteCapture"
+      },
+      "snapshot_revision": "829b0567184fdf5426a3a74793a7ce6d674b3b39",
+      "summary": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-retry-20260919T002127Z-tdqo8u_h/summary.json",
+        "sha256": "sha256:4c62f0103c8aa3257e2bf28178ff32ffc281e59aba8b83dac251a157f0600244"
+      },
+      "top_level_terminals": {
+        "fail": 1,
+        "pass": 22,
+        "skip": 1
+      }
+    }
+  ],
+  "full_plan23_required_bytes": 14191223120,
+  "next_steps": [
+    "Fresh ordinary child-fetch qualification and strict independent replay on the exact focused snapshot.",
+    "Then actual independent Watcher and scoped-question scenarios on the same candidate; Plan25 remains incomplete."
+  ],
+  "not_claimed": [
+    "actual ordinary/review/question acceptance",
+    "full normal/race repository regression",
+    "Plan 25 completion",
+    "ANT completion",
+    "installation or publication"
+  ],
+  "patch_provenance": [
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-observed-operations-20260918T234522Z-ntp2t_fs/observed-operations.patch",
+      "sha256": "sha256:e138437ec1a5d2370dd694af45c5b9b8dd094febdbd380bcd25df01beeec7e29"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-passive-wait-20260918T234656Z-hcnvzd02/passive-wait.patch",
+      "sha256": "sha256:c5aa704cf7bdb5e7148a6ca53e1c2a70f9b9896df9cf720636071bbfee847524"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-result-format-20260918T235935Z-nhunkopz/context-result-format.patch",
+      "sha256": "sha256:2f217eb48f91544d11e5791ca828318bfe59018ebc3ccb856bbb2e68fe145f9e"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-retry-20260919T002127Z-tdqo8u_h/missing-import.patch",
+      "sha256": "sha256:e64a40a5e6c749ec0e392e133704a4e74d6b9e0538f924c62f526fab667b1702"
+    },
+    {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/current-profile-fixture.patch",
+      "sha256": "sha256:6f8a497ec402ce604de0431d1b585904d0ee34f8b2d52d3d396bc6afb5229776"
+    }
+  ],
+  "plan25_summary_created": false,
+  "prospective_focused": {
+    "config": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/config.READY.json",
+      "sha256": "sha256:b48d1c19064da0b5b9d5dbca068672ec05827f2753cc9c0e9a43bd6003d2d9a3"
+    },
+    "expected_runs": [
+      "normal-cmd",
+      "race-cmd"
+    ],
+    "expected_summary_path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/summary.json",
+    "passed": true,
+    "root": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik",
+    "runner": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/run-focused-fixture.py",
+      "sha256": "sha256:4b2eb6ffde67ded239a6140d79d87ba49f10857a2b65642567cf707f416a8561"
+    },
+    "runs": {
+      "normal-cmd": {
+        "argv": [
+          "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+          "test",
+          "-p",
+          "1",
+          "./cmd",
+          "-run",
+          "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+          "-parallel",
+          "1",
+          "-count=1",
+          "-timeout",
+          "600s",
+          "-json"
+        ],
+        "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/repo",
+        "elapsed_seconds": 42.68260192871094,
+        "exit_code": 0,
+        "individual_passed_tests": 400,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/normal-cmd.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/normal-cmd.stdout",
+          "sha256": "sha256:2fe35135fd1a5e0e954135b58727e684eea7eec28153c362851f75df78bc269e"
+        },
+        "stopped_reason": null,
+        "top_level_terminals": {
+          "TestCodexNativeChildContextBootstrap": [
+            "pass"
+          ],
+          "TestCodexNativeChildContextFetchEvidence": [
+            "pass"
+          ],
+          "TestCodexNativeChildContextPassiveWait": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchAckRefusals": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchFactoryAndLegacy": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchReadAckNoMutation": [
+            "pass"
+          ],
+          "TestCodexNativeCodeModeOutputProjection": [
+            "pass"
+          ],
+          "TestCodexNativeCodeModeSequenceBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeGapLiteralCommandAttribution": [
+            "pass"
+          ],
+          "TestCodexNativeGapObservedRefusal": [
+            "pass"
+          ],
+          "TestCodexNativeGapObservedSingleQuoteCapture": [
+            "pass"
+          ],
+          "TestCodexNativeGapParentCoordination": [
+            "pass"
+          ],
+          "TestCodexNativeGapRecordedFailedRefusal": [
+            "pass"
+          ],
+          "TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck": [
+            "pass"
+          ],
+          "TestCodexNativeGapUncachedCheckSurvivesPlainRecheck": [
+            "pass"
+          ],
+          "TestCodexNativeLiteralPatchBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeObservedFixtureInspections": [
+            "pass"
+          ],
+          "TestCodexNativeObservedLiteralPatch": [
+            "pass"
+          ],
+          "TestCodexNativeObservedOperationWrappers": [
+            "pass"
+          ],
+          "TestCodexNativeObservedReadOnlyBatch": [
+            "pass"
+          ],
+          "TestCodexNativeReadOnlyBatchBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeReadOnlyBatchEventLinkage": [
+            "pass"
+          ],
+          "TestCodexNativeSecondReviewControls": [
+            "pass"
+          ],
+          "TestCodexNativeThirdReviewCodeModeOutcome": [
+            "pass"
+          ]
+        }
+      },
+      "race-cmd": {
+        "argv": [
+          "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+          "test",
+          "-p",
+          "1",
+          "./cmd",
+          "-race",
+          "-run",
+          "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+          "-parallel",
+          "1",
+          "-count=1",
+          "-timeout",
+          "600s",
+          "-json"
+        ],
+        "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/repo",
+        "elapsed_seconds": 123.92862606048584,
+        "exit_code": 0,
+        "individual_passed_tests": 400,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/race-cmd.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/race-cmd.stdout",
+          "sha256": "sha256:6bc6565885316a05b94008f89d06b566cd2dfbf1ce431c69f55cddeac97dc229"
+        },
+        "stopped_reason": null,
+        "top_level_terminals": {
+          "TestCodexNativeChildContextBootstrap": [
+            "pass"
+          ],
+          "TestCodexNativeChildContextFetchEvidence": [
+            "pass"
+          ],
+          "TestCodexNativeChildContextPassiveWait": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchAckRefusals": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchFactoryAndLegacy": [
+            "pass"
+          ],
+          "TestCodexNativeChildFetchReadAckNoMutation": [
+            "pass"
+          ],
+          "TestCodexNativeCodeModeOutputProjection": [
+            "pass"
+          ],
+          "TestCodexNativeCodeModeSequenceBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeGapLiteralCommandAttribution": [
+            "pass"
+          ],
+          "TestCodexNativeGapObservedRefusal": [
+            "pass"
+          ],
+          "TestCodexNativeGapObservedSingleQuoteCapture": [
+            "pass"
+          ],
+          "TestCodexNativeGapParentCoordination": [
+            "pass"
+          ],
+          "TestCodexNativeGapRecordedFailedRefusal": [
+            "pass"
+          ],
+          "TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck": [
+            "pass"
+          ],
+          "TestCodexNativeGapUncachedCheckSurvivesPlainRecheck": [
+            "pass"
+          ],
+          "TestCodexNativeLiteralPatchBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeObservedFixtureInspections": [
+            "pass"
+          ],
+          "TestCodexNativeObservedLiteralPatch": [
+            "pass"
+          ],
+          "TestCodexNativeObservedOperationWrappers": [
+            "pass"
+          ],
+          "TestCodexNativeObservedReadOnlyBatch": [
+            "pass"
+          ],
+          "TestCodexNativeReadOnlyBatchBoundary": [
+            "pass"
+          ],
+          "TestCodexNativeReadOnlyBatchEventLinkage": [
+            "pass"
+          ],
+          "TestCodexNativeSecondReviewControls": [
+            "pass"
+          ],
+          "TestCodexNativeThirdReviewCodeModeOutcome": [
+            "pass"
+          ]
+        }
+      }
+    },
+    "selected_cmd_tests": 24,
+    "snapshot_provenance": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/snapshot-provenance.json",
+      "sha256": "sha256:03970c381de648ec5105c3066570e14f7c6788af3f66f26e86afc0d15883fd16"
+    },
+    "snapshot_revision": "47a21932ef54d1c963ee73e639bfba2e2d66bc71",
+    "snapshot_revision_status": "independently committed before both runs",
+    "source_inputs": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/source-inputs.json",
+      "sha256": "sha256:5a4bd0870160caa4b0fcfe5e71de8c616099ca056edf9f2612d97d81ddef99fb"
+    },
+    "status": "passed normal and race; no missing or skipped tests",
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/summary.json",
+      "sha256": "sha256:592e5d2cd01e036416b97a12b7ccca9f13a307ca9d86119d98288e5da9c1aafb"
+    }
+  },
+  "qualification_complete": false,
+  "read_only_observed_capture": {
+    "call_ids": [
+      "call_ymn3RdT67KSPzOXx22HtWAWe",
+      "call_WkaJC0j7lB5KyMQ74kVWOoPO",
+      "call_xTUsSlBu4mtuSnP3Q7Cf8FEf"
+    ],
+    "original_outcome": "incomplete",
+    "parent_rollout_sha256": "sha256:80cc4d066f8bb27802527a209cbdf888c0e6f42a69067444d7cd896b03e8023b",
+    "purpose": "read-only parser regression; never historical live requalification",
+    "receipt": {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/receipt.json",
+      "sha256": "sha256:68285c4307c9ef7484e98104e01700c34c29e62a16206650d0b1d6bb9d9c9a57"
+    },
+    "rollouts": [
+      {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/home/.codex/sessions/2026/09/18/rollout-2026-09-18T09-44-23-01a0b379-429d-7e43-9774-661e2eb21d74.jsonl",
+        "sha256": "sha256:80cc4d066f8bb27802527a209cbdf888c0e6f42a69067444d7cd896b03e8023b"
+      },
+      {
+        "path": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638/home/.codex/sessions/2026/09/18/rollout-2026-09-18T09-46-58-01a0b37b-a036-7ec0-bfe0-2a34a8cbed90.jsonl",
+        "sha256": "sha256:1aa3421fc6461093e9900270ff5608cc3e0fec1848f2f9a5e9f22f342a13bf3e"
+      }
+    ],
+    "root": "/private/tmp/aether-gap2-resume-x7pso2qh/plan18/live-clean/capture/native-ordinary-777367638"
+  },
+  "recorded_at": "2026-09-19T00:50:40.401420+00:00",
+  "requirements_completed": [],
+  "resource_housekeeping": [
+    {
+      "passed": true,
+      "protected_evidence_preserved": true,
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-passive-wait-20260918T234825Z-fuzgj80r/receipt.json",
+        "sha256": "sha256:9f3e9cd62a20278aacfac19a136e7ac8c41c236955d90f5608373fa15d7d0589"
+      },
+      "removed_allocated_bytes": 1024008192,
+      "removed_files": 3853,
+      "storage_estimate_not_discounted": true
+    },
+    {
+      "passed": true,
+      "protected_evidence_preserved": true,
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-plan26-scratch-20260919T001214Z-pq2ds_4t/receipt.json",
+        "sha256": "sha256:baba4301569fd42fb024cd02e7638aaff8de14e8ee73df29c7006da50edd6a50"
+      },
+      "removed_allocated_bytes": 482758656,
+      "removed_files": 1583,
+      "storage_estimate_not_discounted": true
+    },
+    {
+      "passed": true,
+      "protected_evidence_preserved": true,
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-plan08-test-binaries-20260919T002202Z-is0vhw2r/receipt.json",
+        "sha256": "sha256:08eef9f7118a9cec42f4d27f1670d97c06a740dbe0bf0bb60d05b2a2b7ab750d"
+      },
+      "removed_allocated_bytes": 1415651328,
+      "removed_files": 52,
+      "storage_estimate_not_discounted": true
+    }
+  ],
+  "retained_original_ordinary": {
+    "original_outcome_unchanged": true,
+    "outcome": "incomplete",
+    "reason": "child used a tool before acknowledging its complete context",
+    "receipt": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/capture/native-ordinary-1573517767/receipt.json",
+      "sha256": "sha256:4758ca54a2f99594ae0183f11633ae7f973743f801eaddd5f5498a5d73c42560"
+    },
+    "replay_launched": false,
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v4-20260918T232703Z-ghme1q9w/summary.json",
+      "sha256": "sha256:2ecc81aec20da25ca5e2b5cd812a62f1e5e52310490727dd23c99363e28fea15"
+    }
+  },
+  "schema_version": "aether-native-child-fetch-verifier-followup/v1",
+  "scoped_required_bytes": 10471960576,
+  "snapshot_allowance_bytes": 576843776,
+  "source_delta": {
+    "cmd/codex_native_context.go": "sha256:b2088196445b4319782c55734e9795f07f340a63f46740a300d938267559db08",
+    "cmd/codex_native_context_fetch_evidence_test.go": "sha256:abb666981f757310f327142430a1f2da9f0f574abdc7d26ccbcf92dcf3d6ea1b",
+    "cmd/codex_native_gap_attribution_test.go": "sha256:d72d1a8c1a496ca01b194f136ecac2e2c780507a48e2fcb8bca3bc344da158d9",
+    "cmd/codex_native_worker_live_test.go": "sha256:b6d06bbcaba214bbf5d14eb339de0dda29f10e78018f5282888fc15acacbdd97",
+    "cmd/codex_native_worker_test.go": "sha256:d8a02139aba8bb7c51898fdaf65b4ac9048443df1f99259c92ddd08dc40e52ab"
+  },
+  "task": "204.2-25.2 and 25.3",
+  "working_allowance_bytes": 2406670336
+}

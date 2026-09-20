@@ -73,7 +73,7 @@ var swarmFindingsReadCmd = &cobra.Command{
 
 var swarmCleanupCmd = &cobra.Command{
 	Use:   "swarm-cleanup",
-	Short: "Remove swarm data files",
+	Short: "Remove disposable swarm data while preserving result history",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
@@ -85,13 +85,8 @@ var swarmCleanupCmd = &cobra.Command{
 			return nil
 		}
 
-		// Actually remove the swarm's data directory. The previous version
-		// loaded a file "to check existence", admitted in a comment that the
-		// store has no delete, then reported cleaned:true having removed
-		// nothing. A cleanup report must describe the filesystem, not the
-		// intention.
-		// The id becomes a directory name and is then handed to os.RemoveAll,
-		// so it must be proven to name one directory inside the swarms dir.
+		// The id becomes a directory name and is handed to filesystem removal
+		// calls, so it must be proven to name one directory inside swarms.
 		swarmsBase := filepath.Join(store.BasePath(), "swarms")
 		swarmDirAbs, err := safeIdentifierSegment(swarmsBase, "swarm id", id)
 		if err != nil {
@@ -105,24 +100,52 @@ var swarmCleanupCmd = &cobra.Command{
 			existedBefore = true
 		}
 
+		cleaned := false
+		preservedResult := false
 		if existedBefore {
-			if err := os.RemoveAll(swarmDirAbs); err != nil {
-				outputError(2, fmt.Sprintf("failed to remove swarm data at %s: %v", swarmDirRel, err), nil)
+			entries, err := os.ReadDir(swarmDirAbs)
+			if err != nil {
+				outputError(2, fmt.Sprintf("failed to inspect swarm data at %s: %v", swarmDirRel, err), nil)
 				return nil
+			}
+			for _, entry := range entries {
+				if entry.Name() == "result.json" && entry.Type().IsRegular() {
+					preservedResult = true
+					continue
+				}
+				if err := os.RemoveAll(filepath.Join(swarmDirAbs, entry.Name())); err != nil {
+					outputError(2, fmt.Sprintf("failed to remove disposable swarm data at %s: %v", swarmDirRel, err), nil)
+					return nil
+				}
+				cleaned = true
+			}
+			if !preservedResult {
+				if err := os.Remove(swarmDirAbs); err != nil {
+					outputError(2, fmt.Sprintf("failed to remove empty swarm data at %s: %v", swarmDirRel, err), nil)
+					return nil
+				}
+				cleaned = true
 			}
 		}
 
-		// Verify against the filesystem before claiming success.
-		if _, err := os.Stat(swarmDirAbs); err == nil {
+		// Verify the durable result survived and disposable siblings did not.
+		if preservedResult {
+			entries, err := os.ReadDir(swarmDirAbs)
+			if err != nil || len(entries) != 1 || entries[0].Name() != "result.json" {
+				outputError(2, fmt.Sprintf("disposable swarm data at %s still present after removal attempt", swarmDirRel), nil)
+				return nil
+			}
+		} else if _, err := os.Stat(swarmDirAbs); err == nil {
 			outputError(2, fmt.Sprintf("swarm data at %s still present after removal attempt", swarmDirRel), nil)
 			return nil
 		}
 
 		outputOK(map[string]interface{}{
-			"cleaned":  existedBefore,
-			"existed":  existedBefore,
-			"swarm_id": id,
-			"dir":      swarmDirRel,
+			"cleaned":          cleaned,
+			"existed":          existedBefore,
+			"preserved_result": preservedResult,
+			"swarm_id":         id,
+			"dir":              swarmDirRel,
 		})
 		return nil
 	},

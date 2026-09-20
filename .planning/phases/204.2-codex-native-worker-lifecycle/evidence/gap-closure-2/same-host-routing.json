@@ -1,0 +1,36 @@
+{
+  "change": "Detected host pins worker provider; explicit overrides retained; empty environment prefixes do not establish a host",
+  "commits": [
+    "cb31d98b",
+    "a650e299",
+    "311e493e",
+    "e7d29551",
+    "d7de261b"
+  ],
+  "full_package_normal": "passed before final empty-marker fix",
+  "final_focused_normal_race": "passed including detector and selection tests",
+  "guide_tests": "passed",
+  "published": false,
+  "raw_evidence": [
+    {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/routing-red.txt",
+      "sha256": "ff6454f22802579034ef8c3c0ee493c958f38648aa0ed67a7adf162e0bbaeccd"
+    },
+    {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/routing-focused-race.txt",
+      "sha256": "1e343a35e2bc19d41de0f34bfb3e07469b6b3eb939d0b088bf9aeb7b311daad6"
+    },
+    {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/routing-package-normal-final.txt",
+      "sha256": "8fefba2a975016d5afe2213135501ecb16c616171fb837400fa7111fff328b6d"
+    },
+    {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/routing-final-normal.txt",
+      "sha256": "ad28e56e09597755375ae67e7c907835a2a6ce70d210eaf6f311f5d25ff6ff3d"
+    },
+    {
+      "path": "/private/tmp/aether-gap2-resume-x7pso2qh/routing-final-race.txt",
+      "sha256": "4a77e9ded0d883748712d00bcd4e3edee48fdd48d056eed28972bb2401c55d13"
+    }
+  ]
+}

@@ -367,8 +367,14 @@ func TestPreservationReportIsPlainEnglish(t *testing.T) {
 	if !strings.Contains(msg, safety.Branch) {
 		t.Errorf("expected message to name the branch %q, got: %s", safety.Branch, msg)
 	}
-	if !strings.Contains(msg, "aether recover") {
-		t.Errorf("expected message to contain the recovery command %q, got: %s", "aether recover", msg)
+	if !strings.Contains(msg, "aether maintenance recovery-inspect") {
+		t.Errorf("expected message to contain the read-only inspection command, got: %s", msg)
+	}
+	if !strings.Contains(msg, "State effect: none") {
+		t.Errorf("expected message to state that inspection has no state effect, got: %s", msg)
+	}
+	if !strings.Contains(msg, "aether resume") {
+		t.Errorf("expected message to route lifecycle restoration through resume, got: %s", msg)
 	}
 
 	lower := strings.ToLower(msg)

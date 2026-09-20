@@ -141,6 +141,15 @@ var pheromoneDisplayCmd = &cobra.Command{
 			return nil
 		}
 
+		// BIO-08 (plan 203-11): the five influence actions that are not
+		// accept/edit/reject are exposed as flags on this existing
+		// pheromone management command rather than five new commands.
+		// Checked before the read-only display path below so a mutating
+		// invocation never also renders the listing.
+		if result, handled := runPheromoneInfluenceFlags(cmd); handled {
+			return result
+		}
+
 		pf := loadPheromones()
 		if pf == nil {
 			outputWorkflow(map[string]interface{}{
@@ -318,6 +327,19 @@ func init() {
 
 	pheromoneDisplayCmd.Flags().String("type", "", "Filter by signal type (FOCUS/REDIRECT/FEEDBACK)")
 	pheromoneDisplayCmd.Flags().Bool("active-only", true, "Only show active signals")
+	pheromoneDisplayCmd.Flags().String("reinforce", "", "Reinforce a note by ID: raise its strength to the ceiling and record the action")
+	pheromoneDisplayCmd.Flags().String("defer", "", "Defer a note by ID until --defer-until, recording the action")
+	pheromoneDisplayCmd.Flags().String("defer-until", "", "RFC3339 timestamp the note named by --defer returns to effect at (required with --defer)")
+	pheromoneDisplayCmd.Flags().String("expire", "", "Expire a note by ID now, recording the previous expiry")
+	pheromoneDisplayCmd.Flags().String("revoke", "", "Revoke a note by ID permanently -- owner only")
+	pheromoneDisplayCmd.Flags().String("appeal", "", "Appeal a rejected note by ID, surfacing it for reconsideration -- owner only")
+	pheromoneDisplayCmd.Flags().String("weaken", "", "Weaken a note by ID: lower its strength to the floor and record the action")
+	pheromoneDisplayCmd.Flags().String("pin", "", "Pin a note by ID: exempt it from automatic outcome-weighted tuning -- owner only")
+	pheromoneDisplayCmd.Flags().String("unpin", "", "Unpin a note by ID: let automatic outcome-weighted tuning consider it again -- owner only")
+	pheromoneDisplayCmd.Flags().String("reason", "", "Reason recorded alongside --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin")
+	pheromoneDisplayCmd.Flags().String("actor", "", "Actor performing --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin: owner (default), runtime, or learning")
+	pheromoneDisplayCmd.Flags().String("actor-name", "", "Name of the actor performing the action (optional, recorded in the history)")
+	pheromoneDisplayCmd.Flags().Bool("dry-run", false, "Preview --reinforce/--defer/--expire/--revoke/--appeal/--weaken/--pin/--unpin without persisting")
 	pheromoneSnapshotInjectCmd.Flags().String("source-root", "", "Repo or worktree root to copy active pheromones from (default current AETHER_ROOT)")
 	pheromoneSnapshotInjectCmd.Flags().String("target-root", "", "Repo or worktree root to inject active pheromones into")
 	pheromoneMergeBackCmd.Flags().String("source-root", "", "Repo or worktree root to merge pheromones from")
@@ -369,4 +391,79 @@ func pendingSteeringSection() string {
 		return ""
 	}
 	return renderSuggestedSteering(state)
+}
+
+// runPheromoneInfluenceFlags checks pheromoneDisplayCmd's --reinforce,
+// --defer, --expire, --revoke and --appeal flags (BIO-08, plan 203-11) and,
+// if exactly one names a note, performs that action and returns handled=true
+// so the caller returns immediately rather than falling through to the
+// read-only listing below. handled=false means none of the five flags were
+// set and the caller should proceed with its normal display behaviour.
+func runPheromoneInfluenceFlags(cmd *cobra.Command) (error, bool) {
+	reinforceID, _ := cmd.Flags().GetString("reinforce")
+	deferID, _ := cmd.Flags().GetString("defer")
+	deferUntil, _ := cmd.Flags().GetString("defer-until")
+	expireID, _ := cmd.Flags().GetString("expire")
+	revokeID, _ := cmd.Flags().GetString("revoke")
+	appealID, _ := cmd.Flags().GetString("appeal")
+	weakenID, _ := cmd.Flags().GetString("weaken")
+	pinID, _ := cmd.Flags().GetString("pin")
+	unpinID, _ := cmd.Flags().GetString("unpin")
+	reason, _ := cmd.Flags().GetString("reason")
+	actorFlag, _ := cmd.Flags().GetString("actor")
+	actorName, _ := cmd.Flags().GetString("actor-name")
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+
+	actor := pheromoneActorOwner
+	if strings.TrimSpace(actorFlag) != "" {
+		actor = actorFlag
+	}
+
+	switch {
+	case reinforceID != "":
+		return renderPheromoneInfluenceResult(reinforceNote(reinforceID, actor, actorName, reason, dryRun)), true
+	case deferID != "":
+		return renderPheromoneInfluenceResult(deferNote(deferID, actor, actorName, deferUntil, reason, dryRun)), true
+	case expireID != "":
+		return renderPheromoneInfluenceResult(expireNote(expireID, actor, actorName, reason, dryRun)), true
+	case revokeID != "":
+		return renderPheromoneInfluenceResult(revokeNote(revokeID, actor, actorName, reason, dryRun)), true
+	case appealID != "":
+		return renderPheromoneInfluenceResult(appealNote(appealID, actor, actorName, reason, dryRun)), true
+	case weakenID != "":
+		return renderPheromoneInfluenceResult(weakenNote(weakenID, actor, actorName, reason, dryRun)), true
+	case pinID != "":
+		return renderPheromoneInfluenceResult(pinNote(pinID, actor, actorName, reason, dryRun)), true
+	case unpinID != "":
+		return renderPheromoneInfluenceResult(unpinNote(unpinID, actor, actorName, reason, dryRun)), true
+	}
+	return nil, false
+}
+
+// renderPheromoneInfluenceResult writes the CLI envelope for one of the five
+// influence actions. RunE functions in this package always return nil after
+// calling outputError/outputOK -- errors are rendered as a JSON/visual error
+// envelope, not returned as a Go error, matching every other command in this
+// file.
+func renderPheromoneInfluenceResult(outcome pheromoneInfluenceOutcome, err error) error {
+	if err != nil {
+		outputError(1, err.Error(), nil)
+		return nil
+	}
+	if !outcome.Found {
+		outputError(1, "note not found", nil)
+		return nil
+	}
+	result := map[string]interface{}{
+		"applied":     !outcome.WouldApply,
+		"would_apply": outcome.WouldApply,
+	}
+	if outcome.Signal != nil {
+		result["signal"] = *outcome.Signal
+	}
+	if outcome.Entry != nil {
+		result["entry"] = *outcome.Entry
+	}
+	outputOK(result)
+	return nil
 }

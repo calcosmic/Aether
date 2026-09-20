@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +14,8 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/learn"
-	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -48,6 +47,21 @@ var continueFinalizeCmd = &cobra.Command{
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
+		}
+		// FLOOR-03 (closes the 2026-08-01 folded todo): --reconcile-task is
+		// registered on THIS command too now, not only on `continue
+		// --plan-only`. It unions with whatever ReconcileTaskIDs the plan
+		// manifest already carries (recorded at plan-only time) rather than
+		// replacing it, so an operator can record reconciliation at finalize
+		// time even for a task nobody thought to reconcile earlier.
+		// validateExternalContinueState (inside runCodexContinueFinalize)
+		// validates the merged list against the phase exactly as it already
+		// validates the plan's own list, so an unknown task ID is still
+		// refused by name.
+		if flagReconcileTaskIDs := normalizeCLIStringList(mustGetStringArray(cmd, "reconcile-task")); len(flagReconcileTaskIDs) > 0 {
+			if activeManifest := completion.activeManifest(); activeManifest != nil {
+				activeManifest.ReconcileTaskIDs = mergeReconcileTaskIDs(activeManifest.ReconcileTaskIDs, flagReconcileTaskIDs)
+			}
 		}
 		result, state, phase, nextPhase, housekeeping, final, err := runCodexContinueFinalize(skillWorkspaceRoot(), completion, skipMissing, verificationTimeout, noLearn)
 		if err != nil {
@@ -169,6 +183,37 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// 204-15 (SC3a): the DELEGATE check lane's own episode boundary. Before
+	// this plan, runCodexContinueFinalize opened and closed NO episode at
+	// all -- the complete non-test call list for emitColonyLiveEpisodeEnded(
+	// in cmd/ was codex_build.go, oracle_live.go, oracle_loop.go,
+	// codex_plan.go, codex_continue.go; this file did not appear on it
+	// (204-15-PLAN.md's own plan-time finding). continueEpisodeID reuses the
+	// same run identifier finishRuntimeSpawnRun above persists, mirroring
+	// the native lane's shape (cmd/codex_continue.go) line for line.
+	// Registered immediately after runHandle exists and BEFORE the FIELD-04
+	// replay early return just below, so every return path in this
+	// function -- including that early return -- closes inside the
+	// episode.
+	continueEpisodeID := ""
+	if runHandle != nil {
+		continueEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(continueEpisodeID, events.EpisodeKindContinue)
+	restoreLiveContinueEpisode := setActiveLiveContinueEpisode(continueEpisodeID)
+	defer restoreLiveContinueEpisode()
+	// The deferred close reuses checkEpisodeCloseRecord (cmd/episode_ledger.go)
+	// -- the SAME helper the native check lane calls -- so the two lanes
+	// cannot drift into recording different things (204-15-PLAN.md Task
+	// 1(b)). phase.ID and runStatus are both read at DEFER-EXECUTION time,
+	// after every later reassignment in this function's body.
+	defer func() {
+		record := checkEpisodeCloseRecord(phase.ID, runStatus)
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(continueEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(continueEpisodeID, events.EpisodeKindContinue, record)
+		emitColonyLiveEpisodeEndedEventOnly(continueEpisodeID, events.EpisodeKindContinue, runStatus)
+	}()
+
 	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing
 	// verification from an earlier continue-finalize run may have lost the
 	// race to a colony pause and been preserved instead of discarded (see
@@ -198,6 +243,37 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := persistExternalContinueHandoffs(root, phase.ID, plan.Dispatches, completion.workerResults()); err != nil {
 		return nil, state, phase, nil, nil, false, err
 	}
+	// File this check's per-worker token record, under the continue key.
+	//
+	// Placed here, immediately after every reviewer and watcher has reached a
+	// terminal status and before any result envelope is assembled, so the
+	// record exists whether this check goes on to advance the phase or to
+	// block it. A blocked check still spent what it spent.
+	//
+	// The build lane files its own rows under its own key
+	// (cmd/codex_build_finalize.go). Neither file is opened by the other, so a
+	// check can never erase what the build spent, and a later build cannot
+	// erase what the check spent.
+	//
+	// Accounting is a record OF the check, never a gate ON it: a write that
+	// fails is reported on stderr and the check still finishes.
+	continueSpendOutcome, continueSpendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phase.ID,
+		PhaseName:  phase.Name,
+		Workflow:   spendWorkflowContinue,
+		RepoRoot:   root,
+		Platform:   buildHostPlatform(),
+		RunID:      spendRunIDFromTimestamp("continue", plan.GeneratedAt),
+		StartedAt:  spendRunStartFromManifest(plan.GeneratedAt),
+		EndedAt:    now,
+		Dispatches: spendDispatchesFromContinueFlow(workerFlow, plan.Dispatches),
+	})
+	if continueSpendErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: this check's per-worker token record could not be filed: %v\n", continueSpendErr)
+	}
+	for _, note := range continueSpendOutcome.Notes {
+		fmt.Fprintf(os.Stderr, "\u26a0 %s\n", note)
+	}
 	// The runtime persists review findings itself — review castes return
 	// them in result JSON and must never be briefed to run CLI commands
 	// (auditor and gatekeeper have no Bash by design). Non-fatal: ledger
@@ -226,6 +302,17 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// evaluation on the finalize path.
 	assessment := assessCodexContinue(phase, manifest, verification, codexContinueOptions{ReconcileTaskIDs: plan.ReconcileTaskIDs, ReadOnlyArtifacts: plan.ReadOnlyArtifacts, VerificationTimeout: verificationTimeout}, now)
 	verification = attachContinueClaimVerification(verification, assessment)
+	var runtimeCheckpoints []autopilotCheckpointReference
+	if hasRuntimeVerificationCheckpoint(verification.Criteria) {
+		runtimeGeneration, generationErr := validatedRuntimeCheckpointGeneration(manifest, state, verification.Criteria)
+		if generationErr != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to bind owner verification work: %w", generationErr)
+		}
+		runtimeCheckpoints, err = materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria, runtimeGeneration)
+		if err != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+		}
+	}
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {
 		priorGateResults = []GateCheckResult{}
@@ -321,7 +408,19 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if plan.ReviewDepth != "" {
 			resolveDepth = plan.ReviewDepth
 		}
-		gates, autoResolved := autoResolveSoftBlockGates(phase.ID, gates, resolveDepth, phase.Mode)
+		// [Rule 1 - Bug] `gates, autoResolved := ...` previously shadowed the
+		// outer `gates` inside this if-block: a soft_block gate that got
+		// auto-resolved here was invisible everywhere below this block
+		// (review dispatch, advanceExternalContinue, the persisted report) --
+		// the outer `gates.Passed` stayed stuck at its stale pre-resolution
+		// value. `advanceExternalContinue` never re-checks `.Passed` itself,
+		// so this went unnoticed as a functional block, but
+		// runContinueAcceptVerifyAdvance (cmd/codex_verify_advance.go) DOES
+		// gate on `gates.Passed` -- assigning to the outer variable with `=`
+		// is required for the shared decision body to see the resolution
+		// this lane already performed.
+		var autoResolved []string
+		gates, autoResolved = autoResolveSoftBlockGates(phase.ID, gates, resolveDepth, phase.Mode)
 
 		if len(autoResolved) > 0 {
 			// Re-persist gate results with auto-resolved annotations
@@ -494,6 +593,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 			if err != nil {
 				return nil, state, phase, nil, nil, false, err
 			}
+			result["autopilot_signals"] = continueReviewAutopilotSignals(blockedWorkerFlow, runtimeCheckpoints)
 			if superseded, _ := result["superseded"].(bool); superseded {
 				// finalizeBlockedExternalContinue found the runtime state no
 				// longer matches what this call was asked to record (T-188-CR-01)
@@ -512,7 +612,14 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
-	if !review.Passed {
+	// SYN-201-04: the external finalize lane reaches its advancement verdict
+	// only through the same shared decision body every other lane uses.
+	// `gates` here is whatever this lane's own pre-review gate handling
+	// (including its soft_block auto-resolve pass above) left it as --
+	// runContinueAcceptVerifyAdvance does not re-evaluate gates, it folds
+	// the already-decided report with this now-available review report.
+	finalDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &review, state)
+	if !finalDecision.Advances() {
 		// Hand the blocking findings to the Fixer's intake: `aether unblock
 		// --dispatch` reads gate-results-<N>.json, so a review_findings gate
 		// entry with each finding's suggestion as recovery options is what
@@ -524,6 +631,7 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 		if err != nil {
 			return nil, state, phase, nil, nil, false, err
 		}
+		result["autopilot_signals"] = continueReviewAutopilotSignals(blockedWorkerFlow, runtimeCheckpoints)
 		if superseded, _ := result["superseded"].(bool); superseded {
 			runStatus = "superseded"
 			return result, blockedState, phase, nil, nil, false, nil
@@ -538,12 +646,13 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	if runHandle != nil {
 		runID = runHandle.Run.ID
 	}
-	captureContinueLearning(phase, workerFlow, gates, runID, noLearn, now)
+	captureContinueMemory(phase, workerFlow, gates, runID, noLearn, now)
 
 	result, updated, nextPhase, housekeeping, final, err := advanceExternalContinue(root, state, phase, manifest, verification, assessment, gates, review, reviewReportRel, watcherFlow, workerFlow, now, verificationReportRel, gateReportRel, finalizeReviewDepth)
 	if err != nil {
 		return nil, state, phase, nil, housekeeping, final, err
 	}
+	result["autopilot_signals"] = continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints)
 	if superseded, _ := result["superseded"].(bool); superseded {
 		// advanceExternalContinue found the runtime state no longer matches
 		// what this call was asked to advance (188-CONTEXT.md D-04/D-05) and
@@ -564,7 +673,19 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// the stricter-correct placement (RESEARCH.md assumption A1). Do not
 	// "fix" this back to symmetry with the default continue path.
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	// 198.1-05/FEED-05: strong lessons (confidence >= 0.8) reach the shared
+	// cross-project store at every check, not only at project close --
+	// under the same AETHER_HIVE_POLICY switch seal already honours. Placed
+	// immediately after consolidation and before attachConsolidationSummary,
+	// mirroring the default continue lane above.
+	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
+	// 203-13 (BIO-08/CEC-07): outcome-weighted strength tuning runs right
+	// after hive promotion, mirroring the default continue lane above --
+	// same non-blocking discipline.
+	outcomeTuning := runPheromoneOutcomeTuning()
 	attachConsolidationSummary(result, consolidationSummary)
+	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
+	attachPheromoneOutcomeTuningSummary(result, outcomeTuning)
 	if reviewFindingsPersisted > 0 && result != nil {
 		result["review_findings_persisted"] = reviewFindingsPersisted
 	}
@@ -581,6 +702,16 @@ func runCodexContinueFinalize(root string, completion codexExternalContinueCompl
 	// only stdout (D-06/D-07).
 	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, []codexContinueWorkerFlowStep{continueLearningFlowStep(consolidationSummary)})
 	runStatus = "completed"
+	// Written here, after every mutation above (consolidation, hive
+	// promotion, phase commit), not inside advanceExternalContinue: those
+	// attach* calls mutate this SAME result map after advanceExternalContinue
+	// already returned it, and renderContinueVisual's Learning beat
+	// (renderLearningBeat(result["consolidation"])) reads what they add. The
+	// screen the owner actually sees is rendered from this fully-mutated
+	// map; persisting any earlier snapshot would silently diverge from it.
+	if err := writePhaseOutcomeDocument(phase.ID, result, updated); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, updated, phase, nextPhase, housekeeping, final, nil
 }
 
@@ -704,24 +835,235 @@ func mergeExternalContinueResults(plan codexContinuePlanManifest, results []code
 		if summary == "" && len(blockers) > 0 {
 			summary = strings.Join(blockers, "; ")
 		}
-		flow = append(flow, codexContinueWorkerFlowStep{
-			Stage:           dispatch.Stage,
-			Caste:           dispatch.Caste,
-			Name:            dispatch.Name,
-			Task:            dispatch.Task,
-			Status:          status,
-			Summary:         summary,
-			Blockers:        blockers,
-			Duration:        result.Duration,
-			Report:          strings.TrimSpace(result.Report),
-			Findings:        mergeCodexReviewFindings(result.Findings, result.Issues),
+		step := codexContinueWorkerFlowStep{
+			Stage:    dispatch.Stage,
+			Caste:    dispatch.Caste,
+			Name:     dispatch.Name,
+			Task:     dispatch.Task,
+			Status:   status,
+			Summary:  summary,
+			Blockers: blockers,
+			Duration: result.Duration,
+			Report:   strings.TrimSpace(result.Report),
+			// Keep legacy rows raw until normalizeContinueReviewEvidence has
+			// validated their human-readable body. Merging here would discard a
+			// suggestion-only row before it could produce fail-closed evidence.
+			Findings:        append(append([]codexReviewFinding{}, result.Findings...), result.Issues...),
 			Recommendations: uniqueSortedStrings(result.Recommendations),
 			WeakSpots:       uniqueSortedStrings(result.WeakSpots),
 			EdgeCases:       uniqueSortedStrings(result.EdgeCases),
 			ReusableLessons: uniqueSortedStrings(result.ReusableLessons),
-		})
+		}
+		// artifacts.review is authoritative when present. Legacy top-level
+		// findings remain compatible only for older workers that did not emit
+		// the artifact at all.
+		step = normalizeContinueReviewEvidence(step, result.Artifacts)
+		flow = append(flow, step)
 	}
 	return flow, nil
+}
+
+// normalizeContinueReviewEvidence applies the same artifact contract to an
+// in-process WorkerResult and a wrapper completion. An explicit review
+// artifact is authoritative: prose and legacy top-level fields cannot
+// override it, and malformed values become evidence errors rather than a
+// fabricated zero score.
+func normalizeContinueReviewEvidence(step codexContinueWorkerFlowStep, artifacts map[string]json.RawMessage) codexContinueWorkerFlowStep {
+	raw, explicit := artifacts["review"]
+	if !explicit {
+		validFindings := make([]codexReviewFinding, 0, len(step.Findings))
+		for index, finding := range step.Findings {
+			severity := strings.ToUpper(strings.TrimSpace(finding.Severity))
+			if !validReviewArtifactSeverity(severity) {
+				step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s legacy findings[%d].severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO", step.Name, index))
+				continue
+			}
+			finding.Severity = severity
+			if strings.TrimSpace(finding.Title) == "" && strings.TrimSpace(finding.Description) == "" {
+				step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s legacy findings[%d] must include a non-empty title or description", step.Name, index))
+				continue
+			}
+			validFindings = append(validFindings, finding)
+		}
+		step.Findings = mergeCodexReviewFindings(validFindings)
+		if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			step.EvidenceErrors = uniqueSortedStrings(append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review is required for a completed Auditor", step.Name)))
+		}
+		step.EvidenceErrors = uniqueSortedStrings(step.EvidenceErrors)
+		return step
+	}
+
+	step.Findings = nil
+	step.OverallScore = nil
+	step.EvidenceErrors = nil
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || !strings.HasPrefix(trimmed, "{") {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review must be a JSON object", step.Name)}
+		return step
+	}
+
+	var artifact map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &artifact); err != nil {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review is malformed: %v", step.Name, err)}
+		return step
+	}
+	if artifact == nil {
+		step.EvidenceErrors = []string{fmt.Sprintf("%s artifacts.review must be a JSON object", step.Name)}
+		return step
+	}
+
+	scoreRaw, scorePresent := artifact["overall_score"]
+	if !scorePresent {
+		if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score is required for a completed Auditor", step.Name))
+		}
+	} else {
+		var score int
+		if strings.TrimSpace(string(scoreRaw)) == "null" || json.Unmarshal(scoreRaw, &score) != nil {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score must be an integer", step.Name))
+		} else if score < 0 || score > 100 {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review overall_score must be between 0 and 100", step.Name))
+		} else if strings.EqualFold(strings.TrimSpace(step.Caste), "auditor") && continueWorkerFlowStatus(step.Status) == buildWorkerCompleted {
+			step.OverallScore = &score
+		}
+	}
+
+	structuredFindings := []codexReviewFinding{}
+	for _, field := range []string{"findings", "issues"} {
+		fieldRaw, present := artifact[field]
+		if !present {
+			continue
+		}
+		var findings []codexReviewFinding
+		if err := json.Unmarshal(fieldRaw, &findings); err != nil {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review %s must be an array: %v", step.Name, field, err))
+			continue
+		}
+		structuredFindings = append(structuredFindings, findings...)
+	}
+
+	validFindings := make([]codexReviewFinding, 0, len(structuredFindings))
+	for index, finding := range structuredFindings {
+		severity := strings.ToUpper(strings.TrimSpace(finding.Severity))
+		if !validReviewArtifactSeverity(severity) {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review findings[%d].severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO", step.Name, index))
+			continue
+		}
+		finding.Severity = severity
+		if strings.TrimSpace(finding.Title) == "" && strings.TrimSpace(finding.Description) == "" {
+			step.EvidenceErrors = append(step.EvidenceErrors, fmt.Sprintf("%s artifacts.review findings[%d] must include a non-empty title or description", step.Name, index))
+			continue
+		}
+		validFindings = append(validFindings, finding)
+	}
+	step.Findings = mergeCodexReviewFindings(validFindings)
+	step.EvidenceErrors = uniqueSortedStrings(step.EvidenceErrors)
+	return step
+}
+
+func continueReviewEvidenceBlockingIssues(step codexContinueWorkerFlowStep) []string {
+	caste := strings.TrimSpace(step.Caste)
+	if caste == "" {
+		caste = "reviewer"
+	}
+	name := strings.TrimSpace(step.Name)
+	if name == "" {
+		name = "unnamed"
+	}
+	blockers := make([]string, 0, len(step.EvidenceErrors))
+	for _, evidenceError := range step.EvidenceErrors {
+		if reason := strings.TrimSpace(evidenceError); reason != "" {
+			blockers = append(blockers, fmt.Sprintf("%s %s review evidence is invalid: %s", caste, name, reason))
+		}
+	}
+	return uniqueSortedStrings(blockers)
+}
+
+func validReviewArtifactSeverity(severity string) bool {
+	switch severity {
+	case "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO":
+		return true
+	default:
+		return false
+	}
+}
+
+func continueReviewAutopilotSignals(workerFlow []codexContinueWorkerFlowStep, checkpointGroups ...[]autopilotCheckpointReference) codexContinueAutopilotSignals {
+	signals := codexContinueAutopilotSignals{
+		Evaluations: []autopilotTriggerEvaluation{
+			continueAutopilotTriggerEvaluation(autopilotTriggerAuditorScoreBelowFloor, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerCriticalReviewFinding, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerRuntimeVerificationNeeded, false, nil),
+			continueAutopilotTriggerEvaluation(autopilotTriggerVisualCheckpointNeeded, false, nil),
+		},
+	}
+	var scoreWorker string
+	criticalFindings := []codexReviewFinding{}
+	for _, step := range workerFlow {
+		signals.Findings = append(signals.Findings, step.Findings...)
+		signals.EvidenceErrors = append(signals.EvidenceErrors, step.EvidenceErrors...)
+		if step.OverallScore != nil && (signals.AuditorScore == nil || *step.OverallScore < *signals.AuditorScore) {
+			score := *step.OverallScore
+			signals.AuditorScore = &score
+			scoreWorker = step.Name
+		}
+		for _, finding := range step.Findings {
+			if strings.EqualFold(strings.TrimSpace(finding.Severity), "CRITICAL") {
+				criticalFindings = append(criticalFindings, finding)
+			}
+		}
+	}
+	signals.Findings = mergeCodexReviewFindings(signals.Findings)
+	signals.EvidenceErrors = uniqueSortedStrings(signals.EvidenceErrors)
+	if signals.AuditorScore != nil {
+		signals.Evaluations[0] = continueAutopilotTriggerEvaluation(
+			autopilotTriggerAuditorScoreBelowFloor,
+			*signals.AuditorScore < 60,
+			map[string]interface{}{"worker": scoreWorker, "overall_score": *signals.AuditorScore, "floor": 60},
+		)
+	}
+	if len(criticalFindings) > 0 {
+		signals.Evaluations[1] = continueAutopilotTriggerEvaluation(
+			autopilotTriggerCriticalReviewFinding,
+			true,
+			map[string]interface{}{"count": len(criticalFindings), "findings": criticalFindings},
+		)
+	}
+	seenCheckpoints := map[string]bool{}
+	for _, group := range checkpointGroups {
+		for _, checkpoint := range group {
+			if strings.TrimSpace(checkpoint.ID) == "" || seenCheckpoints[checkpoint.ID] {
+				continue
+			}
+			seenCheckpoints[checkpoint.ID] = true
+			signals.Checkpoints = append(signals.Checkpoints, checkpoint)
+		}
+	}
+	for index, checkpointType := range []string{autopilotCheckpointTypeRuntimeVerification, autopilotCheckpointTypeVisual} {
+		matching := []autopilotCheckpointReference{}
+		for _, checkpoint := range signals.Checkpoints {
+			if checkpoint.Type == checkpointType {
+				matching = append(matching, checkpoint)
+			}
+		}
+		if len(matching) == 0 {
+			continue
+		}
+		code := autopilotTriggerRuntimeVerificationNeeded
+		if checkpointType == autopilotCheckpointTypeVisual {
+			code = autopilotTriggerVisualCheckpointNeeded
+		}
+		signals.Evaluations[index+2] = continueAutopilotTriggerEvaluation(code, true, map[string]interface{}{
+			"count":       len(matching),
+			"checkpoints": matching,
+		})
+	}
+	return signals
+}
+
+func continueAutopilotTriggerEvaluation(code autopilotTriggerCode, active bool, evidence map[string]interface{}) autopilotTriggerEvaluation {
+	spec, _ := autopilotTriggerSpecByCode(code)
+	return autopilotTriggerEvaluation{Spec: spec, Active: active, Evidence: evidence}
 }
 
 func mergeCodexReviewFindings(groups ...[]codexReviewFinding) []codexReviewFinding {
@@ -739,7 +1081,7 @@ func mergeCodexReviewFindings(groups ...[]codexReviewFinding) []codexReviewFindi
 			finding.File = strings.TrimSpace(finding.File)
 			finding.Category = strings.TrimSpace(finding.Category)
 			finding.Suggestion = strings.TrimSpace(finding.Suggestion)
-			if finding.Description == "" && finding.Suggestion == "" {
+			if finding.Description == "" {
 				continue
 			}
 			key := strings.Join([]string{
@@ -830,7 +1172,7 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 		}
 		watcher := codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  strings.TrimSpace(step.Name),
 			Summary: summary,
@@ -870,11 +1212,11 @@ func attachExternalContinueWatcher(verification codexContinueVerificationReport,
 // context. Best-effort: gate-results bookkeeping never blocks anything.
 func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorkerFlowStep, now time.Time) {
 	details := []string{}
-	options := []string{"Run /ant-unblock to dispatch the Fixer against these findings"}
+	options := []string{"Run aether unblock --dispatch to dispatch the Fixer against these findings"}
 	fixHint := ""
 	for _, step := range workerFlow {
 		for _, finding := range step.Findings {
-			if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+			if !strings.EqualFold(finding.Severity, "CRITICAL") {
 				continue
 			}
 			desc := strings.TrimSpace(finding.Description)
@@ -897,7 +1239,7 @@ func appendReviewFindingsGateResult(phaseID int, workerFlow []codexContinueWorke
 		return
 	}
 	if fixHint == "" {
-		fixHint = "No reviewer supplied a fix — /ant-unblock dispatches the Fixer to propose one"
+		fixHint = "No reviewer supplied a fix — aether unblock --dispatch dispatches the Fixer to propose one"
 	}
 	entries, err := gateResultsReadPhase(phaseID)
 	if err != nil || entries == nil {
@@ -932,15 +1274,16 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 			continue
 		}
 		report.Workers = append(report.Workers, step)
-		if status == "completed" || status == "manually-reconciled" {
-			// Typed blocking: a completed review whose STRUCTURED findings
-			// carry blocking (or CRITICAL severity, treated as implicitly
-			// blocking) still stops the line — previously only raw blocker
-			// strings fed this decision and structured findings were
-			// decorative. Every typed block carries its way forward in the
-			// same breath: the reviewer's fix, or the Fixer.
+		if evidenceBlockers := continueReviewEvidenceBlockingIssues(step); len(evidenceBlockers) > 0 {
+			report.Passed = false
+			blockers = append(blockers, evidenceBlockers...)
+		}
+		if isSuccessfulExternalBuildStatus(status) {
+			// Severity is authoritative. Only CRITICAL structured findings
+			// stop the line; the legacy worker-supplied blocking bit remains
+			// reportable metadata and cannot promote High or lower evidence.
 			for _, finding := range step.Findings {
-				if !finding.Blocking && !strings.EqualFold(finding.Severity, "CRITICAL") {
+				if !strings.EqualFold(finding.Severity, "CRITICAL") {
 					continue
 				}
 				desc := strings.TrimSpace(finding.Description)
@@ -954,7 +1297,7 @@ func externalContinueReviewReport(phaseID int, workerFlow []codexContinueWorkerF
 				if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
 					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (fix: %s)", step.Name, desc, suggestion))
 				} else {
-					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (next step: /ant-unblock — dispatch the Fixer)", step.Name, desc))
+					blockers = append(blockers, fmt.Sprintf("%s blocking finding: %s (next step: aether unblock --dispatch — dispatch the Fixer)", step.Name, desc))
 				}
 			}
 			continue
@@ -1136,26 +1479,29 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 	emitContinueCeremonyFlowSequence("aether-continue-finalize", phase, workerFlow)
 	updateSessionSummary("continue-finalize", nextCommand, summary)
 	result := map[string]interface{}{
-		"advanced":            false,
-		"blocked":             true,
-		"partial_success":     assessment.PartialSuccess,
-		"current_phase":       blockedState.CurrentPhase,
-		"phase_name":          phase.Name,
-		"state":               blockedState.State,
-		"next":                nextCommand,
-		"review_depth":        string(reviewDepth),
-		"verification":        verification,
-		"assessment":          assessment,
-		"task_evidence":       assessment.Tasks,
-		"gates":               gates,
-		"verification_report": displayDataPath(verificationReportRel),
-		"gate_report":         displayDataPath(gateReportRel),
-		"continue_report":     displayDataPath(continueReportRel),
-		"worker_flow":         workerFlow,
-		"operational_issues":  assessment.OperationalIssues,
-		"recovery":            assessment.Recovery,
-		"reconciled_tasks":    assessment.ReconciledTasks,
-		"blocking_issues":     blockers,
+		"advanced":             false,
+		"blocked":              true,
+		"partial_success":      assessment.PartialSuccess,
+		"current_phase":        blockedState.CurrentPhase,
+		"phase_name":           phase.Name,
+		"continued_phase":      phase.ID,
+		"continued_phase_name": phase.Name,
+		"state":                blockedState.State,
+		"next":                 nextCommand,
+		"review_depth":         string(reviewDepth),
+		"verification":         verification,
+		"assessment":           assessment,
+		"task_evidence":        assessment.Tasks,
+		"gates":                gates,
+		"verification_report":  displayDataPath(verificationReportRel),
+		"gate_report":          displayDataPath(gateReportRel),
+		"continue_report":      displayDataPath(continueReportRel),
+		"worker_flow":          workerFlow,
+		"autopilot_signals":    continueReviewAutopilotSignals(workerFlow),
+		"operational_issues":   assessment.OperationalIssues,
+		"recovery":             assessment.Recovery,
+		"reconciled_tasks":     assessment.ReconciledTasks,
+		"blocking_issues":      blockers,
 		"plan_revision_option": planRevisionRecommendation(
 			colony.PlanRevisionVerificationFailure,
 			fmt.Sprintf("Verification or review blocked phase %d: %s", phase.ID, summary),
@@ -1171,6 +1517,10 @@ func finalizeBlockedExternalContinue(state colony.ColonyState, phase colony.Phas
 		result["recovery_instructions"] = gateRecoveryInstructions
 	}
 	addOrchestratorBoundaryGuidance(result, "continue", blockedState, nextCommand, nil)
+	closeLifecycleRun(result, blockedState, "continue")
+	if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, blockedState, nil
 }
 
@@ -1275,34 +1625,38 @@ func advanceExternalContinue(root string, state colony.ColonyState, phase colony
 	}
 	updateSessionSummary("continue-finalize", nextCommand, summary)
 	result := map[string]interface{}{
-		"advanced":            true,
-		"completed":           final,
-		"partial_success":     assessment.PartialSuccess,
-		"current_phase":       updated.CurrentPhase,
-		"state":               updated.State,
-		"next":                nextCommand,
-		"review_depth":        string(reviewDepth),
-		"verification":        verification,
-		"assessment":          assessment,
-		"task_evidence":       assessment.Tasks,
-		"gates":               gates,
-		"review":              review,
-		"verification_report": displayDataPath(verificationReportRel),
-		"gate_report":         displayDataPath(gateReportRel),
-		"review_report":       displayDataPath(reviewReportRel),
-		"continue_report":     displayDataPath(continueReportRel),
-		"closed_workers":      closedWorkers,
-		"worker_flow":         fullWorkerFlow,
-		"operational_issues":  assessment.OperationalIssues,
-		"recovery":            assessment.Recovery,
-		"reconciled_tasks":    assessment.ReconciledTasks,
-		"signal_housekeeping": housekeeping,
+		"advanced":             true,
+		"completed":            final,
+		"partial_success":      assessment.PartialSuccess,
+		"current_phase":        updated.CurrentPhase,
+		"continued_phase":      phase.ID,
+		"continued_phase_name": phase.Name,
+		"state":                updated.State,
+		"next":                 nextCommand,
+		"review_depth":         string(reviewDepth),
+		"verification":         verification,
+		"assessment":           assessment,
+		"task_evidence":        assessment.Tasks,
+		"gates":                gates,
+		"review":               review,
+		"verification_report":  displayDataPath(verificationReportRel),
+		"gate_report":          displayDataPath(gateReportRel),
+		"review_report":        displayDataPath(reviewReportRel),
+		"continue_report":      displayDataPath(continueReportRel),
+		"closed_workers":       closedWorkers,
+		"worker_flow":          fullWorkerFlow,
+		"autopilot_signals":    continueReviewAutopilotSignals(fullWorkerFlow),
+		"operational_issues":   assessment.OperationalIssues,
+		"recovery":             assessment.Recovery,
+		"reconciled_tasks":     assessment.ReconciledTasks,
+		"signal_housekeeping":  housekeeping,
 	}
 	if nextPhase != nil {
 		result["next_phase"] = nextPhase.ID
 		result["next_phase_name"] = nextPhase.Name
 	}
 	addOrchestratorBoundaryGuidance(result, "continue", updated, nextCommand, nil)
+	closeLifecycleRun(result, updated, "continue")
 	return result, updated, nextPhase, &housekeeping, final, nil
 }
 
@@ -1554,6 +1908,13 @@ func captureContinueLearning(phase colony.Phase, workerFlow []codexContinueWorke
 	// Store via ColonyStore (D-06: .aether/data/learn/)
 	learnStore := learn.NewColonyStore(store)
 	entry := learn.Entry{
+		// Add (below) only assigns an id on ITS OWN parameter copy when
+		// entry.ID is empty -- Go's pass-by-value means that assignment
+		// never reaches this caller's entry, so the id difficulty-triggered
+		// skill proposals need to name their own source learning entry by
+		// (SkillProposal.LearningEntryID, LEARN-07) is pre-assigned here,
+		// before Add ever runs, rather than left for Add to silently drop.
+		ID:             generateSignalID(),
 		Content:        scanResult.Clean, // use cleaned content
 		Evidence:       evidence,
 		Classification: classification,
@@ -1565,18 +1926,18 @@ func captureContinueLearning(phase colony.Phase, workerFlow []codexContinueWorke
 		// Non-blocking: learning failure must not prevent phase advancement
 		fmt.Fprintf(os.Stderr, "warning: failed to capture learning: %v\n", err)
 	} else {
-		// Phase 91: Auto-skill creation hook (AUTO-01)
-		// Only fires after successful learning capture for difficult verified tasks.
-		// Reads auto_skill_mode config to determine behavior (off/propose/auto, default propose).
-		sqliteStore, sqliteErr := learn.NewSQLiteColonyStore(filepath.Join(store.BasePath(), "colony.db"))
-		if sqliteErr == nil {
-			defer sqliteStore.Close()
-			aetherRoot := storage.ResolveAetherRoot(context.Background())
-			mode := learn.LoadAutoSkillMode(store.BasePath())
-			if err := learn.AutoCreateSkillIfDifficult(entry, sqliteStore, aetherRoot, mode); err != nil {
-				// Non-blocking: auto-skill failure must not prevent phase advancement
-				fmt.Fprintf(os.Stderr, "warning: failed to auto-create skill: %v\n", err)
-			}
+		// Phase 91 / LEARN-07 (204-09-PLAN.md Task 3): auto-skill proposal
+		// hook (AUTO-01). Only fires after successful learning capture for
+		// difficult verified tasks. Reads auto_skill_mode config to
+		// determine whether a proposal is raised at all (off/propose/auto,
+		// default propose) -- neither mode creates an active skill
+		// directly any more; both route through the SAME owner
+		// tick-to-approve queue via colonySkillProposalSink
+		// (cmd/suggest_approve.go).
+		mode := learn.LoadAutoSkillMode(store.BasePath())
+		if err := learn.AutoCreateSkillIfDifficult(entry, mode, colonySkillProposalSink{}); err != nil {
+			// Non-blocking: a proposal failure must not prevent phase advancement
+			fmt.Fprintf(os.Stderr, "warning: failed to raise skill proposal: %v\n", err)
 		}
 	}
 }

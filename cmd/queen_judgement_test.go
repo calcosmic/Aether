@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"os"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -21,39 +24,38 @@ func hasCasteName(names []string, want string) bool {
 	return false
 }
 
-// TestQueenCannotDropTheWatcher is the load-bearing test of the whole
-// judgement path. Letting a model choose the team is only safe if its
-// judgement is bounded: a Queen that proposes a build with nothing verifying
-// it must get a Watcher anyway. Without this, "the Queen is intelligent"
-// becomes "the Queen can decide not to be checked".
-func TestQueenCannotDropTheWatcher(t *testing.T) {
-	phase := judgementPhase("Add a hello endpoint", "Implement the /hello route", colony.PhaseModePrototype)
-
-	judgement := queenApplyJudgement([]string{"builder"}, "simple change, builder is enough", phase, "build", colony.ColonyState{})
-
-	if !hasCasteName(judgement.Final, "watcher") {
-		t.Fatalf("Watcher must be restored when omitted; final = %v", judgement.Final)
-	}
-	if !hasCasteName(judgement.Added, "watcher") {
-		t.Errorf("restoring the Watcher must be reported in Added, got %v", judgement.Added)
-	}
-	if !strings.Contains(judgement.Summary(), "required for this phase regardless") {
-		t.Errorf("summary must disclose the override, got: %s", judgement.Summary())
-	}
-}
-
 // TestQueenCannotSkipSecurityReviewOnSecurityWork pins the other floor. A
 // proposal is judgement about which optional specialists help, not permission
 // to skip a security review on work that touches credentials.
+//
+// Plan 194-02 (D-05, D-07) moved this floor: it is no longer an unconditional
+// build-side restoration (mode/production inferred auditor+gatekeeper on
+// every build) but a named-risk signal forced at the continue step only.
+// This test now proves both halves of that move: the caste is still
+// unskippable (queenApplyJudgement restores it into Final on the continue
+// flow), AND the restored dispatch states WHY (D-09) -- something the old
+// build-side restoration never had to say.
 func TestQueenCannotSkipSecurityReviewOnSecurityWork(t *testing.T) {
 	phase := judgementPhase("Password reset", "Let users reset their password via an emailed token", colony.PhaseModeProduction)
 
-	judgement := queenApplyJudgement([]string{"builder", "watcher"}, "straightforward form work", phase, "build", colony.ColonyState{})
+	judgement := queenApplyJudgement([]string{"builder"}, "straightforward form work", phase, "continue", colony.ColonyState{})
+	if !hasCasteName(judgement.Final, "gatekeeper") {
+		t.Fatalf("gatekeeper must be restored on credential work; final = %v", judgement.Final)
+	}
 
-	for _, caste := range []string{"gatekeeper", "auditor"} {
-		if !hasCasteName(judgement.Final, caste) {
-			t.Errorf("%s must be restored on credential work; final = %v", caste, judgement.Final)
+	dispatches := queenContinueDispatchesWithJudgement(phase, colony.VerificationDepthLight, []string{"builder"}, "straightforward form work", nil, nil)
+	found := false
+	for _, dispatch := range dispatches {
+		if dispatch.Caste != "gatekeeper" {
+			continue
 		}
+		found = true
+		if !strings.Contains(dispatch.Rationale, "this touches") {
+			t.Errorf("gatekeeper dispatch should state why it was forced, got rationale %q", dispatch.Rationale)
+		}
+	}
+	if !found {
+		t.Fatalf("gatekeeper missing from continue dispatch list: %+v", dispatches)
 	}
 }
 
@@ -75,7 +77,11 @@ func TestQueenCanAddASpecialistKeywordsWouldMiss(t *testing.T) {
 	judgement := queenApplyJudgement(
 		[]string{"builder", "watcher", "measurer"},
 		"the complaint is latency even though the phase never says so",
-		phase, "build", colony.ColonyState{})
+		phase, "build", colony.ColonyState{},
+		map[string]string{
+			"watcher":  "confirming the fix actually addresses the latency complaint",
+			"measurer": "the complaint is latency even though the phase never says so",
+		})
 
 	if !hasCasteName(judgement.Final, "measurer") {
 		t.Errorf("Queen's added specialist must survive; final = %v", judgement.Final)
@@ -121,7 +127,18 @@ func TestBudgetTrimsTheQueensOptionalPicksNotItsRequiredOnes(t *testing.T) {
 		"builder", "watcher", "architect", "measurer", "chaos",
 		"weaver", "archaeologist", "includer", "sage", "keeper",
 	}
-	judgement := queenApplyJudgement(greedy, "everything, just in case", phase, "build", state)
+	// Every optional pick needs its own stated reason (D-08) or it is refused
+	// before it ever reaches the budget trim this test is pinning -- give
+	// each one a reason so the thing under test (trimming, not refusal) is
+	// what actually exercises the over-sized proposal.
+	greedyReasons := map[string]string{
+		"watcher": "everything, just in case", "architect": "everything, just in case",
+		"measurer": "everything, just in case", "chaos": "everything, just in case",
+		"weaver": "everything, just in case", "archaeologist": "everything, just in case",
+		"includer": "everything, just in case", "sage": "everything, just in case",
+		"keeper": "everything, just in case",
+	}
+	judgement := queenApplyJudgement(greedy, "everything, just in case", phase, "build", state, greedyReasons)
 
 	budget := queenSpawnBudgetForPhase(phase, "build", state)
 	if len(judgement.Final) > budget.MaxWorkers && len(judgement.Final) > len(budget.RequiredCastes) {
@@ -223,23 +240,148 @@ func TestQueenChoiceReachesTheDispatchList(t *testing.T) {
 	}
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := plannedBuildDispatchesWithJudgement(
+	// Owner ruling 2026-09-12: a specialist the Queen names runs at the CHECK,
+	// not during the build. Two contracts contradicted each other here for two
+	// days -- this test asserted the measurer on the BUILD dispatch list while
+	// cmd/codex_build_test.go:1987 asserted it must NOT be there without a
+	// recorded build-end boundary decision (201-05, D-05). The guarantee this
+	// test exists to protect is unchanged and still absolute: the Queen's
+	// decision must reach the ACTUAL spawn list, never stop at an intermediate
+	// record a later step can silently override. Only the boundary it is
+	// asserted at moved, to the one the owner chose and the runtime implements.
+	// D11 rule 4 (a phase is verified once) is why it is one boundary, not both.
+	buildDispatches := testPlannedBuildDispatchesWithJudgement(
 		phase, state, nil, colony.VerificationDepthStandard,
 		[]string{"builder", "measurer"},
 		"the complaint is latency even though the phase never says so",
+		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},
 	)
 
 	spawned := map[string]bool{}
-	for _, dispatch := range dispatches {
+	for _, dispatch := range buildDispatches {
 		spawned[dispatch.Caste] = true
 	}
 
-	if !spawned["measurer"] {
-		t.Errorf("Queen asked for a Measurer and none spawned; castes = %v", casteKeys(spawned))
+	checkDispatches := plannedContinueReviewDispatches(
+		t.TempDir(), phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{},
+		&codex.FakeInvoker{}, time.Minute, colony.VerificationDepthStandard,
+		[]string{"builder", "measurer"},
+		"the complaint is latency even though the phase never says so",
+		map[string]string{"measurer": "the complaint is latency even though the phase never says so"},
+	)
+	checkSpawned := map[string]bool{}
+	for _, dispatch := range checkDispatches {
+		checkSpawned[dispatch.Caste] = true
 	}
-	// The floor still holds in the same list.
-	if !spawned["watcher"] {
-		t.Errorf("Watcher must spawn regardless of the proposal; castes = %v", casteKeys(spawned))
+
+	if !checkSpawned["measurer"] {
+		t.Errorf("Queen asked for a Measurer and none spawned at the check; castes = %v", casteKeys(checkSpawned))
+	}
+	// The other half of the same ruling: it runs once, at the check -- never
+	// also at the build, which is the double-dispatch D-08 removed.
+	if spawned["measurer"] {
+		t.Errorf("Measurer must run at the check, not also during the build; build castes = %v", casteKeys(spawned))
+	}
+	// Phase 193 (D-08) stopped the build's own verification-stage dispatch
+	// from firing without an explicit Queen proposal naming the watcher --
+	// it did not here, so no build-side watcher spawns. Plan 194-02 (D-07)
+	// went further and removed watcher from the required-castes floor
+	// entirely, so there is no longer a restoration path to prove here
+	// either. Agent review for an unrequested watcher lives in `continue`,
+	// not the build boundary (ruling D11 rule 4: a phase is verified once).
+	if spawned["watcher"] {
+		t.Errorf("watcher must not spawn at the build boundary without an explicit Queen proposal; castes = %v", casteKeys(spawned))
+	}
+}
+
+func TestWrapperTrimReplaysReasonsForRetainedOptionalWorkers(t *testing.T) {
+	phase := judgementPhase(
+		"Slow dashboard under load",
+		"Measure latency and exercise failure handling with many rows",
+		colony.PhaseModePrototype,
+	)
+	initialReasons := map[string]string{
+		"measurer": "compare latency before and after the dashboard change",
+		"chaos":    "exercise failure handling with a large result set",
+	}
+	initial := queenApplyJudgement(
+		[]string{"measurer", "chaos"}, "inspect speed and resilience", phase, "build", colony.ColonyState{}, initialReasons,
+	)
+	if !hasCasteName(initial.Final, "measurer") || !hasCasteName(initial.Final, "chaos") {
+		t.Fatalf("fixture did not retain both optional workers: %+v", initial)
+	}
+
+	trimmed := queenApplyJudgement(
+		[]string{"measurer"}, "owner check-in trim", phase, "build", colony.ColonyState{},
+		map[string]string{"measurer": initial.Reasons["measurer"]},
+	)
+	if !hasCasteName(trimmed.Final, "measurer") {
+		t.Fatalf("replaying result.reasons must retain the selected optional worker: %+v", trimmed)
+	}
+	if hasCasteName(trimmed.Final, "chaos") {
+		t.Fatalf("trimmed optional worker unexpectedly survived: %+v", trimmed)
+	}
+
+	for _, path := range []string{
+		"../.claude/commands/ant/build.md",
+		"../.claude/commands/ant-build.md",
+		"../.opencode/commands/ant/build.md",
+	} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(raw)
+		if !strings.Contains(text, `--caste-why "<caste>=<result.reasons[caste]>"`) {
+			t.Errorf("%s trim recipe does not replay a --caste-why from result.reasons", path)
+		}
+		if !strings.Contains(text, "On decline: re-fetch with the unchanged current optional-caste proposal and replay") {
+			t.Errorf("%s decline recipe does not preserve the current proposal and reasons", path)
+		}
+	}
+}
+
+// TestBuildWrapperSpawnLogUsesTrustedPhaseID is CR-05's wrapper contract.
+// A valid build invocation may carry options in $ARGUMENTS; spawn-log must
+// receive only the numeric phase parsed into cross-stage state.
+func TestBuildWrapperSpawnLogUsesTrustedPhaseID(t *testing.T) {
+	const arguments = "1 --verification-depth heavy"
+	const phaseID = "1"
+	for _, path := range []string{
+		"../.claude/commands/ant/build.md",
+		"../.claude/commands/ant-build.md",
+		"../.opencode/commands/ant/build.md",
+	} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var invocation string
+		for _, line := range strings.Split(string(raw), "\n") {
+			if !strings.Contains(line, "aether spawn-log") {
+				continue
+			}
+			start := strings.Index(line, "`")
+			end := strings.Index(line[start+1:], "`")
+			if start >= 0 && end >= 0 {
+				invocation = line[start+1 : start+1+end]
+				break
+			}
+		}
+		if invocation == "" {
+			t.Fatalf("%s has no spawn-log command", path)
+		}
+		expanded := strings.ReplaceAll(invocation, "<phase_id>", phaseID)
+		expanded = strings.ReplaceAll(expanded, "$ARGUMENTS", arguments)
+		if !strings.HasSuffix(expanded, "--phase "+phaseID) {
+			t.Fatalf("%s leaked build options into spawn-log: %q", path, expanded)
+		}
+		if strings.Count(expanded, "--phase") != 1 {
+			t.Fatalf("%s spawn-log command must contain exactly one phase flag: %q", path, expanded)
+		}
+		if strings.Contains(expanded, "--verification-depth") {
+			t.Fatalf("%s forwarded non-phase build arguments into spawn-log: %q", path, expanded)
+		}
 	}
 }
 
@@ -258,7 +400,7 @@ func TestDepthPolicyStillAppliesWithoutAQueenChoice(t *testing.T) {
 	}
 	state := colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{phase}}}
 
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
+	dispatches := testPlannedBuildDispatchesWithJudgement(phase, state, nil, colony.VerificationDepthStandard, nil, "")
 	for _, dispatch := range dispatches {
 		if dispatch.Caste == "measurer" {
 			t.Error("Measurer must stay off at standard depth when the Queen did not ask for it")
@@ -275,32 +417,6 @@ func casteKeys(set map[string]bool) []string {
 	return keys
 }
 
-// TestQueenTrimsContinueReviewersAndKeepsTheWatcher covers the expensive flow.
-// Continue fans out to a reviewer per caste, each a full agent run — a real
-// session spent roughly 350k tokens on three of them, one of which was a
-// Measurer selected because an audio phase's vocabulary contains "latency" and
-// "memory". Nobody judged that worth doing; a word matched.
-func TestQueenTrimsContinueReviewersAndKeepsTheWatcher(t *testing.T) {
-	phase := judgementPhase(
-		"Fix envelope retrigger",
-		"The envelope re-arms once and never again when the step lane sends a steady value; latency and memory behaviour is unchanged",
-		colony.PhaseModeProduction,
-	)
-	depth := colony.VerificationDepthStandard
-
-	// Keyword scoring on this phase pulls in specialists the change does not
-	// need. The Queen reading it knows the question is correctness.
-	before := queenContinueDispatches(phase, depth)
-	after := queenContinueDispatchesWithJudgement(phase, depth, []string{"watcher"}, "this is a correctness fix, not a performance question")
-
-	if len(after) > len(before) {
-		t.Errorf("judgement should not grow the review team here: before %d, after %d", len(before), len(after))
-	}
-	if !queenContinueHasCaste(after, "watcher") {
-		t.Errorf("Watcher must survive: %v", casteNames(after))
-	}
-}
-
 // TestContinueJudgementCannotDropASecurityReview keeps the continue floor equal
 // to the build floor. Trimming reviewers is a cost decision; skipping a
 // security review on credential work is not available at any cost.
@@ -309,7 +425,8 @@ func TestContinueJudgementCannotDropASecurityReview(t *testing.T) {
 
 	after := queenContinueDispatchesWithJudgement(
 		phase, colony.VerificationDepthStandard,
-		[]string{"watcher"}, "looks simple")
+		[]string{"watcher"}, "looks simple", nil, nil,
+		map[string]string{"watcher": "an independent check before this lands"})
 
 	if !queenContinueHasCaste(after, "watcher") {
 		t.Errorf("Watcher must survive: %v", casteNames(after))
@@ -328,7 +445,7 @@ func TestContinueWithNoProposalIsUnchanged(t *testing.T) {
 	depth := colony.VerificationDepthStandard
 
 	base := casteNames(queenContinueDispatches(phase, depth))
-	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, ""))
+	same := casteNames(queenContinueDispatchesWithJudgement(phase, depth, nil, "", nil, nil))
 	if len(base) != len(same) {
 		t.Fatalf("no-proposal continue changed: %v vs %v", base, same)
 	}

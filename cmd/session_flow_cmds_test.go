@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -51,15 +52,15 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 					ID:     1,
 					Name:   "Execution",
 					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement pause-colony", Status: colony.TaskInProgress}},
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement pause", Status: colony.TaskInProgress}},
 				},
 			},
 		},
 	})
 
-	rootCmd.SetArgs([]string{"pause-colony"})
+	rootCmd.SetArgs([]string{"pause"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("pause-colony returned error: %v", err)
+		t.Fatalf("pause returned error: %v", err)
 	}
 
 	if !strings.Contains(buf.String(), `"paused":true`) {
@@ -70,8 +71,8 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 	if err := store.LoadJSON("session.json", &session); err != nil {
 		t.Fatalf("expected session.json to be written: %v", err)
 	}
-	if session.LastCommand != "pause-colony" {
-		t.Fatalf("session.LastCommand = %q, want pause-colony", session.LastCommand)
+	if session.LastCommand != "pause" {
+		t.Fatalf("session.LastCommand = %q, want pause", session.LastCommand)
 	}
 	if !session.ContextCleared {
 		t.Fatal("expected ContextCleared to be true after pause")
@@ -97,7 +98,7 @@ func TestPauseColonyWritesHandoffAndSession(t *testing.T) {
 		t.Fatalf("expected handoff file: %v", err)
 	}
 	handoff := string(data)
-	for _, want := range []string{"# Colony Session — Paused Colony", "Pause this colony cleanly", "Implement pause-colony", "aether resume"} {
+	for _, want := range []string{"# Colony Handoff", "Pause this colony cleanly", "Implement pause", "aether resume"} {
 		if !strings.Contains(handoff, want) {
 			t.Errorf("handoff missing %q\n%s", want, handoff)
 		}
@@ -228,25 +229,33 @@ func TestResumeColonyRestoresSessionAndClearsHandoff(t *testing.T) {
 		t.Fatalf("failed to seed handoff: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("resume-colony returned error: %v", err)
+		t.Fatalf("resume returned error: %v", err)
 	}
 
 	if !strings.Contains(buf.String(), `"resumed":true`) {
 		t.Fatalf("expected resumed:true JSON, got: %s", buf.String())
 	}
 
-	if _, err := os.Stat(handoffPath); !os.IsNotExist(err) {
-		t.Fatalf("expected handoff to be removed, stat err=%v", err)
+	// Resume pairs its removal of the pre-resume handoff with a fresh,
+	// minimal one written in the same transaction (#205-03) so a later
+	// archive never sees an empty required tombstone_input slot. The note
+	// must therefore exist and carry real content, not merely survive.
+	handoffAfterResume, err := os.ReadFile(handoffPath)
+	if err != nil {
+		t.Fatalf("resume did not leave a usable human handoff: %v", err)
+	}
+	if !strings.Contains(string(handoffAfterResume), "# Colony Handoff") {
+		t.Fatalf("resume handoff missing expected content: %s", handoffAfterResume)
 	}
 
 	var updated colony.SessionFile
 	if err := store.LoadJSON("session.json", &updated); err != nil {
 		t.Fatalf("failed to reload session: %v", err)
 	}
-	if updated.LastCommand != "resume-colony" {
-		t.Fatalf("session.LastCommand = %q, want resume-colony", updated.LastCommand)
+	if updated.LastCommand != "resume" {
+		t.Fatalf("session.LastCommand = %q, want resume", updated.LastCommand)
 	}
 	if updated.ContextCleared {
 		t.Fatal("expected ContextCleared to be false after resume")
@@ -315,7 +324,7 @@ func TestResumeColonyRestoresInvalidStateFromHandoffSnapshot(t *testing.T) {
 		t.Fatalf("failed to corrupt state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -376,7 +385,7 @@ func TestResumeColonyRestoresInvalidStateFromLegacyHandoff(t *testing.T) {
 		t.Fatalf("failed to corrupt state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -448,7 +457,7 @@ func TestResumeColonyNoHandoffRejectsBrokenState(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"resume-colony", "--no-handoff"})
+	rootCmd.SetArgs([]string{"resume", "--no-handoff"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -463,8 +472,9 @@ func TestResumeColonyNoHandoffRejectsBrokenState(t *testing.T) {
 	if state.State != colony.State("BROKEN_STATE") {
 		t.Fatalf("state changed despite --no-handoff: %q", state.State)
 	}
-	if !strings.Contains(errBuf.String(), "HANDOFF.md fallback is disabled") {
-		t.Fatalf("expected no-handoff recovery message, got:\n%s", errBuf.String())
+	combined := outBuf.String() + errBuf.String()
+	if !strings.Contains(combined, "HANDOFF.md reconstruction is disabled") {
+		t.Fatalf("expected no-handoff recovery message, got:\n%s", combined)
 	}
 }
 
@@ -510,20 +520,14 @@ func TestResumeColonyWarnsAndBlocksOnHandoffGoalMismatch(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
 
-	errOutput := errBuf.String()
-	if !strings.Contains(errOutput, "COLONY_STATE.json is not runnable") {
-		t.Fatalf("expected broken-state handoff warning, got:\n%s", errOutput)
-	}
-	if !strings.Contains(errOutput, "does not match current COLONY_STATE.json goal") {
-		t.Fatalf("expected goal mismatch warning, got:\n%s", errOutput)
-	}
-	if !strings.Contains(errOutput, "appears to belong to a different colony") {
-		t.Fatalf("expected recovery error to block mismatched handoff, got:\n%s", errOutput)
+	errOutput := outBuf.String() + errBuf.String()
+	if !strings.Contains(errOutput, "does not match current COLONY_STATE.json goal") || !strings.Contains(errOutput, "appears to belong to a different colony") {
+		t.Fatalf("expected conflicting handoff evidence to block recovery, got:\n%s", errOutput)
 	}
 
 	var state colony.ColonyState
@@ -574,7 +578,7 @@ func TestResumeColonyRotatesStaleSpawnTreeForPausedColony(t *testing.T) {
 		t.Fatalf("failed to seed spawn tree: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -631,7 +635,7 @@ func TestResumeColonyNormalizesLegacyPausedStateToReady(t *testing.T) {
 		t.Fatalf("failed to seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -704,7 +708,7 @@ func TestResumeDashboardShowsNextPlannedPhaseAndSessionTodos(t *testing.T) {
 	}
 }
 
-func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
+func TestResumeDashboardClassifiesLegacySessionWithoutMirroring(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -754,21 +758,28 @@ func TestResumeDashboardRestoresLegacySessionMirror(t *testing.T) {
 		ContextCleared: true,
 	})
 
+	// The legacy-session-missing branch is the historically dangerous one:
+	// older dashboard code could create a top-level session while merely
+	// rendering a recovery view. Snapshot both candidate trees before the read
+	// so the assertion proves every byte remains intact, not just that one
+	// expected file was absent afterward.
+	beforeData := snapshotProjectDataTree(t, dataDir)
+	beforeLegacy := snapshotProjectDataTree(t, legacyRoot)
 	result := buildResumeDashboardResult()
-	sessionBlock, ok := result["session"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected session block, got %v", result)
+	afterData := snapshotProjectDataTree(t, dataDir)
+	afterLegacy := snapshotProjectDataTree(t, legacyRoot)
+	if !reflect.DeepEqual(beforeData, afterData) || !reflect.DeepEqual(beforeLegacy, afterLegacy) {
+		t.Fatalf("read-only dashboard mutated legacy-session-missing evidence\ndata before=%#v\ndata after=%#v\nlegacy before=%#v\nlegacy after=%#v", beforeData, afterData, beforeLegacy, afterLegacy)
 	}
-	if summary := stringValue(sessionBlock["summary"]); summary != "Recovered from colony-scoped session" {
-		t.Fatalf("summary = %q, want restored legacy session summary", summary)
+	if _, ok := result["session"]; ok {
+		t.Fatalf("read-only dashboard must not manufacture a session block from legacy data, got %v", result)
 	}
-
-	var mirrored colony.SessionFile
-	if err := store.LoadJSON("session.json", &mirrored); err != nil {
-		t.Fatalf("expected top-level session mirror to be restored: %v", err)
+	recovery := result["recovery"].(map[string]interface{})
+	if recovery["source"] != "COLONY_STATE.json" {
+		t.Fatalf("recovery source = %v, want COLONY_STATE.json", recovery["source"])
 	}
-	if mirrored.SessionID != "matching" {
-		t.Fatalf("restored session id = %q, want matching", mirrored.SessionID)
+	if _, err := os.Stat(filepath.Join(dataDir, "session.json")); !os.IsNotExist(err) {
+		t.Fatalf("read-only dashboard recreated a top-level session: %v", err)
 	}
 }
 
@@ -898,7 +909,7 @@ func TestResumeColonyGCOphanedWorktrees(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1002,7 +1013,7 @@ func TestResumeDetectsStaleFocusSignals(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1063,7 +1074,7 @@ func TestResumeNoStaleWhenSourcePhaseMatchesCurrent(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1118,7 +1129,7 @@ func TestResumeNilSourcePhaseNotFlagged(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1173,7 +1184,7 @@ func TestResumeOnlyFocusFlaggedNotRedirect(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1228,7 +1239,7 @@ func TestResumeInactiveFocusNotFlagged(t *testing.T) {
 		t.Fatalf("seed session: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("resume-colony returned error: %v", err)
 	}
@@ -1402,5 +1413,46 @@ func TestDetectStaleFocusSignals_PastPhaseFlagged(t *testing.T) {
 	}
 	if stale[0].CurrentPhase != 3 {
 		t.Errorf("expected CurrentPhase 3, got %d", stale[0].CurrentPhase)
+	}
+}
+
+// TestStalePauseRefusalNamesTheWayOut pins a real dead end. A worker ran
+// `aether pause` mid-build (its own Stop hook told it to), the runtime kept
+// writing afterwards, and every later `aether resume` refused because the
+// handoff no longer described reality. The refusal told the owner to "resolve
+// the named transaction evidence" via `aether status` -- which names no such
+// evidence -- and no documented command could retire the handoff. The colony
+// was stuck with no supported way out until the escape was found by
+// experiment. Every refusal that fires because a NAMED handoff went stale must
+// name the command that retires it.
+func TestStalePauseRefusalNamesTheWayOut(t *testing.T) {
+	source, err := os.ReadFile("session_flow_cmds.go")
+	if err != nil {
+		t.Fatalf("read session flow source: %v", err)
+	}
+	text := string(source)
+
+	staleRefusals := []string{
+		"the pause transaction receipt does not validate",
+		"repository HEAD or working bytes changed after the handoff",
+		"state names a handoff but session does not",
+		"state and session name different handoff evidence",
+	}
+	const escape = "aether state-mutate --field pause_handoff --value null"
+
+	for _, refusal := range staleRefusals {
+		idx := strings.Index(text, refusal)
+		if idx < 0 {
+			t.Errorf("refusal %q no longer exists; if it was renamed, re-point this test at its replacement", refusal)
+			continue
+		}
+		end := strings.Index(text[idx:], "\n")
+		if end < 0 {
+			end = len(text) - idx
+		}
+		line := text[idx : idx+end]
+		if !strings.Contains(line, escape) {
+			t.Errorf("refusal %q dead-ends: it does not name %q, so an owner has no supported way to retire a stale handoff.\nline: %s", refusal, escape, line)
+		}
 	}
 }

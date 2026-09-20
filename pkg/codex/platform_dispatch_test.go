@@ -430,46 +430,158 @@ exit 0
 	}
 }
 
-func TestSelectPlatformInvokerReportsOrderedEvaluatedFallbackCandidates(t *testing.T) {
+func TestSelectPlatformInvokerPinsActiveHost(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stub uses POSIX sh")
 	}
-
-	dir := t.TempDir()
-	claudeWrapper := writeFakeProviderCLI(t, dir, "provider-wrapper", "should not be probed", "", "", 99)
-	opencodeCalled := filepath.Join(dir, "opencode-called")
-	opencode := writeInvokedMarkerCLI(t, dir, "opencode", opencodeCalled)
-
-	t.Setenv(envActivePlatform, string(PlatformCodex))
-	t.Setenv("AETHER_CODEX_PATH", filepath.Join(dir, "missing-codex-binary"))
-	t.Setenv(envClaudePath, claudeWrapper)
-	t.Setenv(envOpenCodePath, opencode)
-
-	invoker := SelectPlatformInvoker(context.Background())
-	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
-		t.Fatalf("selected platform = %s, want %s", got, PlatformClaude)
-	}
-
-	meta, ok := invoker.(selectionMetadata)
-	if !ok {
-		t.Fatalf("selected invoker does not expose candidate metadata: %T", invoker)
-	}
-	statuses := meta.CandidateStatuses()
-	if len(statuses) != 1 {
-		t.Fatalf("candidate count = %d, want evaluated candidates only [claude]: %+v", len(statuses), statuses)
-	}
-	assertCandidateStatus(t, statuses[0], PlatformClaude, true, "probe_skipped")
-	if _, err := os.Stat(opencodeCalled); !os.IsNotExist(err) {
-		t.Fatalf("opencode candidate was probed despite evaluated-candidates semantics")
-	}
-	description := DescribeInvokerAvailability(invoker, context.Background())
-	for _, want := range []string{"detected host codex", "falling back to claude worker dispatcher"} {
-		if !strings.Contains(description, want) {
-			t.Fatalf("DescribeInvokerAvailability() = %q, want to contain %q", description, want)
+	for _, active := range []Platform{PlatformCodex, PlatformClaude, PlatformOpenCode} {
+		for _, unavailable := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/unavailable=%t", active, unavailable), func(t *testing.T) {
+				dir := t.TempDir()
+				t.Setenv(envActivePlatform, string(active))
+				t.Setenv(envWorkerPlatform, "")
+				for platform, key := range map[Platform]string{PlatformCodex: "AETHER_CODEX_PATH", PlatformClaude: envClaudePath, PlatformOpenCode: envOpenCodePath} {
+					marker := filepath.Join(dir, string(platform)+"-called")
+					if platform == active {
+						binary := writeFakeProviderCLI(t, dir, "active-wrapper", "", "", "", 0)
+						if unavailable {
+							binary = filepath.Join(dir, "missing-active")
+						}
+						t.Setenv(key, binary)
+					} else {
+						response := map[Platform]string{PlatformCodex: "Logged in as test@example.com", PlatformClaude: `{"loggedIn":true}`, PlatformOpenCode: "● default"}[platform]
+						binary := filepath.Join(dir, string(platform))
+						script := "#!/bin/sh\nprintf invoked > '" + marker + "'\nprintf '%s\\n' '" + response + "'\n"
+						if err := os.WriteFile(binary, []byte(script), 0755); err != nil {
+							t.Fatal(err)
+						}
+						t.Setenv(key, binary)
+					}
+				}
+				invoker := SelectPlatformInvoker(context.Background())
+				want := active
+				category := "probe_skipped"
+				if unavailable {
+					want, category = PlatformUnknown, "binary_missing"
+					if _, err := invoker.Invoke(context.Background(), WorkerConfig{}); err == nil {
+						t.Fatal("unavailable host must refuse invocation")
+					}
+				}
+				if got := PlatformFromInvoker(invoker); got != want {
+					t.Fatalf("selected platform = %s, want %s", got, want)
+				}
+				statuses := invoker.(selectionMetadata).CandidateStatuses()
+				if len(statuses) != 1 {
+					t.Fatalf("only active provider may be evaluated: %+v", statuses)
+				}
+				assertCandidateStatus(t, statuses[0], active, !unavailable, category)
+				for _, other := range []Platform{PlatformCodex, PlatformClaude, PlatformOpenCode} {
+					if other != active {
+						if _, err := os.Stat(filepath.Join(dir, string(other)+"-called")); !os.IsNotExist(err) {
+							t.Fatalf("non-active provider %s was probed or launched", other)
+						}
+					}
+				}
+			})
 		}
 	}
-	if strings.Contains(description, "opencode") || strings.Contains(description, "missing-codex-binary") {
-		t.Fatalf("DescribeInvokerAvailability() = %q, want evaluated Claude-first selection only", description)
+}
+
+func TestSelectPlatformInvokerExplicitOverrideSelectsRequestedProvider(t *testing.T) {
+	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, string(PlatformClaude))
+	t.Setenv("AETHER_CODEX_PATH", "go")
+	t.Setenv(envClaudePath, "go")
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
+		t.Fatalf("explicit override selected %s, want claude", got)
+	}
+	statuses := invoker.(selectionMetadata).CandidateStatuses()
+	if len(statuses) != 1 || statuses[0].Platform != PlatformClaude {
+		t.Fatalf("only override provider may be evaluated: %+v", statuses)
+	}
+	if description := DescribeInvokerAvailability(invoker, context.Background()); !strings.Contains(description, "explicit override") || strings.Contains(description, "falling back") {
+		t.Fatalf("override must be described as deliberate selection: %q", description)
+	}
+}
+
+func TestSelectPlatformInvokerUnknownShellRetainsOrderedFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub uses POSIX sh")
+	}
+	for _, entry := range os.Environ() {
+		key, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "CLAUDE_CODE_") || strings.HasPrefix(key, "OPENCODE_") {
+			t.Setenv(key, value)
+			if err := os.Unsetenv(key); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, key := range []string{envActivePlatform, envWorkerPlatform, "CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		t.Setenv(key, "")
+	}
+	dir := t.TempDir()
+	// Keep parent-process detection deterministic without relying on the host
+	// that happens to launch this test process.
+	if err := os.WriteFile(filepath.Join(dir, "ps"), []byte("#!/bin/sh\nif [ \"$2\" = args= ]; then echo /bin/sh; else echo 1; fi\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv(envClaudePath, filepath.Join(dir, "missing-claude"))
+	t.Setenv("AETHER_CODEX_PATH", writeFakeProviderCLI(t, dir, "codex-wrapper", "", "", "", 0))
+	marker := filepath.Join(dir, "opencode-called")
+	t.Setenv(envOpenCodePath, writeInvokedMarkerCLI(t, dir, "opencode", marker))
+	invoker := SelectPlatformInvoker(context.Background())
+	if got := PlatformFromInvoker(invoker); got != PlatformCodex {
+		t.Fatalf("unknown shell selected %s, want codex after unavailable claude", got)
+	}
+	meta := invoker.(selectionMetadata)
+	if meta.ActivePlatform() != PlatformUnknown {
+		t.Fatalf("fixture detected a host: %s", meta.ActivePlatform())
+	}
+	statuses := meta.CandidateStatuses()
+	if len(statuses) != 2 {
+		t.Fatalf("want evaluated standalone candidates [claude, codex]: %+v", statuses)
+	}
+	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "binary_missing")
+	assertCandidateStatus(t, statuses[1], PlatformCodex, true, "probe_skipped")
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("unused standalone fallback was probed")
+	}
+}
+
+func TestDetectPlatformFromEnvIgnoresEmptyProviderPrefixes(t *testing.T) {
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "CLAUDE_CODE_") || strings.HasPrefix(key, "OPENCODE_") {
+			t.Setenv(key, "")
+		}
+	}
+	for _, key := range []string{"CODEX_THREAD_ID", "CODEX_SESSION_ID", "CODEX_CI", "CLAUDECODE", "CLAUDECODE_PROJECT_DIR", "CLAUDE_PROJECT_DIR"} {
+		t.Setenv(key, "")
+	}
+	t.Setenv("CLAUDE_CODE_SIMPLE", " \t ")
+	t.Setenv("OPENCODE_CONFIG", "")
+	if got := detectPlatformFromEnv(); got != PlatformUnknown {
+		t.Fatalf("empty ambient provider settings detected %s, want unknown", got)
+	}
+	for _, test := range []struct {
+		key      string
+		platform Platform
+	}{
+		{"CODEX_THREAD_ID", PlatformCodex},
+		{"CODEX_SESSION_ID", PlatformCodex},
+		{"CODEX_CI", PlatformCodex},
+		{"CLAUDE_CODE_SIMPLE", PlatformClaude},
+		{"OPENCODE_AGENT", PlatformOpenCode},
+	} {
+		t.Run(test.key, func(t *testing.T) {
+			t.Setenv(test.key, "1")
+			if got := detectPlatformFromEnv(); got != test.platform {
+				t.Fatalf("%s detected %s, want %s", test.key, got, test.platform)
+			}
+		})
 	}
 }
 
@@ -568,12 +680,10 @@ func TestSelectPlatformInvokerUnavailableStatusRedactsAndCategorizes(t *testing.
 		t.Fatalf("unavailable invoker does not expose candidate metadata: %T", invoker)
 	}
 	statuses := meta.CandidateStatuses()
-	if len(statuses) != 3 {
-		t.Fatalf("candidate count = %d, want 3 unavailable candidates: %+v", len(statuses), statuses)
+	if len(statuses) != 1 {
+		t.Fatalf("candidate count = %d, want only pinned host: %+v", len(statuses), statuses)
 	}
-	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "binary_missing")
-	assertCandidateStatus(t, statuses[1], PlatformCodex, false, "auth_probe_failed")
-	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "binary_missing")
+	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_probe_failed")
 
 	status := invoker.(interface {
 		Availability(context.Context) AvailabilityStatus
@@ -612,12 +722,10 @@ func TestSelectPlatformInvokerNoCredentialsReportsUnavailable(t *testing.T) {
 		t.Fatalf("unavailable invoker does not expose candidate metadata: %T", invoker)
 	}
 	statuses := meta.CandidateStatuses()
-	if len(statuses) != 3 {
-		t.Fatalf("candidate count = %d, want 3 no-credential candidates: %+v", len(statuses), statuses)
+	if len(statuses) != 1 {
+		t.Fatalf("candidate count = %d, want only pinned host: %+v", len(statuses), statuses)
 	}
-	assertCandidateStatus(t, statuses[0], PlatformClaude, false, "auth_inactive")
-	assertCandidateStatus(t, statuses[1], PlatformCodex, false, "auth_inactive")
-	assertCandidateStatus(t, statuses[2], PlatformOpenCode, false, "credentials_missing")
+	assertCandidateStatus(t, statuses[0], PlatformCodex, false, "auth_inactive")
 
 	status := invoker.(interface {
 		Availability(context.Context) AvailabilityStatus
@@ -631,12 +739,13 @@ func TestSelectPlatformInvokerNoCredentialsReportsUnavailable(t *testing.T) {
 	for _, want := range []string{
 		"detected host platform codex",
 		"codex login status did not confirm an authenticated session",
-		"claude auth status reported no active login",
-		"opencode auth list reported no configured credentials",
 	} {
 		if !strings.Contains(status.Reason, want) {
 			t.Fatalf("unavailable reason missing %q:\n%s", want, status.Reason)
 		}
+	}
+	if strings.Contains(status.Reason, "claude") || strings.Contains(status.Reason, "opencode") {
+		t.Fatalf("unexamined providers appeared in pinned host diagnostic: %s", status.Reason)
 	}
 }
 

@@ -2,10 +2,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -217,12 +221,11 @@ func TestWorktreeAllocateRejectsInvalidName(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
-
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -254,8 +257,8 @@ func TestWorktreeAllocateRequiresBranchOrAgentPhase(t *testing.T) {
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -291,8 +294,8 @@ func TestWorktreeListEmptyState(t *testing.T) {
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -340,8 +343,8 @@ func TestWorktreeListNilState(t *testing.T) {
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -381,8 +384,8 @@ func TestWorktreeOrphanScanDefaultThreshold(t *testing.T) {
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -426,8 +429,8 @@ func TestWorktreeOrphanScanCustomThreshold(t *testing.T) {
 	state := `{"version":"3.0","goal":"test","state":"READY","current_phase":1,"plan":{"phases":[]},"events":[],"memory":{"phase_learnings":[],"decisions":[],"instincts":[]},"errors":{"records":[]}}`
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -534,13 +537,22 @@ func assertOKEnvelope(t *testing.T, output string) map[string]interface{} {
 // Helper: write test state to temp dir and return store + dir
 func newWorktreeTestStore(t *testing.T, stateJSON string) (*storage.Store, string) {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(stateJSON), 0644)
-	os.Setenv("AETHER_ROOT", tmpDir)
-	s, _ := storage.NewStore(dataDir)
-	return s, tmpDir
+	binding := bindCommandTestRepository(t)
+	if err := os.WriteFile(filepath.Join(binding.DataDir, "COLONY_STATE.json"), []byte(stateJSON), 0644); err != nil {
+		t.Fatalf("write worktree test state: %v", err)
+	}
+	return binding.Store, binding.Root
+}
+
+func registerSourceWorktreeAllocation(t *testing.T, branch string) {
+	t.Helper()
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get test working directory: %v", err)
+	}
+	repoRoot := findTestModuleRoot(t)
+	worktreePath := filepath.Join(workingDir, filepath.FromSlash(worktreeBaseDir), sanitizeBranchPath(branch))
+	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
 }
 
 // ---------------------------------------------------------------------------
@@ -557,10 +569,10 @@ func TestWorktreeAllocateAgentPhase(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	// --agent and --phase should construct "phase-2/builder-1"
+	registerSourceWorktreeAllocation(t, "phase-2/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
 
 	err := rootCmd.Execute()
@@ -586,9 +598,9 @@ func TestWorktreeAllocateHumanBranch(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
+	registerSourceWorktreeAllocation(t, "feature/auth")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", "feature/auth"})
 
 	err := rootCmd.Execute()
@@ -625,7 +637,6 @@ func TestWorktreeOrphanScanStaleEntry(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-orphan-scan", "--threshold", "48"})
@@ -703,7 +714,6 @@ func TestWorktreeListWithEntries(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-list"})
@@ -742,7 +752,6 @@ func TestWorktreeListFilterByStatus(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-list", "--status", "merged"})
@@ -780,7 +789,6 @@ func TestWorktreeAllocateRejectsDuplicate(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
@@ -829,7 +837,6 @@ func TestWorktreeOrphanScanUntracked(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-orphan-scan"})
@@ -891,10 +898,12 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, tmpDir := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
-	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", fmt.Sprintf("feature/test-audit-%d", time.Now().UnixNano())})
+	branch := fmt.Sprintf("feature/test-audit-%d", time.Now().UnixNano())
+	registerSourceWorktreeAllocation(t, branch)
+
+	rootCmd.SetArgs([]string{"worktree-allocate", "--branch", branch})
 
 	err := rootCmd.Execute()
 	_ = err // may fail if git is not available
@@ -910,6 +919,30 @@ func TestWorktreeAllocateAuditLog(t *testing.T) {
 			}
 		}
 		// It's ok if the command failed for other reasons (e.g. git not available)
+	}
+}
+
+func TestCleanupTestWorktreesIsIdempotent(t *testing.T) {
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "test@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Test")
+	runGit(t, repoRoot, "commit", "--allow-empty", "-m", "initial")
+
+	branch := "feature/test-owned-idempotent"
+	worktreePath := filepath.Join(repoRoot, ".aether", "worktrees", "test-owned-idempotent")
+	registerTestOwnedWorktree(t, repoRoot, worktreePath, branch)
+	runGit(t, repoRoot, "worktree", "add", "-b", branch, worktreePath, "HEAD")
+
+	cleanupTestWorktrees()
+	cleanupTestWorktrees()
+
+	if _, err := os.Lstat(worktreePath); !os.IsNotExist(err) {
+		t.Fatalf("registered worktree still exists after repeated cleanup: %v", err)
+	}
+	branchExists := exec.Command("git", "-C", repoRoot, "show-ref", "--verify", "--quiet", "refs/heads/"+branch).Run() == nil
+	if branchExists {
+		t.Fatalf("registered branch %q still exists after repeated cleanup", branch)
 	}
 }
 
@@ -940,7 +973,6 @@ func TestWorktreeListEmptyArrayState(t *testing.T) {
 	worktrees := []colony.WorktreeEntry{}
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-list"})
@@ -985,7 +1017,6 @@ func TestWorktreeOrphanScanWithRecentCommit(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-orphan-scan", "--threshold", "48"})
@@ -1017,7 +1048,6 @@ func TestWorktreeAllocateWithPhaseZero(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	// --phase 0 should be rejected (not a valid agent-track name)
@@ -1079,9 +1109,9 @@ func TestWorktreeAllocateMergedBranchAllowed(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
+	registerSourceWorktreeAllocation(t, "phase-2/builder-1")
 	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "builder-1", "--phase", "2"})
 
 	err := rootCmd.Execute()
@@ -1106,7 +1136,6 @@ func TestWorktreeListFilterNonExistentStatus(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-list", "--status", "nonexistent"})
@@ -1140,7 +1169,6 @@ func TestWorktreeMergeBackNotFound(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(nil)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/nonexistent"})
@@ -1177,7 +1205,6 @@ func TestWorktreeMergeBackAlreadyMerged(t *testing.T) {
 
 	state := makeTestStateWithWorktrees(worktrees)
 	s, _ := newWorktreeTestStore(t, state)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
 	store = s
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", "phase-1/builder-done"})
@@ -1239,8 +1266,8 @@ func TestFailing(t *testing.T) { t.Fatal("forced failure") }
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -1351,8 +1378,8 @@ func TestB(t *testing.T) {}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -1445,8 +1472,8 @@ func TestNewFile(t *testing.T) {}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -1571,8 +1598,8 @@ func TestNewFF(t *testing.T) {}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -1666,6 +1693,81 @@ func TestCreateBlockerAppendsToExisting(t *testing.T) {
 // ===========================================================================
 // checkClashesForWorktree helper tests
 // ===========================================================================
+
+func TestReadOnlyGitCommandDisablesAmbientMutationFeatures(t *testing.T) {
+	t.Setenv("GIT_OPTIONAL_LOCKS", "0")
+	command := readOnlyGitCommand(context.Background(), "/repo", "diff", "--name-only", "main..feature")
+	if got, want := command.Args, []string{"git", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-C", "/repo", "diff", "--name-only", "main..feature"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("read-only git args = %#v, want %#v", got, want)
+	}
+	for _, want := range []string{"GIT_OPTIONAL_LOCKS=0", "GIT_PAGER=cat", "GIT_TERMINAL_PROMPT=0"} {
+		if !slices.Contains(command.Env, want) {
+			t.Fatalf("read-only git environment lacks %q: %#v", want, command.Env)
+		}
+	}
+	if command.WaitDelay != worktreeGitWaitDelay {
+		t.Fatalf("read-only git WaitDelay = %v, want %v", command.WaitDelay, worktreeGitWaitDelay)
+	}
+
+	writeCommand := worktreeGitCommand(context.Background(), "/repo", false, "worktree", "add", "/repo/.aether/worktrees/phase-1-builder", "-b", "phase-1/builder")
+	if slices.Contains(writeCommand.Env, "GIT_OPTIONAL_LOCKS=0") {
+		t.Fatal("write git command must retain required Git locks")
+	}
+	if writeCommand.WaitDelay != worktreeGitWaitDelay {
+		t.Fatalf("write git WaitDelay = %v, want %v", writeCommand.WaitDelay, worktreeGitWaitDelay)
+	}
+}
+
+func TestWorktreeAllocateUsesAetherRoot(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdout = &stdoutBuf
+	stderr = &stderrBuf
+
+	root := t.TempDir()
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+	runGit(t, root, "commit", "--allow-empty", "-m", "initial")
+
+	dataDir := filepath.Join(root, ".aether", "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatalf("create data directory: %v", err)
+	}
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+
+	rootCmd.SetArgs([]string{"worktree-allocate", "--agent", "root-anchor", "--phase", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("worktree allocate: %v", err)
+	}
+	if stderrBuf.Len() != 0 {
+		t.Fatalf("worktree allocate stderr: %s", stderrBuf.String())
+	}
+
+	relPath := filepath.ToSlash(filepath.Join(worktreeBaseDir, "phase-1-root-anchor"))
+	absPath := filepath.Join(root, relPath)
+	if _, err := os.Stat(filepath.Join(absPath, ".git")); err != nil {
+		t.Fatalf("allocated worktree is not rooted under AETHER_ROOT: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(".aether", "worktrees", "phase-1-root-anchor")); err == nil {
+		t.Fatal("allocated worktree escaped into the process working directory")
+	}
+
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load allocation state: %v", err)
+	}
+	if len(state.Worktrees) != 1 || state.Worktrees[0].Path != relPath {
+		t.Fatalf("stored worktree state = %#v, want one relative path %q", state.Worktrees, relPath)
+	}
+}
 
 func TestCheckClashesForWorktree(t *testing.T) {
 	// Create a real git repo with two worktrees
@@ -1763,6 +1865,9 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module example.com/worktree-lifecycle\n\ngo 1.26\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
 
 	// Init git repo
 	runGit(t, tmpDir, "init")
@@ -1770,8 +1875,8 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 	runGit(t, tmpDir, "config", "user.name", "Test")
 	runGit(t, tmpDir, "commit", "--allow-empty", "-m", "initial")
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -1861,6 +1966,8 @@ func TestWorktreeLifecycleFull(t *testing.T) {
 import "testing"
 func TestLifecycle(t *testing.T) {}
 `), 0644)
+		runGit(t, wtPath, "add", "cmd/lifecycle_test.go")
+		runGit(t, wtPath, "commit", "-m", "add lifecycle test")
 
 		resetRootCmd(t)
 		stdoutBuf.Reset()
@@ -1935,5 +2042,50 @@ func TestReportOrphanBranches(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected phase-1/builder-1 in orphaned branches, got %+v", orphaned)
+	}
+}
+
+func TestWorktreeFixtureRestoresRepositoryAuthority200(t *testing.T) {
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	t.Cleanup(func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+	})
+
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
+
+	var fixtureRoot string
+	t.Run("isolated worktree fixture", func(t *testing.T) {
+		saveGlobals(t)
+		fixtureRoot = t.TempDir()
+		bindCommandTestRepositoryAt(t, fixtureRoot)
+	})
+
+	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
+		t.Errorf("AETHER_ROOT survived deleted worktree fixture: %q", got)
+	}
+	if got, ok := os.LookupEnv("COLONY_DATA_DIR"); ok {
+		t.Errorf("COLONY_DATA_DIR survived deleted worktree fixture: %q", got)
+	}
+	if store != nil {
+		t.Error("repository store survived deleted worktree fixture")
+	}
+	if tracer != nil {
+		t.Error("repository tracer survived deleted worktree fixture")
+	}
+	if _, err := os.Stat(fixtureRoot); !os.IsNotExist(err) {
+		t.Errorf("fixture root still exists after subtest cleanup: %v", err)
 	}
 }

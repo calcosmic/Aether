@@ -17,8 +17,10 @@ func TestQueenSeedFromHiveFiltersDuplicates(t *testing.T) {
 	store = s
 
 	hubDir := filepath.Join(tmpDir, "hub")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", "") })
+	// t.Setenv restores the previous hub (the suite-wide test hub TestMain
+	// sets), where a cleanup that blanked the variable sent every later test
+	// in this process to the real ~/.aether hub.
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	// Create hive wisdom with two entries
 	wisdomDir := filepath.Join(hubDir, "hive")
@@ -66,8 +68,10 @@ func TestQueenSeedFromHiveSecondRunSeedsZero(t *testing.T) {
 	store = s
 
 	hubDir := filepath.Join(tmpDir, "hub")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", "") })
+	// t.Setenv restores the previous hub (the suite-wide test hub TestMain
+	// sets), where a cleanup that blanked the variable sent every later test
+	// in this process to the real ~/.aether hub.
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	// Create hive wisdom
 	wisdomDir := filepath.Join(hubDir, "hive")

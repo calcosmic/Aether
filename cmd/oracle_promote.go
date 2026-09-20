@@ -27,9 +27,19 @@ type oraclePromoteOutcome struct {
 // checked against the repository later (no file, command, or error named) is
 // rejected with its reason, exactly as hand-written observations are.
 //
+// provenance is a human-readable origin label ("from research: <topic>,
+// <date>") attached to every instinct this call promotes, so a habit created
+// this way can always be traced back to the research it came from and
+// removed if wrong (D-06). It is a plain caller-supplied value rather than
+// something this function derives from global state — the caller
+// (finalizeOracleLoop / the stop path) already knows the run's topic and
+// date; re-deriving it here would be a second source of truth. Pass "" when
+// there is no run to attribute (the hand-typed `aether oracle promote` CLI
+// path).
+//
 // v5 had this as a one-command capture; it was removed in the Go migration and
 // findings have been hand-copied (or lost) ever since.
-func runOraclePromote(root string, minConfidence int, dryRun bool) (map[string]interface{}, error) {
+func runOraclePromote(root string, minConfidence int, dryRun bool, provenance string) (map[string]interface{}, error) {
 	if minConfidence <= 0 {
 		minConfidence = 80
 	}
@@ -62,6 +72,21 @@ func runOraclePromote(root string, minConfidence int, dryRun bool) (map[string]i
 			if text == "" {
 				continue
 			}
+			// Findings come from outside the repository (Oracle's own
+			// research, not repo-authored content) and are replayed verbatim
+			// into later worker prompts once promoted -- the same trust
+			// boundary 198.1 drew for worker-authored text
+			// (colony.SanitizeSignalContent, see cmd/memory_feed.go). Sanitise
+			// before the admissibility gate sees it, exactly as
+			// captureWorkerObservation does.
+			sanitized, sanitizeErr := colony.SanitizeSignalContent(text)
+			if sanitizeErr != nil {
+				outcomes = append(outcomes, oraclePromoteOutcome{
+					Question: questionLabel, Finding: truncateForReport(text), Action: "skipped", SkipReason: sanitizeErr.Error(),
+				})
+				continue
+			}
+			text = sanitized
 			admissible, reason := memory.IsAdmissibleInstinctContent(text)
 			if !admissible {
 				outcomes = append(outcomes, oraclePromoteOutcome{
@@ -83,7 +108,7 @@ func runOraclePromote(root string, minConfidence int, dryRun bool) (map[string]i
 				learnings++
 				action = "learning"
 			}
-			if promoteOracleFindingAsInstinct(text, question.Confidence) {
+			if promoteOracleFindingAsInstinct(text, question.Confidence, provenance) {
 				instincts++
 				if action == "" {
 					action = "instinct"
@@ -152,7 +177,12 @@ func promoteOracleFindingAsLearning(text string, confidence int) bool {
 // promoteOracleFindingAsInstinct promotes a finding through the memory
 // promotion service (which re-checks admissibility, dedupes, and records
 // provenance). Returns false when rejected.
-func promoteOracleFindingAsInstinct(text string, confidence int) bool {
+//
+// originLabel is the human-readable "from research: <topic>, <date>" line
+// (D-06) recorded alongside SourceType/EvidenceType. It is carried on the
+// observation record rather than folded into the finding text itself --
+// finding text is what a later helper acts on and must stay clean.
+func promoteOracleFindingAsInstinct(text string, confidence int, originLabel string) bool {
 	if store == nil {
 		return false
 	}
@@ -166,6 +196,7 @@ func promoteOracleFindingAsInstinct(text string, confidence int) bool {
 		LastSeen:         now,
 		SourceType:       "oracle",
 		EvidenceType:     "research",
+		OriginLabel:      originLabel,
 	}
 	service := memory.NewPromoteService(store, events.NewBus(store, events.DefaultConfig()))
 	if _, err := service.Promote(context.Background(), obs, "oracle-promote"); err != nil {

@@ -1,0 +1,2058 @@
+{
+  "alternatives": [
+    "Obtain a supported vendor same-invocation export for complete tools/settings and explicit post-cancellation write coverage, then repeat Plan 24.",
+    "Owner decides a scoped host-control/observation architecture or proof-contract change; plan it explicitly while preserving native launcher and Go authority. No such change is implemented or approved here."
+  ],
+  "blockers": [
+    "No examined source demonstrates complete same-invocation effective settings plus all model-facing tool definitions for both installed hosts.",
+    "No examined source attests complete attributed post-cancellation file-write observation through an explicit end.",
+    "Optional Codex collab prompt/terminal and Claude forwarded transcript mappings remain unprobed; actual exact context, scoped answer/ACK and Claude comparison are unestablished."
+  ],
+  "candidates_examined": [
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "codex",
+      "id": "C1",
+      "method": "CLI JSON stream and retained historical rollout",
+      "version": "codex-cli 0.155.0"
+    },
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "codex",
+      "id": "C2",
+      "method": "installed app-server generated protocol plus documented thread/read",
+      "version": "codex-cli 0.155.0"
+    },
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "codex",
+      "id": "C3",
+      "method": "debug prompt-input standalone renderer",
+      "version": "codex-cli 0.155.0"
+    },
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "claude",
+      "id": "A1",
+      "method": "stream-json forwarded subagent messages",
+      "version": "2.1.272 (Claude Code)"
+    },
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "claude",
+      "id": "A2",
+      "method": "hooks and child transcripts",
+      "version": "2.1.272 (Claude Code)"
+    },
+    {
+      "actual_worker_probes": 0,
+      "disposition": "not_admitted_for_complete_acquisition",
+      "host": "claude",
+      "id": "A3",
+      "method": "system-prompt snapshot and local debug log",
+      "version": "2.1.272 (Claude Code)"
+    }
+  ],
+  "client_identities": {
+    "aether": {
+      "path": "/Users/callumcowie/.local/bin/aether",
+      "sha256": "sha256:b37f56f6f5c9800483df8e6ea702b5002c9bee7eaff0300bc02830b8b96479f3",
+      "version": "{\"ok\":true,\"result\":\"1.0.81\"}"
+    },
+    "claude": {
+      "path": "/Users/callumcowie/.local/share/claude/versions/2.1.272",
+      "sha256": "sha256:195e24e8e1f9bf46f1eaee72d434a33e18f9f5796f29a6348a00d16c5f8aee75",
+      "version": "2.1.272 (Claude Code)"
+    },
+    "codex": {
+      "path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.155.0-aarch64-apple-darwin/bin/codex",
+      "sha256": "sha256:b0b14f9c1901c1ec44671094b2dc18b39e4bd8d36a6dc2302cc9d961a7e2a197",
+      "version": "codex-cli 0.155.0"
+    }
+  },
+  "downstream_released": false,
+  "generated_at": "2026-09-18T10:49:43.696632+00:00",
+  "integrity": {
+    "installed_aether_matches_1_0_81": true,
+    "protected_changes": [],
+    "protected_file_count": 909,
+    "source_input_changes": []
+  },
+  "obligations": [
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [
+        "/properties/config",
+        "/properties/layers",
+        "/properties/origins"
+      ],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigReadResponse.json",
+        "sha256": "sha256:bd72c94e2c7d49ead6a20bcf54afedc8db11044bf8cadb387e42135dd5d1e342"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "effective_configuration",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadStartResponse.json",
+        "sha256": "sha256:5686cd0fecf44b09c533018de90e34f74fcc92b8aaf941430941fd6d633e6621"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "full_model_facing_tools",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [
+        "/definitions/ThreadItem:collabAgentToolCall/properties/prompt"
+      ],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadReadResponse.json",
+        "sha256": "sha256:d2616b2f1ea2ebcc07b7d9fae6b221a70adeb907413d790da39613650dea07ec"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "exact_delivered_context",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [
+        "/definitions/ThreadItem:collabAgentToolCall/properties/receiverThreadIds"
+      ],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadReadResponse.json",
+        "sha256": "sha256:d2616b2f1ea2ebcc07b7d9fae6b221a70adeb907413d790da39613650dea07ec"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "scoped_answer_and_child_ack",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [
+        "/properties/threadId",
+        "/definitions/Turn/properties/status"
+      ],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnCompletedNotification.json",
+        "sha256": "sha256:78af2a37391e8e669a4020cb58593e4d3e378756ced79d5fec72374fa69fb94b"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "correlated_cancelled_terminal",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [
+        "/definitions/Turn/properties/itemsView"
+      ],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadReadResponse.json",
+        "sha256": "sha256:d2616b2f1ea2ebcc07b7d9fae6b221a70adeb907413d790da39613650dea07ec"
+      },
+      "host": "codex",
+      "invocation_identity": null,
+      "obligation": "complete_no_write_observation_end",
+      "original_invocation_artifacts": [],
+      "status": "unsupported"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-cli.md",
+        "sha256": "sha256:a43cdbaed0f2cb8c0746ff941f6eb8bbc36c4971ab37134be08b6ee503a66317"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "effective_configuration",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-cli.md",
+        "sha256": "sha256:a43cdbaed0f2cb8c0746ff941f6eb8bbc36c4971ab37134be08b6ee503a66317"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "full_model_facing_tools",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-cli.md",
+        "sha256": "sha256:a43cdbaed0f2cb8c0746ff941f6eb8bbc36c4971ab37134be08b6ee503a66317"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "exact_delivered_context",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-cli.md",
+        "sha256": "sha256:a43cdbaed0f2cb8c0746ff941f6eb8bbc36c4971ab37134be08b6ee503a66317"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "scoped_answer_and_child_ack",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-hooks.md",
+        "sha256": "sha256:84dee417bb2ee0b6a858f5f874ebd9a1690c0ddcfef479abdb49f625cf19a4c1"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "correlated_cancelled_terminal",
+      "original_invocation_artifacts": [],
+      "status": "unknown"
+    },
+    {
+      "binding": "No current same-parent/child demonstration; schema/documentation is not invocation proof.",
+      "coverage": "No complete full-request and post-cancellation write-coverage source established in examined mechanisms.",
+      "demonstrated": false,
+      "discovery_field_paths": [],
+      "discovery_source": {
+        "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-hooks.md",
+        "sha256": "sha256:84dee417bb2ee0b6a858f5f874ebd9a1690c0ddcfef479abdb49f625cf19a4c1"
+      },
+      "host": "claude",
+      "invocation_identity": null,
+      "obligation": "complete_no_write_observation_end",
+      "original_invocation_artifacts": [],
+      "status": "unsupported"
+    }
+  ],
+  "plan": "204.2-24",
+  "probe": {
+    "actual_worker_invocations": 0,
+    "discovery_renderer": {
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-ready-home.json",
+      "sha256": "sha256:8eec377c316d76d96ac0222418378e56d71a398000d8e6adbb1afede41d0440a"
+    },
+    "discovery_renderer_is_worker_proof": false,
+    "first_renderer_setup_failure": {
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input.json",
+      "sha256": "sha256:7a51fba64fe9cc9cd8586a079d833f0e12e9d82a114abb9cc71a1a208845b083"
+    },
+    "host_timeout_seconds_if_admitted": 900,
+    "reason": "Required acquisition source unavailable; no expensive run can satisfy the missing source contract.",
+    "status": "not_admitted"
+  },
+  "qualification": "incomplete",
+  "raw_artifacts": [
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/aether-version.json",
+      "sha256": "sha256:0262cc8d84fd3f970e779a49beb28ca6ca88a36e75a24da712cc60443082da05"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/aether-version.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/aether-version.stdout",
+      "sha256": "sha256:15b73df15132af12dd8ef5e87dc8152740d49111897f9bd5c3788b6db5cadabd"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-cli.md",
+      "sha256": "sha256:a43cdbaed0f2cb8c0746ff941f6eb8bbc36c4971ab37134be08b6ee503a66317"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-help.json",
+      "sha256": "sha256:b0586424f08c4c48411897e637fe3d22a64e903574f4277a4296aa0f14a1a55e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-help.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-help.stdout",
+      "sha256": "sha256:ae85d661e9c086f05637ebcd868f5702b477ff6e55e2e65b8ada7807cd51a4b6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-hooks.md",
+      "sha256": "sha256:84dee417bb2ee0b6a858f5f874ebd9a1690c0ddcfef479abdb49f625cf19a4c1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-version.json",
+      "sha256": "sha256:b936bc53755b0c756f0eb92d3fec3a22c368b1eccab54198d5e89657d7657336"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-version.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/claude-version.stdout",
+      "sha256": "sha256:1a7fd8caef08117c2ae8f225a5237e2a43ce69cc382f530e4963503ff5e5091b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-help.json",
+      "sha256": "sha256:1b0fc9672ef5de4c8b5cf462273a020dac4a4720a57655df2f0fb852e6536847"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-help.stderr",
+      "sha256": "sha256:a65b17f79a27665d1b97bb586ed2a21b516bed20ddd21b6c18a1bdbb910f1ee8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-help.stdout",
+      "sha256": "sha256:d24c1bff8da56a7db440b036ff8f951ae658a07ceeb1f72ecce234d8b42ba54d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-ready-home.json",
+      "sha256": "sha256:8eec377c316d76d96ac0222418378e56d71a398000d8e6adbb1afede41d0440a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-ready-home.stderr",
+      "sha256": "sha256:77ad4ec23d61ce1fa0e94acca4c7ae1960d5255321f865b8ff9beba73a8b8d8f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input-ready-home.stdout",
+      "sha256": "sha256:41bddfcb033a62ba6b67d7d8fe77fbc61b61037c731e8e01e26aa60a0c79213f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input.json",
+      "sha256": "sha256:7a51fba64fe9cc9cd8586a079d833f0e12e9d82a114abb9cc71a1a208845b083"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input.stderr",
+      "sha256": "sha256:29563659a43b9c79a3f29cff9124fec0224d52f8b3d6f4e447f6f393edf9e3e0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-prompt-input.stdout",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ApplyPatchApprovalParams.json",
+      "sha256": "sha256:179d91081c3c84d0f79fc544a3d6d423f280c0f9d93512cdd0344c80e09b99a3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ApplyPatchApprovalResponse.json",
+      "sha256": "sha256:a5e145b4794ea91da6eb478626fac96bbbd4485c3399fabd1c9972d53d2d9010"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/AttestationGenerateParams.json",
+      "sha256": "sha256:b85df8f169cfbca98724df3a5f7550fc4649fa69b23f5160aafdb52e027133a8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/AttestationGenerateResponse.json",
+      "sha256": "sha256:2eb86b2a37bca01a8cb5d0822f28cf13d46dd106c8b1d38e7ba097e436b5ab30"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ChatgptAuthTokensRefreshParams.json",
+      "sha256": "sha256:03b7a734b8b3180d9cb477b33564385d29b22a2528165a614891f13849060503"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ChatgptAuthTokensRefreshResponse.json",
+      "sha256": "sha256:06d6b30436fc962d80b5d7920f8f323de12a052214d9148c5f0dfbaedd5eec6c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ClientNotification.json",
+      "sha256": "sha256:706cf248d75027c84a3c63348d0ed507182e8eba40069dd17541793de029145a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ClientRequest.json",
+      "sha256": "sha256:85d6d137bab416d9ad47982adf354d707713042da5d37f934d0b2ed386e53ca4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/CommandExecutionRequestApprovalParams.json",
+      "sha256": "sha256:16a71816c2d66e319c2c4aa83dd636dfdc43c61e72b6d5475e421ce08d8e6558"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/CommandExecutionRequestApprovalResponse.json",
+      "sha256": "sha256:6d0767113e22f311381809b6b236b0dde2b99b01992879c26bf7b1ea0e003cb7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/DynamicToolCallParams.json",
+      "sha256": "sha256:401bba20cfbd95762bef0467d840430c46be53369093ad9f26425ba757e34efc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/DynamicToolCallResponse.json",
+      "sha256": "sha256:abb082cad67f11fcc98ba75f2eff75d7d1723af0c657655329b83ff160451a02"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ExecCommandApprovalParams.json",
+      "sha256": "sha256:653116614df1aa5011c3cc399cf79bae6b9eb28c1d527df27275abf61ceb1365"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ExecCommandApprovalResponse.json",
+      "sha256": "sha256:80dba6d9f28d19c57960db72340554c193624f014cd496714a0c7aabe1120046"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FileChangeRequestApprovalParams.json",
+      "sha256": "sha256:13848b26814c286ad6425a20d01c1691c86790e1f9e2529399677a8a22fe0d18"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FileChangeRequestApprovalResponse.json",
+      "sha256": "sha256:b95b03ee6be674e25cee2e863cc135a28620e1070addd2f34685aadee27cde08"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FuzzyFileSearchParams.json",
+      "sha256": "sha256:0291dbb87a7c3d8ef7f7cdf8d5d61f929deabab8c0ea79f064da95984d7d5f4f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FuzzyFileSearchResponse.json",
+      "sha256": "sha256:4984c3dba591e240407c39531d41c6b499c4816017de70a3371c7d6fa2d0951f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FuzzyFileSearchSessionCompletedNotification.json",
+      "sha256": "sha256:d3af2e301142ac0cb2462d95b052162ff4f25d83f9c1b21e319d5ce9c860d401"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/FuzzyFileSearchSessionUpdatedNotification.json",
+      "sha256": "sha256:b8626521028e0c68611c57d458f27dbc9bf8be542e804865ae0d14acd78cf2e6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCError.json",
+      "sha256": "sha256:d7ea353d4875ae204625da5a00a1ecb5afc69101d5778b9acc253a49f8932992"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCErrorError.json",
+      "sha256": "sha256:12cc5cd5d9df9246defa609c472375020fe5250f3aeabd7d529076cecd9f541e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCMessage.json",
+      "sha256": "sha256:6da4cc373a7ccd01f5608ad4496eeb4d44b6a9b0d3158e85ed66b59f3c0b5114"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCNotification.json",
+      "sha256": "sha256:c2b43f26880db331393fe09f34bdd76dfeb4dc30d8418d1c26e18db166d6c8c8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCRequest.json",
+      "sha256": "sha256:31bd6f360b2dd8a7ceaf682708105d40d38cb0b9d0821357a04da67028438f73"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/JSONRPCResponse.json",
+      "sha256": "sha256:4796738c04c74288213a08fb8d820c7b4df19e0977cdcd35b65ffcb43cfc93ab"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/McpServerElicitationRequestParams.json",
+      "sha256": "sha256:5cbeb6bc702d2efa076da4c1dfb00672c970c1bad747031eb880b9ab907815c0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/McpServerElicitationRequestResponse.json",
+      "sha256": "sha256:792a012fdfe53ac211575a6c37ffbd492be848d15cb313d1bb4b534ade1f54ac"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/PermissionsRequestApprovalParams.json",
+      "sha256": "sha256:c11fbe632472ab0923aba5c0a53da3d6d86929bcd5c78e7c13c51c6b2db508ff"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/PermissionsRequestApprovalResponse.json",
+      "sha256": "sha256:23f3f24e9dbf35db3e0b85703f0d934da5a1cff3cbb611fba8bcd41f3b4a04b0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/RequestId.json",
+      "sha256": "sha256:9c72d59a306d827113020c6d31a14c326d55210d9bd6954f825196a52009f1c7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ServerNotification.json",
+      "sha256": "sha256:0a1c81641a6a2f009d7d6e3e26e8b99e6522f34d749cb1a2d5f182bbc395fcc3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ServerRequest.json",
+      "sha256": "sha256:f339be472737a0003efa25fba2e6e6c9237e621cd065b6d6995c51256e9dc1fb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ToolRequestUserInputParams.json",
+      "sha256": "sha256:fda15b62e7446105b59c8ed85c908abed2a47db70653e57c92c47a2f204fa77a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/ToolRequestUserInputResponse.json",
+      "sha256": "sha256:5073b245f741fa8ce62ec52e4dd1809b7831f9c4284c279a78abc9b171f8e3f2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/codex_app_server_protocol.schemas.json",
+      "sha256": "sha256:f1f3591667d8dcf77352c04be5d0667153e492d1a378e4205d69e9af6f31c0c3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/codex_app_server_protocol.v2.schemas.json",
+      "sha256": "sha256:f0402dc8ce8d278108f1e68e9d46ec7e59ddd9d153f5e70668d84d56f258dda3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v1/InitializeParams.json",
+      "sha256": "sha256:6f0094be9a65242ec779a40794cbd4fdfa32fca1e45084a16adfb50501d33ea2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v1/InitializeResponse.json",
+      "sha256": "sha256:62ad689c2cb6379913c1d72749cfd8de5089d35760214123518eb92eef11acc9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AccountLoginCompletedNotification.json",
+      "sha256": "sha256:d81e8821fd5a4a9ad118dfc3506ea156d32dcb18da388b336501bbc6a5ccb4a6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AccountRateLimitsUpdatedNotification.json",
+      "sha256": "sha256:8252ed2af807bebce56e9c042b6848300c7c52ba7a8162dc50d320709fa3b078"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AccountUpdatedNotification.json",
+      "sha256": "sha256:9bf450d9d9ea23a2bac9c9cb0a68c2de8f89a97bdeb4485c91762bb4d43295b8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AgentMessageDeltaNotification.json",
+      "sha256": "sha256:996e6c0ea65e57bed5a00f410b94381fe5ebf804333e5d00c2b6e6d47e5c55f6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppListUpdatedNotification.json",
+      "sha256": "sha256:2c67a3bc676309afdd0d6952ad454c2a040a3d4c09d38c8f63ca7fb632034cce"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsInstalledParams.json",
+      "sha256": "sha256:c2027510d5d041c2205349036f9c2bea10b20df309de5330beab9de8a9e50bdb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsInstalledResponse.json",
+      "sha256": "sha256:d8ef8dd14dcba8aaaaaf2b0b80db90d66edf8f4ff422589b844ae2b0edcb46d4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsListParams.json",
+      "sha256": "sha256:e880d0c24811118a2d3c2c7f0569a14aae5b12a31b0efe56809ccca8bbd85802"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsListResponse.json",
+      "sha256": "sha256:5811fda68d6274decfc11744ad72bbe93e601d8514549e94f361ba3131d1adeb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsReadParams.json",
+      "sha256": "sha256:61e6a9d35515f3164a7f7e7a5b0c5ac92817c5a3b5d7fb27e9a704fe2935ddf7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AppsReadResponse.json",
+      "sha256": "sha256:f3b73c2c31f16a2cff013c9682dfea48f26571f94002195c93ce10722a288791"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/AuthRecoveryNotification.json",
+      "sha256": "sha256:c19238d43cf8bf610ea346afefc390b9ffa4f01e98ec6b42af0addf29d6cb7d5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CancelLoginAccountParams.json",
+      "sha256": "sha256:a4570a7542b82b918f69199f1e214ef747151c678473a5af58c58b088fdf58b6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CancelLoginAccountResponse.json",
+      "sha256": "sha256:06bc17624df01600fdc399d3c0f222f875c010d2d952c1d1191cb84de9b59014"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecOutputDeltaNotification.json",
+      "sha256": "sha256:28e74454b211ab677a256129e623fc5a2a29ce5394da1c69d3bc5136f7e37c57"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecParams.json",
+      "sha256": "sha256:e4f20080b92c6199cf132941840c4bd0fb9a90e3fec197ceb0e1ce9084346e18"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecResizeParams.json",
+      "sha256": "sha256:b748fee19979d2c32ac17a460ccfdc761e125cc2939bc551945e1e2c2af34197"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecResizeResponse.json",
+      "sha256": "sha256:01da20d70957fa5b43cf41365c5fee4fb3a69927947a45f92866f9bcf0895d0f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecResponse.json",
+      "sha256": "sha256:dec52d187121e8dd48124b47a4a8d8428ef3717b98b9200345bb404f73b62c9d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecTerminateParams.json",
+      "sha256": "sha256:979ece7059c6713d0909ab1690daec27149510f4ea2ec10014600bfb1d631c97"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecTerminateResponse.json",
+      "sha256": "sha256:d46aa76d952bb3ac95d0bd64de609fb8a82efd98d9ee38264fe3673fd184ce5d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecWriteParams.json",
+      "sha256": "sha256:3e8e849ce321c85987bbe96ce1f913df0047696a5207bc97dfa1409b0142eda8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecWriteResponse.json",
+      "sha256": "sha256:22887250f84443b2a6f5fc6f9c46cf9e2af072ff631574340018c48771411571"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/CommandExecutionOutputDeltaNotification.json",
+      "sha256": "sha256:841fa94098ddb63a71acf1bf5f9e3fac1b0491f4ed3fa8ef86f9a6ca1260b539"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigBatchWriteParams.json",
+      "sha256": "sha256:d11e244258ffaf8a37a0ca4afdbe589d07cb7881b72f06b7f730fddbab9ad613"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigReadParams.json",
+      "sha256": "sha256:257c54a423b47c1d209ff1076765a1564d82322fd5161670fd489a2874de1bac"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigReadResponse.json",
+      "sha256": "sha256:bd72c94e2c7d49ead6a20bcf54afedc8db11044bf8cadb387e42135dd5d1e342"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigRequirementsReadResponse.json",
+      "sha256": "sha256:b12320eb9faf118a63de0ce9ba374571e7bf92606c9bcb89eb021b13878a3992"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigValueWriteParams.json",
+      "sha256": "sha256:b9032e35bf64d4628bfc72e22b58b71bbcf754aeb720a86eacb091e0137547c9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigWarningNotification.json",
+      "sha256": "sha256:533e713405b582cce4d772d0b4ebbc75e840f0fe71cedbb17c2c83da285a21d4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConfigWriteResponse.json",
+      "sha256": "sha256:1d690287d9e8a0c552f664038d3810dfc3903ec8042eb2c0f772856414f59954"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConsumeAccountRateLimitResetCreditParams.json",
+      "sha256": "sha256:ce36a9f59ce3b8138fccdca042538f723e93d0e34d08441e6846d3153ee0b291"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ConsumeAccountRateLimitResetCreditResponse.json",
+      "sha256": "sha256:6d4144c00dcb7f73be6ad24693ff7e539bad56064e4432f7f2bf8d20b3bab724"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ContextCompactedNotification.json",
+      "sha256": "sha256:c9f9a58ef680e09d568cff5f24b45895841e1cf138b650bae64dcf6c85f177af"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/DeprecationNoticeNotification.json",
+      "sha256": "sha256:29fdb44fc0a09bfdc5c4924ff34e33679acc9201730fa4fe9be7ed1978af0b72"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/EnvironmentConnectionNotification.json",
+      "sha256": "sha256:007e9a6ccae0003a56476bb7cdc9a097141e964c168e7ae43d213a763c93fb56"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ErrorNotification.json",
+      "sha256": "sha256:d77732536ef8864799e4fbb5bf6965a9f1970a6195e523f144252a82287c08e7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExperimentalFeatureEnablementSetParams.json",
+      "sha256": "sha256:00aaf2ef719cc336e4d20eb26dd6158be1eb26161fb7647372804b80a02e3131"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExperimentalFeatureEnablementSetResponse.json",
+      "sha256": "sha256:5ecd92ee95380d7cadc4c109091530aa71245e41b9f1b530a5e9d5c5c9eda95b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExperimentalFeatureListParams.json",
+      "sha256": "sha256:4db92977e59fea4125710babb4cd2128dc2cebef8292e3619d0844089e7fc1f5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExperimentalFeatureListResponse.json",
+      "sha256": "sha256:4084a25f32333b3f58eb5e9803a5983739b57f945c4e7e4002e85851622ce597"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigDetectParams.json",
+      "sha256": "sha256:db6c6ea654efb4095dc745a1e65bee76d0d063b03f2bc3202b9077a1569211f8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigDetectResponse.json",
+      "sha256": "sha256:36c4173d5f30ebd04be3d40389c904bc4ecadfbb8e5d1dd46b9b589254f7e1d9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportCompletedNotification.json",
+      "sha256": "sha256:c54702d40c3a40bcb3e3e835d99860473831725acbd3576fc26d2d4fa3a7617a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportHistoriesReadResponse.json",
+      "sha256": "sha256:1c09641e957333a2f602a350532acd99cf538a73ea45f39a2294289907a0bd96"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportHistoryRecordParams.json",
+      "sha256": "sha256:6a3e8071854771b0f34c6623fb7dcfbeaa7518a90779cc4a40c97fe92ac6f3ed"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportHistoryRecordResponse.json",
+      "sha256": "sha256:a252a2c2a03b4460bf3635d517c0735fa487a2f8a97de1aa0637f930419ae656"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportParams.json",
+      "sha256": "sha256:6b8d0a8fbd5a7ddd455ec0dea6d1b578f56841480c8a5fffbfcd045db79458ee"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportProgressNotification.json",
+      "sha256": "sha256:dae7bfc12026811ba24cc6f32dc01ae9ffaee7d9340d7768f9afce94575c23d2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ExternalAgentConfigImportResponse.json",
+      "sha256": "sha256:0ad2fc7dff7b1bdc471cc365985f559490f253ea127263417f0a0a1edcb33cef"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FeedbackUploadParams.json",
+      "sha256": "sha256:aa958cd74b37fb28cc49ce22345a1efcda9d4cf5fa47e7cce6949e5366ff8b2e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FeedbackUploadResponse.json",
+      "sha256": "sha256:d23cb7bfa94f59fbb423b1e042239ac1b6dc344be15c5efc69ef04badff01a91"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FileChangeOutputDeltaNotification.json",
+      "sha256": "sha256:04c3df83d46725ffc048577e7a5aa25de9a6c8ea9eff713bbae2b408672481c5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FileChangePatchUpdatedNotification.json",
+      "sha256": "sha256:cfb69d18658610a0510f213e09c6847f70517410ed91cf99cc4713c15a795213"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsChangedNotification.json",
+      "sha256": "sha256:197693fcb852a85fedfbcf1cd00c9a3cc74dddfa09bdf6b11fdafebbcd12ea2d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsCopyParams.json",
+      "sha256": "sha256:bc1135070827681e4d9a14f79b5b06a4f5652e538ae6a89642d27dbc8b2a2af1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsCopyResponse.json",
+      "sha256": "sha256:c88392d6c3ff394441231cdf5614794ba0c2b4ba683811f6033a01fe65528a59"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsCreateDirectoryParams.json",
+      "sha256": "sha256:405fd718ebafe7f47ffd82c86540ab4af663659c737ea2b25acd3e04a1bc94ea"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsCreateDirectoryResponse.json",
+      "sha256": "sha256:a658fbd34d5e3d6300bcb7015f10fc1764aa8aca3088abc79af9caa2e848e527"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsGetMetadataParams.json",
+      "sha256": "sha256:382bbf3a8b5c7e8cb16a1a29f853ce49c2904e563325e33a9e41dcbf632dab5e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsGetMetadataResponse.json",
+      "sha256": "sha256:b8355f112eda37d7ff25ad0eda7dae912dba695961855c5cb8444a7f867d66c2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsReadDirectoryParams.json",
+      "sha256": "sha256:c4ca6cdc129d70375fe638c723c1b1bb07a9716101525970cf77bf7560fec657"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsReadDirectoryResponse.json",
+      "sha256": "sha256:2cfb28c3c1ab1487f6b778f4d76871e3a9f590597bdf0da502cc41b202269dbc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsReadFileParams.json",
+      "sha256": "sha256:74b325108195fe955e6ffcb6032e9380d3bfdee8aed7d115f5f1e4b127c5d706"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsReadFileResponse.json",
+      "sha256": "sha256:fd67dd725b5bf5c7f27e78cc3d66fe24314f08913fc00ace9dbb663bf2f487e1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsRemoveParams.json",
+      "sha256": "sha256:c453f8ae4b3311f5da88f67f743fdabbcdc323dc3d9eaa40d750ceae147bb630"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsRemoveResponse.json",
+      "sha256": "sha256:6371aba2cae2f92be487be05c1ce531ca4139da5004b740a0010ccfdba548100"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsUnwatchParams.json",
+      "sha256": "sha256:3134d42c231f40769a4d1ac4adcf051be5205e7a1b70bb32c4a8655fea730175"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsUnwatchResponse.json",
+      "sha256": "sha256:9c59c3473df1f1873ee0d87ed33cecec0766b24c8357ee7dc8b29a57ca21e104"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsWatchParams.json",
+      "sha256": "sha256:10bd9c01b3819db1ed8e2487a277f20b35e3a9f74ae77214654f1a529fc1444d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsWatchResponse.json",
+      "sha256": "sha256:d32e77e7d6f619c5f4183c335ecddd3c4ffb95a51761198985c47838ae891a6c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsWriteFileParams.json",
+      "sha256": "sha256:2167e05c7f3eb26d475f9c1ce71697ba3b635efd8761a00b22abfd6af175bd2f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/FsWriteFileResponse.json",
+      "sha256": "sha256:0e4153ee7baa5c1203c2c573504baaa40e1dd8738d78e4c1e3a179fb49df6b16"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GetAccountParams.json",
+      "sha256": "sha256:30b545275f60975b55bd6fbaafd70f15505801d14168ee82d3931b6e93c78aab"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GetAccountRateLimitsResponse.json",
+      "sha256": "sha256:76bc91758269a89f57cd16c618b91c1fba76aca3e9d2b6186205e6f107d6b28c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GetAccountResponse.json",
+      "sha256": "sha256:08a7dd8c570c905b0bb6998d43ed133e72e2445f08125f86dfc96887e288701a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GetAccountTokenUsageResponse.json",
+      "sha256": "sha256:a58e58c852c888e5de925d99a66688d55ebb2fff038e795aadf04f8a8426dff8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GetWorkspaceMessagesResponse.json",
+      "sha256": "sha256:3ebd00f0acca088e5ee0309ec09b9a571e7f2eea5b63a32cda67be01c6886d67"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/GuardianWarningNotification.json",
+      "sha256": "sha256:5325551d2efb47d578665e3deb846f6369e05f98fbc5bfbffc5d9fe0cb0bd167"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/HookCompletedNotification.json",
+      "sha256": "sha256:1f146d70303cea6e59752191179e36a273650d63a74d4f9338f9a399da6597d2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/HookStartedNotification.json",
+      "sha256": "sha256:913ca61da2ab299d5f3318f6ea4d842d22708fc9308a9b10cdfad5e757098f2f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/HooksListParams.json",
+      "sha256": "sha256:07638c3a8a3690cf368fa92c7ff697fdd0132865e8c59d53f6e5789e5a260053"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/HooksListResponse.json",
+      "sha256": "sha256:891dd10ef7f78e59631fce05fff2becddb8004b3c0338dbbbd6b4f17ef1fa64f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ItemCompletedNotification.json",
+      "sha256": "sha256:69aba3fe5f72f38bf5c541e7e2c09de40778abe65ff969d9fc73372037812091"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ItemGuardianApprovalReviewCompletedNotification.json",
+      "sha256": "sha256:a9f56c22fa2bdac445e4099bb0b16d92a4166f119127c871c24716977fcacdae"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ItemGuardianApprovalReviewStartedNotification.json",
+      "sha256": "sha256:eb6283bd8ab1f7d23439cb9f140ea6bf13d6ebb47f59aeb73f46f9948d5c9657"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ItemStartedNotification.json",
+      "sha256": "sha256:c4c34f47db6326cd4841bae428f23d08eb285077ffad35be9772b928c65bb912"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ListMcpServerStatusParams.json",
+      "sha256": "sha256:33b1933595d844c61f76bdcfbc874c8456b65079877fed6e86e2710ea3d49f1b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ListMcpServerStatusResponse.json",
+      "sha256": "sha256:b70fe28f68e82f9716bfdf534c8339c00318e875e15bb30e7f153c5adbbcf962"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/LoginAccountParams.json",
+      "sha256": "sha256:48fb9bea54d7e0890052653ac06737efb3200ba2261515b2c4014027f36bea3d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/LoginAccountResponse.json",
+      "sha256": "sha256:72e6d77f49bc5809c3af50f183e2a0862dd8f7836816d4796ff69bb13eae0e89"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/LogoutAccountResponse.json",
+      "sha256": "sha256:ac14ddfca2ec6092b0039be8720262d5a9930484d23e62544d2ef0b7e1db7926"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceAddParams.json",
+      "sha256": "sha256:e6c92ca2a3889641ca2281cca7684569b1187653b25b57f9beabf85519d638a2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceAddResponse.json",
+      "sha256": "sha256:a37633e9ecc2fdd87ea582861bcdcbf7963a8fab6db9fbc1bc8eac7d2f7f9a8b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceRemoveParams.json",
+      "sha256": "sha256:220c2475a96f32ca095f80f3ecbad427477b4ba37dfad7fb48a0acabdeb1f4eb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceRemoveResponse.json",
+      "sha256": "sha256:98deb2f721d57ed727f7cc7b4f478db5f604b6b6d40e6261928dfd5f586405e3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceUpgradeParams.json",
+      "sha256": "sha256:93fc5d331d353b1b89262625c38eed54c6c16b2fb8aa0eac718245c7bdcbe4dc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/MarketplaceUpgradeResponse.json",
+      "sha256": "sha256:2402379cb0ed1168a7dc327c412fd61bafdea2ad13ea7a3b3ebaee3b43c45963"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpResourceReadParams.json",
+      "sha256": "sha256:a8241b056a65473b2b9bf0a14c1a49146de52dbc1cfc276549f52f4db13f3be6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpResourceReadResponse.json",
+      "sha256": "sha256:a48af749203ed3307414750d5070facb5ae6ef8b00253f1cfd9a8124bdfcfe41"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerEventStreamNotification.json",
+      "sha256": "sha256:44b04b6cc079ec0b99b4d29af1a69d99037505c19a2a07cff955aa298d7c181b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerOauthLoginCompletedNotification.json",
+      "sha256": "sha256:d3b7ca4f2626a623b4b5a97eeedc711cc27d41b3ee56fed8b0304857c5c9b13c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerOauthLoginParams.json",
+      "sha256": "sha256:83446fb61e04a361691f84fe236a51fff2ee4fb12a8f58e2e828a32cf6f6cc75"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerOauthLoginResponse.json",
+      "sha256": "sha256:95d7d00622866ac49dbe459164b8be665b2c9ad7b26772eadfc610a0537aa6d4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerRefreshResponse.json",
+      "sha256": "sha256:54a77812db02175dc69053870e582d3b314af6f161f0c76846f3563b0f9487c4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerStatusUpdatedNotification.json",
+      "sha256": "sha256:d6f4cb120b2363d321247592f03b9afbbf2762ad6d8af31b88c1b1bf39c4c7aa"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerToolCallParams.json",
+      "sha256": "sha256:7039a7583a1cbf38e9e0f5fe6398ff3711acd4d654b81b0be562514087fce6ba"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpServerToolCallResponse.json",
+      "sha256": "sha256:04a59b2064922c37b0c49bdb2470b8fff08d943e56dba4f7280a6b34bfa52c68"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/McpToolCallProgressNotification.json",
+      "sha256": "sha256:64a32b8282226876e749bc107a81db89d20d5ce5cb86ee6a043b960763214b1d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelListParams.json",
+      "sha256": "sha256:de29a536c00a5b8f46f34dba417dabd93365305571a8ed200e33bea85db68b5a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelListResponse.json",
+      "sha256": "sha256:c7b58b332f6cf18fd64235409a6daf27bb9e6c09d12dcd0daa2f3dc628b55f6f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelProviderCapabilitiesReadParams.json",
+      "sha256": "sha256:9db732188a15476cabb42cf05e495ae0803a1ada993fca7348c21c30a998388d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelProviderCapabilitiesReadResponse.json",
+      "sha256": "sha256:5c42590f728289daaa441b947617398a0ca3aa17479013b3c564a5d314a3c9cf"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelReroutedNotification.json",
+      "sha256": "sha256:37cd3c1b3a3560b85b01d4061a07d830fc9ed93b80e4663f975f9197cdb501ef"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelSafetyBufferingUpdatedNotification.json",
+      "sha256": "sha256:4cf853e3a2f968fdfde75206fd497d3d530b26769026bee343c3ef09ce438cfd"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ModelVerificationNotification.json",
+      "sha256": "sha256:4f27a99d0c8664c29abb4d65384ab16853bbc29b61de5e749111cefdc6994655"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/NullableGetAccountRateLimitsParams.json",
+      "sha256": "sha256:072f813ca1c696831a7f2fbd934feaa8cad228a6b3d44a4be8877547c796341b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/NullableGetAccountTokenUsageParams.json",
+      "sha256": "sha256:a992c6ea0fe02b0e9f46b18afb51b8ee2635e7f0c7d546f71e7f95e2a98bebba"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PermissionProfileListParams.json",
+      "sha256": "sha256:576d405f6c94cbde982a9f65c9301717043683b83ca35d564247907feb16b1b4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PermissionProfileListResponse.json",
+      "sha256": "sha256:4a290b5b9d47c2fc671033e22754671161bc563027ba387e861bd935398f0def"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PlanDeltaNotification.json",
+      "sha256": "sha256:a5cf42ccfc6cf905ede0fa9041e9c951ea7870aba4e3a7c7f68d85f01416d3af"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginInstallParams.json",
+      "sha256": "sha256:d6a8ff6356aed22c916cfd5a791ecce34ee2ac509750f690e7d0ef483fec7472"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginInstallResponse.json",
+      "sha256": "sha256:ae283e1ecb9f454f7614c6a4348fda5a7aba5af99e9ab9177b9a0cd3e1cd7db7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginInstalledParams.json",
+      "sha256": "sha256:0b56f55a817b6e82ea104496281cd43714ee96800f9b984412a3a858f444f68c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginInstalledResponse.json",
+      "sha256": "sha256:8afc8a16fa5c21d67f66d1855bf29890bad10a6229bafc960b3503281fc878e2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginListParams.json",
+      "sha256": "sha256:bc6b499161306df7082c5a8cc51fd793cd6d28dda93555b12ae299445132270a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginListResponse.json",
+      "sha256": "sha256:a405d2514d6236df75130c87c749e0e070b946a889f143a0448bbcd27d1d8501"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginReadParams.json",
+      "sha256": "sha256:f15952a2828c90501cc32f347c1e1691ea65cd2d97f503ab40e7be08757de74d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginReadResponse.json",
+      "sha256": "sha256:1651d8136fbbbb00878c4c1f8adbf279d050bf25b4454e6db4fa46f192f953d2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginReconcileParams.json",
+      "sha256": "sha256:91dfe0967326b876e50ddf8d896c6c516440c43a36b08efd4746c0bd770882dc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginReconcileResponse.json",
+      "sha256": "sha256:ba2a8e317c9098beed39d4decc433d9dc29ba0c8164e8d4c229481b9243c5ec8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareCheckoutParams.json",
+      "sha256": "sha256:25fd868fff9500ff244150a4ecd36322c0d31b339a4709649594b79aa1349185"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareCheckoutResponse.json",
+      "sha256": "sha256:d6271afa9bba5531574ba255d22b03f70fe10b8ef159185355625d92b6f9fac6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareDeleteParams.json",
+      "sha256": "sha256:d422a3fdecf91612bdf839d4fea6f1cddccb794869dc03ad3b8998bcb8e27fff"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareDeleteResponse.json",
+      "sha256": "sha256:ae881a7f898f5287354de5adf6f42094cef9029a9b9376bfd12aa1b0fe0b3106"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareListParams.json",
+      "sha256": "sha256:0d71280d2a655ffc26375044ec1693203848614f99fdb4563e0cb5a4ee40122b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareListResponse.json",
+      "sha256": "sha256:d349a496947956fd5f4d125b8348faa2ef0c91daf7f3cd74ae0616f55c8e328b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareSaveParams.json",
+      "sha256": "sha256:ec937521a40437506ceb2dcfe79cedd03812dd1b8233c651b89c2ddd76e148fe"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareSaveResponse.json",
+      "sha256": "sha256:3eb7c0ed6e6c72126c7bb3d845e73d5de98ad0d4ea8639d2f227fecd16c15411"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareUpdateTargetsParams.json",
+      "sha256": "sha256:0ecf16212022bca115211cbf13a1302f8995d7be5664ca268b926b7d00add7b0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginShareUpdateTargetsResponse.json",
+      "sha256": "sha256:caf42dec67940f9e686ac7b4e77484921d62fee400b3af73fc85e6f46eaa03f4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginSkillReadParams.json",
+      "sha256": "sha256:8850a9a45b9cf6e8b016f014c7c65f7062937be896d4fa0eafdaccc816909a56"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginSkillReadResponse.json",
+      "sha256": "sha256:dedaf95c4a8f70c022f5cac6fe3882603ed2b27d5efef710b52ae370869956cc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginUninstallParams.json",
+      "sha256": "sha256:4c9e1da7048fc99ef5269d4c3f4c6c3297dac01992c2756340fa210ae8f800cc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/PluginUninstallResponse.json",
+      "sha256": "sha256:f6a0c9c8dfd9e3fc4a535ecfa606f12922c09e469a37d6b1c6e189f45cacb89e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ProcessExitedNotification.json",
+      "sha256": "sha256:06cb5f39c67f84c227063d7f40e5e78fb62afdb76778c3d603687181896e8440"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ProcessOutputDeltaNotification.json",
+      "sha256": "sha256:c31714aa83297b83fd69dee98db877be7d4a3f98551dbeb517750efba0ecd79d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ProjectChangedNotification.json",
+      "sha256": "sha256:b32151fcb7ef78fc5c969db44255756e5e6e1754398a5b6b09244dcff0c1eab9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/RawResponseCompletedNotification.json",
+      "sha256": "sha256:aba140e87952c900f96e0308a8849d3e313d985de1f1aa2b77f193884a76357c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/RawResponseItemCompletedNotification.json",
+      "sha256": "sha256:808fe739fc46130292a0a8c1969ff4e63dff856fc241ff78ce207a8eb1a67f46"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ReasoningSummaryPartAddedNotification.json",
+      "sha256": "sha256:c8dfcb82d773d0f5d297ae1a47749e2b719013e82030a3af5d4550f9feb8eed6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ReasoningSummaryTextDeltaNotification.json",
+      "sha256": "sha256:895bdca00b4674634c25a5c4d1f82e55e65767d81ddcac4bb7b00aa3d438e62f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ReasoningTextDeltaNotification.json",
+      "sha256": "sha256:16cdc13080a7523b44f00fb6fdb660c56a7c4c8cda96b2f9b87b7e72264170fb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/RemoteControlStatusChangedNotification.json",
+      "sha256": "sha256:56aa1d58294238557cd8b16199909c2c157a7542b9259ef2deddf40fe4c02c91"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ReviewStartParams.json",
+      "sha256": "sha256:31f826890392eb5cdc9995c94884d3a5ca6af84c66283f2f981e792a1419769f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ReviewStartResponse.json",
+      "sha256": "sha256:d6d5c99473b695fff0f58a896bee11ddcddca23304523fba878860324b7f07df"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SendAddCreditsNudgeEmailParams.json",
+      "sha256": "sha256:91b380293f5685573f8dcdf46c99eba6f8a2adb7a206df9ac987f7fe6cb282a1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SendAddCreditsNudgeEmailResponse.json",
+      "sha256": "sha256:389978f741476c7cbcaec716b11a5bfb7f17581a28013e18cbf7a73ec8a45ae6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ServerRequestResolvedNotification.json",
+      "sha256": "sha256:4f03d586a5af04edd912cad08cc97eceb658e7e06744565e6d41a93e04a55966"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsChangedNotification.json",
+      "sha256": "sha256:84f7f1d327c5c774899992f32c98e9e95ee3e010a410d233ec0c33221e4ccbfb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsConfigWriteParams.json",
+      "sha256": "sha256:6e7dea83b649bfd118828b60446eb2eab2f5ce3cafe287c933b830c9cae9b170"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsConfigWriteResponse.json",
+      "sha256": "sha256:628bc112ca64f5475eb02a0eda718e82d670c40299444494e02a8dc278a772c7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsExtraRootsSetParams.json",
+      "sha256": "sha256:bb60389a0c7d4b73f625b9a40965e5e67b56b6503989f2d732cae12e9ca9698a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsExtraRootsSetResponse.json",
+      "sha256": "sha256:b659ec17a196eaa3a23273a3e2d5596460ea329bc3ade249971576bc723d9e96"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsListParams.json",
+      "sha256": "sha256:1d245374e64c5acc9739dfc68a4fe5114c6c9147af04c480886f1846d2ca6239"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/SkillsListResponse.json",
+      "sha256": "sha256:230f125d6c36ec1b1514018a0bb6d0627f7308ea82f1ef04cad85490de482bae"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/StrictReviewRequiredNotification.json",
+      "sha256": "sha256:16b50621c0982d84bd83b6e85586c1038ff309337e4253219895be7c118df470"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TerminalInteractionNotification.json",
+      "sha256": "sha256:5383b3d9681d3c071c9845fd4f043afd60fbe1bcc3650939356cb03848a7d627"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadApproveGuardianDeniedActionParams.json",
+      "sha256": "sha256:082e5278ed4fb1fc23eafbe658e95ec21d81c446bb6daf2b57e25e8cd3aebd5e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadApproveGuardianDeniedActionResponse.json",
+      "sha256": "sha256:628336c7cdabd508d5202695502bb0f9ce42fdde380f5efdd4b033cf215d93e5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadArchiveParams.json",
+      "sha256": "sha256:dc2c0b133b814a5d9d543cc37afdb3f4f22feca35b7cea4272834b20a1e47705"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadArchiveResponse.json",
+      "sha256": "sha256:2e021dabd0930ae3e2beb68cd0ddbafc40fc20cfbf8dbcb5e2f9c0493d06a08c"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadArchivedNotification.json",
+      "sha256": "sha256:54ca94956719ade8682c766f31419ee9953dee8f4587b5b30efd0927de6ca26e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentAddParams.json",
+      "sha256": "sha256:9fb9d132c284d92759f39605177eef49ede6605106a211f121ad8b0cde240b3f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentAddResponse.json",
+      "sha256": "sha256:06fd0a224722c962687bf808bd3f4d5233e35ae9fbcccd88711fa6f55334d626"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentListParams.json",
+      "sha256": "sha256:1e999a37aa4ea451887d6cb9154c6c6aec0130ba8b56eef65827bf864b5810cc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentListResponse.json",
+      "sha256": "sha256:1ba64dc8c5d173c044753e1207ba906550be15b67c4ee105957bdaf4489cc1e8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentRemoveParams.json",
+      "sha256": "sha256:9b262d87755c4ccbd1bf6d17dc71d45d173d80f26e4af9dc6df65bc2c206203d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentRemoveResponse.json",
+      "sha256": "sha256:905003d0d531365a3557f42dfdcc9a2d5ff13c4992f860d7e6145cbd74083dbe"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadAttachmentUpdatedNotification.json",
+      "sha256": "sha256:4470f2a0322b9a179e6970f02c5a862dc05ef4c052d948d4baa21934668c1408"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadClosedNotification.json",
+      "sha256": "sha256:d504cceb70e3397ad684924b08d3bff328a927be02ef4e3d482a18e27bab73de"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadCompactStartParams.json",
+      "sha256": "sha256:684b20adf20213a9fcbca31b59108feadcd5a8b693c16431c20d701049df3737"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadCompactStartResponse.json",
+      "sha256": "sha256:74674e47f33e37d7d97d144eac1789ef0580a1fc12d45a5675bb97caa08d803a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadDeleteParams.json",
+      "sha256": "sha256:0d5425d94af95e3dd20971cee052b2cb8c7d0d23195db1d17fde4e59cfbdec4a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadDeleteResponse.json",
+      "sha256": "sha256:333c0c5df96d78d1bcbdb19b57ddfa941de9a02bdae1c29d13c5311c2cdf6527"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadDeletedNotification.json",
+      "sha256": "sha256:6f8d6fa96700ec6fff4b8c2bddf6768539b7ec7ba5dc05483aba53f5183386f9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadForkParams.json",
+      "sha256": "sha256:60540b97d453ddbc5e12bfaa007a3718f31847d18dec0da59a5e4b89be4717ad"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadForkResponse.json",
+      "sha256": "sha256:f87794f43e171ebe2d471987fb00292d2070249768ce24457277375ec418482f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalClearParams.json",
+      "sha256": "sha256:896c8b1997edf913382393f7d0f20ced4344714b9f0e8ce1f6564a11403e1675"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalClearResponse.json",
+      "sha256": "sha256:2652c2d0072be8ccb71c8dcaaa054aa74f974e68156a73451baf72c8597669c2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalClearedNotification.json",
+      "sha256": "sha256:ad6c2cf53970e45cae55d36dbddd84ecc7b34837846616493efa7b132a35a051"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalGetParams.json",
+      "sha256": "sha256:1a5de89b3c5c49528af404a65411a73ef05dc7c9c49c3f00c90d9926dfe34137"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalGetResponse.json",
+      "sha256": "sha256:f610000963194731c96ce2b45e46722ca700f1b6ccc1fc55a2fd95e526018fd9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalSetParams.json",
+      "sha256": "sha256:93162f095e9b3b5a051ceb24318b8922c663edefc1f8c67bd378085c0d6c01d2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalSetResponse.json",
+      "sha256": "sha256:b1c61b6068b3b73dd3d97b38f8a269593f8f7added4643bfdb2016315b71ad8e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadGoalUpdatedNotification.json",
+      "sha256": "sha256:52010479c7efcc6dc749e2d9bf1e27c134453d92a1f0b367193d8125eec1fedc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadInjectItemsParams.json",
+      "sha256": "sha256:8d7e754402a2bb71bd817882076d2f8ac4cd75d4573306db082a83b841aa3532"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadInjectItemsResponse.json",
+      "sha256": "sha256:93d909e5b49b44da02072d340f8ad0ecd417d448ccf27fe50be7e369c7864159"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadItemsListParams.json",
+      "sha256": "sha256:ff56040c327ecdd30ef02affac9bc71fab64031e8980f2b4fea9fd8a888160b4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadItemsListResponse.json",
+      "sha256": "sha256:886369490fec07067597460301b3d5c1dc9aedc41ea42522cae397d8babe6156"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadListParams.json",
+      "sha256": "sha256:bf5abcb5363c177f8d6b60e6193c76ad8807d6452b67a73ee2f1d77dfe427ac9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadListResponse.json",
+      "sha256": "sha256:4bb627dd0db9ab52a3b94a88a8e9c2e27870da9fed2dda505ab0085d708524a3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadLoadedListParams.json",
+      "sha256": "sha256:42c2d124ab2b2998d84f0126daae2d32b0bf9c5a7ea7266e3a0814e5e37cf00d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadLoadedListResponse.json",
+      "sha256": "sha256:1ea02c4710083e552b2a3a89b931b9049d5bf05b7db46278b8352cf9fd80cd52"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadMetadataUpdateParams.json",
+      "sha256": "sha256:190da07d8c7c89c44b1e44b4e57fb5d803f356953534498a7a7f39fe29a8a6a4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadMetadataUpdateResponse.json",
+      "sha256": "sha256:1d34a3bdf73f866c6d3910548322326f4e9458bdfea478317b613cc0c99aba2e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadNameUpdatedNotification.json",
+      "sha256": "sha256:06d5e6b0e1eaf03eb88891af58eff14368a76e300a40a9bed71bacce2093b960"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadProjectUpdatedNotification.json",
+      "sha256": "sha256:ad31b029957a9259f26352ce879219cbe25f0314ae883d02ab811a0c6427a1e5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadQueueChangedNotification.json",
+      "sha256": "sha256:0a960da43fb14f69dae2550ac4f8517760464eedbf95a9977718548739fdcf21"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadReadParams.json",
+      "sha256": "sha256:dfe040c6ac71d30795b8be3f3ff232e66f362a37f883b491e5d1ea367f470db4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadReadResponse.json",
+      "sha256": "sha256:d2616b2f1ea2ebcc07b7d9fae6b221a70adeb907413d790da39613650dea07ec"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeClosedNotification.json",
+      "sha256": "sha256:5290a73f8d4652b59d2f82d89c7bd289003fe2981fb0c628a61e801fa2123364"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeErrorNotification.json",
+      "sha256": "sha256:aeba7e4b477b4825b41990a4da69b0f3cb3a00f44cf9e2e42e275b944b7cb040"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeItemAddedNotification.json",
+      "sha256": "sha256:48aabfcbfd2361b5830a93257bc9eb31a6933f6e390694e188bfb287acbad9b4"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeItemCompletedNotification.json",
+      "sha256": "sha256:b2a5e38840b8afc2111620c332801603e832b91ad4c95dd1f13c926923b760ef"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeItemStartedNotification.json",
+      "sha256": "sha256:ef1a68a635ce680b321e276fd9144ef614b37bab16942368bdc16bb8ee217f46"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeItemTranscriptDeltaNotification.json",
+      "sha256": "sha256:42f2456726367b90a2626a32f3f88495de87032243beecd9bfbad28734f4b62d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeOutputAudioDeltaNotification.json",
+      "sha256": "sha256:4f73a5c606fda4984da4fc14e4cd98f62c8f9aa75b2db17cff76562c2d176ec0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeSdpNotification.json",
+      "sha256": "sha256:1e276f48d346e6cace65551f84ef9b0bc8daba2a3ce93499f3a902551de239fc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeStartedNotification.json",
+      "sha256": "sha256:483d324381a8ced04c8ab158c825bca2b64c06a4e85b350a086730050fe8f188"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeTranscriptDeltaNotification.json",
+      "sha256": "sha256:1a6add677534de891026eb56aac815b2585fbd4a6d6475f679a722c52b778703"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRealtimeTranscriptDoneNotification.json",
+      "sha256": "sha256:0000453425e300fd19ac2bc5fba4ebf3fbce48ac9a9b62ceb8bc5db8b6c77fff"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadResumeParams.json",
+      "sha256": "sha256:36b2854eb802559e17b0e5639385a1e39d5279326c50e2cdb836749b6dd7cb6f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadResumeResponse.json",
+      "sha256": "sha256:fb1fac1fc4f7657736c1ab1a85efe7d71c8dde8fb5be7bf2b823d07367dab9b5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRevertParams.json",
+      "sha256": "sha256:3a5e85a67906c8ea3ad9f5065559d263d968a28a957739e7a1d9e4e1981e4eb8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRevertResponse.json",
+      "sha256": "sha256:60524c6fd66050509e204c9a0f77f544731f3bb070059bc95462375f30cb93cd"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRevertedNotification.json",
+      "sha256": "sha256:570995a91a4436d403bafbf9a4c34ead666b137ecd5406803e14826a6d84cf22"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRollbackParams.json",
+      "sha256": "sha256:27002ceab514bcbab10ad2e0a7b9b842f9ae51bd5e8c084ed14960889b422ebd"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadRollbackResponse.json",
+      "sha256": "sha256:6441a92be16354d1bfdf77a65e8a1228a7d2ba67b76bf18da068ebd2bbb94a30"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionCreateParams.json",
+      "sha256": "sha256:e3bf941ceab7a4dd39ce1b4063168621d60162aa97f7171cef59819c999c501e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionCreateResponse.json",
+      "sha256": "sha256:2b0b0e7a2651354aac35aa5d1a423b9f207ee8d46b2de077df747f4ed4f4c8de"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionDeleteParams.json",
+      "sha256": "sha256:93cc3d12bd5580966b59bbab8f2ccddd31b3b4bce56f76d49cfe41f1916b5deb"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionDeleteResponse.json",
+      "sha256": "sha256:9bbee5cca1fca02e4a65c2481dc3b24f090bca7afb786923ee481017b133b091"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionListParams.json",
+      "sha256": "sha256:6aea71b3fba46351fcaf648eab0da564080ba424599a012648abd9fd44464cf8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionListResponse.json",
+      "sha256": "sha256:dc3b5e5501a56ea2a1a83cb97c5221b355629f8c9468793d94e22673424140bc"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionMoveParams.json",
+      "sha256": "sha256:48bc921055838df25c5595c96be7bd25beef3accb8bd1d28026fcaa7d81487b1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionMoveResponse.json",
+      "sha256": "sha256:243299d7eebd4fb264d4e75efeb5058982681202371c2b83ff1a63b3369ddbb6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionUpdateParams.json",
+      "sha256": "sha256:6cc7b7e486026a59d6fcc0701407d9293c0fe8b96e41894630c3a39fee967980"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSectionUpdateResponse.json",
+      "sha256": "sha256:4588cbf0374204c17f02f15eecb5390cd5346bc551675e07e541bbfd28d020bf"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSetNameParams.json",
+      "sha256": "sha256:8e334c816bbaeb80f807aca61bf659246f3f60c245c21b5cb7e3ca4ee3ce4820"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSetNameResponse.json",
+      "sha256": "sha256:f8763716433feea94f7c1ebd59b6cea4c261432e83240c13a8d49ba8185aa567"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadSettingsUpdatedNotification.json",
+      "sha256": "sha256:e601ede3c6947f6df0aea6b1c091c01e38ef7909df939f5ef11c8f836fc8a2ed"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadShellCommandParams.json",
+      "sha256": "sha256:dc646457ca36be601c8c3d15c44d14907d9a165ccf2b9635a8e9a878f0ca0727"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadShellCommandResponse.json",
+      "sha256": "sha256:fd4911613f6a6da2ca13b75342501d4d61f64e00a1083c6d60038369b8caeefe"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadStartParams.json",
+      "sha256": "sha256:792e2f32e37cece971bd616664ea2053741acbed4e9c92e9d1766427718f2ecd"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadStartResponse.json",
+      "sha256": "sha256:5686cd0fecf44b09c533018de90e34f74fcc92b8aaf941430941fd6d633e6621"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadStartedNotification.json",
+      "sha256": "sha256:b20c94888884f9147d060bd57295b92a4669848f325c42051fc7882d648e3ed5"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadStatusChangedNotification.json",
+      "sha256": "sha256:26f3c60c1b73f7fa2d31c74429cdc36f8746c76c33e3d314b3fb61d3661f05f6"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadTokenUsageUpdatedNotification.json",
+      "sha256": "sha256:aba4f6c7e4a19b2b842c08ee793b57000c07dafd57b922ad0d8e7c76609108c2"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadTurnsListParams.json",
+      "sha256": "sha256:2a8b93d7d4437cc25e16a1dde16d8db3c338d39e16c5eece2a56e943a21577d7"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadTurnsListResponse.json",
+      "sha256": "sha256:45bffd91efc358859a1a54b8165c0a8b1c21ebc2a312da9f25d05ff27af798ee"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadUnarchiveParams.json",
+      "sha256": "sha256:a1d5d847b61ea16ab09d5b9d1c1461134a7829292aae02a7e11b0a69b00c76ca"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadUnarchiveResponse.json",
+      "sha256": "sha256:a516d589987839a630d4f80be05550faf7212cf3bc296890d2b3af365b6a2421"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadUnarchivedNotification.json",
+      "sha256": "sha256:fc00949cdc588b84800a26403647eda0e22d6f28663dc032a90db9c20dfa822d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadUnsubscribeParams.json",
+      "sha256": "sha256:77c67e0dc0a729af2d4612f30ed63f1297160232e96cd32b7cb9cc3e7fff0233"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/ThreadUnsubscribeResponse.json",
+      "sha256": "sha256:9cad5e71a589c3c20e0980ce34a894a29e2898a075b10b1493bc87f32500081a"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnCompletedNotification.json",
+      "sha256": "sha256:78af2a37391e8e669a4020cb58593e4d3e378756ced79d5fec72374fa69fb94b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnDiffUpdatedNotification.json",
+      "sha256": "sha256:59a02535094b591b926cdc11a8e5f5babf73b442323a02cace1661c62f0c2918"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnInterruptParams.json",
+      "sha256": "sha256:6dff382dae73d1dbc58406ed045605f647e7a49660e2540fbd2c6c24d60c5f2b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnInterruptResponse.json",
+      "sha256": "sha256:531de6be06fe979b5963f249bab82498a175e614bf65ac12fb2e849dfe60bcf1"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnModerationMetadataNotification.json",
+      "sha256": "sha256:90fe9ade83c46fd42af9d023737a9990595dac71e059158744950f538e802876"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnPlanUpdatedNotification.json",
+      "sha256": "sha256:2522f743be0a1e9666dec5ad4f18d8ecba3c4f16e66d510b1491d4117d1dd0ba"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnStartParams.json",
+      "sha256": "sha256:a3835e8c1e942e4b358e1a670939b89918b16c4d13105a579899892b7ade6dea"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnStartResponse.json",
+      "sha256": "sha256:6fc49c3e5d0ce11a3a109ae194619b04d6e3ff98fa29bac683fdb754608958be"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnStartedNotification.json",
+      "sha256": "sha256:d4b59fd396cadfc2377f60c9f9f4c9367dca95362baadf7817c74e1b9c910c4d"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnSteerParams.json",
+      "sha256": "sha256:4a52eb76e7a717bb388484ccd7538737fca0df35481fc30a21e259f1bfe96e37"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/TurnSteerResponse.json",
+      "sha256": "sha256:866ba9a77c12b5d570c837d58f73bf40b24e50fa93404bdf792dd984d313b1aa"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WarningNotification.json",
+      "sha256": "sha256:f83c400591b923400ca0beaaaab1341c712d5ac0dee4ce6868a8e590f46490f9"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WindowsSandboxReadinessResponse.json",
+      "sha256": "sha256:077f60a3d6d1fc226c45059472b29caf675fdc3fdebb29569eaab94bd05ceb00"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WindowsSandboxSetupCompletedNotification.json",
+      "sha256": "sha256:dc5383ae8fc2a46badbc2dab3ccd0447fed97729c2d5a177e28c4a7e2a60c329"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WindowsSandboxSetupStartParams.json",
+      "sha256": "sha256:8610d077fff4fc5811f2e33dea82617a15ffb82f08e55e1540aef877133f5b4f"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WindowsSandboxSetupStartResponse.json",
+      "sha256": "sha256:830bf89deac3e73e36b7d9799ceed32ee25e782c30b1d25266374aa020d3bc7e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema/v2/WindowsWorldWritableWarningNotification.json",
+      "sha256": "sha256:bfa34d4890c8121a04412b8d53314a13adf98289fdd948857fd97b808dcbe79e"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema-help.json",
+      "sha256": "sha256:67edf9110d19198740fa3c2ef10e127ed046e1d3216c7e6460ca82a28283a852"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema-help.stderr",
+      "sha256": "sha256:a65b17f79a27665d1b97bb586ed2a21b516bed20ddd21b6c18a1bdbb910f1ee8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema-help.stdout",
+      "sha256": "sha256:c119fb866c02811bd66e23b7792f76fc16df91452caf8b47b34788c6ac97da1b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema.json",
+      "sha256": "sha256:195a3a7c030e43df89069d8f55cc8d3038b32761d6223721c26b6816f1bc0225"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema.stderr",
+      "sha256": "sha256:a65b17f79a27665d1b97bb586ed2a21b516bed20ddd21b6c18a1bdbb910f1ee8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-schema.stdout",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-version.json",
+      "sha256": "sha256:ba3d6692fde24e30e8331aadb2f629231e722f6f659b925330d76213b184b923"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-version.stderr",
+      "sha256": "sha256:a65b17f79a27665d1b97bb586ed2a21b516bed20ddd21b6c18a1bdbb910f1ee8"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/codex-version.stdout",
+      "sha256": "sha256:2ac299c8ffa6fa32b7270a8d778afefab5455a098c5bbc9aeabf2e1bdce1d5e3"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/discover.py",
+      "sha256": "sha256:7440fe2ca19db575398661cc201f6f98024551935c992653655da0eddec9d4d0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/historical-inspection.json",
+      "sha256": "sha256:3880c25a7e3a8802aac6c826ac5bf562272a0b2830f175ef570f019082b5a0e9"
+    },
+    {
+      "kind": "historical_actual",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/historical-parent.jsonl",
+      "sha256": "sha256:80cc4d066f8bb27802527a209cbdf888c0e6f42a69067444d7cd896b03e8023b"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/inspect_retained.py",
+      "sha256": "sha256:535eb662f4ccd2d7e6a58ccbf50877035a60b97e9f6e162fe23c324a2c65c4af"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/openai-app-server.md",
+      "sha256": "sha256:a72a5c88ab05ab9737ec28b432708f2776f696be48eae09ee39c02dd2f9480e0"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/receipt.py",
+      "sha256": "sha256:03747aa71aeafcddce79a94faf0e609da4ef308f3767059c903035d8be583700"
+    },
+    {
+      "kind": "discovery_only",
+      "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/start.json",
+      "sha256": "sha256:6bc270ae3552dbac0869b1a4b99dd2bb4d8b32bf070ca2bb59d004bf9d9586ec"
+    }
+  ],
+  "ready_for_adapter": false,
+  "requirements_completed": [],
+  "resources": {
+    "admission_reason": "Capability gate stops before compilation/live resource admission. Disk measurement alone is not admission.",
+    "compilation_admitted": false,
+    "disk_free_at_discovery_bytes": 14135324672,
+    "disk_free_at_receipt_bytes": 14077054976,
+    "live_probe_admitted": false
+  },
+  "schema_version": "aether-gap3-acquisition/v1",
+  "source_input_digest": "sha256:ec9e997412f072c18cde11e5cfb496f95d6927a7b46b2449fc84ceeb0cf7b7c1",
+  "source_inventory": {
+    "path": "/private/tmp/aether-gap3-plan24-htx7w6cb/start.json",
+    "sha256": "sha256:6bc270ae3552dbac0869b1a4b99dd2bb4d8b32bf070ca2bb59d004bf9d9586ec"
+  },
+  "source_inventory_scope": "Tracked discovery source/capture inputs, not compilation admission; no build performed.",
+  "source_revision": "048068666fd0ea066baf0d7b295279e702310b39",
+  "status": "blocked"
+}

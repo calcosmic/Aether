@@ -51,7 +51,7 @@ func assembleBudgetTestContext(t *testing.T, phase colony.Phase, state colony.Co
 
 	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{})
 	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, nil, reviewDepth)
+	dispatches := testPlannedBuildDispatchesForSelectionWithState(phase, state, nil, reviewDepth)
 	if len(dispatches) == 0 {
 		t.Fatal("fixture produced no dispatches")
 	}

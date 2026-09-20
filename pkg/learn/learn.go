@@ -4,6 +4,12 @@
 // repo-isolated JSON persistence.
 package learn
 
+import (
+	"sort"
+
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
 // Classification enum for learning entries (D-10, D-11).
 type Classification string
 
@@ -55,6 +61,26 @@ type Entry struct {
 	Redacted       bool           `json:"redacted,omitempty"`
 	Status         string         `json:"status,omitempty"`
 	ParentID       string         `json:"parent_id,omitempty"`
+
+	// SchemaVersion and Lineage are the SYN-204-02 per-record schema
+	// contract (204-03-PLAN.md Task 1, LEARN-01) -- see
+	// pkg/colony/instincts.go's InstinctEntry field comment for the
+	// omitempty/legacy-defaults rationale, identical here.
+	SchemaVersion int                         `json:"schema_version,omitempty"`
+	Lineage       *colony.MemoryRecordLineage `json:"lineage,omitempty"`
+}
+
+// SortEntriesByRecency orders entries by CreatedAt descending, tie-broken
+// by ID ascending -- the same total-order tie-break shape as
+// colony.SortInstinctEntriesByRecency/SortMiddenEntriesByRecency, applied
+// to the learning store.
+func SortEntriesByRecency(entries []Entry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].CreatedAt != entries[j].CreatedAt {
+			return entries[i].CreatedAt > entries[j].CreatedAt
+		}
+		return entries[i].ID < entries[j].ID
+	})
 }
 
 // EntryFilter for List queries.

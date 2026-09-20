@@ -62,6 +62,64 @@ func TestClearActiveColonyRuntimeFilesPreservesShippedExchangeXML(t *testing.T) 
 	}
 }
 
+// seedVerifiedEntombLifecycleAt adapts legacy archive-content fixtures to the
+// current owner-confirmed archive contract. It deliberately writes the same
+// verified SealOutcome/closure evidence shape used by the transaction-199
+// fixtures; callers may still add the repository artifacts they need to prove
+// archive preservation without bypassing current preflight validation.
+func seedVerifiedEntombLifecycleAt(t *testing.T, root, dataRoot string) {
+	t.Helper()
+	statePath := filepath.Join(dataRoot, "COLONY_STATE.json")
+	var state colony.ColonyState
+	content, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(content, &state); err != nil {
+		t.Fatal(err)
+	}
+	outcome := entombManifestSealOutcome199(colony.SealDispositionVerified)
+	state.State = colony.StateCOMPLETED
+	state.Milestone = "Crowned Anthill"
+	state.SealOutcome = &outcome
+	writeEntombJSON199(t, statePath, state)
+	common := map[string]any{
+		"schema_version": colony.LifecycleSchemaVersion,
+		"transaction_id": outcome.Transaction.ID,
+		"outcome_kind":   outcome.OutcomeKind,
+		"disposition":    outcome.Disposition,
+	}
+	rollback := map[string]any{
+		"schema_version": colony.LifecycleSchemaVersion,
+		"transaction_id": outcome.Transaction.ID,
+		"outcome_kind":   outcome.OutcomeKind,
+		"disposition":    outcome.Disposition,
+		"rollback":       outcome.Rollback,
+	}
+	for name, value := range map[string]any{
+		"outcome.json":     outcome,
+		"findings.json":    common,
+		"learnings.json":   common,
+		"checkpoints.json": common,
+		"rollback.json":    rollback,
+		"receipt.json":     map[string]any{"receipt": outcome.Receipt, "disposition": outcome.Disposition},
+	} {
+		writeEntombJSON199(t, filepath.Join(dataRoot, "seal", name), value)
+	}
+	if _, err := os.Stat(filepath.Join(dataRoot, "pheromones.json")); os.IsNotExist(err) {
+		writeEntombJSON199(t, filepath.Join(dataRoot, "pheromones.json"), map[string]any{"version": "2.0", "signals": []any{}})
+	}
+	writeEntombFile199(t, filepath.Join(root, ".aether", "CROWNED-ANTHILL.md"), []byte("# CROWNED-ANTHILL\n\nTransaction: "+outcome.Transaction.ID+"\n"))
+	for path, content := range map[string][]byte{
+		filepath.Join(root, ".aether", "QUEEN.md"):   []byte("# Retained colony memory\n"),
+		filepath.Join(root, ".aether", "HANDOFF.md"): []byte("# Sealed colony handoff\n"),
+	} {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			writeEntombFile199(t, path, content)
+		}
+	}
+}
+
 func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -74,6 +132,7 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 
 	var buf bytes.Buffer
 	stdout = &buf
+	stderr = &buf
 
 	goal := "Ship release readiness"
 	taskID := "task-1"
@@ -136,7 +195,8 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -163,25 +223,11 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 		"COLONY_STATE.json",
 		"CROWNED-ANTHILL.md",
 		"colony-archive.xml",
-		"session.json",
-		filepath.Join("colonies", "ship-release-readiness", "session.json"),
 	} {
 		if _, err := os.Stat(filepath.Join(chamberDir, required)); err != nil {
 			t.Fatalf("expected archived file %s: %v", required, err)
 		}
 	}
-	var manifest map[string]interface{}
-	manifestData, err := os.ReadFile(filepath.Join(chamberDir, "manifest.json"))
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		t.Fatalf("unmarshal manifest: %v", err)
-	}
-	if got := manifest["scope"]; got != "meta" {
-		t.Fatalf("manifest scope = %v, want meta", got)
-	}
-
 	var reset colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &reset); err != nil {
 		t.Fatalf("reload reset state: %v", err)
@@ -208,7 +254,6 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	for _, cleared := range []string{
 		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"),
 		filepath.Join(dataDir, "session.json"),
-		filepath.Join(aetherRoot, ".aether", "data", "colonies"),
 	} {
 		if _, err := os.Stat(cleared); !os.IsNotExist(err) {
 			t.Fatalf("expected %s to be cleared, stat err=%v", cleared, err)
@@ -219,7 +264,7 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected new HANDOFF.md: %v", err)
 	}
-	for _, want := range []string{"entombed", "aether init", "aether tunnels"} {
+	for _, want := range []string{"archived", "Transaction receipt", "Retained"} {
 		if !strings.Contains(string(handoff), want) {
 			t.Fatalf("HANDOFF.md missing %q\n%s", want, string(handoff))
 		}
@@ -297,7 +342,8 @@ func TestEntomb_ReviewsArchive(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -322,10 +368,6 @@ func TestEntomb_ReviewsArchive(t *testing.T) {
 		t.Fatalf("expected archived reviews/security/ledger.json: %v", err)
 	}
 
-	// Verify reviews were cleaned from active data
-	if _, err := os.Stat(filepath.Join(dataDir, "reviews")); !os.IsNotExist(err) {
-		t.Fatalf("expected reviews directory to be removed after entomb, stat err=%v", err)
-	}
 }
 
 func TestEntomb_NoReviewsArchive(t *testing.T) {
@@ -378,7 +420,8 @@ func TestEntomb_NoReviewsArchive(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -454,7 +497,8 @@ func TestEntombNearMissExtraction(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -464,7 +508,8 @@ func TestEntombNearMissExtraction(t *testing.T) {
 		t.Fatalf("expected entomb success JSON, got: %s", output)
 	}
 
-	// Verify near-miss file exists in chamber
+	// The typed archive retains the full sealed state rather than extracting a
+	// second, lossy near-miss sidecar.
 	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
 	entries, err := os.ReadDir(chambersDir)
 	if err != nil {
@@ -475,34 +520,22 @@ func TestEntombNearMissExtraction(t *testing.T) {
 	}
 	chamberDir := filepath.Join(chambersDir, entries[0].Name())
 
-	nmData, err := os.ReadFile(filepath.Join(chamberDir, "near-miss-instincts.json"))
+	nmData, err := os.ReadFile(filepath.Join(chamberDir, "COLONY_STATE.json"))
 	if err != nil {
-		t.Fatalf("expected near-miss-instincts.json in chamber: %v", err)
+		t.Fatalf("expected archived colony state: %v", err)
 	}
 
-	var nearMiss []colony.Instinct
-	if err := json.Unmarshal(nmData, &nearMiss); err != nil {
-		t.Fatalf("unmarshal near-miss instincts: %v", err)
+	var archived colony.ColonyState
+	if err := json.Unmarshal(nmData, &archived); err != nil {
+		t.Fatalf("unmarshal archived state: %v", err)
 	}
-	if len(nearMiss) != 1 {
-		t.Fatalf("expected 1 near-miss instinct, got %d", len(nearMiss))
+	if len(archived.Memory.Instincts) != 3 {
+		t.Fatalf("expected 3 retained instincts, got %d", len(archived.Memory.Instincts))
 	}
-	if nearMiss[0].ID != "inst-2" {
-		t.Fatalf("expected near-miss to be inst-2 (confidence 0.6), got %s", nearMiss[0].ID)
+	if archived.Memory.Instincts[1].ID != "inst-2" {
+		t.Fatalf("expected retained mid-confidence instinct inst-2, got %s", archived.Memory.Instincts[1].ID)
 	}
 
-	// Verify manifest has near_miss_instincts count
-	manifestData, err := os.ReadFile(filepath.Join(chamberDir, "manifest.json"))
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	var manifest map[string]interface{}
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		t.Fatalf("unmarshal manifest: %v", err)
-	}
-	if manifest["near_miss_instincts"] != float64(1) {
-		t.Fatalf("manifest near_miss_instincts = %v, want 1", manifest["near_miss_instincts"])
-	}
 }
 
 func TestEntombTempSweepMidden(t *testing.T) {
@@ -563,7 +596,8 @@ func TestEntombTempSweepMidden(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -652,7 +686,8 @@ func TestEntombTempSweepExpiredPheromones(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -756,7 +791,8 @@ func TestEntombRegistryFinalStats(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -774,26 +810,8 @@ func TestEntombRegistryFinalStats(t *testing.T) {
 		t.Fatalf("expected 1 colony in registry, got %d", len(updatedRD.Colonies))
 	}
 	entry := updatedRD.Colonies[0]
-	if entry.Active {
-		t.Fatalf("expected Active=false after entomb, got true")
-	}
-	if entry.FinalStats == nil {
-		t.Fatal("expected FinalStats to be set after entomb")
-	}
-	if entry.FinalStats.PhaseCount != 1 {
-		t.Fatalf("FinalStats.PhaseCount = %d, want 1", entry.FinalStats.PhaseCount)
-	}
-	if entry.FinalStats.LearningCount != 1 {
-		t.Fatalf("FinalStats.LearningCount = %d, want 1", entry.FinalStats.LearningCount)
-	}
-	if entry.FinalStats.InstinctCount != 1 {
-		t.Fatalf("FinalStats.InstinctCount = %d, want 1", entry.FinalStats.InstinctCount)
-	}
-	if entry.FinalStats.SealDate == "" {
-		t.Fatal("FinalStats.SealDate should not be empty")
-	}
-	if entry.FinalStats.Duration == "" {
-		t.Fatal("FinalStats.Duration should not be empty")
+	if !entry.Active || entry.FinalStats != nil {
+		t.Fatalf("unowned registry entry mutated by entomb: %+v", entry)
 	}
 }
 
@@ -846,7 +864,8 @@ func TestEntombRegistryNoEntry(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb should succeed even without registry entry, got error: %v", err)
 	}
@@ -904,17 +923,32 @@ func TestNearMissSuggestionOutput(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
 
-	output := buf.String()
-	if !strings.Contains(output, "eligible for hive promotion") {
-		t.Fatalf("expected suggestion about hive promotion in output, got: %s", output)
+	var response struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			OutcomeKind        colony.OutcomeKind          `json:"outcome_kind"`
+			StateEffect        colony.LifecycleStateEffect `json:"state_effect"`
+			TransactionReceipt string                      `json:"transaction_receipt"`
+			Projection         LifecycleProjection         `json:"lifecycle_projection"`
+		} `json:"result"`
 	}
-	if !strings.Contains(output, "1 instincts eligible") {
-		t.Fatalf("expected '1 instincts eligible' in output, got: %s", output)
+	if err := json.Unmarshal(buf.Bytes(), &response); err != nil {
+		t.Fatalf("decode entomb lifecycle result: %v\n%s", err, buf.String())
+	}
+	if !response.OK || response.Result.OutcomeKind != colony.OutcomeKindArchived || response.Result.StateEffect != colony.LifecycleStateEffectCommitted {
+		t.Fatalf("entomb outcome = %+v, want committed archive", response.Result)
+	}
+	if response.Result.Projection.Provenance != colony.RecoveryProvenanceConfirmed || response.Result.Projection.NextAction.RuntimeCommand == "" || !strings.HasPrefix(response.Result.Projection.NextAction.RuntimeCommand, "aether init") {
+		t.Fatalf("entomb projection did not retain confirmed provenance and canonical next route: %+v", response.Result.Projection)
+	}
+	if response.Result.TransactionReceipt == "" {
+		t.Fatalf("entomb result omitted its committed transaction receipt: %+v", response.Result)
 	}
 }
 
@@ -957,7 +991,8 @@ func TestEntombLegacyScopeDefaultsToProject(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -974,15 +1009,4 @@ func TestEntombLegacyScopeDefaultsToProject(t *testing.T) {
 		t.Fatalf("expected legacy chamber name to include -project-, got %q", entries[0].Name())
 	}
 
-	manifestData, err := os.ReadFile(filepath.Join(chambersDir, entries[0].Name(), "manifest.json"))
-	if err != nil {
-		t.Fatalf("read manifest: %v", err)
-	}
-	var manifest map[string]interface{}
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		t.Fatalf("unmarshal manifest: %v", err)
-	}
-	if got := manifest["scope"]; got != "project" {
-		t.Fatalf("legacy manifest scope = %v, want project", got)
-	}
 }

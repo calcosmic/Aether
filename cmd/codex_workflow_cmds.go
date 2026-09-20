@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -47,6 +48,7 @@ var colonizeCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "colonize", "", "")
 		outputWorkflow(result, renderColonizeVisual(result))
 		return nil
 	},
@@ -62,17 +64,67 @@ var planCmd = &cobra.Command{
 		synthetic, _ := cmd.Flags().GetBool("synthetic")
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		repairArtifact, _ := cmd.Flags().GetBool("repair-artifact")
+		preset, _ := cmd.Flags().GetString("preset")
 		depth, _ := cmd.Flags().GetString("depth")
 		planningDepth, _ := cmd.Flags().GetString("planning-depth")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		targetConfidence, _ := cmd.Flags().GetInt("target")
 		maxIterations, _ := cmd.Flags().GetInt("max-iterations")
 		acceptBelowTarget, _ := cmd.Flags().GetBool("accept")
+		candidate, _ := cmd.Flags().GetBool("candidate")
+		candidateID, _ := cmd.Flags().GetString("candidate-id")
+		showIteration, _ := cmd.Flags().GetInt("show-iteration")
+		details, _ := cmd.Flags().GetBool("details")
+		acceptCandidate, _ := cmd.Flags().GetString("accept-candidate")
+		retireCandidate, _ := cmd.Flags().GetString("retire-candidate")
+		specificationRevisionID, _ := cmd.Flags().GetString("spec-revision")
+		specificationRevisionHash, _ := cmd.Flags().GetString("spec-hash")
+		basePlanRevisionID, _ := cmd.Flags().GetString("base-plan-revision")
+		timelineDigest, _ := cmd.Flags().GetString("timeline-digest")
+		proposalHash, _ := cmd.Flags().GetString("proposal-hash")
+		acceptanceToken, _ := cmd.Flags().GetString("acceptance-token")
 		revisionType, _ := cmd.Flags().GetString("revision-type")
 		revisionReason, _ := cmd.Flags().GetString("revision-reason")
 		revisionEvidence, _ := cmd.Flags().GetStringArray("revision-evidence")
 		researchDocs, _ := cmd.Flags().GetStringArray("research")
+		candidateInputs := planCandidateCommandInputs{
+			DeprecatedAccept: acceptBelowTarget, Candidate: candidate, CandidateID: candidateID,
+			ShowIteration: showIteration, ShowIterationSet: cmd.Flags().Changed("show-iteration"), Details: details,
+			AcceptCandidate: acceptCandidate, RetireCandidate: retireCandidate, SpecificationRevisionID: specificationRevisionID,
+			SpecificationRevisionHash: specificationRevisionHash, BasePlanRevisionID: basePlanRevisionID,
+			TimelineDigest: timelineDigest, ProposalHash: proposalHash, AcceptanceToken: acceptanceToken,
+		}
+		for _, name := range []string{"refresh", "force", "synthetic", "plan-only", "repair-artifact", "preset", "depth", "planning-depth", "verification-depth", "target", "max-iterations", "revision-type", "revision-reason", "revision-evidence", "research", "print-brief", "full"} {
+			if cmd.Flags().Changed(name) {
+				candidateInputs.ConflictingPlanFlags = append(candidateInputs.ConflictingPlanFlags, "--"+name)
+			}
+		}
+		if candidateResult, handled, candidateErr := runPlanCandidateCommand(skillWorkspaceRoot(), candidateInputs); handled {
+			if candidateErr != nil {
+				if refusal, ok := planningCandidateRefusalValue(candidateResult["refusal"]); ok {
+					if shouldRenderVisualOutput(stderr) {
+						markRenderedCommandError(1)
+						writeVisualOutput(stderr, renderPlanningCandidateRefusalVisual(refusal, planningVisualOptions{}))
+					} else {
+						outputError(1, candidateErr.Error(), refusal)
+					}
+					return renderedErrorExit(1)
+				}
+				outputError(1, candidateErr.Error(), nil)
+				return renderedErrorExit(1)
+			}
+			closeLifecycleCommand(candidateResult, "plan", "", "")
+			outputWorkflow(candidateResult, renderPlanVisual(candidateResult))
+			return nil
+		}
 
+		if repairArtifact {
+			for _, flag := range []string{"refresh", "force", "synthetic", "plan-only", "preset", "depth", "planning-depth", "verification-depth", "target", "max-iterations", "revision-type", "revision-reason", "revision-evidence", "research", "print-brief", "full", "worker-timeout"} {
+				if cmd.Flags().Changed(flag) {
+					return fmt.Errorf("--repair-artifact cannot be combined with --%s", flag)
+				}
+			}
+		}
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			fullFlag, _ := cmd.Flags().GetBool("full")
 			if err := printPlanningBriefs(skillWorkspaceRoot(), fullFlag); err != nil {
@@ -87,29 +139,154 @@ var planCmd = &cobra.Command{
 			return nil
 		}
 		result, err := runCodexPlanWithOptions(skillWorkspaceRoot(), codexPlanOptions{
-			Refresh:           refresh || forceAlias,
-			Synthetic:         synthetic,
-			PlanOnly:          planOnly,
-			Depth:             depth,
-			PlanningDepth:     planningDepth,
-			VerificationDepth: verificationDepth,
-			WorkerTimeout:     workerTimeout,
-			TargetConfidence:  targetConfidence,
-			MaxIterations:     maxIterations,
-			Accept:            acceptBelowTarget,
-			RepairArtifact:    repairArtifact,
-			RevisionType:      revisionType,
-			RevisionReason:    revisionReason,
-			RevisionEvidence:  revisionEvidence,
-			ResearchDocs:      researchDocs,
+			Refresh:             refresh || forceAlias,
+			Synthetic:           synthetic,
+			PlanOnly:            planOnly,
+			Preset:              preset,
+			PresetSet:           cmd.Flags().Changed("preset"),
+			Depth:               depth,
+			DepthSet:            cmd.Flags().Changed("depth"),
+			PlanningDepth:       planningDepth,
+			VerificationDepth:   verificationDepth,
+			WorkerTimeout:       workerTimeout,
+			TargetConfidence:    targetConfidence,
+			TargetConfidenceSet: cmd.Flags().Changed("target"),
+			MaxIterations:       maxIterations,
+			MaxIterationsSet:    cmd.Flags().Changed("max-iterations"),
+			Accept:              acceptBelowTarget,
+			RepairArtifact:      repairArtifact,
+			RevisionType:        revisionType,
+			RevisionReason:      revisionReason,
+			RevisionEvidence:    revisionEvidence,
+			ResearchDocs:        researchDocs,
+			RequireTerritory:    true,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "plan", "", "")
 		outputWorkflow(result, renderPlanVisual(result))
 		return nil
 	},
+}
+
+// territoryPlanPreflight is the common automatic territory gate used by the
+// plan command and the Phase 199 front door. It never dispatches workers or
+// writes state. A missing/stale result carries the existing colonize manifest
+// as internal work; unavailable evidence stops with a single recovery door.
+func territoryPlanPreflight(root string, opts codexPlanOptions) (SurveyFreshnessResult, *codexColonizeManifest, error) {
+	freshness := ensureTerritoryFreshness(root)
+	switch freshness.Freshness {
+	case colony.SurveyFreshnessFresh:
+		return freshness, nil, nil
+	case colony.SurveyFreshnessUnavailable:
+		detail := strings.TrimSpace(freshness.SourceError)
+		if detail == "" {
+			detail = strings.Join(surveyReasonStrings(freshness.ReasonCodes), ", ")
+		}
+		return freshness, nil, fmt.Errorf("territory evidence is unavailable: %s; run `aether resume` to inspect and recover the retained evidence", detail)
+	case colony.SurveyFreshnessMissing, colony.SurveyFreshnessStale:
+		facts, err := surveyWorkspace(root)
+		if err != nil {
+			return freshness, nil, fmt.Errorf("prepare automatic territory refresh: %w", err)
+		}
+		existingSurvey := surveyDocsExist(filepath.Join(store.BasePath(), "survey"))
+		colonizeOpts := codexColonizeOptions{
+			ForceResurvey:         true,
+			WorkerTimeout:         opts.WorkerTimeout,
+			PlanOnly:              true,
+			RequireCompleteSurvey: true,
+		}
+		manifest := buildCodexColonizeManifest(
+			root,
+			facts,
+			colonizeOpts,
+			"plan-only",
+			existingSurvey,
+			snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))),
+			resolveCodexWorkerContext(),
+		)
+		manifest.TransactionID = fmt.Sprintf("territory-%d-%s", time.Now().UTC().UnixNano(), randomHex(4))
+		manifest.BaselineDigest = territorySurveyBaselineDigest(root)
+		manifest.PublicationMode = territoryPublicationTransactional
+		manifest.RefreshReasons = append([]SurveyFreshnessReasonCode{}, freshness.ReasonCodes...)
+		manifest.CandidateSurveyDir = filepath.ToSlash(filepath.Join(".aether", "data", "territory-candidates", manifest.TransactionID, "survey"))
+		for i := range manifest.Dispatches {
+			paths := make([]string, 0, len(manifest.Dispatches[i].Outputs))
+			for _, output := range manifest.Dispatches[i].Outputs {
+				paths = append(paths, filepath.ToSlash(filepath.Join(manifest.CandidateSurveyDir, output)))
+			}
+			manifest.Dispatches[i].OutputPaths = paths
+			manifest.Dispatches[i].Brief = fmt.Sprintf(
+				"Survey task: %s\n\nWrite these candidate survey outputs in the repo: %s\n\nSurvey the territory at %s. Do not write the live .aether/data/survey directory; the Go finalizer publishes the verified candidate atomically.",
+				manifest.Dispatches[i].Task,
+				strings.Join(paths, ", "),
+				root,
+			)
+		}
+		return freshness, &manifest, nil
+	default:
+		return freshness, nil, fmt.Errorf("territory freshness returned invalid value %q; run `aether resume`", freshness.Freshness)
+	}
+}
+
+func surveyReasonStrings(reasons []SurveyFreshnessReasonCode) []string {
+	values := make([]string, 0, len(reasons))
+	for _, reason := range reasons {
+		values = append(values, string(reason))
+	}
+	return values
+}
+
+func territoryRefreshPlanResult(state colony.ColonyState, freshness SurveyFreshnessResult, manifest codexColonizeManifest) map[string]interface{} {
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	dispatches := surveyorDispatchMaps(manifest.Dispatches)
+	return map[string]interface{}{
+		"planned":                    false,
+		"plan_only":                  true,
+		"goal":                       goal,
+		"territory_refresh_required": true,
+		"territory_freshness":        freshness,
+		"territory_outcome_label":    freshness.OutcomeLabel(),
+		"colonize_manifest":          manifest,
+		"dispatches":                 dispatches,
+		"surveyors":                  dispatches,
+		"dispatch_mode":              manifest.DispatchMode,
+		"dispatch_contract":          manifest.DispatchContract,
+		"requires_finalizer":         true,
+		"finalizer_command":          manifest.FinalizerCommand,
+		"resume_command":             "aether plan",
+		"owner_decision_required":    false,
+		"next":                       "run the manifest surveyors, finalize the territory refresh, then resume `aether plan`",
+	}
+}
+
+func parseCoherentJobProposals(rawValues []string) ([]coherentJobProposal, error) {
+	proposals := make([]coherentJobProposal, 0, len(rawValues))
+	for index, raw := range rawValues {
+		if strings.TrimSpace(raw) == "" {
+			return nil, fmt.Errorf("job proposal %d is empty; provide one JSON object", index+1)
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		var proposal coherentJobProposal
+		if err := decoder.Decode(&proposal); err != nil {
+			return nil, fmt.Errorf("job proposal %d is invalid JSON: %w", index+1, err)
+		}
+		var trailing interface{}
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			if err == nil {
+				return nil, fmt.Errorf("job proposal %d must contain exactly one JSON object", index+1)
+			}
+			return nil, fmt.Errorf("job proposal %d has trailing JSON: %w", index+1, err)
+		}
+		proposals = append(proposals, proposal)
+	}
+	return proposals, nil
 }
 
 var buildCmd = &cobra.Command{
@@ -120,6 +297,18 @@ var buildCmd = &cobra.Command{
 		phaseNum, err := strconv.Atoi(args[0])
 		if err != nil || phaseNum < 1 {
 			outputError(1, fmt.Sprintf("invalid phase %q", args[0]), nil)
+			return nil
+		}
+
+		// D-14: --checkin (force the pause) and --no-checkin (skip it) are a
+		// named conflict, refused before ANY side effect -- no plan-only
+		// attempt opened, no manifest written, no checkpoint or colony state
+		// touched. This must run before the print-brief and plan-only
+		// branches below.
+		checkinFlag, _ := cmd.Flags().GetBool("checkin")
+		noCheckinFlag, _ := cmd.Flags().GetBool("no-checkin")
+		if checkinFlag && noCheckinFlag {
+			outputError(1, "cannot combine --checkin and --no-checkin: --checkin forces the pre-spawn team check-in pause, --no-checkin skips it -- choose one", nil)
 			return nil
 		}
 
@@ -135,6 +324,14 @@ var buildCmd = &cobra.Command{
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		queenCastes, _ := cmd.Flags().GetStringArray("castes")
 		queenCasteReason, _ := cmd.Flags().GetString("caste-reason")
+		queenCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
+		queenVerificationBoundary, _ := cmd.Flags().GetString("verification-boundary")
+		queenVerificationBoundaryWhy, _ := cmd.Flags().GetString("boundary-why")
+		jobProposals, err := parseCoherentJobProposals(mustGetStringArray(cmd, "job-proposal"))
+		if err != nil {
+			outputError(1, err.Error(), nil)
+			return nil
+		}
 
 		if printBrief, _ := cmd.Flags().GetBool("print-brief"); printBrief {
 			worker, _ := cmd.Flags().GetString("worker")
@@ -155,20 +352,58 @@ var buildCmd = &cobra.Command{
 		planOnly, _ := cmd.Flags().GetBool("plan-only")
 		if planOnly {
 			result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, codexBuildOptions{
-				WorkerTimeout:     workerTimeout,
-				Force:             forceBuild,
-				LightFlag:         lightFlag,
-				HeavyFlag:         heavyFlag,
-				VerificationDepth: verificationDepth,
-				QueenCastes:       queenCastes,
-				QueenCasteReason:  queenCasteReason,
+				WorkerTimeout:                workerTimeout,
+				Force:                        forceBuild,
+				LightFlag:                    lightFlag,
+				HeavyFlag:                    heavyFlag,
+				VerificationDepth:            verificationDepth,
+				QueenCastes:                  queenCastes,
+				QueenCasteReason:             queenCasteReason,
+				QueenCasteWhy:                queenCasteWhy,
+				QueenVerificationBoundary:    queenVerificationBoundary,
+				QueenVerificationBoundaryWhy: queenVerificationBoundaryWhy,
+				JobProposals:                 jobProposals,
+				NonInteractive:               noCheckinFlag,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return nil
 			}
+			// The wrapper's Team Check-In stage pauses on result.checkin_requested;
+			// the runtime plan itself is identical whatever this decides
+			// (D-11..D-14, cmd/ceremony_team_checkin.go: decideBuildCheckin).
+			buildManifest, _ := result["dispatch_manifest"].(codexBuildManifest)
+			pendingOwnerDecision, pendingOwnerDecisionWhy := buildHasPendingOwnerDecision(buildManifest)
+			checkinDecision := decideBuildCheckin(buildCheckinDecisionInput{
+				NoCheckin:                noCheckinFlag,
+				Checkin:                  checkinFlag,
+				PendingOwnerDecision:     pendingOwnerDecision,
+				PendingOwnerDecisionWhy:  pendingOwnerDecisionWhy,
+				ImplementationDispatches: len(dispatches),
+			})
+			result["checkin_requested"] = checkinDecision.Requested
+			result["checkin_reason"] = string(checkinDecision.Reason)
+			if checkinDecision.Why != "" {
+				result["checkin_reason_detail"] = checkinDecision.Why
+			}
 			reviewDepthPlan := reviewDepthFromResult(result)
-			outputWorkflow(result, renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result)))
+			planOnlyVisual := renderBuildPlanOnlyVisual(state, phase, dispatches, reviewDepthPlan, queenPolicyFromResult(result))
+			// D-12: the automatic fast path still shows a compact, non-blocking
+			// summary before dispatch -- it is never invisible, just never a
+			// question. Rendered only for the exact fast-path reason so a
+			// pending-decision or explicit --checkin pause never gets this
+			// summary appended alongside the full check-in card.
+			if !checkinDecision.Requested && checkinDecision.Reason == buildCheckinReasonOneWorkerFastPath && len(dispatches) == 1 {
+				fastPathSummary, fastPathVisual := renderBuildFastPathSummary(phase, dispatches[0], checkinDecision)
+				result["checkin_summary"] = fastPathSummary
+				planOnlyVisual = planOnlyVisual + "\n" + fastPathVisual
+			}
+			// The heads-up leads -- it decides whether the build happens at
+			// all, so it appears before the spawn plan it gates.
+			if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
+				planOnlyVisual = advisoryVisual + "\n\n" + planOnlyVisual
+			}
+			outputWorkflow(result, planOnlyVisual)
 			return nil
 		}
 
@@ -176,13 +411,20 @@ var buildCmd = &cobra.Command{
 		cbThreshold, _ := cmd.Flags().GetInt("circuit-breaker-threshold")
 		verboseFlag, _ := cmd.Flags().GetBool("verbose")
 		result, err := runCodexBuildWithOptions(skillWorkspaceRoot(), phaseNum, selectedTasks, syntheticBuild, codexBuildOptions{
-			WorkerTimeout:           workerTimeout,
-			Force:                   forceBuild,
-			LightFlag:               lightFlag,
-			HeavyFlag:               heavyFlag,
-			VerificationDepth:       verificationDepth,
-			CircuitBreakerThreshold: cbThreshold,
-			Verbose:                 verboseFlag,
+			WorkerTimeout:                workerTimeout,
+			Force:                        forceBuild,
+			LightFlag:                    lightFlag,
+			HeavyFlag:                    heavyFlag,
+			VerificationDepth:            verificationDepth,
+			CircuitBreakerThreshold:      cbThreshold,
+			Verbose:                      verboseFlag,
+			QueenCastes:                  queenCastes,
+			QueenCasteReason:             queenCasteReason,
+			QueenCasteWhy:                queenCasteWhy,
+			QueenVerificationBoundary:    queenVerificationBoundary,
+			QueenVerificationBoundaryWhy: queenVerificationBoundaryWhy,
+			JobProposals:                 jobProposals,
+			NonInteractive:               noCheckinFlag,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
@@ -195,7 +437,26 @@ var buildCmd = &cobra.Command{
 			return nil
 		}
 
-		dispatches := plannedBuildDispatches(state.Plan.Phases[phaseNum-1], state.ColonyDepth)
+		// WR-05 (195-REVIEW.md): a partially credited build must never fall
+		// through to the ordinary finished-build screen, which states that
+		// verification happens next, names the following phase, and points at
+		// the continue command -- none of which is true when tasks are still
+		// unstarted -- while never showing the recovery command at all.
+		if partial, _ := result["recovery_job"].(bool); partial {
+			partialVisual := renderBuildPartialCreditResultVisual(state, state.Plan.Phases[phaseNum-1], result)
+			if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
+				partialVisual = advisoryVisual + "\n\n" + partialVisual
+			}
+			outputWorkflow(result, partialVisual)
+			return nil
+		}
+
+		dispatches, planErr := plannedBuildDispatches(state.Plan.Phases[phaseNum-1], state.ColonyDepth)
+		if planErr != nil {
+			// WR-06: never render a planning refusal as an empty team.
+			outputError(2, planErr.Error(), nil)
+			return nil
+		}
 		if manifestPath, ok := result["manifest"].(string); ok && strings.TrimSpace(manifestPath) != "" {
 			rel := strings.TrimPrefix(manifestPath, ".aether/data/")
 			var manifest codexBuildManifest
@@ -204,7 +465,41 @@ var buildCmd = &cobra.Command{
 			}
 		}
 		reviewDepthBuild := reviewDepthFromResult(result)
-		outputWorkflow(result, renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result)))
+		renderedBuildVisual := renderBuildVisualWithDispatches(state, state.Plan.Phases[phaseNum-1], dispatches, reviewDepthBuild, queenPolicyFromResult(result))
+
+		// D-03/D-05/D-07/D-08 (201-19): when the phase's own sealed build
+		// attempt resolves to a real work verdict, render the verdict, the
+		// recommended next action and the credited/uncredited file card
+		// through the one shared closeout instead of today's plain visual.
+		// A phase with no terminal attempt, or a result with no lifecycle
+		// projection to apply the closeout onto (applyLifecycleCloseout
+		// erroring), falls through to exactly today's rendering -- nothing
+		// regresses for an older or projection-less result.
+		var buildVisual string
+		var closeoutRendered bool
+		if details, ok := buildWorkCloseoutDetails(phaseNum); ok {
+			result["current_phase"] = phaseNum
+			if err := applyLifecycleCloseout(result, "build", details); err == nil {
+				body := renderedBuildVisual
+				if fileCard := renderBuildResultFileSection(phaseNum); fileCard != "" {
+					body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
+				}
+				buildVisual = appendLifecycleCloseoutVisual(body, result, detectPlatform())
+				closeoutRendered = true
+			} else {
+				delete(result, "current_phase")
+			}
+		}
+		if !closeoutRendered {
+			// The one cost line ends this lane's ending screen too. The
+			// plan-only path above deliberately does NOT get one: nothing has
+			// been spent yet when a team is merely being planned.
+			buildVisual = appendSpendCostLine(renderedBuildVisual, phaseNum)
+		}
+		if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
+			buildVisual = advisoryVisual + "\n\n" + buildVisual
+		}
+		outputWorkflow(result, buildVisual)
 		return nil
 	},
 }
@@ -230,6 +525,7 @@ var continueCmd = &cobra.Command{
 		skipWatchers, _ := cmd.Flags().GetBool("skip-watchers")
 		continueCastes, _ := cmd.Flags().GetStringArray("castes")
 		continueCasteReason, _ := cmd.Flags().GetString("caste-reason")
+		continueCasteWhy, _ := cmd.Flags().GetStringArray("caste-why")
 		verificationDepth, _ := cmd.Flags().GetString("verification-depth")
 		classicCeremony, _ := cmd.Flags().GetBool("classic-ceremony")
 		if classicCeremony {
@@ -251,6 +547,7 @@ var continueCmd = &cobra.Command{
 				VerificationDepth:   verificationDepth,
 				QueenCastes:         continueCastes,
 				QueenCasteReason:    continueCasteReason,
+				QueenCasteWhy:       continueCasteWhy,
 			})
 			if err != nil {
 				outputError(1, err.Error(), nil)
@@ -269,19 +566,33 @@ var continueCmd = &cobra.Command{
 			HeavyFlag:           heavyFlag,
 			SkipWatchers:        skipWatchers,
 			VerificationDepth:   verificationDepth,
+			QueenCastes:         continueCastes,
+			QueenCasteReason:    continueCasteReason,
+			QueenCasteWhy:       continueCasteWhy,
 		})
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
 
+		// A check that blocked still spent what it spent, so its ending
+		// screen carries the cost line exactly as a passing one does.
+		// D-05/D-06/D-07 (201-20): applyCheckWorkCloseout resolves the
+		// verdict codex_continue.go already stored on result and, when one
+		// is present, folds it into result and appends the verdict, the
+		// recommended next action, and the ONE cost-and-time block --
+		// dropping the plain appendSpendCostLine call so exactly one cost
+		// block remains. Falls back to today's exact rendering (including
+		// its own appendSpendCostLine) when no verdict resolves.
 		if blocked, _ := result["blocked"].(bool); blocked {
-			outputWorkflow(result, renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result)))
+			body := renderContinueBlockedVisual(state, phase, result, reviewDepthFromResult(result))
+			outputWorkflow(result, applyCheckWorkCloseout(result, phase.ID, body))
 			return nil
 		}
 
 		reviewDepthContinue := reviewDepthFromResult(result)
-		outputWorkflow(result, renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue))
+		body := renderContinueVisual(state, phase, housekeeping, final, nextPhase, result, reviewDepthContinue)
+		outputWorkflow(result, applyCheckWorkCloseout(result, phase.ID, body))
 		return nil
 	},
 }
@@ -390,37 +701,36 @@ var sealCmd = &cobra.Command{
 			return nil
 		}
 
-		// The same readiness rules as the heavy path: with --force the
-		// all-phases-completed rule becomes an owner override (recorded
-		// with a reason), because sometimes the work was finished OUTSIDE
-		// the colony, or the colony is wedged on its own gates, and the
-		// owner's call to file the project away must win.
-		state, incompletePhases, err := validateSealReady(forceFlag)
+		root := resolveAetherRootPath()
+		facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
 		if err != nil {
 			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
 		}
-
-		// Check for blocker-severity flags
-		blockers, issues := checkSealBlockers(store)
-		if len(blockers) > 0 {
-			if !forceFlag {
-				renderRecoveryMenu("seal", renderBlockerSummary(blockers, issues), nil)
-				return nil
-			}
-			// --force: warn but continue
-			visualFprintln(stdout, fmt.Sprintf("WARNING: Overriding %d blocker(s) with --force", len(blockers)))
-		} else if len(issues) > 0 {
-			visualFprintln(stdout, fmt.Sprintf("NOTE: %d unresolved issue-severity flag(s)", len(issues)))
-		}
-
-		override := sealOverride{Forced: forceFlag, Reason: strings.TrimSpace(forceReason), IncompletePhases: incompletePhases, OverriddenBlockers: len(blockers)}
-		if forceFlag && (len(incompletePhases) > 0 || len(blockers) > 0) && override.Reason == "" {
-			renderRecoveryMenu("seal", fmt.Sprintf("force-sealing overrides %d unverified phase(s) and %d open blocker(s) — a reason is required so the override is recorded honestly: rerun with `--reason \"why\"`", len(incompletePhases), len(blockers)), nil)
+		preflight, err := BuildSealPreflight(facts, SealPreflightRequest{
+			Caller: SealCallerDirectOwner, Force: forceFlag, Reason: forceReason,
+		})
+		if err != nil {
+			renderRecoveryMenu("seal", err.Error(), nil)
 			return nil
 		}
-
-		return completeSealRuntime(state, override)
+		proceed, pending := runSealPreflightConfirmationGate(preflight)
+		if !proceed {
+			outputOK(pending)
+			return nil
+		}
+		// Curation is a durable part of a valid direct-owner seal. It runs
+		// exactly once after typed preflight and owner confirmation, and its
+		// resulting evidence is committed by the lifecycle transaction below.
+		review := runSealWisdomReview(facts.State.Value)
+		override := sealOverride{
+			Forced: forceFlag, Reason: preflight.OwnerReason,
+			OverriddenBlockers: len(preflight.ResidualRisks),
+		}
+		for _, phaseID := range preflight.IncompletePhaseIDs {
+			override.IncompletePhases = append(override.IncompletePhases, fmt.Sprintf("phase %d", phaseID))
+		}
+		return completeSealRuntime(facts.State.Value, override, review, preflight)
 	},
 }
 
@@ -440,7 +750,29 @@ func (o sealOverride) overrodeAnything() bool {
 	return o.Forced && (len(o.IncompletePhases) > 0 || o.OverriddenBlockers > 0 || o.OverriddenReviewBlocks > 0)
 }
 
-func completeSealRuntime(state colony.ColonyState, override sealOverride) error {
+// sealWisdomReview is the result of running the "what did we learn" pass
+// exactly once, before the seal confirmation question exists at all (D-05),
+// so its lessons are recorded even if the owner ultimately declines to
+// finish. It carries the promoted entries, the consolidation summary, and
+// the already-rendered beats text so a later caller can reuse them without
+// recomputing (or re-running) the review.
+type sealWisdomReview struct {
+	Consolidation         sealConsolidationSummary
+	PromotedInstinctNames []string
+	HiveEligibleCount     int
+	HivePromotedCount     int
+	HivePromotionFailures int
+	Beats                 string
+	FinalReview           *sealFinalReviewReport
+}
+
+// runSealWisdomReview runs the eight-ant curation pass plus the local/hive
+// instinct promotion loop exactly once, printing the same beats and hive
+// report lines completeSealRuntime always has, so behavior for a seal that
+// proceeds is byte-identical to before this function existed. state is
+// accepted for symmetry with the rest of the seal call chain and future
+// callers that need it; today's review reads only the package-level store.
+func runSealWisdomReview(state colony.ColonyState) sealWisdomReview {
 	// Snapshot the instinct entries eligible for THIS seal's own local/hive
 	// promotion loop (D-08) before consolidation below decays trust scores
 	// and archives stale instincts. Consolidation's archival floor operates
@@ -553,7 +885,8 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 	// ceremony reads consolidation -> promotion -> hive: printed here, after
 	// the promotion loop above has run, and before the hive reporting lines
 	// below.
-	visualFprint(stdout, renderSealConsolidationBeats(sealConsolidation))
+	beats := renderSealConsolidationBeats(sealConsolidation)
+	visualFprint(stdout, beats)
 	emitSealConsolidationCeremony(sealConsolidation)
 
 	// Ceremony Step 2: Report hive promotion results (replaces SUGGESTION per CERE-02)
@@ -567,109 +900,890 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride) error 
 		visualFprintln(stdout, fmt.Sprintf("Hive auto-promotion is disabled; %d eligible instinct(s) remain project-local", hiveEligibleCount))
 	}
 
-	// Ceremony Step 3: Expire all FOCUS pheromones, preserve REDIRECT (D-03)
-	expiredFOCUSCount := expireSignalsByType(store, "FOCUS")
+	return sealWisdomReview{
+		Consolidation:         sealConsolidation,
+		PromotedInstinctNames: promotedInstinctNames,
+		HiveEligibleCount:     hiveEligibleCount,
+		HivePromotedCount:     hivePromotedCount,
+		HivePromotionFailures: hivePromotionFailures,
+		Beats:                 beats,
+	}
+}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+// SealTransactionInput is the complete, already-authorized payload for one
+// retained closure. Tests and the command path use the same entry point so
+// crash recovery cannot diverge from ordinary seal behavior.
+type SealTransactionInput struct {
+	Root                       string
+	DataRoot                   string
+	HubRoot                    string
+	Facts                      LifecycleFacts
+	State                      colony.ColonyState
+	Session                    colony.SessionFile
+	Preflight                  SealPreflight
+	FinalReview                sealFinalReviewReport
+	Review                     sealWisdomReview
+	Warnings                   []string
+	ShelfCandidates            []colony.ShelfEntry
+	ReviewBacklog              []colony.ReviewLedgerEntry
+	Now                        time.Time
+	Fault                      lifecycleTransactionFaultHook
+	DisablePostCommitPromotion bool
+}
+
+type sealReceiptEnvelope struct {
+	Disposition colony.SealDisposition  `json:"disposition"`
+	OwnerReason string                  `json:"owner_reason,omitempty"`
+	Receipt     colony.LifecycleReceipt `json:"receipt"`
+}
+
+type sealRollbackRecord struct {
+	SchemaVersion string                    `json:"schema_version"`
+	TransactionID string                    `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind        `json:"outcome_kind"`
+	Disposition   colony.SealDisposition    `json:"disposition"`
+	OwnerReason   string                    `json:"owner_reason,omitempty"`
+	Rollback      *colony.LifecycleRollback `json:"rollback,omitempty"`
+}
+
+type sealFindingsRecord struct {
+	SchemaVersion string                   `json:"schema_version"`
+	TransactionID string                   `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind       `json:"outcome_kind"`
+	Disposition   colony.SealDisposition   `json:"disposition"`
+	OwnerReason   string                   `json:"owner_reason,omitempty"`
+	Findings      []sealFinalReviewFinding `json:"findings"`
+}
+
+type sealLearningsRecord struct {
+	SchemaVersion string                 `json:"schema_version"`
+	TransactionID string                 `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind     `json:"outcome_kind"`
+	Disposition   colony.SealDisposition `json:"disposition"`
+	OwnerReason   string                 `json:"owner_reason,omitempty"`
+	Learnings     []colony.PhaseLearning `json:"retained_learnings"`
+	FutureWork    []SealUnresolvedItem   `json:"uncompleted_future_work"`
+}
+
+type sealCheckpointsRecord struct {
+	SchemaVersion string                 `json:"schema_version"`
+	TransactionID string                 `json:"transaction_id"`
+	OutcomeKind   colony.OutcomeKind     `json:"outcome_kind"`
+	Disposition   colony.SealDisposition `json:"disposition"`
+	OwnerReason   string                 `json:"owner_reason,omitempty"`
+	Checkpoints   []SealOwnerCheckpoint  `json:"owner_checkpoints"`
+}
+
+// SealTransactionID is stable across retry and replay. It uses only the
+// pre-seal episode and typed authority facts, never bytes the transaction is
+// about to mutate.
+func SealTransactionID(input SealTransactionInput) string {
+	episode := ""
+	if input.State.AcceptedCharter != nil {
+		episode = strings.TrimSpace(input.State.AcceptedCharter.EpisodeID)
+	}
+	if episode == "" && input.State.SessionID != nil {
+		episode = strings.TrimSpace(*input.State.SessionID)
+	}
+	goal := ""
+	if input.State.Goal != nil {
+		goal = strings.TrimSpace(*input.State.Goal)
+	}
+	seed := struct {
+		Episode     string
+		Goal        string
+		CapturedAt  string
+		Disposition colony.SealDisposition
+		Reason      string
+	}{
+		Episode:     episode,
+		Goal:        goal,
+		CapturedAt:  input.Preflight.FactsCapturedAt,
+		Disposition: input.Preflight.Disposition,
+		Reason:      input.Preflight.OwnerReason,
+	}
+	content, _ := json.Marshal(seed)
+	digest := strings.TrimPrefix(lifecycleDigest(content), "sha256:")
+	if len(digest) > 20 {
+		digest = digest[:20]
+	}
+	return "seal-" + digest
+}
+
+// CommitSealTransaction commits the retained state, report, registry,
+// evidence, signals, event, outcome and application receipt through the shared
+// lifecycle coordinator. A retry resumes durable intent or returns the exact
+// already-verified artifacts; it never appends a second event.
+func CommitSealTransaction(input SealTransactionInput) (SealTransactionResult, error) {
+	if err := input.Preflight.Validate(); err != nil {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction preflight: %w", err)
+	}
+	root, err := filepath.Abs(strings.TrimSpace(input.Root))
+	if err != nil || strings.TrimSpace(input.Root) == "" {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction: repository root is required")
+	}
+	root = filepath.Clean(root)
+	dataRoot := strings.TrimSpace(input.DataRoot)
+	if dataRoot == "" {
+		dataRoot = filepath.Join(root, ".aether", "data")
+	}
+	dataRoot, err = filepath.Abs(dataRoot)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	dataRoot = filepath.Clean(dataRoot)
+	hubRoot := strings.TrimSpace(input.HubRoot)
+	if hubRoot == "" {
+		hubRoot = resolveHubPathQuiet()
+	}
+	if hubRoot == "" {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction: hub root is required for the registry transition")
+	}
+	hubRoot, err = filepath.Abs(hubRoot)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	hubRoot = filepath.Clean(hubRoot)
+	if input.Now.IsZero() {
+		input.Now = time.Now().UTC()
+	} else {
+		input.Now = input.Now.UTC()
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".aether"), 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := os.MkdirAll(dataRoot, 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Join(hubRoot, "registry"), 0o755); err != nil {
+		return SealTransactionResult{}, err
+	}
+
+	input.Root, input.DataRoot, input.HubRoot = root, dataRoot, hubRoot
+	txID := SealTransactionID(input)
+	config := lifecycleTransactionConfig{
+		TransactionID: txID,
+		Command:       "seal",
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot:    root,
+			LifecycleDataRoot: dataRoot,
+			Hub: lifecycleTransactionHubRoot{
+				Channel: lifecycleTransactionHubStable,
+				Path:    hubRoot,
+			},
+		},
+		Fault: input.Fault,
+	}
+	journalIntent := filepath.Join(dataRoot, "transactions", txID, "intent.json")
+	if _, statErr := os.Stat(journalIntent); statErr == nil {
+		receipt, resumeErr := resumeLifecycleTransaction(config)
+		if resumeErr != nil {
+			return SealTransactionResult{}, resumeErr
+		}
+		if receipt.StateEffect != colony.LifecycleStateEffectCommitted {
+			return SealTransactionResult{}, fmt.Errorf("seal transaction %s resumed with %s", txID, receipt.StateEffect)
+		}
+		result, loadErr := loadSealTransactionResult(input, txID, true)
+		if loadErr != nil {
+			return SealTransactionResult{}, loadErr
+		}
+		return finishSealPostCommitPromotions(input, result)
+	} else if !os.IsNotExist(statErr) {
+		return SealTransactionResult{}, statErr
+	}
+
+	artifacts, err := buildSealTransactionArtifacts(input, txID)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	tx, err := beginLifecycleTransaction(config)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	for _, target := range artifacts {
+		if err := tx.DeclareWrite(target.Root, target.Path, target.Content); err != nil {
+			return SealTransactionResult{}, err
+		}
+	}
+	if _, err := tx.Commit(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	result, err := loadSealTransactionResult(input, txID, false)
+	if err != nil {
+		return SealTransactionResult{}, err
+	}
+	return finishSealPostCommitPromotions(input, result)
+}
+
+type sealTransactionArtifact struct {
+	Root    lifecycleTransactionRootKind
+	Path    string
+	Content []byte
+}
+
+func buildSealTransactionArtifacts(input SealTransactionInput, txID string) ([]sealTransactionArtifact, error) {
+	evidence, signals, queenBytes, err := buildSealClosureEvidence(input, txID)
+	if err != nil {
+		return nil, err
+	}
+	transaction := colony.LifecycleTransactionReference{
+		ID:          txID,
+		Stage:       colony.TransactionStageVerified,
+		JournalPath: filepath.Join(input.DataRoot, "transactions", txID),
+	}
+	receipt := colony.LifecycleReceipt{
+		SchemaVersion:      colony.LifecycleSchemaVersion,
+		ReceiptID:          txID + "-seal-receipt",
+		Command:            "seal",
+		OutcomeKind:        input.Preflight.OutcomeKind,
+		ProjectionRevision: input.Preflight.ProjectionRevision,
+		Evidence:           append([]colony.LifecycleEvidence{}, input.Preflight.Evidence...),
+		Verification:       sealLifecycleVerifications(input.Preflight),
+		Warnings:           append([]colony.LifecycleIssue{}, input.Preflight.ResidualRisks...),
+		StateEffect:        colony.LifecycleStateEffectCommitted,
+		Transaction:        transaction,
+		Provenance:         colony.RecoveryProvenanceConfirmed,
+	}
+	if input.Preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		receipt.Decisions = []colony.LifecycleDecision{{
+			ID:          "owner-forced-incomplete-closure",
+			Scope:       "seal",
+			Summary:     input.Preflight.OwnerReason,
+			EvidenceIDs: []string{"seal-force-authority"},
+		}}
+	}
+	if err := receipt.Validate(); err != nil {
+		return nil, fmt.Errorf("seal receipt: %w", err)
+	}
+	receiptBytes, err := marshalSealJSON(receipt)
+	if err != nil {
+		return nil, err
+	}
+	receiptReference := &colony.LifecycleReceiptReference{ID: receipt.ReceiptID, Digest: lifecycleDigest(receiptBytes)}
+	outcome := buildSealOutcome(input.Preflight, txID, transaction, receiptReference, receipt)
+	if err := outcome.Validate(); err != nil {
+		return nil, fmt.Errorf("seal outcome: %w", err)
+	}
+
+	state := input.State
+	now := input.Now.Format(time.RFC3339)
 	state.State = colony.StateCOMPLETED
 	state.Milestone = "Crowned Anthill"
 	state.MilestoneUpdatedAt = &now
-	if override.overrodeAnything() {
-		// A forced seal is a real event in the colony's history, not a
-		// footnote: name what was skipped and why, so the Archaeologist and
-		// anyone reading history sees an honest record.
-		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf(
-			"%s|sealed_forced|seal|Colony force-sealed by owner (%d unverified phase(s), %d overridden blocker(s)): %s",
-			now, len(override.IncompletePhases), override.OverriddenBlockers+override.OverriddenReviewBlocks, override.Reason,
-		))
-	} else {
-		state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|sealed|seal|Colony sealed at Crowned Anthill", now))
+	state.LifecycleReceipt = &receipt
+	state.SealOutcome = &outcome
+	eventKind := "sealed_verified"
+	eventSummary := "Verified colony closure recorded"
+	if outcome.Disposition == colony.SealDispositionForcedIncomplete {
+		eventKind = "sealed_forced_incomplete"
+		eventSummary = "Owner-forced incomplete closure recorded: " + outcome.OwnerReason
+	}
+	state.Events = append(trimmedEvents(state.Events), fmt.Sprintf("%s|%s|seal|%s", now, eventKind, eventSummary))
+
+	session := input.Session
+	session.LastCommand = "seal"
+	session.LastCommandAt = now
+	session.CurrentPhase = state.CurrentPhase
+	session.CurrentMilestone = state.Milestone
+	session.SuggestedNext = "aether status"
+	session.Summary = eventSummary
+	session.LifecycleReceipt = &receipt
+	session.SealOutcome = &outcome
+
+	finalReview := input.FinalReview
+	finalReview.TransactionID = txID
+	finalReview.Disposition = outcome.Disposition
+	finalReview.OwnerReason = outcome.OwnerReason
+	finalReview.ClosureEvidence = &evidence
+	if finalReview.GeneratedAt == "" {
+		finalReview.GeneratedAt = now
 	}
 
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		outputError(2, fmt.Sprintf("failed to save colony state: %v", err), nil)
-		return nil
+	findings := sealFindingsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Findings: append([]sealFinalReviewFinding{}, finalReview.Findings...),
+	}
+	learnings := sealLearningsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Learnings: append([]colony.PhaseLearning{}, state.Memory.PhaseLearnings...),
+		FutureWork: append([]SealUnresolvedItem{}, input.Preflight.UnresolvedItems...),
+	}
+	checkpoints := sealCheckpointsRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Checkpoints: append([]SealOwnerCheckpoint{}, input.Preflight.OwnerCheckpoints...),
+	}
+	rollback := sealRollbackRecord{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: outcome.OutcomeKind, Disposition: outcome.Disposition,
+		OwnerReason: outcome.OwnerReason, Rollback: outcome.Rollback,
+	}
+	receiptEnvelope := sealReceiptEnvelope{Disposition: outcome.Disposition, OwnerReason: outcome.OwnerReason, Receipt: receipt}
+
+	crowned := buildTransactionalSealSummary(state, input, evidence, receipt)
+	eventBytes, err := buildSealEventBusBytes(input, outcome)
+	if err != nil {
+		return nil, err
+	}
+	registryBytes, err := buildSealRegistryBytes(input, state)
+	if err != nil {
+		return nil, err
 	}
 
-	// Shelf candidate detection (before archiving)
-	candidates, _ := detectShelfCandidates(state, store)
-	if len(candidates) > 0 {
-		visualFprintln(stdout, shelfCandidateSummary(candidates))
+	values := []struct {
+		root  lifecycleTransactionRootKind
+		path  string
+		value any
+	}{
+		{lifecycleTransactionRootData, "COLONY_STATE.json", state},
+		{lifecycleTransactionRootData, "session.json", session},
+		{lifecycleTransactionRootData, "seal/outcome.json", outcome},
+		{lifecycleTransactionRootData, "seal/receipt.json", receiptEnvelope},
+		{lifecycleTransactionRootData, "seal/closure-evidence.json", evidence},
+		{lifecycleTransactionRootData, sealFinalReviewReportRel, finalReview},
+		{lifecycleTransactionRootData, "seal/findings.json", findings},
+		{lifecycleTransactionRootData, "seal/learnings.json", learnings},
+		{lifecycleTransactionRootData, "seal/checkpoints.json", checkpoints},
+		{lifecycleTransactionRootData, "seal/rollback.json", rollback},
+		{lifecycleTransactionRootData, "pheromones.json", signals},
+	}
+	artifacts := []sealTransactionArtifact{
+		{Root: lifecycleTransactionRootRepository, Path: filepath.Join(".aether", "CROWNED-ANTHILL.md"), Content: []byte(crowned)},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.Join(".aether", "QUEEN.md"), Content: queenBytes},
+	}
+	for _, entry := range values {
+		content, marshalErr := marshalSealJSON(entry.value)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		artifacts = append(artifacts, sealTransactionArtifact{Root: entry.root, Path: entry.path, Content: content})
+	}
+	artifacts = append(artifacts,
+		sealTransactionArtifact{Root: lifecycleTransactionRootData, Path: "event-bus.jsonl", Content: eventBytes},
+		sealTransactionArtifact{Root: lifecycleTransactionRootHubStable, Path: filepath.Join("registry", "registry.json"), Content: registryBytes},
+	)
+	return artifacts, nil
+}
+
+func buildSealOutcome(preflight SealPreflight, txID string, transaction colony.LifecycleTransactionReference, receipt *colony.LifecycleReceiptReference, lifecycleReceipt colony.LifecycleReceipt) colony.SealOutcome {
+	outcome := colony.SealOutcome{
+		SchemaVersion:      colony.LifecycleSchemaVersion,
+		OutcomeID:          txID + "-outcome",
+		Command:            "seal",
+		OutcomeKind:        preflight.OutcomeKind,
+		ProjectionRevision: preflight.ProjectionRevision,
+		Disposition:        preflight.Disposition,
+		CompletedPhases:    append([]int{}, preflight.CompletedPhaseIDs...),
+		IncompletePhases:   append([]int{}, preflight.IncompletePhaseIDs...),
+		IncompleteTaskIDs:  append([]string{}, preflight.IncompleteTaskIDs...),
+		FailedGates:        sealLifecycleVerificationsForGates(preflight.FailedGates, false),
+		SkippedGates:       sealLifecycleVerificationsForGates(preflight.SkippedGates, false),
+		OwnerReason:        preflight.OwnerReason,
+		Rollback:           preflight.Rollback,
+		Evidence:           append([]colony.LifecycleEvidence{}, preflight.Evidence...),
+		Verification:       append([]colony.LifecycleVerification{}, lifecycleReceipt.Verification...),
+		Warnings:           append([]colony.LifecycleIssue{}, preflight.ResidualRisks...),
+		StateEffect:        colony.LifecycleStateEffectCommitted,
+		Transaction:        transaction,
+		Receipt:            receipt,
+		Provenance:         colony.RecoveryProvenanceConfirmed,
+	}
+	for _, issue := range preflight.MissingEvidence {
+		outcome.MissingEvidence = append(outcome.MissingEvidence, colony.LifecycleEvidence{ID: issue.ID, Kind: "missing", Summary: issue.Summary})
+	}
+	for _, item := range preflight.UnresolvedItems {
+		outcome.UnresolvedEvidence = append(outcome.UnresolvedEvidence, colony.LifecycleEvidence{ID: item.Kind + ":" + item.ID, Kind: item.Kind, Summary: item.Summary})
+	}
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		outcome.Decisions = []colony.LifecycleDecision{{ID: "owner-forced-incomplete-closure", Scope: "seal", Summary: preflight.OwnerReason, EvidenceIDs: []string{"seal-force-authority"}}}
+	}
+	return outcome
+}
+
+func sealLifecycleVerifications(preflight SealPreflight) []colony.LifecycleVerification {
+	result := sealLifecycleVerificationsForGates(preflight.PassedGates, true)
+	result = append(result, sealLifecycleVerificationsForGates(preflight.FailedGates, false)...)
+	result = append(result, sealLifecycleVerificationsForGates(preflight.SkippedGates, false)...)
+	return result
+}
+
+func sealLifecycleVerificationsForGates(gates []colony.GateResultEntry, passed bool) []colony.LifecycleVerification {
+	result := make([]colony.LifecycleVerification, 0, len(gates))
+	for _, gate := range gates {
+		result = append(result, colony.LifecycleVerification{Name: gate.Name, Passed: passed, EvidenceIDs: []string{"gate:" + gate.Name}, Detail: gate.Detail})
+	}
+	return result
+}
+
+func buildSealClosureEvidence(input SealTransactionInput, txID string) (SealClosureEvidence, colony.PheromoneFile, []byte, error) {
+	repositoryIdentity := stableRepoIdentity(input.Root)
+	if repositoryIdentity == "" {
+		repositoryIdentity = "path_" + strings.TrimPrefix(lifecycleDigest([]byte(input.Root)), "sha256:")[:12]
+	}
+	evidence := SealClosureEvidence{
+		SchemaVersion: colony.LifecycleSchemaVersion, TransactionID: txID,
+		OutcomeKind: input.Preflight.OutcomeKind, Disposition: input.Preflight.Disposition,
+		OwnerReason:      input.Preflight.OwnerReason,
+		Checkpoints:      append([]SealOwnerCheckpoint{}, input.Preflight.OwnerCheckpoints...),
+		ResidualRisks:    append([]colony.LifecycleIssue{}, input.Preflight.ResidualRisks...),
+		UncompletedWork:  append([]SealUnresolvedItem{}, input.Preflight.UnresolvedItems...),
+		RetainedContents: append([]SealPreservedContent{}, input.Preflight.PreservedContents...),
+		PrimaryNext:      input.Preflight.PrimaryNext, OptionalNext: input.Preflight.OptionalNext,
+		ProjectionRevision: input.Preflight.ProjectionRevision,
+	}
+	stateSource := emptyFallback(strings.TrimSpace(input.Facts.State.Source.Path), filepath.Join(input.DataRoot, "COLONY_STATE.json"))
+	for _, learning := range input.State.Memory.PhaseLearnings {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance(learning.ID, "phase_learning", stateSource, "COLONY_STATE.json", repositoryIdentity, "project", learning, []string{"phase-learning:" + learning.ID}, nil, txID))
+	}
+	for _, decision := range input.State.Memory.Decisions {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance(decision.ID, "decision", stateSource, "COLONY_STATE.json", repositoryIdentity, "colony", decision, nil, []string{decision.ID}, txID))
+	}
+	instinctSource := emptyFallback(strings.TrimSpace(input.Facts.Memory.Source.Path), filepath.Join(input.DataRoot, "instincts.json"))
+	policy := string(currentHiveRuntimePolicy())
+	queenPath := filepath.Join(input.Root, ".aether", "QUEEN.md")
+	queenBefore, readErr := os.ReadFile(queenPath)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return SealClosureEvidence{}, colony.PheromoneFile{}, nil, readErr
+	}
+	queen := string(queenBefore)
+	for _, instinct := range input.Facts.Memory.Value.Instincts {
+		memory := sealMemoryProvenance(instinct.ID, "instinct", instinctSource, "instincts.json", repositoryIdentity, "colony", instinct, []string{instinct.Provenance.Evidence}, nil, txID)
+		evidence.Memory = append(evidence.Memory, memory)
+		action := strings.TrimSpace(instinct.Action)
+		sensitive := sealContentSensitive(action)
+		sanitized, sanitizeErr := colony.SanitizeSignalContent(action)
+		eligible := instinct.Confidence >= 0.8 && action != "" && !sensitive && sanitizeErr == nil
+		allowed := eligible && input.Preflight.Disposition == colony.SealDispositionVerified && policy == string(hivePolicyPromote)
+		decision := SealWisdomDecision{
+			ID: instinct.ID, Source: instinctSource, Scope: "cross_project_candidate", Digest: lifecycleDigest([]byte(action)),
+			Domain: instinct.Domain, Confidence: instinct.Confidence, Policy: policy, Sensitive: sensitive,
+			Eligible: eligible, PromotionAllowed: allowed, TransactionID: txID,
+		}
+		switch {
+		case sensitive:
+			decision.Sanitization, decision.Reason = "blocked_sensitive", "content matched the private or credential boundary"
+		case sanitizeErr != nil:
+			decision.Sanitization, decision.Reason = "blocked", sanitizeErr.Error()
+		case !eligible:
+			decision.Sanitization, decision.Reason = "passed", "content remains local because it is below the promotion threshold"
+		case input.Preflight.Disposition == colony.SealDispositionForcedIncomplete:
+			decision.Sanitization, decision.Reason = "passed", "forced-incomplete closure never promotes cross-project wisdom"
+		case policy != string(hivePolicyPromote):
+			decision.Sanitization, decision.Reason = "passed", "resolved Hive policy prohibits promotion"
+		default:
+			decision.Sanitization, decision.Reason = "passed", "eligible only after the verified seal transaction commits"
+		}
+		evidence.Wisdom = append(evidence.Wisdom, decision)
+		if sanitizeErr == nil && !sensitive && sanitized != "" && !strings.Contains(queen, sanitized) {
+			if !strings.HasSuffix(queen, "\n") && queen != "" {
+				queen += "\n"
+			}
+			queen += fmt.Sprintf("\n## Retained at seal (%s)\n- %s\n", txID, sanitized)
+		}
+	}
+	if len(queenBefore) > 0 {
+		evidence.Memory = append(evidence.Memory, sealMemoryProvenance("queen-local", "queen_memory", queenPath, "QUEEN.md", repositoryIdentity, "project", string(queenBefore), []string{"queen:pre-seal"}, nil, txID))
 	}
 
-	// Scan for high-severity open findings before building summary
-	warnings := scanHighSeverityOpen(store)
-	finalReview := loadSealFinalReviewForSummary(store)
-	reviewBacklog := collectOpenReviewBacklog(store, 10)
+	version := "2.0"
+	signals := colony.PheromoneFile{Version: &version, Signals: append([]colony.PheromoneSignal{}, input.Facts.Signals.Value...)}
+	for index := range signals.Signals {
+		signal := &signals.Signals[index]
+		content := strings.TrimSpace(extractText(signal.Content))
+		decision := SealSignalDecision{
+			ID: signal.ID, Type: signal.Type, Source: emptyFallback(signal.Source, input.Facts.Signals.Source.Path), Scope: "project",
+			Digest: lifecycleDigest([]byte(content)), Privacy: "project_local", Sensitive: sealContentSensitive(content), TransactionID: txID,
+		}
+		if strings.EqualFold(signal.Type, "FOCUS") && signal.Active {
+			decision.Classification = "expired_at_closure"
+			signal.Active = false
+			archivedAt := input.Now.Format(time.RFC3339)
+			signal.ArchivedAt = &archivedAt
+		} else if signal.Active {
+			decision.Classification = "retained"
+		} else {
+			decision.Classification = "already_expired"
+		}
+		evidence.Signals = append(evidence.Signals, decision)
+	}
+	return evidence, signals, []byte(queen), nil
+}
 
-	// Archive reviews directory alongside CROWNED-ANTHILL.md
-	aetherDir := filepath.Dir(store.BasePath())
-	_ = copyDirIfExists(filepath.Join(filepath.Dir(store.BasePath()), "data", "reviews"), filepath.Join(aetherDir, "reviews-archive"))
+func sealMemoryProvenance(id, kind, source, storeName, repositoryIdentity, scope string, value any, evidenceIDs, decisionIDs []string, txID string) SealMemoryProvenance {
+	content, _ := json.Marshal(value)
+	sensitive := sealContentSensitive(string(content))
+	sanitization := "passed"
+	if sensitive {
+		sanitization = "blocked_sensitive"
+	}
+	return SealMemoryProvenance{
+		ID: id, Kind: kind, Source: source, Store: storeName, RepositoryIdentity: repositoryIdentity,
+		Scope: scope, Digest: lifecycleDigest(content), EvidenceIDs: compactSealStrings(evidenceIDs), DecisionIDs: compactSealStrings(decisionIDs),
+		Sanitization: sanitization, Sensitive: sensitive, TransactionID: txID,
+	}
+}
 
-	// Build enrichment data for CROWNED-ANTHILL.md
+func compactSealStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func sealContentSensitive(content string) bool {
+	lower := strings.ToLower(content)
+	for _, marker := range []string{"password=", "password:", "api_key", "api-key", "secret=", "secret:", "access_token", "private key", "bearer "} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func buildTransactionalSealSummary(state colony.ColonyState, input SealTransactionInput, evidence SealClosureEvidence, receipt colony.LifecycleReceipt) string {
+	if input.Preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		var b strings.Builder
+		b.WriteString("# Forced seal record — completion not verified\n\n")
+		b.WriteString("The owner closed this colony for recordkeeping without verification of completion.\n\n")
+		b.WriteString("## Owner reason\n\n")
+		b.WriteString(input.Preflight.OwnerReason + "\n\n")
+		b.WriteString("## Uncompleted work\n\n")
+		for _, item := range evidence.UncompletedWork {
+			b.WriteString("- " + item.Summary + "\n")
+		}
+		b.WriteString("\n## Retained evidence\n\n")
+		b.WriteString("- Transaction: " + evidence.TransactionID + "\n")
+		b.WriteString("- Receipt: " + receipt.ReceiptID + "\n")
+		b.WriteString("- Active state remains at `.aether/data/COLONY_STATE.json`.\n")
+		return b.String()
+	}
 	enrichment := sealEnrichment{
 		LearningsCount:        len(state.Memory.PhaseLearnings),
-		InstinctsPromoted:     promotedInstinctNames,
-		HiveEligible:          hiveEligibleCount,
-		HivePromoted:          hivePromotedCount,
-		HivePromotionFailures: hivePromotionFailures,
-		SignalsExpired:        expiredFOCUSCount,
-		FlagsResolved:         countResolvedFlags(store),
-		ShelfCandidates:       candidates,
-		FinalReview:           finalReview,
-		ReviewBacklog:         reviewBacklog,
-		ConsolidationReport:   sealConsolidation.ReportPath,
-		Override:              override,
+		InstinctsPromoted:     input.Review.PromotedInstinctNames,
+		HiveEligible:          input.Review.HiveEligibleCount,
+		HivePromoted:          input.Review.HivePromotedCount,
+		HivePromotionFailures: input.Review.HivePromotionFailures,
+		SignalsExpired:        countSealSignalClassification(evidence.Signals, "expired_at_closure"),
+		FlagsResolved:         countResolvedSealCheckpoints(evidence.Checkpoints),
+		ShelfCandidates:       input.ShelfCandidates,
+		FinalReview:           &input.FinalReview,
+		ReviewBacklog:         input.ReviewBacklog,
+		ConsolidationReport:   input.Review.Consolidation.ReportPath,
 	}
+	return buildSealSummary(state, input.Now.Format(time.RFC3339), input.Warnings, enrichment)
+}
 
-	summaryPath := filepath.Join(aetherDir, "CROWNED-ANTHILL.md")
-	summary := buildSealSummary(state, now, warnings, enrichment)
-	if err := os.WriteFile(summaryPath, []byte(summary), 0644); err != nil {
-		outputError(2, fmt.Sprintf("failed to write %s: %v", summaryPath, err), nil)
+func countSealSignalClassification(decisions []SealSignalDecision, classification string) int {
+	count := 0
+	for _, decision := range decisions {
+		if decision.Classification == classification {
+			count++
+		}
+	}
+	return count
+}
+
+func countResolvedSealCheckpoints(checkpoints []SealOwnerCheckpoint) int {
+	count := 0
+	for _, checkpoint := range checkpoints {
+		if checkpoint.Resolved {
+			count++
+		}
+	}
+	return count
+}
+
+func buildSealEventBusBytes(input SealTransactionInput, outcome colony.SealOutcome) ([]byte, error) {
+	path := filepath.Join(input.DataRoot, "event-bus.jsonl")
+	before, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if len(before) > 0 && before[len(before)-1] != '\n' {
+		before = append(before, '\n')
+	}
+	expires := input.Now.Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	status := "sealed"
+	if outcome.Disposition == colony.SealDispositionForcedIncomplete {
+		status = "forced_incomplete"
+	}
+	goal := ""
+	if input.State.Goal != nil {
+		goal = strings.TrimSpace(*input.State.Goal)
+	}
+	sealPayload, err := json.Marshal(events.CeremonyPayload{
+		Phase: input.State.CurrentPhase, PhaseName: "Crowned Anthill",
+		TaskID: outcome.OutcomeID, Task: "seal", Status: status, Message: goal,
+		Completed: len(outcome.CompletedPhases), Total: len(input.State.Plan.Phases),
+	})
+	if err != nil {
+		return nil, err
+	}
+	eventsToAppend := []events.Event{{ID: outcome.Transaction.ID + "-event", Topic: events.CeremonyTopicChamberSeal, Payload: sealPayload, Source: "aether-seal", Timestamp: input.Now.Format(time.RFC3339), TTLDays: 30, ExpiresAt: expires}}
+	for _, event := range eventsToAppend {
+		line, marshalErr := json.Marshal(event)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		before = append(before, line...)
+		before = append(before, '\n')
+	}
+	return before, nil
+}
+
+func buildSealRegistryBytes(input SealTransactionInput, state colony.ColonyState) ([]byte, error) {
+	path := filepath.Join(input.HubRoot, "registry", "registry.json")
+	var registry registryData
+	if content, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(content, &registry); err != nil {
+			return nil, fmt.Errorf("decode registry: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	found := false
+	for index := range registry.Colonies {
+		if filepath.Clean(registry.Colonies[index].RepoPath) != input.Root {
+			continue
+		}
+		registry.Colonies[index].Active = false
+		registry.Colonies[index].LastGoal = goal
+		found = true
+	}
+	if !found {
+		registry.Colonies = append(registry.Colonies, registryEntry{RepoPath: input.Root, Active: false, LastGoal: goal, RegisteredAt: input.Now.Format(time.RFC3339)})
+	}
+	return marshalSealJSON(registry)
+}
+
+func marshalSealJSON(value any) ([]byte, error) {
+	content, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(content, '\n'), nil
+}
+
+func loadSealTransactionResult(input SealTransactionInput, txID string, replay bool) (SealTransactionResult, error) {
+	var outcome colony.SealOutcome
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "outcome.json"), &outcome); err != nil {
+		return SealTransactionResult{}, err
+	}
+	var envelope sealReceiptEnvelope
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "receipt.json"), &envelope); err != nil {
+		return SealTransactionResult{}, err
+	}
+	var evidence SealClosureEvidence
+	if err := readSealTransactionJSON(filepath.Join(input.DataRoot, "seal", "closure-evidence.json"), &evidence); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if outcome.Transaction.ID != txID || envelope.Receipt.Transaction.ID != txID || evidence.TransactionID != txID {
+		return SealTransactionResult{}, fmt.Errorf("seal transaction artifacts do not agree on transaction %s", txID)
+	}
+	if err := outcome.Validate(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	if err := envelope.Receipt.Validate(); err != nil {
+		return SealTransactionResult{}, err
+	}
+	return SealTransactionResult{
+		TransactionID: txID, Outcome: outcome, Receipt: envelope.Receipt, Evidence: evidence,
+		SummaryPath: filepath.Join(input.Root, ".aether", "CROWNED-ANTHILL.md"),
+		PrimaryNext: evidence.PrimaryNext, OptionalNext: evidence.OptionalNext, Replay: replay,
+	}, nil
+}
+
+func readSealTransactionJSON(path string, destination any) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(content, destination); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
+}
+
+func finishSealPostCommitPromotions(input SealTransactionInput, result SealTransactionResult) (SealTransactionResult, error) {
+	if input.DisablePostCommitPromotion || result.Outcome.Disposition != colony.SealDispositionVerified {
+		return result, nil
+	}
+	existing, found, err := loadSealPromotionReceipts(input.DataRoot, result.TransactionID)
+	if err != nil {
+		return result, err
+	}
+	if found {
+		result.Promotions = existing
+		applySealPromotionReceipts(&result)
+		return result, nil
+	}
+	for _, decision := range result.Evidence.Wisdom {
+		if !decision.PromotionAllowed || decision.Promoted {
+			continue
+		}
+		var candidate *colony.InstinctEntry
+		for index := range input.Facts.Memory.Value.Instincts {
+			if input.Facts.Memory.Value.Instincts[index].ID == decision.ID {
+				candidate = &input.Facts.Memory.Value.Instincts[index]
+				break
+			}
+		}
+		if candidate == nil {
+			continue
+		}
+		receipt := SealPromotionReceipt{
+			SchemaVersion: colony.LifecycleSchemaVersion, ReceiptID: result.TransactionID + "-hive-" + candidate.ID,
+			TransactionID: result.TransactionID, WisdomID: candidate.ID, Policy: decision.Policy, SourceDigest: decision.Digest,
+		}
+		reference := "seal-receipt:" + result.Receipt.ReceiptID + ":" + candidate.ID
+		repoName := filepath.Base(input.Root)
+		alreadyPromoted, lookupErr := sealHivePromotionAlreadyRecorded(input.HubRoot, reference)
+		if lookupErr != nil {
+			receipt.Reason = lookupErr.Error()
+		} else if alreadyPromoted {
+			receipt.Promoted = true
+		} else if err := promoteToHiveWithReference(candidate.Action, candidate.Domain, repoName, candidate.Confidence, reference); err != nil {
+			receipt.Reason = err.Error()
+		} else {
+			receipt.Promoted = true
+		}
+		result.Promotions = append(result.Promotions, receipt)
+	}
+	if len(result.Promotions) > 0 {
+		if err := storeSealPromotionReceipts(input.DataRoot, result.Promotions); err != nil {
+			return result, err
+		}
+	}
+	applySealPromotionReceipts(&result)
+	return result, nil
+}
+
+type sealPromotionReceiptFile struct {
+	SchemaVersion string                 `json:"schema_version"`
+	Receipts      []SealPromotionReceipt `json:"receipts"`
+}
+
+func loadSealPromotionReceipts(dataRoot, transactionID string) ([]SealPromotionReceipt, bool, error) {
+	path := filepath.Join(dataRoot, "seal", "hive-promotion-receipts.json")
+	var file sealPromotionReceiptFile
+	if err := readSealTransactionJSON(path, &file); err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	for _, receipt := range file.Receipts {
+		if receipt.TransactionID != transactionID {
+			return nil, false, fmt.Errorf("seal promotion receipt %s belongs to transaction %s, not %s", receipt.ReceiptID, receipt.TransactionID, transactionID)
+		}
+	}
+	return file.Receipts, true, nil
+}
+
+func sealHivePromotionAlreadyRecorded(hubRoot, reference string) (bool, error) {
+	wisdom, err := loadWisdomLocked(hubRoot)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range wisdom.Entries {
+		for _, evidence := range entry.Evidence {
+			if evidence.Reference == reference {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func applySealPromotionReceipts(result *SealTransactionResult) {
+	if result == nil || len(result.Promotions) == 0 {
+		return
+	}
+	byWisdomID := make(map[string]SealPromotionReceipt, len(result.Promotions))
+	for _, receipt := range result.Promotions {
+		byWisdomID[receipt.WisdomID] = receipt
+	}
+	for index := range result.Evidence.Wisdom {
+		receipt, ok := byWisdomID[result.Evidence.Wisdom[index].ID]
+		if !ok {
+			continue
+		}
+		result.Evidence.Wisdom[index].Promoted = receipt.Promoted
+		result.Evidence.Wisdom[index].PromotionReceiptID = receipt.ReceiptID
+	}
+}
+
+func storeSealPromotionReceipts(dataRoot string, receipts []SealPromotionReceipt) error {
+	content, err := marshalSealJSON(sealPromotionReceiptFile{SchemaVersion: colony.LifecycleSchemaVersion, Receipts: receipts})
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dataRoot, "seal", "hive-promotion-receipts.json")
+	return atomicReplaceLifecycleTarget(path, content, 0o644, os.Rename)
+}
+
+func completeSealRuntime(state colony.ColonyState, override sealOverride, review sealWisdomReview, supplied ...SealPreflight) error {
+	root := resolveAetherRootPath()
+	now := time.Now().UTC()
+	facts, err := loadLifecycleFacts(root, store, now)
+	if err != nil {
+		outputError(2, fmt.Sprintf("failed to load seal evidence: %v", err), nil)
 		return nil
 	}
-	emitLifecycleCeremony(events.CeremonyTopicChamberSeal, events.CeremonyPayload{
-		Phase:     state.CurrentPhase,
-		PhaseName: "Crowned Anthill",
-		Status:    "sealed",
-		Message:   "Colony sealed at Crowned Anthill",
-		Completed: completedPhaseCount(state),
-		Total:     len(state.Plan.Phases),
-	}, "aether-seal")
-	updateSessionSummary("seal", "aether entomb", "Colony sealed")
-
-	// Hub registry (RECLAIM-02, non-blocking): the sealed colony's entry goes
-	// inactive with its final goal recorded, so `aether registry-list` reads
-	// as a true history of colonies on this machine.
-	sealGoal := ""
-	if state.Goal != nil {
-		sealGoal = strings.TrimSpace(*state.Goal)
+	preflight := SealPreflight{}
+	if len(supplied) > 0 {
+		preflight = supplied[0]
+	} else {
+		request := SealPreflightRequest{Caller: SealCallerDirectOwner, Force: override.Forced, Reason: override.Reason}
+		preflight, err = BuildSealPreflight(facts, request)
+		if err != nil {
+			renderRecoveryMenu("seal", err.Error(), nil)
+			return nil
+		}
 	}
-	if _, regErr := upsertColonyRegistryEntry(filepath.Dir(filepath.Dir(store.BasePath())), sealGoal, nil, false); regErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not update hub registry at seal: %v\n", regErr)
+	finalReview := review.FinalReview
+	if finalReview == nil {
+		finalReview = loadSealFinalReviewForSummary(store)
+	}
+	if finalReview == nil {
+		finalReview = &sealFinalReviewReport{GeneratedAt: now.Format(time.RFC3339), Source: "seal-transaction", Passed: preflight.Disposition == colony.SealDispositionVerified}
+	}
+	candidates, _ := detectShelfCandidates(state, store)
+	input := SealTransactionInput{
+		Root: root, DataRoot: store.BasePath(), HubRoot: resolveHubPathQuiet(), Facts: facts,
+		State: state, Session: facts.Session.Value, Preflight: preflight, FinalReview: *finalReview, Review: review,
+		Warnings: scanHighSeverityOpen(store), ShelfCandidates: candidates, ReviewBacklog: collectOpenReviewBacklog(store, 10), Now: now,
+	}
+	transactionResult, err := CommitSealTransaction(input)
+	if err != nil {
+		outputError(2, fmt.Sprintf("seal transaction did not commit: %v", err), nil)
+		return nil
 	}
 
 	result := map[string]interface{}{
-		"sealed":    true,
-		"milestone": state.Milestone,
-		"summary":   summaryPath,
-		"next":      "aether entomb",
+		"sealed": true, "outcome_kind": transactionResult.Outcome.OutcomeKind,
+		"disposition": transactionResult.Outcome.Disposition, "seal_outcome": transactionResult.Outcome,
+		"lifecycle_receipt": transactionResult.Receipt, "summary": transactionResult.SummaryPath,
+		"next": transactionResult.PrimaryNext, "optional_next": transactionResult.OptionalNext,
 	}
-	if override.overrodeAnything() {
+	if transactionResult.Outcome.Disposition == colony.SealDispositionForcedIncomplete {
 		result["force_sealed"] = true
-		result["force_reason"] = override.Reason
-		result["unverified_phases"] = override.IncompletePhases
+		result["force_reason"] = transactionResult.Outcome.OwnerReason
+		result["unverified_phases"] = transactionResult.Outcome.IncompletePhases
 		result["overridden_blockers"] = override.OverriddenBlockers + override.OverriddenReviewBlocks
+	} else {
+		result["milestone"] = "Crowned Anthill"
 	}
-	addOrchestratorBoundaryGuidance(result, "seal", state, "aether entomb", nil)
-	outputWorkflow(result, renderSealVisual(state, summaryPath))
-
-	if shouldRenderVisualOutput(stdout) {
-		writeVisualOutput(stdout, renderStageMarker("Post-Seal: Delivery Readiness"))
-		readinessSummary := buildPorterReadinessSummary()
-		writeVisualOutput(stdout, readinessSummary)
-		writeVisualOutput(stdout, "\nRun `aether porter check` to validate and deliver.\n")
-	}
+	outputWorkflow(result, RenderSealOutcome(transactionResult))
 	return nil
 }
 
@@ -759,78 +1873,81 @@ func newSignalShortcutCommand(use, signalType, short string) *cobra.Command {
 				outputErrorMessage("no store initialized")
 				return nil
 			}
-			result, err := createPheromoneSignal(signalType, args[0], "user", "", "", 1.0, "")
+			result, err := createAgencySignalResult(signalType, args[0], "user", "", "", 1.0, "")
 			if err != nil {
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			priorityValue := signalPriorityValue(signalType)
-			if signal, ok := result["signal"].(map[string]interface{}); ok {
-				if persisted, ok := signal["priority"].(string); ok && strings.TrimSpace(persisted) != "" {
-					priorityValue = persisted
-				}
-			}
-			replaced, _ := result["replaced"].(bool)
-			outputWorkflow(result, renderSignalVisual(signalType, args[0], priorityValue, replaced))
+			outputWorkflow(result, RenderAgencySignalResult(result))
 			return nil
 		},
 	}
 }
 
 func createPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (map[string]interface{}, error) {
-	if sigType == "" || strings.TrimSpace(content) == "" {
-		return nil, fmt.Errorf("signal type and content are required")
-	}
-
-	sigType = strings.ToUpper(sigType)
-	switch sigType {
-	case "FOCUS", "REDIRECT", "FEEDBACK":
-	default:
-		return nil, fmt.Errorf("invalid signal type %q", sigType)
-	}
-
-	if priority == "" {
-		switch sigType {
-		case "FOCUS":
-			priority = "normal"
-		case "REDIRECT":
-			priority = "high"
-		case "FEEDBACK":
-			priority = "low"
-		}
-	}
-
-	if strength == 0 {
-		strength = 1.0
-	}
-
-	tmpCmd := &cobra.Command{}
-	tmpCmd.Flags().String("type", sigType, "")
-	tmpCmd.Flags().String("content", content, "")
-	tmpCmd.Flags().String("priority", priority, "")
-	tmpCmd.Flags().Float64("strength", strength, "")
-	tmpCmd.Flags().String("source", sourceFlag, "")
-	tmpCmd.Flags().String("reason", reasonFlag, "")
-	tmpCmd.Flags().String("ttl", ttlFlag, "")
-
-	var buf strings.Builder
-	oldStdout := stdout
-	stdout = &buf
-	defer func() { stdout = oldStdout }()
-
-	if err := pheromoneWriteCmd.RunE(tmpCmd, nil); err != nil {
+	signal, reinforced, total, err := persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag, strength, priority)
+	if err != nil {
 		return nil, err
 	}
+	return map[string]interface{}{
+		"created":  true,
+		"signal":   signal,
+		"total":    total,
+		"replaced": reinforced,
+	}, nil
+}
 
-	var envelope map[string]interface{}
-	if err := json.Unmarshal([]byte(buf.String()), &envelope); err != nil {
-		return nil, fmt.Errorf("failed to parse pheromone-write result: %w", err)
+// createAgencySignalResult performs exactly one existing signal write, then
+// derives a read-only receipt from the signal and lifecycle facts returned by
+// that write. It does not infer an acknowledgement, causal effect, or conflict.
+func createAgencySignalResult(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (AgencySignalResult, error) {
+	signal, reinforced, _, err := persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag, strength, priority)
+	if err != nil {
+		return AgencySignalResult{}, err
 	}
-	if ok, _ := envelope["ok"].(bool); !ok {
-		return nil, fmt.Errorf("failed to create pheromone signal")
+	evidence := currentAgencyReceiptEvidence(resolveAetherRootPath(), signal)
+	return BuildAgencySignalResult(signal, reinforced, evidence)
+}
+
+func persistPheromoneSignal(sigType, content, sourceFlag, reasonFlag, ttlFlag string, strength float64, priority string) (colony.PheromoneSignal, bool, int, error) {
+	if strings.TrimSpace(sigType) == "" || strings.TrimSpace(content) == "" {
+		return colony.PheromoneSignal{}, false, 0, fmt.Errorf("signal type and content are required")
 	}
-	result, _ := envelope["result"].(map[string]interface{})
-	return result, nil
+	signal, reinforced, err := writePheromoneSignal(sigType, content, priority, sourceFlag, reasonFlag, ttlFlag, strength, nil)
+	if err != nil {
+		return colony.PheromoneSignal{}, false, 0, err
+	}
+	var file colony.PheromoneFile
+	total := 0
+	if loadErr := store.LoadJSON("pheromones.json", &file); loadErr == nil {
+		total = len(file.Signals)
+	}
+	return signal, reinforced, total, nil
+}
+
+func currentAgencyReceiptEvidence(root string, signal colony.PheromoneSignal) AgencyReceiptEvidence {
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		return AgencyReceiptEvidence{}
+	}
+	projection := projectLifecycle(facts, LifecycleViewFocused, "runtime")
+	evidence := AgencyReceiptEvidence{}
+	for _, task := range projection.Tasks.Value {
+		if task.ID != nil && task.Status == colony.TaskInProgress && strings.TrimSpace(*task.ID) != "" {
+			evidence.ActiveJobIDs = append(evidence.ActiveJobIDs, strings.TrimSpace(*task.ID))
+		}
+	}
+	state := facts.State.Value
+	if facts.State.Source.Provenance == LifecycleFactConfirmed &&
+		(state.CurrentPhase > 0 || len(state.Plan.Phases) > 0 || strings.TrimSpace(string(state.State)) != "") {
+		evidence.LifecycleBoundary = &colony.LifecycleEvidence{
+			ID:      "next-safe-boundary:" + signal.ID,
+			Kind:    "lifecycle_boundary",
+			Source:  facts.State.Source.Path,
+			Summary: "The durable signal is available to the next worker-context lifecycle boundary.",
+		}
+	}
+	return evidence
 }
 
 func synthesizePlan(goal string, granularity colony.PlanGranularity, domains []string) []colony.Phase {
@@ -1057,24 +2174,92 @@ func collectOpenReviewBacklog(s *storage.Store, limit int) []colony.ReviewLedger
 }
 
 // checkSealBlockers loads flags from pending-decisions.json (fallback flags.json),
-// splits unresolved entries into blockers and issues.
-func checkSealBlockers(s *storage.Store) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
-	var ff colony.FlagsFile
-	if err := s.LoadJSON("pending-decisions.json", &ff); err != nil {
-		if err2 := s.LoadJSON("flags.json", &ff); err2 != nil {
-			return nil, nil
+// splits unresolved entries into blockers and issues, and appends any
+// durable visual/runtime owner checkpoints as blocker-shaped entries at the
+// seal boundary. Historical needs_owner_confirmation reports still receive
+// their live compatibility blocker when no matching durable checkpoint was
+// materialized by the newer continue runtime.
+func checkSealBlockers(s *storage.Store, state colony.ColonyState) (blockers []colony.FlagEntry, issues []colony.FlagEntry) {
+	const durabilityBlockerID = "pending-decisions-storage-unavailable"
+	seenBlockers := map[string]bool{}
+	durabilityFailureAdded := false
+	appendBlocker := func(blocker colony.FlagEntry) {
+		if blocker.ID != "" && seenBlockers[blocker.ID] {
+			return
+		}
+		blockers = append(blockers, blocker)
+		if blocker.ID != "" {
+			seenBlockers[blocker.ID] = true
 		}
 	}
-	for _, f := range ff.Decisions {
-		if f.Resolved {
+	appendPendingDecisionFailure := func(err error) {
+		if err == nil || durabilityFailureAdded {
+			return
+		}
+		failure := colony.FlagEntry{
+			ID:              durabilityBlockerID,
+			Type:            "blocker",
+			Description:     fmt.Sprintf("Seal cannot trust %s because its required owner-work state could not be read, decoded, or durably updated: %v. Safe recovery command: aether patrol", pendingDecisionsFile, err),
+			Source:          "pending_decision_storage",
+			RecoveryCommand: "aether patrol",
+		}
+		// The durability ID is runtime-reserved. If an ordinary flag reused it,
+		// replace that projection so it cannot hide the actual storage failure.
+		for i := range blockers {
+			if blockers[i].ID == durabilityBlockerID {
+				blockers[i] = failure
+				durabilityFailureAdded = true
+				return
+			}
+		}
+		appendBlocker(failure)
+		durabilityFailureAdded = true
+	}
+	appendFlags := func(file colony.FlagsFile) {
+		for _, f := range file.Decisions {
+			if f.Resolved {
+				continue
+			}
+			switch f.Type {
+			case "blocker":
+				appendBlocker(f)
+			case "issue":
+				issues = append(issues, f)
+			}
+		}
+	}
+
+	if s == nil {
+		appendPendingDecisionFailure(fmt.Errorf("no store initialized"))
+		return blockers, issues
+	}
+	ff, _, flagsErr := readCanonicalBlockerFlags(s)
+	if flagsErr != nil {
+		appendPendingDecisionFailure(flagsErr)
+	} else {
+		appendFlags(ff)
+	}
+
+	checkpointBlockers, checkpointErr := autopilotCheckpointSealBlockersFromStore(s, state)
+	if checkpointErr != nil {
+		appendPendingDecisionFailure(checkpointErr)
+	}
+	for _, blocker := range checkpointBlockers {
+		appendBlocker(blocker)
+	}
+	checkpointCompatibilityIDs := map[string]bool{}
+	if checkpointErr == nil {
+		var compatibilityErr error
+		checkpointCompatibilityIDs, compatibilityErr = autopilotCheckpointCompatibilityIDsFromStore(s, state)
+		if compatibilityErr != nil {
+			appendPendingDecisionFailure(compatibilityErr)
+		}
+	}
+	for _, blocker := range ownerConfirmationSealBlockers(state) {
+		if checkpointCompatibilityIDs[blocker.ID] {
 			continue
 		}
-		switch f.Type {
-		case "blocker":
-			blockers = append(blockers, f)
-		case "issue":
-			issues = append(issues, f)
-		}
+		appendBlocker(blocker)
 	}
 	return blockers, issues
 }
@@ -1096,6 +2281,18 @@ func renderBlockerSummary(blockers []colony.FlagEntry, issues []colony.FlagEntry
 	}
 	b.WriteString("\nBLOCKED: Resolve blockers above or use --force to override.\n")
 	for _, bl := range blockers {
+		// A blocker with its own RecoveryCommand (e.g. an owner-confirmation
+		// blocker, which is computed live and never written to
+		// pending-decisions.json) is not resolvable through
+		// `aether flag-resolve` -- that command can only look up IDs that
+		// exist in the flags file, so printing it here would hand the
+		// (non-technical) owner a command guaranteed to fail. Print the
+		// blocker's real recovery command instead; only fall back to
+		// flag-resolve for ordinary persisted flags (WR-01, 193-REVIEW.md).
+		if bl.RecoveryCommand != "" {
+			b.WriteString("  " + bl.RecoveryCommand + "\n")
+			continue
+		}
 		b.WriteString(fmt.Sprintf("  aether flag-resolve --id %s\n", bl.ID))
 	}
 	if len(issues) > 0 {
@@ -1309,13 +2506,26 @@ func init() {
 	planCmd.Flags().Bool("refresh", false, "Regenerate the plan even when an existing plan is already present")
 	planCmd.Flags().Bool("force", false, "Alias for --refresh")
 	planCmd.Flags().Bool("plan-only", false, "Print the planning dispatch manifest without mutating colony state or spawning workers")
-	planCmd.Flags().Bool("repair-artifact", false, "Repair and validate dependency references in .aether/data/planning/phase-plan.json without rerunning workers")
-	planCmd.Flags().String("depth", "", "Planning depth: fast, balanced, deep, or exhaustive")
+	planCmd.Flags().Bool("repair-artifact", false, "Validate accepted-plan dependencies without changing approvals; otherwise repair the legacy .aether/data/planning/phase-plan.json artifact without workers")
+	planCmd.Flags().String("preset", "", "Planning preset: fast, balanced, deep, or exhaustive")
+	planCmd.Flags().String("depth", "", "Legacy alias for --preset: fast, balanced, deep, or exhaustive")
 	planCmd.Flags().String("planning-depth", "", "Task decomposition depth: light, standard, or deep")
 	planCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
-	planCmd.Flags().Int("target", 0, "Planning confidence target 70-99 (default from depth preset)")
-	planCmd.Flags().Int("max-iterations", 0, "Planning iteration budget 2-12 (default from depth preset)")
-	planCmd.Flags().Bool("accept", false, "Accept the current best plan even if confidence is below target")
+	planCmd.Flags().Int("target", 0, "Exact preset confidence target; requires matching --max-iterations")
+	planCmd.Flags().Int("max-iterations", 0, "Exact preset pass cap; requires matching --target")
+	planCmd.Flags().Bool("accept", false, "Deprecated: use --accept-candidate with the exact pending candidate ID")
+	planCmd.Flags().Bool("candidate", false, "Review the exact stopped plan candidate without changing state")
+	planCmd.Flags().String("candidate-id", "", "With --candidate or --show-iteration: name which waiting plan to review when more than one is waiting")
+	planCmd.Flags().Int("show-iteration", 0, "Show one immutable candidate timeline pass by ordinal; requires --details")
+	planCmd.Flags().Bool("details", false, "Return the complete immutable card selected by --show-iteration")
+	planCmd.Flags().String("accept-candidate", "", "Accept the exact candidate ID shown by --candidate")
+	planCmd.Flags().String("retire-candidate", "", "Retire the exact waiting candidate `id` shown by --candidate, without accepting it: it stops waiting for review and stops blocking phase insertion")
+	planCmd.Flags().String("spec-revision", "", "Approved specification revision bound to candidate acceptance")
+	planCmd.Flags().String("spec-hash", "", "Approved specification content hash bound to candidate acceptance")
+	planCmd.Flags().String("base-plan-revision", "", "Active base plan revision bound to candidate acceptance")
+	planCmd.Flags().String("timeline-digest", "", "Complete immutable timeline digest bound to candidate acceptance")
+	planCmd.Flags().String("proposal-hash", "", "Exact proposal hash bound to candidate acceptance")
+	planCmd.Flags().String("acceptance-token", "", "Explicit action token shown by the exact candidate review")
 	planCmd.Flags().String("revision-type", "", "Why a refreshed plan is needed: manual, user_feedback, research, verification_failure, or scope_change")
 	planCmd.Flags().String("revision-reason", "", "Traceable explanation for refreshing a plan after completed work")
 	planCmd.Flags().StringArray("revision-evidence", nil, "Repository-relative evidence file supporting the revision (repeatable)")
@@ -1340,8 +2550,14 @@ func init() {
 	// The Queen's team choice. Supplied by the wrapper after it has read the
 	// phase; omitted means the deterministic keyword engine decides, which is
 	// what every caller did before judgement existed.
+	buildCmd.Flags().Bool("no-checkin", false, "Skip the wrapper's pre-spawn team check-in pause (the runtime plan is unchanged)")
+	buildCmd.Flags().Bool("checkin", false, "Force the wrapper's pre-spawn team check-in pause even for a decision-free one-worker build (D-14 owner override); conflicts with --no-checkin")
 	buildCmd.Flags().StringArray("castes", nil, "Queen's proposed worker castes for this phase (repeatable or comma-separated). Safety castes the phase requires are added back automatically; the worker budget still applies")
-	buildCmd.Flags().String("caste-reason", "", "Why the Queen chose that team, shown to the operator alongside the roster")
+	buildCmd.Flags().String("caste-reason", "", "One line summarising the whole team's choice, shown to the operator alongside the roster. This is NOT a per-worker reason -- a worker named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
+	buildCmd.Flags().StringArray("caste-why", nil, "One reason per proposed worker, as caste=reason (repeatable; the reason may itself contain '='). A worker named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
+	buildCmd.Flags().String("verification-boundary", "", "Where the reviewer's judgement should land: 'check step' (the default, at aether continue) or 'build end' (during this build itself). Moving it to build end requires --boundary-why; leaving this unset makes no request and the default applies")
+	buildCmd.Flags().String("boundary-why", "", "The plain-English reason review should happen at build end instead of the check step. Required whenever --verification-boundary asks for build end")
+	buildCmd.Flags().StringArray("job-proposal", nil, "Queen coherent-job proposal as one JSON object (repeatable; fields: name, task_ids, owner_caste, relationship, benefit, owner_reason)")
 	buildCmd.Flags().Int("circuit-breaker-threshold", 3, "Consecutive failures before circuit breaker trips for a worker (default: 3)")
 	buildCmd.Flags().Bool("no-suggest", false, "Skip pheromone suggestion analysis during build")
 	buildCmd.Flags().Bool("verbose", false, "Show full worker output (default: filtered summary)")
@@ -1355,18 +2571,20 @@ func init() {
 	continueCmd.Flags().String("verification-depth", "", "Verification depth: light, standard, or heavy")
 	continueCmd.Flags().Duration("worker-timeout", 0, "Override per-worker timeout for continue verification/review dispatches (e.g. 15m)")
 	continueCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
-	continueCmd.Flags().Bool("skip-watchers", false, "Skip watcher agent spawn; rely on verification commands only")
+	continueCmd.Flags().Bool("skip-watchers", false, "Skip AI reviewer workers for this run; the program's own checks (build, types, lint, tests) still run either way")
 	// Continue is the expensive flow: every reviewer is a full agent run. The
 	// Queen chooses the team after reading the phase; without a proposal the
 	// keyword engine decides, as before.
 	continueCmd.Flags().StringArray("castes", nil, "Queen's proposed review castes for this phase (repeatable or comma-separated). The Watcher and any review the phase requires are added back automatically")
-	continueCmd.Flags().String("caste-reason", "", "Why the Queen chose that review team")
+	continueCmd.Flags().String("caste-reason", "", "One line summarising the whole review team's choice. This is NOT a per-worker reason -- a reviewer named in --castes with no matching --caste-why entry is refused by name even if --caste-reason is set. Use --caste-why for that.")
+	continueCmd.Flags().StringArray("caste-why", nil, "One reason per proposed reviewer, as caste=reason (repeatable; the reason may itself contain '='). A reviewer named in --castes with no entry here, and not required by the phase, is refused by name rather than sent unexplained")
 	continueCmd.Flags().Bool("synthetic", false, "Mark continue as synthetic (skip real agent workers, use provided results)")
-	continueCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
+	continueCmd.Flags().Bool("no-learn", false, "Only turns off the legacy learning-entry capture for this run (D-16, PRIV-05); observations and failure records are still written, so a blocked run still leaves a record of what broke -- see captureContinueMemory's doc comment")
 	continueCmd.Flags().Bool("classic-ceremony", false, "Emit the heavy continue review manifest for wrapper-spawned classic ceremony reviewers")
 	continueFinalizeCmd.Flags().String("completion-file", "", "JSON file containing continue_manifest and external review worker results")
+	continueFinalizeCmd.Flags().StringArray("reconcile-task", nil, "Mark one or more task IDs as manually reconciled at finalize time, combined with any already recorded when the build was planned (repeatable or comma-separated); this command does not accept --read-only-artifact directly, so record that evidence earlier via continue --plan-only --read-only-artifact")
 	continueFinalizeCmd.Flags().Duration("verification-timeout", 0, "Override deterministic verification command timeout (e.g. 30m); env: AETHER_CONTINUE_VERIFICATION_TIMEOUT")
-	continueFinalizeCmd.Flags().Bool("no-learn", false, "Disable learning capture for this run (D-16, PRIV-05)")
+	continueFinalizeCmd.Flags().Bool("no-learn", false, "Only turns off the legacy learning-entry capture for this run (D-16, PRIV-05); observations and failure records are still written, so a blocked run still leaves a record of what broke -- see captureContinueMemory's doc comment")
 	skipPhaseCmd.Flags().Bool("force", false, "Confirm that the phase should be abandoned and marked complete")
 	skipPhaseCmd.Flags().String("reason", "", "Audit reason for force-skipping the phase")
 	sealCmd.Flags().Bool("force", false, "Owner override: seal past unverified phases, open blockers, and review blocks (recorded; requires --reason when it overrides anything)")

@@ -1,0 +1,94 @@
+{
+  "cache_handoff": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/composition-repair-handoff.json",
+    "sha256": "sha256:e7815e52b4407533a185b96ce621430a6280814d6bbe5add17bdb032f10eb675"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/config.READY.json",
+    "sha256": "sha256:fbea942255426987ecd5483d126b00addf59db80108a38335711c7f1020e4e9a"
+  },
+  "focused_failure_regraded": false,
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/summary.json",
+    "sha256": "sha256:fec6d3af5a547a3c2d322ef533276b4d0b8615399ac438556bee827402b763bf"
+  },
+  "history_preserved": true,
+  "next_required": "Diagnose and repair the two regressions, commit a new source identity, independently review and admit a fresh same-24-family normal/race run before any new live trial.",
+  "normal": {
+    "argv": [
+      "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "./cmd",
+      "-run",
+      "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+      "-parallel",
+      "1",
+      "-count=1",
+      "-timeout",
+      "600s",
+      "-json"
+    ],
+    "bound_seconds": 900,
+    "cleanup": {
+      "errors": [],
+      "observed_pids": [],
+      "observed_zombie_pids": [],
+      "process_group": 73247,
+      "reaped_pids": [
+        73247
+      ],
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": []
+    },
+    "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/repo",
+    "elapsed_seconds": 46.75031399726868,
+    "exit_code": 1,
+    "started_epoch": 1789851407.9387782,
+    "stderr": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/normal-cmd.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/normal-cmd.stdout",
+      "sha256": "sha256:6364c1c53edf0506649d101394082329729ded04217c8588228b38321b05382d"
+    },
+    "stopped_reason": null
+  },
+  "observed_failures": [
+    "Existing output-exit parent-coordination fixture valid/file_uri/actual_command_failure cases were classified unrecognized.",
+    "A child inspection chain containing one quoted executable token git status was incorrectly accepted as the git status command."
+  ],
+  "original_live_attempt_twelve_unchanged": true,
+  "phase_complete": false,
+  "race": "not_run_after_normal_failure",
+  "raw_failed_terminals": [
+    "TestCodexNativeGapParentCoordination/output-exit/valid",
+    "TestCodexNativeGapParentCoordination/output-exit/file_uri",
+    "TestCodexNativeGapParentCoordination/output-exit/actual_command_failure",
+    "TestCodexNativeGapParentCoordination",
+    "TestCodexNativeObservedFixtureInspections/sed_-n_'1,200p'_clamp.go_&&_'git_status'_--short",
+    "TestCodexNativeObservedFixtureInspections",
+    null
+  ],
+  "recorded_at": "2026-09-19T20:59:52.918987+00:00",
+  "requirements_completed": [],
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/run-focused-composition-repair.PENDING.py",
+    "sha256": "sha256:1276a93bf0b1b1d5858500b64e3efcee8010bc723a7fb922c852d02f1cee4c8e"
+  },
+  "schema_version": "aether-native-focused-failure-record/v1",
+  "snapshot_provenance": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-repair-ycgapky0/snapshot-provenance.json",
+    "sha256": "sha256:e1ea862cfb63be7c9e9ff8645d84bd7752e8f4392f4d103a01ab846a5d26bc2c"
+  },
+  "snapshot_revision": "d5cc6791669b0552b3cec08d6c1d57459badfee7",
+  "source_revision": "2a66d33fefc9d6e581383124ea6b48eca8ec031d",
+  "status": "failed",
+  "terminal_counts": {
+    "fail": 6,
+    "pass": 1197
+  }
+}

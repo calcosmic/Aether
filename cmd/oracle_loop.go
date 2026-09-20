@@ -17,6 +17,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 const (
@@ -569,6 +570,15 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("create oracle dir: %w", err)
 	}
 	state, _ := loadOracleStateFile(paths.StatePath)
+	// Captured before the StartedAt backfill immediately below can invent
+	// one -- a genuinely never-started run (StartedAt still empty here) has
+	// no live episode to close, and oracleLiveEpisodeID's own "oracle"
+	// fallback for an empty StartedAt would otherwise let this manual stop
+	// close an episode it never opened.
+	liveEpisodeID := ""
+	if strings.TrimSpace(state.StartedAt) != "" {
+		liveEpisodeID = oracleLiveEpisodeID(state)
+	}
 	if err := os.WriteFile(paths.StopPath, []byte(time.Now().UTC().Format(time.RFC3339)+"\n"), 0644); err != nil {
 		return nil, fmt.Errorf("write stop marker: %w", err)
 	}
@@ -587,9 +597,20 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	if err := writeOracleStateFile(paths.StatePath, state); err != nil {
 		return nil, err
 	}
+	// The controller process this just killed may never reach its own
+	// finalizeOracleLoop terminal branch, or runOracleLoop's deferred
+	// episode close -- this command owns finishing work for a run stopped
+	// from outside its own process (D-05, D-06, D-07), including closing
+	// the live episode (202-17, CR-01) so a stopped run does not stay
+	// classified as live forever.
+	if liveEpisodeID != "" {
+		emitColonyLiveEpisodeEnded(liveEpisodeID, events.EpisodeKindOracle, state.Status)
+	}
 
+	researchDocument := ""
 	if plan, err := loadOraclePlanFile(paths.PlanPath); err == nil {
 		_ = writeOracleDerivedReports(paths, state, plan)
+		researchDocument = finalizeOracleResearchArtifacts(paths, state, plan)
 	}
 
 	result, err := oracleStatusResult(root)
@@ -601,6 +622,9 @@ func stopOracleCompatibility(root string) (map[string]interface{}, error) {
 	result["stop_path"] = paths.StopPath
 	result["killed_pids"] = killedPIDs
 	result["next"] = "aether oracle status"
+	if researchDocument != "" {
+		result["research_document"] = researchDocument
+	}
 	if killErr != nil {
 		result["kill_warning"] = killErr.Error()
 	}
@@ -641,7 +665,24 @@ func startOracleCompatibility(root, topic, depth string, confidenceTarget string
 	_ = os.Remove(paths.StopPath)
 	_ = os.Remove(paths.LoopPath)
 
-	depthCfg := resolveOracleDepth(depth)
+	// The owner-facing start path speaks the shared Fast/Balanced/Deep/
+	// Exhaustive vocabulary via resolveOraclePreset -- every other use of
+	// oracleDepthLevels/resolveOracleDepth in this file (the loop's own
+	// stopping arithmetic, `oracle iterate`) is untouched. An omitted --depth
+	// still defaults to Balanced; anything else invalid is refused by name.
+	presetInput := strings.TrimSpace(depth)
+	if presetInput == "" {
+		presetInput = string(planningStagePresetBalanced)
+	}
+	preset, err := resolveOraclePreset(presetInput)
+	if err != nil {
+		return nil, err
+	}
+	depthCfg := oracleDepthConfig{
+		MaxIterations:    preset.RoundCap,
+		TargetConfidence: preset.TargetConfidence,
+		Label:            preset.Label,
+	}
 	scopeProfile, err := resolveOracleScope(topic, requestedScope)
 	if err != nil {
 		return nil, err
@@ -871,7 +912,36 @@ func oracleBackgroundEnv(env []string) []string {
 	return out
 }
 
-func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
+// runOracleLoop wraps the round-based run (runOracleLoopRounds, this
+// function's former body, renamed) in Oracle's own live episode boundary
+// (202-17, CR-01/CEC-05/LIVE-06), mirroring cmd/codex_build.go's and
+// cmd/codex_continue.go's emit-started / defer-emit-ended shape on their own
+// lanes.
+//
+// The boundary is opened only when the durable state already carries a
+// non-empty StartedAt. runOracleLoopRounds's own invoker-availability and
+// agent-validation checks run first, inside it, and can still refuse to
+// start the run entirely -- opening an episode here for a run that never
+// began would record a phantom episode that closes immediately with no
+// round ever having played on it. StartedAt is set once, before this
+// function is ever called (by the run/resume entry points that construct
+// oracleStateFile), so an empty value here means this particular invocation
+// is not really a run at all.
+//
+// state is loaded independently of runOracleLoopRounds's own load: a
+// failure to load it here only means the episode boundary is skipped, and
+// runOracleLoopRounds's own reload owns the real error path.
+func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks []string) (result map[string]interface{}, err error) {
+	if state, loadErr := loadOracleStateFile(paths.StatePath); loadErr == nil && strings.TrimSpace(state.StartedAt) != "" {
+		_, closeEpisode := openOracleLiveEpisode(state)
+		defer func() {
+			closeEpisode(oracleLiveTerminalStatus(result, err))
+		}()
+	}
+	return runOracleLoopRounds(paths, detectedType, languages, frameworks)
+}
+
+func runOracleLoopRounds(paths oraclePaths, detectedType string, languages, frameworks []string) (map[string]interface{}, error) {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
@@ -922,6 +992,11 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 		state.StopReason = ""
 		state.ActiveQuestionID = strings.TrimSpace(target.ID)
 		state.ActiveQuestionText = strings.TrimSpace(target.Text)
+		// 202-11 (LIVE-06/CEC-05): announce the round beginning on the live
+		// stream at the moment the loop has already decided everything the
+		// event needs -- the round number, its cap, the phase and the
+		// active question are all set on state by this point.
+		emitOracleLiveRound(state)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
 		state.ActiveTimeoutSec = 0
@@ -1079,6 +1154,10 @@ func runOracleLoop(paths oraclePaths, detectedType string, languages, frameworks
 
 		state.OverallConfidence = oracleOverallConfidence(plan)
 		appendOracleProgressEvent(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventIterationEnd, state))
+		// 202-11 (LIVE-06/CEC-05): announce the round ending, carrying the
+		// confidence it ended at, at the same existing mutation point the
+		// round-log's own "iteration_end" event already uses.
+		emitOracleLiveRoundEnded(state)
 		state.Platform = oracleInvokerPlatform(invoker)
 		state.ActiveAttempt = 0
 		state.ActiveReasoning = ""
@@ -1325,6 +1404,72 @@ func collectEvidence(plan oraclePlanFile, state oracleStateFile) []oracleEvidenc
 	return entries
 }
 
+// oracleResearchProvenanceLabel builds the plain-English "from research:
+// <topic>, <date>" line a promoted finding carries (D-06), so every habit
+// created this way can be traced back to the research it came from and
+// removed if it turns out wrong. Falls back to the run's raw topic when no
+// core question was recorded; empty when neither is set.
+func oracleResearchProvenanceLabel(state oracleStateFile) string {
+	topic := strings.TrimSpace(emptyFallback(strings.TrimSpace(state.CoreQuestion), state.Topic))
+	if topic == "" {
+		return ""
+	}
+	return fmt.Sprintf("from research: %s, %s", topic, time.Now().UTC().Format("2006-01-02"))
+}
+
+// finalizeOracleResearchArtifacts is the single body behind two entry
+// points: finalizeOracleLoop's own terminal branch (the loop process
+// finishing, stopping, or hitting its iteration cap in-process) and the
+// `aether oracle stop` path (cmd/oracle_loop.go, stopOracleCompatibility),
+// which can terminate the loop's process tree before the loop ever reaches
+// its own terminal branch. Both must file, register, and promote exactly
+// the same way, so this is called from both rather than duplicated into the
+// stop path (D-05, D-06, D-07).
+//
+// A run with nothing gathered yet (an owner stop before any finding landed)
+// files nothing and registers nothing -- that is the expected shape, not a
+// failure, so nothing is said about it. Every other step here is non-fatal:
+// a save, registration, or promotion failure is reported as one plain
+// sentence and never turns a finished or interrupted research run into a
+// failed command.
+//
+// Returns the repo-relative path of the saved document, or "" when nothing
+// was filed.
+func finalizeOracleResearchArtifacts(paths oraclePaths, state oracleStateFile, plan oraclePlanFile) string {
+	if !isCanonicalOracleWorkspace(paths) {
+		return ""
+	}
+
+	body, readErr := os.ReadFile(paths.SynthesisPath)
+	if readErr != nil || strings.TrimSpace(string(body)) == "" {
+		// 202-12 (LIVE-07): a run that gathered no evidence writes no
+		// synthesis document at all -- this is reported to the owner as an
+		// empty run, naming what it tried, not as a silent no-op or an
+		// unverified synthesis.
+		emitVisualLine(fmt.Sprintf("ℹ %s: this run gathered no evidence, so nothing was written -- nothing to save", oracleEmptyRunTopic(state)))
+		return ""
+	}
+
+	saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
+	if saveErr != nil {
+		// Worth saying out loud: the run produced something but its write-up
+		// is still only in the workspace, where the next run will sweep it.
+		emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
+		return ""
+	}
+
+	if regErr := registerColonyResearchDoc(paths.Root, saved); regErr != nil {
+		// The write-up is safe on disk; only the automatic pointer failed.
+		emitVisualLine(fmt.Sprintf("⚠ research was filed at %s but the colony was not pointed at it (%v) — run `aether init --research %s \"<goal>\"` to fix it", saved, regErr, saved))
+	}
+
+	if _, promErr := runOraclePromote(paths.Root, 0, false, oracleResearchProvenanceLabel(state)); promErr != nil {
+		emitVisualLine(fmt.Sprintf("⚠ research was filed but strong findings could not be promoted into learned habits (%v)", promErr))
+	}
+
+	return saved
+}
+
 func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePlanFile, detectedType string, languages, frameworks []string, iterationsRun int, status, stopReason, next string) (map[string]interface{}, error) {
 	state.Status = status
 	state.Platform = oracleDetectedPlatform()
@@ -1350,19 +1495,15 @@ func finalizeOracleLoop(paths oraclePaths, state oracleStateFile, plan oraclePla
 	// is the one place that can promise a terminal line for anyone following.
 	emitOracleProgress(paths.ProgressPath, newOracleProgressEvent(oracleProgressEventRunEnd, state))
 
-	// A run that reached a conclusion gets its write-up saved somewhere the
-	// next run cannot destroy. Blocked and manually stopped runs do not --
-	// `aether oracle save` keeps those on request.
+	// A run that reached a conclusion, hit its iteration cap, or was stopped
+	// (by the owner, or by a signal) gets its write-up saved somewhere the
+	// next run cannot destroy, registered on the colony, and its strong
+	// findings promoted into labelled habits -- with no hand-typed command
+	// (D-05, D-06, D-07). A blocked run (worker error/timeout, no progress)
+	// still does not; `aether oracle save` keeps those on request.
 	researchDocument := ""
-	if (status == "complete" || stopReason == "max_iterations_reached") && isCanonicalOracleWorkspace(paths) {
-		saved, saveErr := saveOracleResearchDocument(paths, state, plan, "")
-		if saveErr != nil {
-			// Worth saying out loud: the run succeeded but its write-up is
-			// still only in the workspace, where the next run will sweep it.
-			emitVisualLine(fmt.Sprintf("⚠ research completed but could not be saved durably (%v) — run `aether oracle save` before starting another run", saveErr))
-		} else {
-			researchDocument = saved
-		}
+	if status == "complete" || stopReason == "max_iterations_reached" || status == "stopped" {
+		researchDocument = finalizeOracleResearchArtifacts(paths, state, plan)
 	}
 
 	questionCount, answeredCount, touchedCount := oracleQuestionCounts(plan)
@@ -2603,12 +2744,30 @@ func applyOracleWorkerResponse(state oracleStateFile, plan oraclePlanFile, respo
 	plan.Questions[idx] = question
 	plan.LastUpdated = now
 
+	// 202-11 (LIVE-06/CEC-05): capture the pre-merge values so the live
+	// stream can announce only what is genuinely new -- a contradiction or
+	// gap already recorded before this merge must not be announced again,
+	// and a confidence figure that did not move must not fire a "changed"
+	// event.
+	previousGaps := append([]string(nil), state.OpenGaps...)
+	previousContradictions := append([]string(nil), state.Contradictions...)
+	previousConfidence := state.OverallConfidence
+
 	state.OpenGaps = mergeOracleNotes(state.OpenGaps, response.Gaps)
 	state.Contradictions = mergeOracleNotes(state.Contradictions, response.Contradictions)
+	for _, gap := range newOracleNotes(previousGaps, state.OpenGaps) {
+		emitOracleLiveGapTargeted(state, gap)
+	}
+	for _, contradiction := range newOracleNotes(previousContradictions, state.Contradictions) {
+		emitOracleLiveContradiction(state, contradiction)
+	}
 	if strings.TrimSpace(response.Recommendation) != "" {
 		state.Recommendation = response.Recommendation
 	}
 	state.OverallConfidence = oracleOverallConfidence(plan)
+	if state.OverallConfidence != previousConfidence {
+		emitOracleLiveConfidence(state, previousConfidence)
+	}
 	state.Summary = response.Summary
 	state.LastUpdated = now
 

@@ -1,175 +1,60 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
-	"os"
 	"testing"
 )
 
-func TestAutopilotInitCreatesState(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+func TestAutopilotStateCompatibility(t *testing.T) {
+	legacyJSON := []byte(`{
+		"initialized_at":"2026-01-01T00:00:00Z",
+		"total_phases":3,
+		"current_phase":1,
+		"status":"running",
+		"reason":"",
+		"headless":true,
+		"replan_interval":2,
+		"phases":[{"phase":1,"status":"completed","at":"2026-01-01T00:05:00Z"}],
+		"last_updated":"2026-01-01T00:05:00Z"
+	}`)
 
-	var buf bytes.Buffer
-	stdout = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	rootCmd.SetArgs([]string{"autopilot-init", "--phases", "5"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-init returned error: %v", err)
+	var state autopilotState
+	if err := json.Unmarshal(legacyJSON, &state); err != nil {
+		t.Fatalf("decode legacy state: %v", err)
+	}
+	if state.SchemaVersion != 0 || state.LastReport != nil {
+		t.Fatalf("legacy optional fields changed: schema=%d report=%+v", state.SchemaVersion, state.LastReport)
+	}
+	if state.TotalPhases != 3 || state.CurrentPhase != 1 || len(state.Phases) != 1 {
+		t.Fatalf("legacy state fields not preserved: %+v", state)
+	}
+	if got := state.Phases[0]; got.Phase != 1 || got.Status != "completed" {
+		t.Fatalf("legacy phase status not preserved: %+v", got)
 	}
 
-	out := parseEnvelope(t, buf.String())
-	if out["ok"] != true {
-		t.Fatalf("expected ok=true, got: %v", out["ok"])
+	state.SchemaVersion = autopilotStateSchemaVersion
+	state.LastReport = &autopilotInvocationReport{
+		SchemaVersion: autopilotReportSchemaVersion,
+		InvocationID:  "run-compatibility-test",
+		Outcome:       "completed",
+		Next:          "aether seal",
 	}
-	result := out["result"].(map[string]interface{})
-	if result["initialized"] != true {
-		t.Fatalf("expected initialized=true, got: %v", result["initialized"])
-	}
-	if result["total_phases"] != float64(5) {
-		t.Fatalf("expected total_phases=5, got: %v", result["total_phases"])
-	}
-
-	// Verify filesystem state
-	statePath := tmpDir + "/.aether/data/autopilot/state.json"
-	raw, err := os.ReadFile(statePath)
+	raw, err := json.Marshal(state)
 	if err != nil {
-		t.Fatalf("read state.json: %v", err)
-	}
-	var state autopilotState
-	if err := json.Unmarshal(raw, &state); err != nil {
-		t.Fatalf("parse state.json: %v", err)
-	}
-	if state.TotalPhases != 5 {
-		t.Fatalf("expected TotalPhases=5, got %d", state.TotalPhases)
-	}
-	if state.Status != "initialized" {
-		t.Fatalf("expected Status=initialized, got %q", state.Status)
-	}
-}
-
-func TestAutopilotStatusNotInitialized(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	var buf bytes.Buffer
-	stdout = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	rootCmd.SetArgs([]string{"autopilot-status"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-status returned error: %v", err)
+		t.Fatalf("encode current state: %v", err)
 	}
 
-	out := parseEnvelope(t, buf.String())
-	if out["ok"] != true {
-		t.Fatalf("expected ok=true, got: %v", out["ok"])
+	var roundTrip autopilotState
+	if err := json.Unmarshal(raw, &roundTrip); err != nil {
+		t.Fatalf("decode current state: %v", err)
 	}
-	result := out["result"].(map[string]interface{})
-	if result["active"] != false {
-		t.Fatalf("expected active=false when not initialized, got: %v", result["active"])
+	if roundTrip.SchemaVersion != autopilotStateSchemaVersion || roundTrip.LastReport == nil {
+		t.Fatalf("current optional fields not preserved: %+v", roundTrip)
 	}
-}
-
-func TestAutopilotUpdateMutatesState(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	var buf bytes.Buffer
-	stdout = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	// Initialize first
-	rootCmd.SetArgs([]string{"autopilot-init", "--phases", "3"})
-	_ = rootCmd.Execute()
-
-	resetRootCmd(t)
-	stdout = &buf
-	buf.Reset()
-
-	rootCmd.SetArgs([]string{"autopilot-update", "--phase", "1", "--status", "completed"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-update returned error: %v", err)
+	if roundTrip.LastReport.InvocationID != "run-compatibility-test" || roundTrip.LastReport.Next != "aether seal" {
+		t.Fatalf("current report fields not preserved: %+v", roundTrip.LastReport)
 	}
-
-	out := parseEnvelope(t, buf.String())
-	if out["ok"] != true {
-		t.Fatalf("expected ok=true, got: %v", out["ok"])
-	}
-	result := out["result"].(map[string]interface{})
-	if result["updated"] != true {
-		t.Fatalf("expected updated=true, got: %v", result["updated"])
-	}
-	if result["phase"] != float64(1) {
-		t.Fatalf("expected phase=1, got: %v", result["phase"])
-	}
-
-	// Verify state
-	statePath := tmpDir + "/.aether/data/autopilot/state.json"
-	raw, _ := os.ReadFile(statePath)
-	var state autopilotState
-	json.Unmarshal(raw, &state)
-	if len(state.Phases) != 1 {
-		t.Fatalf("expected 1 phase entry, got %d", len(state.Phases))
-	}
-	if state.Phases[0].Status != "completed" {
-		t.Fatalf("expected phase status completed, got %q", state.Phases[0].Status)
-	}
-	if state.Status != "running" {
-		t.Fatalf("expected autopilot status running, got %q", state.Status)
-	}
-}
-
-func TestAutopilotStop(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	var buf bytes.Buffer
-	stdout = &buf
-
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
-
-	// Initialize
-	rootCmd.SetArgs([]string{"autopilot-init", "--phases", "2"})
-	_ = rootCmd.Execute()
-
-	resetRootCmd(t)
-	stdout = &buf
-	buf.Reset()
-
-	rootCmd.SetArgs([]string{"autopilot-stop"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-stop returned error: %v", err)
-	}
-
-	out := parseEnvelope(t, buf.String())
-	if out["ok"] != true {
-		t.Fatalf("expected ok=true, got: %v", out["ok"])
-	}
-	result := out["result"].(map[string]interface{})
-	if result["stopped"] != true {
-		t.Fatalf("expected stopped=true, got: %v", result["stopped"])
-	}
-
-	// Verify state
-	statePath := tmpDir + "/.aether/data/autopilot/state.json"
-	raw, _ := os.ReadFile(statePath)
-	var state autopilotState
-	json.Unmarshal(raw, &state)
-	if state.Status != "stopped" {
-		t.Fatalf("expected status=stopped, got %q", state.Status)
+	if roundTrip.TotalPhases != 3 || roundTrip.Phases[0].Status != "completed" {
+		t.Fatalf("legacy fields lost after current round trip: %+v", roundTrip)
 	}
 }

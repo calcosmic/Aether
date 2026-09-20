@@ -1,0 +1,28 @@
+{
+  "schema_version": "aether-gap2-resumed-tracer/v1",
+  "passed": true,
+  "source_revision": "b5742d34e92ee462adb93ec6b929b7d523f19148",
+  "candidate_sha256": "sha256:b688d0e9b958f51ea39a63af0d77bfceac53ee2a3276613011fca2c011d4ce30",
+  "receipt": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/ordinary-tracer/native-ordinary-1985867744/receipt.json",
+    "sha256": "sha256:be8e1666a0e4d036651f366b808633727882a877a96bb20c53897ac79ad5d5b8"
+  },
+  "run": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/ordinary-tracer-run.json",
+    "sha256": "sha256:d1a13fc287925ea01b9994df9e2f9daef7d6b32f6ca413d31ddc7ccb5afa6fa1"
+  },
+  "preflight": {
+    "path": "/private/tmp/aether-gap2-resume-x7pso2qh/admission-preflight-final/manifest.json",
+    "sha256": "sha256:5cd6076e06d234251de9e7de79b333c0f96c38ef43d9d3d8e86bff6833b9accc"
+  },
+  "worker": "Brick-46",
+  "task_path": "/root/brick_46",
+  "child_id": "01a0b36d-6467-72a2-bdf4-bb065dd782bc",
+  "checks_passed": true,
+  "credit_observed": true,
+  "terminal_corroborated": true,
+  "replay_stable": true,
+  "parent_substitution": false,
+  "temporary_auth_removed": true,
+  "qualification": "ordinary behavior passed; full host-provenance qualification remains pending Plan18 and final matrix"
+}

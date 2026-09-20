@@ -6,15 +6,8 @@
  * JSON packets and calls `aether ceremony ...` with visual output enabled.
  */
 import { execFileSync } from "node:child_process";
+import { isTerminalWorkerStatus } from "./worker-status.js";
 import { writeCompletionFile } from "./go-bridge.js";
-const TERMINAL_WORKER_STATUSES = new Set([
-    "completed",
-    "failed",
-    "blocked",
-    "timeout",
-    "manually-reconciled",
-    "code_written",
-]);
 function runGoCeremonyCommand(opts, args) {
     try {
         return execFileSync(opts.goBinaryPath, args, {
@@ -45,9 +38,7 @@ function isTerminalWorkerResult(data) {
     if (typeof data !== "object" || data === null || Array.isArray(data)) {
         return false;
     }
-    const status = data["status"];
-    return (typeof status === "string" &&
-        TERMINAL_WORKER_STATUSES.has(status.trim().toLowerCase()));
+    return isTerminalWorkerStatus(data["status"]);
 }
 export class GoCeremonyAdapter {
     opts;

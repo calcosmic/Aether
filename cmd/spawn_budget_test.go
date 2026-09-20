@@ -198,8 +198,6 @@ var queenSpawnBudgetIdentifiers = []string{
 	"queenRequiredCastesForBudget",
 	"queenBuildSafetyRequiredCaste",
 	"queenBuildSafetyRequiredCastes",
-	"queenPhaseHasSecuritySignal",
-	"queenBuildSafetyReviewRequired",
 	"queenBuildBaseWorkerBudget",
 	"applyBuildDepthToBudget",
 	"buildWorkerCapLight",

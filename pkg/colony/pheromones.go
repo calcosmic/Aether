@@ -34,6 +34,63 @@ type PheromoneSignal struct {
 	Tags               []PheromoneTag  `json:"tags,omitempty"`
 	Scope              *PheromoneScope `json:"scope,omitempty"`
 	SourcePhase        *int            `json:"source_phase,omitempty"` // Phase when signal was created
+
+	// Provenance and Quarantined are pointer-backed and omitempty, per the
+	// Phase 199 rule that new lifecycle evidence is pointer-backed and
+	// omitted when absent (BIO-07): a legacy colony's signals, written
+	// before these fields existed, stay readable and read as an explicit
+	// "unknown" provenance / not quarantined (pheromoneSignalProvenance,
+	// pheromoneSignalQuarantined in cmd/pheromone_resolver.go) rather than
+	// a fabricated category.
+	Provenance  *string `json:"provenance,omitempty"`
+	Quarantined *bool   `json:"quarantined,omitempty"`
+
+	// DeferredUntil and RevokedAt are pointer-backed and omitempty, following
+	// the same Phase 199 rule (BIO-08, plan 203-11): a legacy signal written
+	// before these fields existed has both nil and reads as neither deferred
+	// nor revoked (pheromoneSignalDeferred/pheromoneSignalRevoked in
+	// cmd/pheromone_resolver.go). DeferredUntil holds an RFC3339 timestamp;
+	// the note returns to effect on its own once that time passes -- nothing
+	// clears the field. RevokedAt, once set, is permanent: nothing in this
+	// runtime may clear it back to nil except a fresh, recorded owner action
+	// (cmd/pheromone_influence.go's revokeNote is the only writer).
+	DeferredUntil *string `json:"deferred_until,omitempty"`
+	RevokedAt     *string `json:"revoked_at,omitempty"`
+
+	// Pinned is pointer-backed and omitempty, following the same Phase 199
+	// rule (BIO-08/CEC-07, plan 203-13): a legacy signal written before this
+	// field existed reads as not pinned. Once true, an automatic tuning
+	// pass (cmd/pheromone_outcome.go's tuneNoteStrengthFromOutcomes) skips
+	// the note entirely, in either direction -- only an explicit owner
+	// action (cmd/pheromone_influence.go's pinNote/unpinNote) may ever set
+	// or clear it; the runtime cannot.
+	Pinned *bool `json:"pinned,omitempty"`
+}
+
+// Write-time provenance categories a stored pheromone signal may declare.
+// PheromoneProvenanceUnknown is deliberately NOT one of these -- it is the
+// read-time fallback for a legacy signal with no Provenance field, never a
+// value writePheromoneSignal itself stamps.
+const (
+	PheromoneProvenanceOwner    = "owner"
+	PheromoneProvenanceRuntime  = "runtime"
+	PheromoneProvenanceLearning = "learning"
+	PheromoneProvenanceImport   = "import"
+	PheromoneProvenanceUnknown  = "unknown"
+)
+
+// PheromoneProvenances returns the four write-time provenance categories a
+// stored pheromone signal may declare. cmd's
+// TestPheromoneProvenanceRegistryIsComplete parses this file's declared
+// PheromoneProvenance* constants and fails by name if a new one is added
+// here without also being added to this accessor.
+func PheromoneProvenances() []string {
+	return []string{
+		PheromoneProvenanceOwner,
+		PheromoneProvenanceRuntime,
+		PheromoneProvenanceLearning,
+		PheromoneProvenanceImport,
+	}
 }
 
 // PheromoneFile represents the top-level pheromones.json file.

@@ -19,8 +19,8 @@ func TestPheromoneRead(t *testing.T) {
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	store = s
 	rootCmd.SetArgs([]string{"pheromone-read"})
@@ -68,8 +68,8 @@ func TestPheromoneReadEmpty(t *testing.T) {
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -99,8 +99,8 @@ func TestPheromoneCount(t *testing.T) {
 	s, tmpDir := setupTestStore(t)
 	defer os.RemoveAll(tmpDir)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", tmpDir+"/.aether/data")
 
 	store = s
 	rootCmd.SetArgs([]string{"pheromone-count"})
@@ -144,8 +144,8 @@ func TestPheromoneCountEmpty(t *testing.T) {
 	dataDir := tmpDir + "/.aether/data"
 	os.MkdirAll(dataDir, 0755)
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	s, _ := storage.NewStore(dataDir)
 	store = s
@@ -164,5 +164,61 @@ func TestPheromoneCountEmpty(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 	if result["focus"] != float64(0) {
 		t.Errorf("focus = %v, want 0 for empty store", result["focus"])
+	}
+}
+
+func TestPheromoneFixtureRestoresRepositoryAuthority200(t *testing.T) {
+	saveGlobals(t)
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	t.Cleanup(func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+	})
+
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
+
+	var fixtureRoot string
+	t.Run("isolated pheromone fixture", func(t *testing.T) {
+		saveGlobals(t)
+		fixtureRoot = t.TempDir()
+		dataDir := fixtureRoot + "/.aether/data"
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		fixtureStore, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store = fixtureStore
+		t.Setenv("AETHER_ROOT", fixtureRoot)
+		t.Setenv("COLONY_DATA_DIR", dataDir)
+	})
+
+	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
+		t.Errorf("AETHER_ROOT survived deleted pheromone fixture: %q", got)
+	}
+	if got, ok := os.LookupEnv("COLONY_DATA_DIR"); ok {
+		t.Errorf("COLONY_DATA_DIR survived deleted pheromone fixture: %q", got)
+	}
+	if store != nil {
+		t.Error("repository store survived deleted pheromone fixture")
+	}
+	if tracer != nil {
+		t.Error("repository tracer survived deleted pheromone fixture")
+	}
+	if _, err := os.Stat(fixtureRoot); !os.IsNotExist(err) {
+		t.Errorf("fixture root still exists after subtest cleanup: %v", err)
 	}
 }

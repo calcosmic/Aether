@@ -68,7 +68,7 @@ func TestBuildManifestCarriesContextCapsuleOnce(t *testing.T) {
 	}
 
 	reviewDepth := colony.VerificationDepthStandard
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, nil, reviewDepth)
+	dispatches := testPlannedBuildDispatchesForSelectionWithState(phase, state, nil, reviewDepth)
 	if len(dispatches) < 2 {
 		t.Fatalf("expected 2+ planned dispatches from a 2-task phase, got %d", len(dispatches))
 	}

@@ -86,7 +86,7 @@ func TestInstallSyncPairsDoesNotMirrorFullSkillsToCodex(t *testing.T) {
 	}
 }
 
-func TestSyncCodexSkillShimsPrunesFullMirrorAndPreservesCustom(t *testing.T) {
+func TestSyncCodexSkillShimsPreservesUnprovenMirrorAndCustom(t *testing.T) {
 	tmpDir := t.TempDir()
 	destDir := filepath.Join(tmpDir, ".codex", "skills", "aether")
 
@@ -110,8 +110,11 @@ func TestSyncCodexSkillShimsPrunesFullMirrorAndPreservesCustom(t *testing.T) {
 	if len(result.errors) > 0 {
 		t.Fatalf("syncCodexSkillShims errors: %v", result.errors)
 	}
-	if _, err := os.Stat(filepath.Join(oldMirror, "SKILL.md")); !os.IsNotExist(err) {
-		t.Fatalf("expected old full mirror to be pruned, stat err: %v", err)
+	if got := string(mustReadLifecycleFixtureFile(t, filepath.Join(oldMirror, "SKILL.md"))); got != "---\nname: typescript\nsource: shipped\ntype: domain\n---\nold full skill\n" {
+		t.Fatal("unproven mirror bytes changed")
+	}
+	if len(result.preserved) != 2 {
+		t.Fatalf("expected both unowned entries reported preserved: %v", result.preserved)
 	}
 	if _, err := os.Stat(filepath.Join(customSkill, "SKILL.md")); err != nil {
 		t.Fatalf("expected custom skill to be preserved: %v", err)
@@ -123,12 +126,13 @@ func TestSyncCodexSkillShimsPrunesFullMirrorAndPreservesCustom(t *testing.T) {
 	}
 
 	dirs := findSkillDirs(destDir)
-	if len(dirs) != len(codexSkillShims())+1 {
-		t.Fatalf("expected %d shim/custom skills, got %d: %v", len(codexSkillShims())+1, len(dirs), dirs)
+	if len(dirs) != len(codexSkillShims())+2 {
+		t.Fatalf("expected %d shim/custom skills, got %d: %v", len(codexSkillShims())+2, len(dirs), dirs)
 	}
 }
 
 func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
+	t.Setenv("AETHER_HUB_DIR", "")
 	sourceDir := t.TempDir()
 	homeDir := t.TempDir()
 	for _, rel := range []string{
@@ -143,6 +147,12 @@ func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
 		}
 	}
 
+	// Copy the actual support sources: production must still reject incomplete packages.
+	for _, name := range []string{"aether-colony-creation", "aether-colony-research", "aether-colony-build-cycle"} {
+		rel := filepath.Join(".aether", "skills", "colony", name, "SKILL.md")
+		writeMaintenanceMutation199File(t, filepath.Join(sourceDir, rel), mustReadLifecycleFixtureFile(t, filepath.Join(antSkillSourceRoot(t), rel)))
+	}
+	writeMaintenanceMutation199File(t, filepath.Join(sourceDir, ".aether", "version.json"), mustReadLifecycleFixtureFile(t, filepath.Join(antSkillSourceRoot(t), ".aether", "version.json")))
 	results, errors := syncPlatformHomeAssets(sourceDir, homeDir, channelDev, false)
 	if len(errors) > 0 {
 		t.Fatalf("dev default sync returned errors: %v", errors)
@@ -150,15 +160,19 @@ func TestDevPlatformHomeSyncRequiresExplicitOptIn(t *testing.T) {
 	if len(results) != 1 || results[0]["dest"] != "skipped" {
 		t.Fatalf("dev default should skip platform homes, got %#v", results)
 	}
-	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "aether-plan", "SKILL.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "ant-plan", "SKILL.md")); !os.IsNotExist(err) {
 		t.Fatalf("dev default should not write Codex command shims, stat err: %v", err)
 	}
 
+	hubResult := setupInstallHub(filepath.Join(homeDir, ".aether-dev"), sourceDir, resolveVersion(sourceDir))
+	if errs := installHubErrors(hubResult); len(errs) > 0 {
+		t.Fatal(errs)
+	}
 	results, errors = syncPlatformHomeAssets(sourceDir, homeDir, channelDev, true)
 	if len(errors) > 0 {
 		t.Fatalf("dev opt-in sync returned errors: %v", errors)
 	}
-	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "aether-plan", "SKILL.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(homeDir, ".codex", "skills", "aether", "ant-plan", "SKILL.md")); err != nil {
 		t.Fatalf("dev opt-in should write Codex command shim: %v; results=%#v", err, results)
 	}
 }

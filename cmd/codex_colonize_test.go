@@ -1040,7 +1040,7 @@ func TestWriteSurveyArtifactsMapsDispatchesByDeclaredOutputs(t *testing.T) {
 		{Caste: "surveyor-provisions", Name: "Provision-Worker", Outputs: []string{"PROVISIONS.md", "TRAILS.md"}, Status: "completed"},
 	}
 
-	if _, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil); err != nil {
+	if _, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, surveyorSpecs, nil); err != nil {
 		t.Fatalf("writeSurveyArtifacts returned error: %v", err)
 	}
 
@@ -1079,7 +1079,7 @@ func TestWriteSurveyArtifactsPreservesClaimedWorkerFile(t *testing.T) {
 		{Caste: "surveyor-pathogens", Name: "Pathogen-Worker", Outputs: []string{"PATHOGENS.md"}, Status: "completed"},
 	}
 
-	_, preserved, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil)
+	_, preserved, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, surveyorSpecs, nil)
 	if err != nil {
 		t.Fatalf("writeSurveyArtifacts returned error: %v", err)
 	}
@@ -1113,7 +1113,7 @@ func TestWriteSurveyArtifactsRejectsMissingRequiredSurveyOutput(t *testing.T) {
 		}
 	}()
 
-	_, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, nil)
+	_, _, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, surveyorSpecs, nil)
 	if err == nil {
 		t.Fatal("expected missing required survey output error")
 	}

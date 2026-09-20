@@ -26,6 +26,18 @@ func TestLifecycleWrappersHaveVisualCloseoutAfterJSONFinalizer(t *testing.T) {
 			if workflow == "build" {
 				finalizer = "AETHER_OUTPUT_MODE=json aether build-finalize"
 			}
+			if workflow == "plan" {
+				// Phase 200 separates a stopped candidate from an accepted plan.
+				// Plan wrappers therefore cross the exact acceptance boundary before
+				// exposing build/run, rather than rendering the legacy finalizer closeout.
+				assertSubstringsInOrder(t, wrapperPath, text, []string{
+					finalizer,
+					"AETHER_OUTPUT_MODE=json aether plan --candidate",
+					"acceptance_command",
+					"acceptance_receipt",
+				})
+				continue
+			}
 			closeout := "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow
 			assertSubstringsInOrder(t, wrapperPath, text, []string{finalizer, closeout})
 		}
@@ -68,11 +80,20 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 			text := string(content)
-			// TS host workflows delegate manifest orchestration to aether host and retain visual closeout.
-			for _, want := range []string{
-				"aether host " + workflow,
-				"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow " + workflow,
-			} {
+			// TS host workflows delegate manifest orchestration to aether host.
+			// Plan now closes through exact candidate acceptance; the other
+			// workflows retain the visual closeout ceremony.
+			wants := []string{"aether host " + workflow}
+			if workflow == "plan" {
+				wants = append(wants,
+					"AETHER_OUTPUT_MODE=json aether plan --candidate",
+					"acceptance_command",
+					"acceptance_receipt",
+				)
+			} else {
+				wants = append(wants, "AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow "+workflow)
+			}
+			for _, want := range wants {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing TS host visual contract %q", wrapperPath, want)
 				}
@@ -119,11 +140,14 @@ func TestWrapperOrchestratedCommandsPreserveLiveWorkerCeremony(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 			text := string(content)
-			// TS host wrappers delegate orchestration; only require core safety markers
-			for _, want := range []string{
-				"Do not set `run_in_background`",
-				"background agents",
-			} {
+			// Phase 200's plan wrapper names the concrete staged safety rule:
+			// one visible Scout first, with no background execution. Other host
+			// workflows retain the established generic background-agent wording.
+			wants := []string{"Do not set `run_in_background`", "background agents"}
+			if command == "plan" {
+				wants = []string{"Exactly one visible Scout", "set background execution"}
+			}
+			for _, want := range wants {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s missing live worker ceremony contract %q", wrapperPath, want)
 				}
@@ -168,6 +192,48 @@ func TestRuntimeOwnedWrappersDelegateVisually(t *testing.T) {
 			if !strings.Contains(string(content), want) {
 				t.Errorf("%s missing visual runtime delegation %q", wrapperPath, want)
 			}
+		}
+	}
+}
+
+func TestInsertPhaseWrapperParityAndGoOwnership(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	paths := []string{
+		filepath.Join(repoRoot, ".aether", "commands", "insert-phase.yaml"),
+		filepath.Join(repoRoot, ".claude", "commands", "ant", "insert-phase.md"),
+		filepath.Join(repoRoot, ".opencode", "commands", "ant", "insert-phase.md"),
+	}
+	contents := make([]string, 0, len(paths))
+	for _, path := range paths {
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read %s: %v", path, readErr)
+		}
+		text := string(content)
+		contents = append(contents, text)
+		for _, want := range []string{
+			"AETHER_OUTPUT_MODE=visual aether insert-phase $ARGUMENTS",
+			`aether insert-phase "problem to stabilise"`,
+			`aether insert-phase --after 2 --name "Stabilize login retries" --description "login retries lose state" --constraints "do not change the provider"`,
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s missing insert-phase contract %q", path, want)
+			}
+		}
+	}
+
+	claudeBody := normalizeCommandWrapper(contents[1])
+	opencodeBody := normalizeCommandWrapper(contents[2])
+	if claudeBody != opencodeBody {
+		t.Fatal("insert-phase wrapper body drift between Claude and OpenCode")
+	}
+	for _, forbidden := range []string{"derivePhaseInsertName", "resolvePhaseInsertRequest"} {
+		if strings.Contains(claudeBody, forbidden) {
+			t.Errorf("managed wrappers contain Go-owned implementation detail %q", forbidden)
 		}
 	}
 }

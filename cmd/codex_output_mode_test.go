@@ -11,14 +11,72 @@ import (
 )
 
 func TestBuildBufferedOutputBreaksJSONUnderVisualEnv(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
+	t.Run("visual mode overrides a buffered host writer", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		acceptedOutputModeBuildTestColony(t)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	dataDir := setupBuildFlowTest(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		rootCmd.SetArgs([]string{"build", "1"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build returned error: %v", err)
+		}
+
+		assertVisualOutputBreaksJSON(t, stdout.(*bytes.Buffer).String(), "B U I L D")
+	})
+
+	t.Run("json mode is one clean envelope on a buffered host writer", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
+		acceptedOutputModeBuildTestColony(t)
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+		rootCmd.SetArgs([]string{"build", "1"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("build returned error: %v", err)
+		}
+
+		output := bytes.TrimSpace(stdout.(*bytes.Buffer).Bytes())
+		var envelope map[string]interface{}
+		if err := json.Unmarshal(output, &envelope); err != nil {
+			t.Fatalf("json mode did not produce one valid envelope: %v\n%s", err, output)
+		}
+		if envelope["ok"] != true {
+			t.Fatalf("json mode envelope = %#v, want ok:true", envelope)
+		}
+		for _, visualNoise := range []string{"B U I L D", "──", "🐜", "[FAKE-NARRATOR]"} {
+			if bytes.Contains(output, []byte(visualNoise)) {
+				t.Fatalf("json mode leaked visual or narrator text %q:\n%s", visualNoise, output)
+			}
+		}
+	})
+
+	t.Run("explicit modes override terminal writer inference", func(t *testing.T) {
+		terminal, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatalf("open terminal-shaped writer: %v", err)
+		}
+		defer terminal.Close()
+		if !isTerminalWriter(terminal) {
+			t.Skipf("%s is not reported as a character device on this platform", os.DevNull)
+		}
+
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		if !shouldRenderVisualOutput(terminal) {
+			t.Fatal("explicit visual mode lost to terminal writer inference")
+		}
+		t.Setenv("AETHER_OUTPUT_MODE", "json")
+		if shouldRenderVisualOutput(terminal) {
+			t.Fatal("explicit json mode lost to terminal writer inference")
+		}
+	})
+}
+
+func acceptedOutputModeBuildTestColony(t *testing.T) {
+	t.Helper()
 	goal := "Capture buffered build output regression"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -26,19 +84,13 @@ func TestBuildBufferedOutputBreaksJSONUnderVisualEnv(t *testing.T) {
 			Phases: []colony.Phase{{
 				ID:          1,
 				Name:        "Reproduce failure",
-				Description: "Show that ambient visual mode contaminates buffered build output",
+				Description: "Show that explicit output mode controls buffered build output",
 				Status:      colony.PhaseReady,
 				Tasks:       []colony.Task{{ID: &taskID, Goal: "Trigger build output", Status: colony.TaskPending}},
 			}},
 		},
 	})
-
-	rootCmd.SetArgs([]string{"build", "1"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("build returned error: %v", err)
-	}
-
-	assertVisualOutputBreaksJSON(t, stdout.(*bytes.Buffer).String(), "B U I L D")
+	withWorkingDir(t, accepted.Root)
 }
 
 func TestInstallBufferedOutputBreaksJSONUnderVisualEnv(t *testing.T) {

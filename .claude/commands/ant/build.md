@@ -116,6 +116,28 @@ See `.aether/docs/wrapper-host-contract.md` for the full field shapes this manif
 
 **Stop conditions:** If provider dispatch is unavailable, surface only the Go-owned structured availability message: provider, sanitized cause, and next action. Do not include raw provider stdout, stderr, tokens, or auth probe output. Do not retry silently or fall back to a simulated dispatch.
 
+## Coherent Jobs
+
+🐜 Related tasks travel together: one worker, one job, one set-up cost.
+
+**Purpose:** Let the Queen propose which tasks belong to one worker, then show what the runtime actually accepted — so several related tasks become one job instead of one fresh worker re-reading the same files per task.
+
+**Reads:** `job_decisions` from the plan-only result, and each dispatch's `job_name`, `job_reason`, `job_source`, and `covered_task_ids`.
+
+Grouping is a proposal, not a decision. Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits.
+
+1. Propose a grouping only when you can name both the relationship and the benefit. A generic "these are related" is not a reason. `--job-proposal` is repeatable — one JSON object per group, carrying `name`, `task_ids`, `owner_caste`, `relationship`, `benefit`, and an optional `owner_reason`:
+
+```
+aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner_caste":"builder","relationship":"these tasks edit the same templates","benefit":"one worker avoids repeated setup and write conflicts"}' $ARGUMENTS --plan-only
+```
+
+2. With no proposal at all the runtime still groups: tasks joined by a dependency chain, or by meaningful shared implementation files, become one job. Incidental overlap through a README, a changelog, or a dependency manifest never joins unrelated work.
+3. Read `job_decisions` and relay it in plain English. Each entry's `status` is `accepted` or `refused`. A refusal names `offending_task_id` and `dependency_id` — the task that would have run before something it depends on — plus `replacement_job_names`, the dependency-safe jobs the runtime substituted in its place. Every other proposal is kept untouched: the runtime repairs the one bad group, it does not fall back to one worker per task.
+4. Each dispatch then carries `job_name`, `job_reason` (the accepted relationship and benefit), `job_source` (`queen` when you proposed it, `automatic` when the runtime grouped it, `single` for one ungrouped task, `retry` for a recovery job), and `covered_task_ids` — every task that job owns, in order. Render these values; never edit them, and never re-propose a refused grouping unchanged.
+
+**Stop conditions:** The runtime reports a real dependency cycle — it blocks dispatch for the whole phase and names the cycle plus the plan repair. Surface that and stop; a cycle has no safe order to fall back to.
+
 ## Queen's Team Decision
 
 🐜 This is the step where the Queen is a Queen rather than a lookup table.
@@ -130,8 +152,9 @@ Each specialist you spawn is a full agent run: roughly 100,000 tokens and
 several minutes. Spawning one with nothing to do costs exactly as much as
 spawning one that finds a real problem.
 
-Builder and Watcher are not yours to decide — the runtime always includes them.
-Do not discuss them.
+The Builder is not yours to decide — the runtime always includes it on any
+non-discovery build (a discovery-mode phase sends one Scout instead, since
+research is the deliverable there, not code). Do not discuss it.
 
 ### Classify the evidence, then the verdict follows
 
@@ -171,7 +194,7 @@ Worked examples:
 | "the dashboard feels sluggish with lots of rows" | Measurer — inferred, no keyword present |
 | "let people stay signed in between visits" | Gatekeeper — that is session handling |
 | "swap the payment provider" | Ambassador + Gatekeeper — money and credentials |
-| "change the button copy from Submit to Save" | nobody — Builder and Watcher suffice |
+| "change the button copy from Submit to Save" | nobody — the Builder alone is enough |
 
 **An empty team is a normal, good answer.** It is not a failure to find work.
 
@@ -179,12 +202,15 @@ Worked examples:
 
 Name the specialist whose absence would most likely let something real ship
 broken, then at most two more. List them in priority order — if the phase is
-over budget the tail is dropped first.
+over budget the tail is dropped first. Every named worker needs its OWN
+reason via `--caste-why`: a worker named in `--castes` with no matching
+`--caste-why` entry is refused by name and the rest of the team still goes.
 
 ```
 aether build $ARGUMENTS --plan-only \
   --castes measurer \
-  --caste-reason "no perf vocabulary, but 'feels sluggish with lots of rows' is a latency complaint"
+  --caste-why measurer="no perf vocabulary, but 'feels sluggish with lots of rows' is a latency complaint" \
+  --caste-reason "confirm the reported slowness is real before shipping"
 ```
 
 Spawn from **that** manifest. If you have no reason to change the team, keep
@@ -195,10 +221,15 @@ what the runtime chose and move on.
 Your proposal is judgement about optional specialists. It is not permission to
 lower the floor:
 
-- Castes the phase requires are added back whether you omitted them on purpose
-  or overlooked them. A build always gets a Watcher; credential, auth, and
-  release-gate work always gets a security review.
+- The Builder is added back if you omitted it. A reviewer is added only when
+  the phase touches one of five named things — logins and passwords, payments,
+  deleting data, changing the database's structure, or signing off a release —
+  and that reviewer runs at the checking step (`continue`) afterward, not here
+  at the build; the card names exactly which of the five it was.
 - The worker budget still applies, trimming your lowest-priority picks.
+- A worker named without its own `--caste-why` reason is refused by name; the
+  rest of the team still goes. `--caste-reason` is the team summary only — it
+  never satisfies the per-worker requirement.
 - Unrecognised names are reported in `caste_decision.unknown_ignored`.
 
 Read `caste_decision.summary` after re-fetching and relay it in plain English,
@@ -238,6 +269,66 @@ AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --work
 
 **Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
 
+## Blocker Heads-Up
+
+🐜 Before anyone moves, the colony says plainly if something is stuck.
+
+**Purpose:** When something is genuinely stuck, tell the owner in plain English before any worker spawns, and ask one question -- carry on with the build, or stop and deal with it first. Never a silent warning that continues regardless, and never a refusal the owner did not ask for.
+
+**Reads:** `result.blocker_advisory` (each named signal, already in plain English) and `result.blocker_advisory_question` (present only when the run can actually ask) from the plan-only result.
+
+The runtime computes exactly three "hard stop" signals -- never an ordinary FOCUS/FEEDBACK note, never an everyday flag: a forced reviewer still waiting on the owner's check-in decision, an unanswered planning or worker question, and the last check-and-advance (`aether continue`) on this phase ending blocked.
+
+- If `result.blocker_advisory` is empty, say nothing and continue to Team Check-In.
+- If `result.blocker_advisory` names one or more signals AND `result.blocker_advisory_question` is present, show each signal in plain English, then ask the user (AskUserQuestion, single question): "Carry on with the build, or stop and deal with this first?" with options:
+  - "Carry on with the build" (recommended) -- continue to Team Check-In exactly as planned.
+  - "Stop here" -- spawn nothing; tell the owner what to run next (`aether status` names the exact next step for whatever is stuck) and end the build here.
+- If `result.blocker_advisory` names signals but `result.blocker_advisory_question` is absent (automatic mode, or the owner passed `--no-checkin`), show the same heads-up and continue without asking -- the run proceeds exactly as if the owner had said "carry on".
+
+**Stop conditions:** The owner picks "Stop here" -- spawn no worker; report the outstanding signal(s) and the next command, then end the build here.
+
+## Team Check-In
+
+🐜 The colony shows its team; the owner has the last word before anyone moves.
+
+**Purpose:** Pause after the spawn plan renders and let the user approve, trim, decline, or redirect the team before any worker spawns. The worker that writes the code is the one part of the team never offered for removal — the runtime re-adds it regardless, so offering that choice would be a lie. A reviewer forced by a named risk signal IS offered for removal, but only to the owner, and only by explicitly declining it with a reason that is recorded — never by a silent trim.
+
+**Reads:** the manifest file written in Dispatch Manifest, and `result.checkin_requested`, `result.checkin_reason`, and `result.checkin_summary` from the plan-only result.
+
+`checkin_requested` is the runtime's decision and `checkin_reason` says why. Never infer either from the flags you passed:
+
+- `one_worker_fast_path` — exactly one worker, and nothing left for the owner to decide. Show `checkin_summary` (the worker, every covered task, why those tasks are one job, and why no approval is needed) as a short note, then continue without asking. The note is not optional; a build that spends nothing still shows who it sent.
+- `non_interactive` — autopilot, or the owner passed `--no-checkin`. Skip this stage entirely.
+- `explicit_checkin`, `pending_owner_decision`, or `default_pause` — `checkin_requested` is true. Run the full stage below unchanged; a forced reviewer, an unanswered planning question, or a worker's open question keeps the pause even for a one-worker build.
+
+The owner can force the pause on an otherwise decision-free one-worker build:
+
+```
+aether build --checkin $ARGUMENTS --plan-only
+```
+
+Passing `--checkin` and `--no-checkin` together is refused by name before anything is written. Do not guess which one wins.
+
+1. Render the runtime-owned check-in card:
+
+```
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
+```
+
+2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`, `result.waived`, `result.waive_commands`.
+For a blocking check-in only, before asking the owner to approve the team, run `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>`. Display `result.approval_card` verbatim in a fenced text block in the visible conversation immediately before the approval choices; a collapsed tool result or a generic sentence about the team is not enough. The card names each worker, its assignment and wave, and the required reviewers that run afterward. Keep the runtime roster unchanged. If an older runtime has no `approval_card`, render the visual team-checkin ceremony and relay its roster visibly before asking. Read `result.optional`, `result.waived`, and `result.waive_commands` for the existing trim/decline flow.
+
+3. Ask the user (AskUserQuestion, single question): "The Queen picked this team. Proceed?" with options:
+   - "Proceed with this team" (recommended) — spawn as planned.
+   - "Trim optional workers" — follow up with ONE multi-select question listing ONLY `result.optional` entries, each labeled with its plain-English job and reason. Never list a required caste.
+   - "Decline a required reviewer" — only offer this when `result.waive_commands` is non-empty. State the consequence BEFORE naming anything: declining means the security or quality reviewer named on the card will NOT run on this phase, the reason given is written down, and it applies to that one signal on that one phase only. Relay the exact `aether decision-answer` command from `result.waive_commands` for the operator to run — the runtime already built the command and its wording; never construct the question text yourself.
+   - "Redirect first" — route to `aether discuss`, then request a fresh manifest exactly as the Guided Boundary Gate does; never reuse the pre-discuss manifest.
+4. On trim: for every retained optional caste, replay its original reason from `result.reasons` as a separate `--caste-why "<caste>=<result.reasons[caste]>"` argument. Then re-fetch `AETHER_OUTPUT_MODE=json aether build $ARGUMENTS --plan-only --castes <kept optional castes> --caste-why "<caste>=<result.reasons[caste]>" <repeat --caste-why once per kept caste> --caste-reason "owner check-in trim"`, overwrite the manifest file with the new manifest, re-render the spawn ceremony for the new plan, and record the preference: `AETHER_OUTPUT_MODE=json aether memory-capture "owner trimmed <dropped castes> from the phase <n> build team"`. Relay `caste_decision.summary` in plain English — anything the runtime added back must be said out loud.
+5. On decline: re-fetch with the unchanged current optional-caste proposal and replay every original `result.reasons` entry as its own `--caste-why` argument, exactly as in the trim recipe. After the operator runs the relayed `aether decision-answer` command, overwrite the manifest with that re-fetch and re-render both the check-in card and the spawn ceremony so the decline is reflected without losing any proposed worker before anything spawns.
+6. Autopilot (`/ant-run`) never runs this stage — it does not run this wrapper and can never decline a reviewer.
+
+**Stop conditions:** The user has been asked and their pick applied. Never spawn from a manifest the user asked to trim without re-fetching it.
+
 ## Worker Spawning
 
 🐜 The Queen spawns directly. The colony requires actual parallelism.
@@ -256,22 +347,25 @@ For each step in `dispatch_manifest.execution_plan`, spawn matching dispatches:
 
 - Use visible live Task/subagent calls. Do not set `run_in_background`.
 - Each worker description: `{caste emoji} {Caste} {name}: {task}`.
-- Each dispatch carries `brief` — the complete runtime-rendered worker prompt (phase objective, constraints, hints, success criteria, survey paths) — or `brief_path`: a repo-display path to a file holding that same composed brief, byte for byte. `brief_path` is now the routine channel for every dispatch: the runtime writes the composed brief to disk and reports the path, so inline JSON briefs of 6-22KB never hit Read-tool long-line truncation. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch — honor it verbatim when it is the only one present. Whichever one a dispatch carries, use it VERBATIM; never merge, summarize, or reconstruct. Read `dispatch_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this build spawns, and it is the SOLE source of pheromone signals and prior worker handoffs (the brief itself does not repeat them) — and prepend it VERBATIM ahead of the brief, then append `dispatch.skill_section` when present. Do not summarize, reorder, or reconstruct any of it — the runtime already assembled it.
+- Each dispatch carries `brief` — the complete runtime-rendered worker prompt (phase objective, constraints, hints, success criteria, survey paths) — or `brief_path`: a repo-display path to a file holding that same composed brief, byte for byte. `brief_path` is now the routine channel for every dispatch: the runtime writes the composed brief to disk and reports the path, so inline JSON briefs of 6-22KB never hit Read-tool long-line truncation. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch — honor it verbatim when it is the only one present. Whichever one a dispatch carries, use it VERBATIM; never merge, summarize, or reconstruct. Read `dispatch_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every worker this build spawns, and it is the SOLE source of pheromone signals and prior worker handoffs (the brief itself does not repeat them) — and prepend it VERBATIM ahead of the brief, then append `dispatch.skill_section` when present, then append the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering; never wrapper-written). Do not summarize, reorder, or reconstruct any of it — the runtime already assembled it.
 - Inspect and preserve each dispatch `permission_profile`. A `repository_read_only` worker must use a host-enforced no-write boundary. Reject `scoped_write` or `test_write` when the host cannot enforce it. `behavioral_restrictions` inside `workspace_write` are instructions, not a sandbox claim.
 - Require terminal structured result with: `name`, `caste`, `stage`, `execution_wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, `blockers`, `duration`, `handoff`.
 - The `handoff` object is mandatory for completed workers and must be concrete: `{changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, freshness}` (freshness: RFC3339 timestamp of evidence collection, or `not-run`). It is what the next phase's workers receive as context — an empty handoff will be rejected by the finalizer.
+- A dispatch's `covered_task_ids` is that worker's assignment scope, not credit for it. When a worker finishes only part of its job, its terminal result must carry a `task_receipts` array: one entry per task it actually proved, each with `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, and its own `handoff`. A task with no receipt is simply unfinished. Never claim one because a related file changed or because the worker mentioned it.
+- An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`. Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
 
 Respect `execution_plan`: serial steps stay serial; parallel steps may spawn together.
 
 For each manifest wave:
 
 1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
-2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each worker.
+2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1 --phase <phase_id>` before each worker, using the trusted numeric `phase_id` parsed into cross-stage state — never raw `$ARGUMENTS`, which may also contain build options. `--phase` lets the runtime close the forced-reviewer decline window the moment dispatch begins, so a later `decision-answer` call cannot silently drop a reviewer the owner never declined.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
-4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present. Nothing else, nothing invented.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.
+5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present + the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering). Nothing else, nothing invented.
 6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
+8. After the wave's workers return: collect `handoff.open_decisions` from their terminal results. For each question not already answered this build (compare normalized text), ask the user (AskUserQuestion, at most 4 per wave; carry extras to the next boundary). Every question gets the option "Let the colony proceed on its current assumption" — an unanswered question never blocks the build. For each real answer, record it: `AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>` and keep the returned `prompt_section`. For every LATER wave's workers, append the newest `prompt_section` verbatim after `dispatch.skill_section` — it is runtime-rendered owner steering, delivered exactly like the capsule and brief.
 
 **Stop conditions:** All workers in a wave fail — do not continue to the next wave; failed dependencies cascade into work built on broken foundations.
 
@@ -301,6 +395,13 @@ Then render the user-facing closeout:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
 
+Read the finalizer's own answer instead of assuming a job finished whole:
+
+- Each dispatch's `completed_task_ids` is what the runtime actually credited. It is the only place credit exists.
+- `recovery_job` set to true means part of the job was proven and part was not. `unfinished_task_ids` lists exactly what remains, `parent_attempt_id` and `retry_attempt_id` link the new attempt to the original one so the first worker's proof is never overwritten, and `recovery_command` is the exact command that redispatches only the unfinished tasks. Relay `recovery_command` in plain English; never ask a new worker to redo credited work.
+
+In worktree mode one job takes one isolated copy of the project, one branch, and one merge-back. The runtime admits receipts, copies back only what it admitted, and only then credits tasks. Anything the worker touched but never proved is neither copied back nor deleted — it stays on its own preserved branch, which the runtime names. Say that plainly rather than reporting it as lost or as done.
+
 **Stop conditions:** `build-finalize` reports failure — do not render closeout as success; surface the runtime's own error instead.
 
 ## After the Build
@@ -313,12 +414,17 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion
 
 1. Use the visual closeout's next-step line as the source of truth.
 2. Summarize in plain language what moved forward, which workers/castes ran, and the most relevant signal or risk.
-3. Then ask the user what to do next as a real multiple-choice question (the AskUserQuestion tool), with these options:
+3. Check for unanswered worker questions: run `AETHER_OUTPUT_MODE=json aether handoff-decisions --phase <n>` and note `count`.
+4. Then ask the user what to do next as a real multiple-choice question (the AskUserQuestion tool), with these options:
    - "Verify and advance now" — runs `/ant-continue` (recommended; mark it so).
    - "Stop here — safe to clear your context" — offer this option ONLY when the closeout's Handoff section actually said the handoff was saved; if it said "not confirmed" or "don't clear", replace this option with "Stop here (handoff not confirmed — don't clear your context)".
    - "Add steering first" — `/ant-focus` or `/ant-redirect` before verification.
+   - "Answer the workers' open questions first (<count> waiting)" — include this option ONLY when `count` > 0. Walk each question through AskUserQuestion (always offering "Let the colony proceed on its current assumption"), record real answers via `AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>`, then re-ask this choice.
    Run nothing until the user picks. If they pick stop, stop — report nothing further.
-4. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
+5. Autopilot (`/ant-run`) is exempt: its auto-advance is runtime-owned and this stage never runs inside it.
+
+**If the user asks what it cost:** tell them they can run `aether spend` to see, worker by worker, how many tokens each worker's own tool reported for this run.
+That is a read-only detail view and the wrapper must never run it unprompted: the run's own figures are already on screen, and repeating them would print the same numbers twice.
 
 **Stop conditions:** the user has been asked and their pick executed (or nothing, if they chose to stop).
 

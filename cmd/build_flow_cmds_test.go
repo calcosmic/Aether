@@ -10,49 +10,89 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // setupBuildFlowTest creates a temp directory with store initialized for testing.
 func setupBuildFlowTest(t *testing.T) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create temp data dir: %v", err)
-	}
-	origRoot := os.Getenv("AETHER_ROOT")
-	os.Setenv("AETHER_ROOT", tmpDir)
-	t.Cleanup(func() {
-		if origRoot == "" {
-			os.Unsetenv("AETHER_ROOT")
-			return
-		}
-		os.Setenv("AETHER_ROOT", origRoot)
-	})
+	binding := bindCommandTestRepository(t)
 
 	// These fixtures stand in for a software project, so they must contain
 	// software. Phase 182 made the test-coverage specialist conditional on the
 	// repository actually holding program code -- a repository of markdown notes
 	// gives it nothing to find -- and without this file every build-flow fixture
 	// would read as a notes vault and quietly lose a worker it should have.
-	if err := os.WriteFile(tmpDir+"/main.go", []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(binding.Root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
 		t.Fatalf("failed to write fixture source file: %v", err)
 	}
 
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	originalStdout := stdout
+	originalStderr := stderr
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
 	t.Cleanup(func() {
-		stdout = os.Stdout
-		stderr = os.Stderr
+		stdout = originalStdout
+		stderr = originalStderr
 	})
 
-	return dataDir
+	return binding.DataDir
+}
+
+func TestRepositoryTestBindingSequence200(t *testing.T) {
+	var deletedRoot string
+	t.Run("formerly contaminating temp store", func(t *testing.T) {
+		binding := bindCommandTestRepository(t)
+		deletedRoot = binding.Root
+		if store != binding.Store {
+			t.Fatalf("first command store = %p, want %p", store, binding.Store)
+		}
+	})
+	if _, err := os.Stat(deletedRoot); !os.IsNotExist(err) {
+		t.Fatalf("first temporary repository survived its test: %v", err)
+	}
+	if store != nil || tracer != nil {
+		t.Fatalf("first repository authority leaked: store=%p tracer=%p", store, tracer)
+	}
+
+	// Recreate the exact stale environment that used to poison the next test.
+	t.Setenv("AETHER_ROOT", deletedRoot)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(deletedRoot, ".aether", "data"))
+
+	t.Run("hook gets a fresh repository", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		var output bytes.Buffer
+		stdout = &output
+		stderr = &output
+		binding := bindCommandTestRepository(t)
+		setHookStdin(t, `{"hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"`+filepath.Join(binding.DataDir, "COLONY_STATE.json")+`"}}`)
+		rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("hook command inherited stale repository authority: %v", err)
+		}
+	})
+
+	t.Run("patrol gets a fresh repository", func(t *testing.T) {
+		dataDir := setupPatrolData(t)
+		result := runPatrolCheck(t, dataDir)
+		if result == nil {
+			t.Fatal("patrol returned no result")
+		}
+	})
+
+	t.Run("build flow gets a fresh repository", func(t *testing.T) {
+		dataDir := setupBuildFlowTest(t)
+		root := os.Getenv("AETHER_ROOT")
+		if got := os.Getenv("COLONY_DATA_DIR"); filepath.Clean(got) != filepath.Clean(dataDir) {
+			t.Fatalf("build-flow data environment = %q, want %q", got, dataDir)
+		}
+		if got := filepath.Clean(store.BasePath()); got != filepath.Clean(dataDir) {
+			t.Fatalf("build-flow store = %q, want %q", got, dataDir)
+		}
+		if root == deletedRoot {
+			t.Fatalf("build flow reused deleted repository %q", root)
+		}
+	})
 }
 
 // createTestColonyState creates a minimal COLONY_STATE.json for testing.
@@ -424,7 +464,7 @@ func TestPrintNextUpCompleted(t *testing.T) {
 	}
 }
 
-func TestPrintNextUpUsesTargetedRecoveryCommand(t *testing.T) {
+func TestPrintNextUpUsesCanonicalResumeForBlockedRecovery(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
@@ -457,11 +497,11 @@ func TestPrintNextUpUsesTargetedRecoveryCommand(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, "aether build 1 --task 1.1") {
-		t.Fatalf("expected targeted recovery command, got: %s", output)
+	if !strings.Contains(output, "aether resume") {
+		t.Fatalf("expected canonical resume recovery command, got: %s", output)
 	}
-	if strings.Contains(output, "Run `aether continue` to verify work and advance") {
-		t.Fatalf("expected print-next-up to avoid generic continue when targeted recovery exists, got: %s", output)
+	if strings.Contains(output, "aether build 1 --task 1.1") {
+		t.Fatalf("print-next-up revived a targeted recovery door, got: %s", output)
 	}
 }
 
@@ -496,6 +536,9 @@ func TestPrintNextUpReadyUsesCurrentPhaseBuild(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	if !strings.Contains(output, "aether build 2") {
 		t.Fatalf("expected ready colony to suggest build 2, got: %s", output)
+	}
+	if !strings.Contains(output, "aether run") {
+		t.Fatalf("expected ready colony to expose the coequal Autopilot choice, got: %s", output)
 	}
 	if strings.Contains(output, "aether build 3") {
 		t.Fatalf("expected ready colony to avoid skipping phase 2, got: %s", output)

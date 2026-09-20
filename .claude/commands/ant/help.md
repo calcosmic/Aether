@@ -1,68 +1,50 @@
 <!-- Aether-managed: runtime spec at .aether/commands/help.yaml. Synced by aether update. -->
 ---
 name: ant-help
-description: "🐜 Aether command guide — the colony lifecycle and every /ant command"
+description: "🐜 Show the guided Aether journey from runtime truth"
 ---
 
-You are the colony's guide. Show the user what they can do, organized by what they're trying to achieve. Keep it warm, scannable, and honest.
+You are the colony's guide. Use the Go `aether` CLI as the source of truth.
 
-If `$ARGUMENTS` names a specific command (with or without the `/ant-` prefix), skip the overview and explain that one command in depth: run `aether command-guide <name>` for the runtime truth, then describe when to use it, what it does, and what usually comes next.
+Run `AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS` exactly once and return its stdout unchanged. The runtime owns the standing line, responsive layout, command descriptions, and state-derived Next Up answer. If an argument names one command, pass it through in `$ARGUMENTS`; do not invent a second command catalog.
 
-Otherwise, present this overview:
+The runtime output must preserve these visible contracts:
 
-## 🐜 The Colony Lifecycle
+- Empty line 1: `No colony is active`
+- Empty line 2: `Start a guided colony for one goal with /ant-init "goal".`
+- Active standing: `Colony: {identity} | Goal: {accepted goal} | Episode: {episode} | Phase: {current}/{total} | Standing: {standing} | Ants: {acting castes or No ants are active} | Blockers: {count} | Next Up: {exact action}`
 
-The daily loop, in order:
+## The Colony Lifecycle
 
-```
-/ant-init "goal"     🥚 Start a colony — repo scan, charter, your approval
-/ant-colonize        🗺️ Survey an existing codebase (once per repo)
-/ant-plan            📋 Generate phases — Scout research + confidence loop
-/ant-build 1         🔨 Workers execute phase 1 — visible spawning
-/ant-continue        👁️ Verify, learn, advance to the next phase
-   … build → continue until done …
-/ant-seal            👑 Crown the colony — final review, wisdom capture
-```
+For the runtime's detailed command contract, use `aether command-guide <command>`; use `aether recipes` to browse supported journeys.
 
-When stuck or curious: `/ant-oracle "question"` — iterative deep research (🔮 RALF loop) that can feed back into your plan.
+## Normal journey
 
-## Steering the colony
+- `/ant-init "goal"` — Start a guided colony for one goal.
+- `/ant-plan` — Turn the accepted goal and territory evidence into an executable phase plan.
+- `/ant-build` — Execute one accepted phase with guided checkpoints.
+- `/ant-run` — Autopilot the remaining accepted phases within the displayed safety contract.
+- `/ant-status` — Show the complete authoritative colony snapshot.
+- `/ant-pause` — Stop at a safe boundary and save one resumable handoff.
+- `/ant-resume` — Validate and restore the safest honest recovery point.
+- `/ant-seal` — Close a verified colony, or explicitly record an owner-forced incomplete closure.
+- `/ant-entomb` — Archive and clear the sealed colony.
 
-| Command | Use it for |
-|---------|-----------|
-| `/ant-focus "area"` | "Pay attention here" |
-| `/ant-redirect "avoid X"` | Hard constraint — workers must not do X |
-| `/ant-feedback "note"` | Gentle adjustment after seeing results |
-| `/ant-pheromones` | See every active signal |
+## Steer and inspect
 
-## Watching and recovering
+- `/ant-focus` — Guide colony attention toward one area.
+- `/ant-feedback` — Add a gentle correction for future work.
+- `/ant-redirect` — Record a hard constraint the colony must avoid.
+- `/ant-watch` — Show live worker activity.
+- `/ant-phase` — Inspect the current phase and its accepted work.
+- `/ant-history` — Review recorded colony events.
+- `/ant-swarm` — Route a problem or inspect the live swarm.
+- `/ant-oracle status` — Inspect the current deep-research run.
+- `/ant-dream` — Let the colony reflect on the codebase.
+- `/ant-interpret` — Interpret saved Dreams without changing colony state.
+- `/ant-memory-details` — Inspect retained learning and memory.
+- `/ant-flags` — Inspect retained blockers, issues, and findings.
 
-| Command | Use it for |
-|---------|-----------|
-| `/ant-status` | Dashboard — goal, phase, progress, signals, warnings |
-| `/ant-phase [N]` | One phase in detail |
-| `/ant-resume` | Restore context after /clear or a new session |
-| `/ant-pause-colony` | Save a handoff before stepping away |
-| `/ant-medic` | Diagnose and repair a stuck colony |
-| `/ant-history` | Browse colony events |
-| `/ant-watch` | Live worker activity |
+## Expert maintenance
 
-## Before planning (optional but powerful)
-
-`/ant-discuss` — clarify intent as a real dialogue · `/ant-assumptions` — surface what the plan assumes · `/ant-council` — weigh a hard decision from several perspectives
-
-## Specialists (on demand)
-
-`/ant-swarm "bug"` — parallel investigation · `/ant-chaos` — resilience probing · `/ant-archaeology` — git history excavation · `/ant-organize` — hygiene report · `/ant-dream` — the colony reflects · `/ant-interpret` — read its dreams
-
-## Housekeeping and lifecycle
-
-`/ant-entomb` — archive a sealed colony · `/ant-maturity` — the colony's journey · `/ant-shelf` — idea backlog (`-add`, `-list`, `-promote`, `-dismiss`) · `/ant-flags` / `/ant-flag` — blockers · `/ant-preferences` — how you like to work · `/ant-profile` — learned behavior · `/ant-skill-create` — teach the colony a skill · `/ant-quick` — one-shot task · `/ant-run` — autopilot · `/ant-update` — refresh Aether's files from the hub (note: does **not** update the runtime binary) · `/ant-data-clean`, `/ant-migrate-state`, `/ant-verify-castes`, `/ant-patrol`, `/ant-memory-details`, `/ant-tunnels`, `/ant-insert-phase`, `/ant-export-signals`, `/ant-import-signals`, `/ant-reference-index`, `/ant-reference-list`, `/ant-reference-match`, `/ant-queen-compose`, `/ant-porter`, `/ant-bump-version` (owner), `/ant-lay-eggs` (first-time setup)
-
-## Digging deeper
-
-- `aether command-guide <command>` — runtime truth for any single command
-- `aether recipes` — common multi-command workflows
-- `aether status` — always the source of truth on colony state
-
-End by asking what they're trying to do right now, and point them at the one command that does it.
+- `/ant-maintenance` — Inspect or repair Aether internals with preview and rollback.

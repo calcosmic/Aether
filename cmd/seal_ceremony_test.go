@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,6 +67,7 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 
 	dataDir := filepath.Join(tmpDir, ".aether", "data")
 	t.Setenv("COLONY_DATA_DIR", dataDir)
+	t.Setenv("AETHER_ROOT", tmpDir)
 	// Seal promotes instincts into the hive at the hub. Belt-and-suspenders
 	// with the suite-wide TestMain isolation: whatever the global env is in
 	// this test's position in the run order, seal tests NEVER write the
@@ -76,6 +80,11 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 	stdout = outBuf
 	stderr = errBuf
 
+	// The current confirmation is derived from typed preflight facts. Record
+	// the exact answer an owner would submit on a second invocation; the old
+	// legacy-state helper could not cover forced-incomplete preflights.
+	autoRecordSealPreflightConfirmationForTest(t, s, tmpDir, args)
+
 	allArgs := append([]string{"seal"}, args...)
 	rootCmd.SetArgs(allArgs)
 	rootCmd.SetOut(outBuf)
@@ -83,6 +92,327 @@ func runSealCmd(t *testing.T, s *storage.Store, tmpDir string, args []string) (s
 	rootCmd.Execute()
 
 	return outBuf.String(), errBuf.String()
+}
+
+func autoRecordSealPreflightConfirmationForTest(t *testing.T, s *storage.Store, root string, args []string) {
+	t.Helper()
+	force := false
+	reason := ""
+	for index, arg := range args {
+		switch arg {
+		case "--force":
+			force = true
+		case "--reason":
+			if index+1 < len(args) {
+				reason = args[index+1]
+			}
+		}
+	}
+	facts, err := loadLifecycleFacts(root, s, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("load seal facts: %v", err)
+	}
+	preflight, err := BuildSealPreflight(facts, SealPreflightRequest{Caller: SealCallerDirectOwner, Force: force, Reason: reason})
+	if err != nil {
+		return // The command must render this preflight refusal itself.
+	}
+	source := "seal-confirmation"
+	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
+		source = "seal-force-confirmation"
+	}
+	if _, err := recordSealConfirmationAnswer(SealConfirmationCopy(preflight), "yes", source); err != nil {
+		t.Fatalf("record seal confirmation: %v", err)
+	}
+}
+
+// executeSealAtPublicRoot exercises the same Execute boundary used by main.
+// Recovery menus render their own error payload, so callers must inspect both
+// stderr and the renderedCommandError returned after Cobra completes.
+func executeSealAtPublicRoot(t *testing.T, s *storage.Store, tmpDir, mode string) (string, string, error) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(tmpDir, ".aether", "data"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, ".hub"))
+	t.Setenv("AETHER_OUTPUT_MODE", mode)
+	store = s
+	outBuf := &bytes.Buffer{}
+	errBuf := &bytes.Buffer{}
+	stdout = outBuf
+	stderr = errBuf
+	rootCmd.SetOut(outBuf)
+	rootCmd.SetErr(errBuf)
+	rootCmd.SetArgs([]string{"seal"})
+	err := Execute()
+	return outBuf.String(), errBuf.String(), err
+}
+
+func requireRenderedSealExitOne(t *testing.T, err error) {
+	t.Helper()
+	var rendered renderedCommandError
+	if !errors.As(err, &rendered) || rendered.code != 1 {
+		t.Fatalf("seal error = %v, want rendered exit code 1", err)
+	}
+}
+
+func checkpointCapabilitiesInSealOutput(output string) []string {
+	const marker = "--checkpoint-capability '"
+	capabilities := []string{}
+	for {
+		start := strings.Index(output, marker)
+		if start < 0 {
+			return capabilities
+		}
+		output = output[start+len(marker):]
+		end := strings.IndexByte(output, '\'')
+		if end < 0 {
+			return capabilities
+		}
+		capabilities = append(capabilities, output[:end])
+		output = output[end+1:]
+	}
+}
+
+func TestSealPendingDecisionStorageFailureFailsClosed(t *testing.T) {
+	assertLegacyStorageIgnored := func(t *testing.T, s *storage.Store, tmpDir string) {
+		t.Helper()
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		if err != nil {
+			t.Fatalf("seal with retired legacy blocker storage returned execution error: %v", err)
+		}
+		if strings.Contains(out+errOut, "flags.json") {
+			t.Fatalf("retired legacy blocker storage influenced current seal preflight:\n%s%s", out, errOut)
+		}
+		var state colony.ColonyState
+		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state after refused seal: %v", err)
+		}
+		if state.State == colony.StateCOMPLETED {
+			t.Fatal("seal completed while retired legacy blocker storage was present")
+		}
+	}
+
+	t.Run("malformed file overrides valid legacy fallback", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := s.SaveJSON("flags.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{}}); err != nil {
+			t.Fatalf("seed legacy flags: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(s.BasePath(), pendingDecisionsFile), []byte("{not-json"), 0o644); err != nil {
+			t.Fatalf("seed malformed pending decisions: %v", err)
+		}
+
+		for _, mode := range []string{"json", "visual"} {
+			out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, mode)
+			requireRenderedSealExitOne(t, err)
+			if rendered := out + errOut; !strings.Contains(rendered, "blockers evidence is malformed") {
+				t.Fatalf("%s seal did not fail closed on current typed evidence corruption:\n%s", mode, rendered)
+			}
+		}
+
+		var state colony.ColonyState
+		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state after refused seal: %v", err)
+		}
+		if state.State == colony.StateCOMPLETED {
+			t.Fatal("corrupt pending decisions were hidden by flags.json and seal completed")
+		}
+	})
+
+	t.Run("directory-backed file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.Mkdir(filepath.Join(s.BasePath(), pendingDecisionsFile), 0o755); err != nil {
+			t.Fatalf("seed directory-backed pending decisions: %v", err)
+		}
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		requireRenderedSealExitOne(t, err)
+		if rendered := out + errOut; !strings.Contains(rendered, "blockers evidence is unavailable") {
+			t.Fatalf("directory-backed current evidence was not rejected: %s", rendered)
+		}
+	})
+
+	t.Run("missing current with malformed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.WriteFile(filepath.Join(s.BasePath(), "flags.json"), []byte("{not-json"), 0o644); err != nil {
+			t.Fatalf("seed malformed legacy flags: %v", err)
+		}
+		assertLegacyStorageIgnored(t, s, tmpDir)
+	})
+
+	t.Run("missing current with directory-backed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		if err := os.Mkdir(filepath.Join(s.BasePath(), "flags.json"), 0o755); err != nil {
+			t.Fatalf("seed directory-backed legacy flags: %v", err)
+		}
+		assertLegacyStorageIgnored(t, s, tmpDir)
+	})
+
+	t.Run("missing current with symlink-backed legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		target := filepath.Join(tmpDir, "outside-legacy-flags.json")
+		if err := os.WriteFile(target, []byte(`{"version":"1","decisions":[]}`), 0o644); err != nil {
+			t.Fatalf("seed symlink target: %v", err)
+		}
+		if err := os.Symlink(target, filepath.Join(s.BasePath(), "flags.json")); err != nil {
+			t.Fatalf("seed symlink-backed legacy flags: %v", err)
+		}
+		assertLegacyStorageIgnored(t, s, tmpDir)
+	})
+
+	t.Run("missing current with unreadable legacy file", func(t *testing.T) {
+		s, tmpDir := setupSealTestStore(t)
+		legacyPath := filepath.Join(s.BasePath(), "flags.json")
+		if err := os.WriteFile(legacyPath, []byte(`{"version":"1","decisions":[]}`), 0o600); err != nil {
+			t.Fatalf("seed unreadable legacy flags: %v", err)
+		}
+		if err := os.Chmod(legacyPath, 0); err != nil {
+			t.Fatalf("make legacy flags unreadable: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(legacyPath, 0o600) })
+		assertLegacyStorageIgnored(t, s, tmpDir)
+		if err := os.Chmod(legacyPath, 0o600); err != nil {
+			t.Fatalf("restore legacy flags permissions: %v", err)
+		}
+	})
+
+	t.Run("typed checkpoint refusal does not persist retired capability UI", func(t *testing.T) {
+		saveGlobals(t)
+		s, tmpDir := setupSealTestStore(t)
+		store = s
+		criterion := codexCriterionVerification{
+			TaskID: "1.1", Criterion: "The owner experience feels correct", State: criterionStateNeedsOwnerConfirmation,
+		}
+		if refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, checkpointTestGeneration(t, "seal-unwritable", "seal-unwritable-evidence")); err != nil || len(refs) != 1 {
+			t.Fatalf("seed checkpoint: refs=%#v err=%v", refs, err)
+		}
+		before := pendingDecisionBytes(t)
+		out, errOut, err := executeSealAtPublicRoot(t, s, tmpDir, "json")
+		requireRenderedSealExitOne(t, err)
+		if rendered := out + errOut; !strings.Contains(rendered, "owner_checkpoint") {
+			t.Fatalf("typed checkpoint refusal omitted owner evidence:\n%s", rendered)
+		}
+		if after := pendingDecisionBytes(t); !bytes.Equal(before, after) {
+			t.Fatal("seal refusal mutated pending decisions through retired capability presentation")
+		}
+	})
+}
+
+func TestSealPendingDecisionAbsenceAllowsLegacyFallback(t *testing.T) {
+	s, _ := setupSealTestStore(t)
+	legacy := colony.FlagEntry{ID: "legacy-blocker", Type: "blocker", Description: "legacy blocker", Resolved: false}
+	if err := s.SaveJSON("flags.json", colony.FlagsFile{Version: "1", Decisions: []colony.FlagEntry{legacy}}); err != nil {
+		t.Fatalf("seed legacy flags: %v", err)
+	}
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	blockers, _ := checkSealBlockers(s, state)
+	if len(blockers) != 1 || blockers[0].ID != legacy.ID {
+		t.Fatalf("absent pending decisions did not allow legacy fallback: %#v", blockers)
+	}
+}
+
+func TestSealCheckpointCapabilityDeduplicatesAndStaysTransient(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := setupSealTestStore(t)
+	store = s
+	var state colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	session := "seal-capability-dedup"
+	state.SessionID = &session
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("scope seal fixture: %v", err)
+	}
+	criterion := codexCriterionVerification{
+		TaskID: "1.1", Criterion: "The final owner interaction feels correct", State: criterionStateNeedsOwnerConfirmation,
+	}
+	generationA := checkpointTestGeneration(t, "seal-generation-a", "seal-generation-evidence-a")
+	refs, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationA)
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("materialize checkpoint: refs=%#v err=%v", refs, err)
+	}
+	replayed, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationA)
+	if err != nil || len(replayed) != 1 || replayed[0].ID != refs[0].ID || len(loadCheckpointDecisions(t)) != 1 {
+		t.Fatalf("exact generation replay was not deduplicated: first=%#v replay=%#v err=%v", refs, replayed, err)
+	}
+	initialCapability := checkpointCapabilityFromReference(t, refs[0])
+	report := codexContinueVerificationReport{
+		Phase: 1, GeneratedAt: time.Now().UTC().Format(time.RFC3339), Criteria: []codexCriterionVerification{criterion},
+	}
+	if err := s.SaveJSON(continuePlanArtifactsPath(1, "verification.json"), report); err != nil {
+		t.Fatalf("seed legacy verification projection: %v", err)
+	}
+
+	decision := loadCheckpointDecisions(t)[0]
+	compatibilityID := stableAutopilotCheckpointID(decision.CheckpointCompatibilityKey)
+	legacy := ownerConfirmationSealBlockers(state)
+	if len(legacy) != 1 || legacy[0].ID != compatibilityID || legacy[0].ID == refs[0].ID {
+		t.Fatalf("legacy projection identity = %#v, want compatibility ID %s distinct from durable row %s", legacy, compatibilityID, refs[0].ID)
+	}
+	blockers, _ := checkSealBlockers(s, state)
+	if len(blockers) != 1 || blockers[0].ID != refs[0].ID {
+		t.Fatalf("durable and legacy checkpoint projections were not deduplicated by identity: %#v", blockers)
+	}
+	if got := checkpointCapabilitiesInSealOutput(blockers[0].RecoveryCommand); len(got) != 1 || got[0] == initialCapability {
+		t.Fatalf("deduplicated blocker command has no fresh capability: %#v", blockers[0])
+	}
+
+	jsonOut, jsonErr, jsonExecErr := executeSealAtPublicRoot(t, s, tmpDir, "json")
+	requireRenderedSealExitOne(t, jsonExecErr)
+	if rendered := jsonOut + jsonErr; !strings.Contains(rendered, refs[0].ID) || !strings.Contains(rendered, `"ok":false`) {
+		t.Fatalf("JSON refusal omitted checkpoint identity or error envelope:\n%s", rendered)
+	} else if got := checkpointCapabilitiesInSealOutput(rendered); len(got) != 0 {
+		t.Fatalf("JSON seal leaked retired capability command(s): %#v", got)
+	}
+
+	visualOut, visualErr, visualExecErr := executeSealAtPublicRoot(t, s, tmpDir, "visual")
+	requireRenderedSealExitOne(t, visualExecErr)
+	if visualOut != "" {
+		t.Fatalf("visual seal refusal leaked to stdout:\n%s", visualOut)
+	}
+	visualCaps := checkpointCapabilitiesInSealOutput(visualErr)
+	if !strings.Contains(visualErr, refs[0].ID) || len(visualCaps) != 0 {
+		t.Fatalf("visual seal did not retain typed identity without retired capability UI:\n%s", visualErr)
+	}
+
+	pendingRaw := pendingDecisionBytes(t)
+	eventRaw, err := os.ReadFile(filepath.Join(s.BasePath(), "event-bus.jsonl"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read lifecycle events: %v", err)
+	}
+	if bytes.Contains(pendingRaw, []byte(initialCapability)) || bytes.Contains(eventRaw, []byte(initialCapability)) {
+		t.Fatalf("raw capability %q reached a durable sink", initialCapability)
+	}
+	digest := sha256.Sum256([]byte(initialCapability))
+	if !bytes.Contains(pendingRaw, []byte(hex.EncodeToString(digest[:]))) {
+		t.Fatalf("pending decisions omitted SHA-256 binding for durable checkpoint capability")
+	}
+	if bytes.Contains(eventRaw, []byte("--checkpoint-capability")) {
+		t.Fatalf("lifecycle telemetry persisted the raw blocker summary:\n%s", eventRaw)
+	}
+
+	generationB := checkpointTestGeneration(t, "seal-generation-b", "seal-generation-evidence-b")
+	secondGeneration, err := materializeRuntimeVerificationCheckpoints(1, []codexCriterionVerification{criterion}, generationB)
+	if err != nil || len(secondGeneration) != 1 || secondGeneration[0].ID == refs[0].ID {
+		t.Fatalf("distinct durable generation was conflated: first=%#v second=%#v err=%v", refs, secondGeneration, err)
+	}
+	blockers, _ = checkSealBlockers(s, state)
+	if len(blockers) != 2 {
+		t.Fatalf("legacy suppression hid a durable generation or leaked a legacy blocker: %#v", blockers)
+	}
+	seen := map[string]bool{}
+	for _, blocker := range blockers {
+		seen[blocker.ID] = true
+		if got := checkpointCapabilitiesInSealOutput(blocker.RecoveryCommand); len(got) != 1 {
+			t.Fatalf("durable generation %s did not retain one capability command: %#v", blocker.ID, blocker)
+		}
+	}
+	if !seen[refs[0].ID] || !seen[secondGeneration[0].ID] || seen[compatibilityID] {
+		t.Fatalf("seal blockers did not preserve both durable row IDs while suppressing compatibility ID %s: %#v", compatibilityID, blockers)
+	}
 }
 
 // TestSealBlockerCheck verifies that seal blocks when blocker flags exist.
@@ -109,9 +439,10 @@ func TestSealBlockerCheck(t *testing.T) {
 
 	_, errOut := runSealCmd(t, s, tmpDir, nil)
 
-	// Should output error containing BLOCKED
-	if !strings.Contains(errOut, "BLOCKED") {
-		t.Errorf("expected error output to contain 'BLOCKED', got: %s", errOut)
+	// Current preflight names the typed evidence refusal rather than a
+	// decorative blocker banner.
+	if !strings.Contains(errOut, "normal seal requires verified completion") {
+		t.Errorf("expected typed completion refusal, got: %s", errOut)
 	}
 	if !strings.Contains(errOut, "blk-001") {
 		t.Errorf("expected error output to contain blocker ID 'blk-001', got: %s", errOut)
@@ -153,9 +484,8 @@ func TestSealForceBlockers(t *testing.T) {
 	// override is recorded, never waved through silently.
 	out, _ := runSealCmd(t, s, tmpDir, []string{"--force", "--reason", "issue tracked externally; shipping"})
 
-	// Should contain the warning about overriding
-	if !strings.Contains(out, "WARNING: Overriding") {
-		t.Errorf("expected stdout to contain override warning, got: %s", out)
+	if !strings.Contains(out, "forced_incomplete_closure") || !strings.Contains(out, "issue tracked externally; shipping") {
+		t.Errorf("expected forced-incomplete transaction evidence, got: %s", out)
 	}
 
 	// Verify colony state WAS mutated (COMPLETED)
@@ -192,9 +522,8 @@ func TestSealIssueWarning(t *testing.T) {
 
 	out, _ := runSealCmd(t, s, tmpDir, nil)
 
-	// Should contain the NOTE about unresolved issues
-	if !strings.Contains(out, "NOTE:") {
-		t.Errorf("expected stdout to contain NOTE about issues, got: %s", out)
+	if !strings.Contains(out, "Residual risks retained") || !strings.Contains(out, "issue-001") {
+		t.Errorf("expected retained-risk transaction evidence, got: %s", out)
 	}
 
 	// Verify colony state WAS mutated (seal proceeded)
@@ -212,7 +541,7 @@ func TestCheckSealBlockers(t *testing.T) {
 	s, _ := setupSealTestStore(t)
 
 	// No flags file: should return empty
-	blockers, issues := checkSealBlockers(s)
+	blockers, issues := checkSealBlockers(s, colony.ColonyState{})
 	if len(blockers) != 0 || len(issues) != 0 {
 		t.Errorf("expected empty with no flags file, got %d blockers, %d issues", len(blockers), len(issues))
 	}
@@ -229,7 +558,7 @@ func TestCheckSealBlockers(t *testing.T) {
 	}
 	_ = s.SaveJSON("pending-decisions.json", flags)
 
-	blockers, issues = checkSealBlockers(s)
+	blockers, issues = checkSealBlockers(s, colony.ColonyState{})
 	if len(blockers) != 1 || blockers[0].ID != "b1" {
 		t.Errorf("expected 1 unresolved blocker 'b1', got %d: %v", len(blockers), blockers)
 	}
@@ -260,6 +589,41 @@ func TestRenderBlockerSummary(t *testing.T) {
 	}
 	if !strings.Contains(out, "issue-severity") {
 		t.Error("summary should mention issue-severity flags")
+	}
+}
+
+// TestRenderBlockerSummaryUsesOwnBlockerRecoveryCommand proves WR-01
+// (193-REVIEW.md): an owner-confirmation blocker is computed live and never
+// written to pending-decisions.json, so the generic "aether flag-resolve
+// --id <ID>" line would always fail for it. The summary must print that
+// blocker's own RecoveryCommand instead, and must not offer the
+// unresolvable flag-resolve invocation for it -- while an ordinary
+// persisted-flag blocker (no RecoveryCommand set) keeps the existing
+// flag-resolve line unchanged.
+func TestRenderBlockerSummaryUsesOwnBlockerRecoveryCommand(t *testing.T) {
+	ownerBlocker := colony.FlagEntry{
+		ID:              "owner-confirm-1-abc123",
+		Description:     `Phase 1: "A human judged this looks right" needs your confirmation.`,
+		Type:            "blocker",
+		Source:          "owner_confirmation",
+		RecoveryCommand: `aether decision-answer --question 'no program check or reviewer could verify it' --answer 'confirmed' --phase 1`,
+	}
+	persistedBlocker := colony.FlagEntry{
+		ID:          "blk-002",
+		Description: "A persisted blocker flag",
+		Type:        "blocker",
+	}
+
+	out := renderBlockerSummary([]colony.FlagEntry{ownerBlocker, persistedBlocker}, nil)
+
+	if !strings.Contains(out, "aether decision-answer") {
+		t.Fatalf("summary must offer the owner-confirmation blocker's real recovery command, got:\n%s", out)
+	}
+	if strings.Contains(out, "flag-resolve --id owner-confirm") {
+		t.Fatalf("summary must not offer an unresolvable flag-resolve command for an owner-confirmation blocker, got:\n%s", out)
+	}
+	if !strings.Contains(out, "aether flag-resolve --id blk-002") {
+		t.Fatalf("summary must keep the flag-resolve line for an ordinary persisted-flag blocker, got:\n%s", out)
 	}
 }
 
@@ -504,7 +868,6 @@ func TestCrownedAnthillEnrichment(t *testing.T) {
 		Decisions: []colony.FlagEntry{
 			{ID: "r1", Resolved: true},
 			{ID: "r2", Resolved: true},
-			{ID: "r3", Resolved: false},
 		},
 	}
 	_ = s.SaveJSON("pending-decisions.json", flags)
@@ -526,8 +889,14 @@ func TestCrownedAnthillEnrichment(t *testing.T) {
 	if !strings.Contains(content, "| Learnings captured | 2 |") {
 		t.Error("CROWNED-ANTHILL.md should show 2 learnings captured")
 	}
-	if !strings.Contains(content, "| Flags resolved | 2 |") {
-		t.Error("CROWNED-ANTHILL.md should show 2 flags resolved")
+	// 3, not 2: the seal confirmation gate's own recorded "yes" answer
+	// (198-03, recorded by autoRecordSealConfirmationForTest the same way
+	// an owner's real answer would be) is itself a resolved decision in
+	// the same pending-decisions.json store, and countResolvedFlags counts
+	// any resolved decision there regardless of type -- an accurate count
+	// of what a real seal run now leaves resolved, not a test artifact.
+	if !strings.Contains(content, "| Flags resolved | 3 |") {
+		t.Error("CROWNED-ANTHILL.md should show 3 flags resolved (2 fixture flags + the recorded seal confirmation)")
 	}
 	if !strings.Contains(content, "| FOCUS signals expired | 0 |") {
 		t.Error("CROWNED-ANTHILL.md should show FOCUS signals expired metric")
@@ -564,7 +933,7 @@ func TestExpireSignalsByType(t *testing.T) {
 	_ = s.SaveJSON("pheromones.json", pf)
 
 	// Expire FOCUS signals
-	count := expireSignalsByType(s, "FOCUS")
+	count, _ := expireSignalsByType(s, "FOCUS")
 	if count != 2 {
 		t.Errorf("expected 2 FOCUS signals expired, got %d", count)
 	}
@@ -579,7 +948,7 @@ func TestExpireSignalsByType(t *testing.T) {
 	}
 
 	// Expiring again should return 0
-	count2 := expireSignalsByType(s, "FOCUS")
+	count2, _ := expireSignalsByType(s, "FOCUS")
 	if count2 != 0 {
 		t.Errorf("expected 0 on second expire, got %d", count2)
 	}
@@ -863,6 +1232,12 @@ func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
 	}
 
 	const actionText = "Run go build ./... before every seal to catch broken compilation"
+	// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely helpful
+	// application, not merely three applications of any kind -- otherwise
+	// this instinct falls out of consolidation's QueenEligible list and the
+	// fixture no longer exercises the "dual eligibility" scenario this test
+	// is named for.
+	dualEligibilityNow := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
@@ -875,7 +1250,10 @@ func TestSealDoesNotDoublePromoteInstincts(t *testing.T) {
 				TrustTier:  "trusted",
 				Confidence: 0.9,
 				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
-				Archived:   false,
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: dualEligibilityNow, Phase: 1, Outcome: "helpful"},
+				},
+				Archived: false,
 			},
 		},
 	}
@@ -1046,7 +1424,10 @@ func TestSealReportsPipelinePromotedInstinctsBelowLocalBar(t *testing.T) {
 
 	// Snapshot confidence 0.78: below the seal loop's 0.8 bar, but with 3
 	// recorded applications the post-decay confidence stays >= 0.75, so the
-	// pipeline promotes it into QUEEN.md's "## Instincts" section.
+	// pipeline promotes it into QUEEN.md's "## Instincts" section. LEARN-03
+	// (204-06-PLAN.md Task 3): at least one of those applications must now
+	// be genuinely helpful, not merely three applications of any kind.
+	nowStr := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	instincts := colony.InstinctsFile{
 		Version: "1",
 		Instincts: []colony.InstinctEntry{
@@ -1059,7 +1440,10 @@ func TestSealReportsPipelinePromotedInstinctsBelowLocalBar(t *testing.T) {
 				TrustTier:  "trusted",
 				Confidence: 0.78,
 				Provenance: colony.InstinctProvenance{ApplicationCount: 3},
-				Archived:   false,
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+				},
+				Archived: false,
 			},
 		},
 	}

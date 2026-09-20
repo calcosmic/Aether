@@ -35,7 +35,7 @@ func runDiscussArgs(t *testing.T, buf, errBuf *bytes.Buffer, args ...string) map
 	}
 	var env map[string]interface{}
 	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
-		t.Fatalf("parse envelope: %v\nraw: %s", err, buf.String())
+		t.Fatalf("parse envelope: %v\nstdout: %s\nstderr: %s", err, buf.String(), errBuf.String())
 	}
 	result, _ := env["result"].(map[string]interface{})
 	return result
@@ -44,9 +44,10 @@ func runDiscussArgs(t *testing.T, buf, errBuf *bytes.Buffer, args ...string) map
 func TestDiscussAddQuestionRoundTrip(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	binding := bindCommandTestRepository(t)
+	if store != binding.Store {
+		t.Fatal("discuss fixture did not bind the repository-authorized store")
+	}
 	seedComposedQuestionColony(t)
 
 	var buf, errBuf bytes.Buffer
@@ -58,6 +59,7 @@ func TestDiscussAddQuestionRoundTrip(t *testing.T) {
 		"--options", "Stream like JSON|Buffer whole files",
 		"--category", "integration",
 		"--grounding", "discuss-analyze found streaming JSON handlers in reports/handler.go",
+		"--source", "wrapper:csv-streaming",
 		"--hard",
 	)
 	if result["created"] != true {
@@ -92,21 +94,77 @@ func TestDiscussAddQuestionRoundTrip(t *testing.T) {
 		t.Fatalf("description does not round-trip through the canned parser: q=%q opts=%v", question, opts)
 	}
 
-	// Resolution is the UNCHANGED pipeline: a hard clarification's answer
-	// becomes a REDIRECT signal.
-	runDiscussArgs(t, &buf, &errBuf, "--resolve", id, "--answer", "Stream like JSON")
+	// Resolution is the unchanged repository-bound pipeline: a hard
+	// clarification's answer becomes a REDIRECT signal and the settled answer
+	// is handed to the draft specification in a second parseable JSON result.
+	resolved := runDiscussArgs(t, &buf, &errBuf, "--resolve", id, "--answer", "Stream like JSON")
+	if resolved["resolved"] != true || resolved["answer"] != "Stream like JSON" {
+		t.Fatalf("composed question did not round-trip through resolution: %v", resolved)
+	}
+	if resolved["redirect_emitted"] != true {
+		t.Fatalf("hard composed answer did not emit a redirect: %v", resolved)
+	}
+	if err := store.LoadJSON(pendingDecisionsFile, &pending); err != nil {
+		t.Fatalf("reload resolved decision: %v", err)
+	}
+	decision = nil
+	for i := range pending.Decisions {
+		if pending.Decisions[i].ID == id {
+			decision = &pending.Decisions[i]
+			break
+		}
+	}
+	if decision == nil || !decision.Resolved || decision.Resolution != "Stream like JSON" {
+		t.Fatalf("resolved decision was not persisted in the bound repository: %+v", decision)
+	}
 	var pf colony.PheromoneFile
 	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
 		t.Fatalf("load pheromones: %v", err)
 	}
-	found := false
+	redirectFound := false
 	for _, sig := range pf.Signals {
 		if sig.Type == "REDIRECT" && strings.Contains(string(sig.Content), "Stream like JSON") {
-			found = true
+			redirectFound = true
 		}
 	}
-	if !found {
-		t.Fatalf("resolving a hard composed question did not emit a REDIRECT signal: %+v", pf.Signals)
+	if !redirectFound {
+		t.Fatalf("resolving a hard composed question did not persist its REDIRECT signal: %+v", pf.Signals)
+	}
+}
+
+func TestDiscussSpecificationDecisionLineageBoundsGeneratedHardIDs(t *testing.T) {
+	generated := PendingDecision{
+		ID:     "pd_1788965312123456789",
+		Source: "wrapper:authority:csv-streaming",
+	}
+	first := discussSpecificationDecisionLineage(generated)
+	second := discussSpecificationDecisionLineage(generated)
+	if first != second {
+		t.Fatalf("generated decision lineage is not deterministic: first=%q second=%q", first, second)
+	}
+	if len(first) > 35 || len(first+"-hard") > 40 {
+		t.Fatalf("generated decision lineage exceeds canonical bounds: base=%q (%d) hard=%q (%d)", first, len(first), first+"-hard", len(first+"-hard"))
+	}
+	for _, check := range []struct {
+		section colony.SpecSection
+		lineage string
+	}{
+		{section: colony.SpecSectionBindingDecisions, lineage: first},
+		{section: colony.SpecSectionNegativeExpectations, lineage: first + "-hard"},
+	} {
+		if _, err := colony.CanonicalSpecItemID(check.section, check.lineage); err != nil {
+			t.Fatalf("bounded lineage %q is not canonical for %s: %v", check.lineage, check.section, err)
+		}
+	}
+
+	short := PendingDecision{ID: "pd_surface", Source: "wrapper:scope:surface"}
+	if got, want := discussSpecificationDecisionLineage(short), "owner-decision-pd_surface"; got != want {
+		t.Fatalf("short decision identity changed: got %q want %q", got, want)
+	}
+	other := generated
+	other.ID = "pd_1788965312123456790"
+	if got := discussSpecificationDecisionLineage(other); got == first {
+		t.Fatalf("distinct generated decision IDs collapsed to one lineage %q", got)
 	}
 }
 

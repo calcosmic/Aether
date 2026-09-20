@@ -11,9 +11,20 @@ import (
 	"time"
 )
 
+// isolateUpdateE2ERepositoryRoot makes these process-local integration tests
+// exercise the repository selected by their cwd. Other command tests may set
+// explicit lifecycle-root overrides, which are authoritative in production and
+// therefore must not bleed into a downstream-update fixture.
+func isolateUpdateE2ERepositoryRoot(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_ROOT", "")
+	t.Setenv("COLONY_DATA_DIR", "")
+}
+
 // TestE2ERegressionStablePublishUpdate proves the full stable pipeline:
 // publish -> downstream update -> version agreement.
 func TestE2ERegressionStablePublishUpdate(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -35,6 +46,7 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("stable publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, sourceDir, homeDir)
 
 	// Step 3: Verify hub has correct version
 	hubDir := filepath.Join(homeDir, ".aether")
@@ -84,6 +96,7 @@ func TestE2ERegressionStablePublishUpdate(t *testing.T) {
 // TestE2ERegressionDevPublishUpdate proves the full dev pipeline:
 // dev publish -> dev update -> version agreement.
 func TestE2ERegressionDevPublishUpdate(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -154,6 +167,7 @@ func TestE2ERegressionDevPublishUpdate(t *testing.T) {
 // TestE2ERegressionStalePublishDetection proves stale publish is caught at
 // the downstream update boundary with critical classification and recovery command.
 func TestE2ERegressionStalePublishDetection(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -254,6 +268,7 @@ func TestE2ERegressionChannelIsolation(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("stable publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, stableSource, homeDir)
 
 	// Step 2: Record stable hub state
 	stableHubDir := filepath.Join(homeDir, ".aether")
@@ -313,6 +328,7 @@ func TestE2ERegressionChannelIsolation(t *testing.T) {
 // instantly. This test proves the full downstream publish-update-init-plan pipeline
 // works without hanging.
 func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -334,6 +350,7 @@ func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, sourceDir, homeDir)
 
 	// Step 3: Create downstream repo and update from hub
 	repoDir := t.TempDir()
@@ -420,14 +437,17 @@ func TestE2ERegressionStuckPlanInvestigation(t *testing.T) {
 		if !ok {
 			t.Fatalf("plan result.result is not a map: %T", envelope["result"])
 		}
-		if inner["planned"] != true {
-			t.Fatalf("plan result.planned != true: %v", inner["planned"])
+		if inner["planned"] != false || inner["preset_required"] != true {
+			t.Fatalf("unselected planning preset did not stop without dispatch: %+v", inner)
 		}
-		count, ok := inner["count"].(float64)
-		if !ok || count < 1 {
-			t.Fatalf("plan result.count < 1: %v", inner["count"])
+		if inner["state_effect"] != "unchanged" || inner["dispatch_count"] != float64(0) {
+			t.Fatalf("preset boundary changed state or dispatched work: %+v", inner)
 		}
-		t.Logf("plan succeeded: %d phases generated, dispatch_mode=%v", int(count), inner["dispatch_mode"])
+		next, _ := inner["next"].(string)
+		if !strings.Contains(next, "aether plan --preset <name>") {
+			t.Fatalf("preset boundary lacks exact recovery: %+v", inner)
+		}
+		t.Log("plan returned the unbiased preset boundary without hanging")
 	case <-time.After(60 * time.Second):
 		t.Fatal("aether plan hung -- stuck-plan bug reproduced")
 	}

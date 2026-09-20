@@ -1,8 +1,8 @@
 name: ant-discuss
-description: "💬 Capture clarifications before planning through the Aether CLI runtime"
+description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS"
+  command: "AETHER_OUTPUT_MODE=json aether discuss $ARGUMENTS"
 codex_orchestration:
   category: "semi-intelligent"
   skill: "aether-colony-research"
@@ -10,16 +10,24 @@ codex_orchestration:
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 ceremony_contract:
   class: "guided_ritual"
-  authority: "Go owns pending-decision persistence, REDIRECT emission, and visual question rendering. The typed intake `aether discuss --add-question ... --grounding ...` materializes Queen-composed questions into the same pipeline; the runtime refuses ungrounded questions and dedups by --source slug."
-  wrapper_role: "Compose 3-5 questions from THIS goal and THIS codebase (status + discuss-analyze + survey docs), each citing what it is grounded in; materialize via --add-question; present everything pending as real multiple choice; persist picks via --resolve. Fall back to the runtime's generator only when discuss-analyze returns no scan context or the goal is empty. Never invent answers or imply worker dispatch."
+  authority: "Go assembles the current evidence frontier, decides which unresolved choices are material or evidence-answerable, binds answer reuse to the exact goal/session/specification/base-plan meaning and consequences, persists accepted answers, and creates or retains the settled draft specification."
+  wrapper_role: "Invoke the structured runtime result; render every card in `material_batch.cards` with its decision, why-now evidence, Queen recommendation, viable-choice consequences, prior-answer revalidation, planning-resume description, and `exact_answer_syntax`; submit only the owner's explicit answer through that runtime command; then request a fresh result. When settled, render the runtime's exact specification result and route to `/ant-spec`."
+  material_batch: "The runtime returns the complete currently known material batch. Do not impose a question quota, truncate the batch, add generic categories, or synthesize another question."
+  exact_resume: "After each answer, consume a fresh Go result and continue only from its remaining batch or exact next command. Never reuse a batch across a changed goal, session, specification revision, base plan, meaning, behavior, authority, risk, scope, acceptance impact, or affected semantic IDs."
+  settled: "Settled intent produces or retains a specification result. A new result is explicitly `draft` and remains unauthorized for planning until the owner reviews and approves that exact revision through `/ant-spec`; discussion never approves a specification or a plan."
+legacy_compatibility:
+  status: "The `Compose the Questions` and `Canned fallback (typed condition ...)` headings are retained as inert migration markers for older installed wrapper contracts. They are not executable guidance."
+  composed_intake: "The runtime still recognizes `--add-question` plus `--grounding`, but this wrapper must not invoke them or use AskUserQuestion to author cards. The former promise was to make questions SPECIFIC to this goal and this codebase; Go now satisfies that promise through the complete evidence-backed material batch."
+  fallback: "The historical fallback applied when there was no scan context or the goal was empty. It is disabled in the evidence-first wrapper because only Go may decide whether a material question exists."
 guardrails:
-  - "Do not write `pending-decisions.json`, `pheromones.json`, or `COLONY_STATE.json` by hand from this command spec."
-  - "Do not render Scout/Builder/Watcher worker theatre for discuss; this is a guided clarification ritual, not a spawned-worker lifecycle."
-  - "If the runtime returns clarification questions, present them honestly instead of inventing answers on the user's behalf."
+  - "Do not write `pending-decisions.json`, `pheromones.json`, `COLONY_STATE.json`, `.aether/SPEC.md`, or lifecycle receipts by hand from this command spec."
+  - "Do not compose questions, classify materiality, decide answer equivalence, fabricate evidence, invent receipts, infer draft state, or claim approval in the wrapper."
+  - "Do not render Scout/Builder/Watcher worker theatre for discuss; this is a guided owner-decision ritual, not a spawned-worker lifecycle."
+  - "A platform-native question card may render the structured choices, but nothing is recorded without the owner's explicit pick and the exact Go-owned answer command."
+  - "Never route settled discuss directly to `/ant-plan`; the next public boundary is `/ant-spec`."
   - "If docs and runtime disagree, runtime wins."
 follow_up:
-  analyze: "aether discuss-analyze --target ."
-  analyze_purpose: "Run before discussion to get codebase-aware suggested questions covering architecture, dependencies, testing, deployment, and performance."
-  persist_answer: "AETHER_OUTPUT_MODE=visual aether discuss --resolve <id> --answer \"<choice>\""
-  settled: "If the runtime reports discussion_status: settled, route wrapper users back to `/ant-plan`; direct CLI users can run `aether plan`."
-  council: "Use `/ant-council` only when the user wants multi-position deliberation; `/ant-discuss` is the lightweight pre-plan clarification gate."
+  persist_answer: "Use the card's exact `exact_answer_syntax`: `aether discuss --resolve <id> --answer \"<answer>\"`."
+  resume: "Rerun `AETHER_OUTPUT_MODE=json aether discuss` after an answer and consume the newly issued batch, draft, or exact next command."
+  settled: "Render `draft_spec` or the retained `approved_spec` exactly as returned and route wrapper users to `/ant-spec`. A draft is not approval and cannot authorize planning or build."
+  council: "Use `/ant-council` only when the user wants multi-position deliberation; `/ant-discuss` owns evidence-first material intent decisions."

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,8 +78,8 @@ type codexExternalBuildWorkerResult struct {
 	// call the manifest still lists as separate dispatches. This is the
 	// WORKER's own claim, submitted via the completion packet -- contrast
 	// codexBuildDispatch.CoveredTaskIDs (cmd/codex_build.go), which the
-	// RUNTIME writes when it coalesces a dependent chain into one dispatch
-	// before any worker runs (coalesceSequentialDispatches). Because this
+	// RUNTIME writes when it groups a dependent chain into one dispatch
+	// before any worker runs (planCoherentJobs). Because this
 	// field is worker-supplied, the trust boundary inverts relative to that
 	// runtime-written analog: mergeExternalBuildResults validates every
 	// entry against the manifest's own dispatches before granting any
@@ -89,16 +91,31 @@ type codexExternalBuildWorkerResult struct {
 	// results, or granted by a claimant that is
 	// failed/unevidenced/unrecognized, is a distinct, named contract
 	// violation, never a silent credit or a silently dropped field.
-	CoveredTaskIDs []string            `json:"covered_task_ids,omitempty"`
-	DependsOn      []string            `json:"depends_on,omitempty"`
-	Outputs        []string            `json:"outputs,omitempty"`
-	Blockers       []string            `json:"blockers,omitempty"`
-	Duration       float64             `json:"duration,omitempty"`
-	ToolCount      int                 `json:"tool_count,omitempty"`
-	FilesCreated   []string            `json:"files_created,omitempty"`
-	FilesModified  []string            `json:"files_modified,omitempty"`
-	TestsWritten   []string            `json:"tests_written,omitempty"`
-	Handoff        codex.WorkerHandoff `json:"handoff,omitempty"`
+	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
+	// TaskReceipts carries optional task-specific completion evidence using
+	// the same additive vocabulary as native worker results. CoveredTaskIDs
+	// remains assignment scope; later reconciliation decides whether any
+	// receipt earns task credit.
+	TaskReceipts []codex.TaskReceipt `json:"task_receipts,omitempty"`
+	// Disposition qualifies a completed_no_change status (ruling D6): the
+	// only recognized value is "verified_existing" — the worker proved the
+	// required behavior already exists rather than merely finding nothing to
+	// do. One success status with a disposition, never a second terminal
+	// state machine. Raw status "verified_existing" is folded into
+	// status=completed_no_change + this disposition by the merge path.
+	Disposition   string              `json:"disposition,omitempty"`
+	DependsOn     []string            `json:"depends_on,omitempty"`
+	Outputs       []string            `json:"outputs,omitempty"`
+	Blockers      []string            `json:"blockers,omitempty"`
+	Duration      float64             `json:"duration,omitempty"`
+	ToolCount     int                 `json:"tool_count,omitempty"`
+	FilesCreated  []string            `json:"files_created,omitempty"`
+	FilesModified []string            `json:"files_modified,omitempty"`
+	TestsWritten  []string            `json:"tests_written,omitempty"`
+	Handoff       codex.WorkerHandoff `json:"handoff,omitempty"`
+	// Actual worker findings survive aggregation without becoming host authority.
+	Artifacts   map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport json.RawMessage            `json:"scout_report,omitempty"`
 }
 
 // effectiveName returns the worker name, falling back to AntName when Name is empty.
@@ -169,6 +186,16 @@ var buildFinalizeCmd = &cobra.Command{
 			}
 			return err
 		}
+		// NEW-03 (195-REVIEW.iter2.md): the same screen the direct lane
+		// already shows. WR-05's fix landed only on `aether build`, so the
+		// wrapper's own lane -- plan, spawn, then build-finalize, the one the
+		// project's guide documents as primary -- still told the owner a
+		// half-built phase was ready to be checked and never showed the
+		// command that finishes the rest.
+		if partial, _ := result["recovery_job"].(bool); partial {
+			outputWorkflow(result, renderBuildPartialCreditResultVisual(state, phase, result))
+			return nil
+		}
 		outputWorkflow(result, renderBuildFinalizeVisual(state, phase, dispatches))
 		return nil
 	},
@@ -207,7 +234,12 @@ var buildCompletionStageCmd = &cobra.Command{
 			outputError(1, colonyStateLoadMessage(err), nil)
 			return err
 		}
-		binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+		stageDigest, digestErr := jsonSHA256(completion)
+		if digestErr != nil {
+			outputError(1, fmt.Sprintf("hash completion packet: %v", digestErr), nil)
+			return digestErr
+		}
+		binding, err := validateBuildAttemptManifestBinding(*manifest, state, isCommittedPartialAttemptReplay(*manifest, stageDigest))
 		if err != nil || !binding.Bound {
 			if err == nil {
 				err = fmt.Errorf("completion manifest is not bound to a durable build attempt")
@@ -396,7 +428,11 @@ func (c codexExternalBuildCompletion) workerResults() []codexExternalBuildWorker
 	return results
 }
 
-func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool, partialRetryStartOptions ...buildStartOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	return runCodexBuildFinalizeWithHooks(root, phaseNum, completion, skipVerify, codexNativeFinalizeHooks{}, partialRetryStartOptions...)
+}
+
+func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexExternalBuildCompletion, skipVerify bool, hooks codexNativeFinalizeHooks, partialRetryStartOptions ...buildStartOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
@@ -429,15 +465,55 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}
+	// Consult saved lane evidence before classifying the submitted binding.
+	// Dropping all tracking fields must not bypass native journal admission.
+	if _, current, ok := loadLatestBuildAttempt(phaseNum); ok {
+		if err := validateCodexNativeCompletion(current, completion); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+	}
+	initialStateDigest, err := jsonSHA256(state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
 	}
-	if err := validateBuildManifestPlanRevision(*manifest, state); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	completionDigest, err := jsonSHA256(completion)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
-	binding, err := validateBuildAttemptManifestBinding(*manifest, state)
+	classification, err := classifyBuildManifestBinding(*manifest)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	var binding buildAttemptManifestBinding
+	partialReplay := false
+	if classification == buildManifestBindingLegacy {
+		var replayed bool
+		binding, replayed, err = legacyBuildCompletionReplayBinding(*manifest, state, completionDigest)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		if !replayed {
+			binding = buildAttemptManifestBinding{Legacy: true}
+		}
+	} else {
+		// WR-02: does this manifest name the current committed partial parent?
+		// Compute that before the staleness guards because partial credit
+		// legitimately changed the state they compare against. The read-only
+		// replay path below still verifies the exact completion digest and
+		// canonical recovery child before returning any result, so a changed
+		// packet reaches an exact fail-closed explanation rather than gaining a
+		// mutation path.
+		partialReplay = isCommittedPartialAttempt(*manifest)
+		if err := validateBuildManifestPlanRevision(*manifest, state, partialReplay); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
+		binding, err = validateBuildAttemptManifestBinding(*manifest, state, partialReplay)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 	}
 	// T-188-09 (D-10, D-11): a completion packet with no attempt binding at
 	// all is still accepted -- this branch is deliberately kept, not
@@ -454,10 +530,6 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	// that is correct on every occurrence, not just the common one.
 	if binding.Legacy {
 		visualFprintf(stderr, "warning: phase %d's build completion did not include the newer tracking details that link it back to one specific dispatched build, so it is being accepted using the older, less strictly checked method\n", phaseNum)
-	}
-	completionDigest, err := jsonSHA256(completion)
-	if err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash completion packet: %w", err)
 	}
 	if binding.Bound && buildAttemptCompletionSealed(binding.Record) && binding.Record.CompletionSHA256 != "" && binding.Record.CompletionSHA256 != completionDigest {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match the result already bound to attempt %s", binding.Record.ID)
@@ -502,6 +574,13 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if binding.Bound && binding.Record.Status == buildAttemptBuilt {
 		return idempotentExternalBuildFinalizeResult(state, phaseNum, binding, completionDigest)
 	}
+	// WR-02: replaying the identical packet for a committed partial returns the
+	// same answer -- including the same recovery command -- and commits nothing
+	// new. Without this the runtime's own "rerun build-finalize with the same
+	// completion packet" instruction had no reachable outcome for a partial.
+	if binding.Bound && binding.Record.Status == buildAttemptPartial {
+		return idempotentExternalPartialFinalizeResult(state, phaseNum, updatedPhaseForPartialReplay(state, phaseNum), binding, completionDigest)
+	}
 	if err := validateFinalizerManifestFreshness("dispatch_manifest", manifest.GeneratedAt, now); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
@@ -543,6 +622,24 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if err := validateBuildProvenanceForManifest(manifest, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	// D-08/D-09 (195-06): the external/wrapper lane reuses the EXACT same
+	// two-stage receipt trust boundary the native lane wired in 195-04
+	// (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence,
+	// via resolveCoherentJobDispatchReceipts) -- never a second, external-only
+	// validator. In-repo files already live in root at this point, so
+	// admission and finalization run consecutively, exactly like the native
+	// lane's executeCodexBuildDispatches. A worktree-backed completion's
+	// files are NOT yet synced into root (mergePhaseWorktrees runs later,
+	// below), so that lane instead routes through the SAME two stages with a
+	// receipt-scoped sync step inserted between them
+	// (resolveWorktreeExternalDispatchReceipts, plan 195-08) -- the identical
+	// sequence the native worktree lane uses, never an external-only
+	// validator, so both lanes credit the same tasks from the same evidence.
+	if effectiveParallelMode(state) == colony.ModeWorktree {
+		dispatches = resolveWorktreeExternalDispatchReceipts(root, phase, state, phaseNum, dispatches)
+	} else {
+		dispatches = resolveCoherentJobDispatchReceipts(root, phase, dispatches)
+	}
 	startedAt := parseManifestGeneratedAt(*manifest)
 	completedAt := now
 	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
@@ -556,17 +653,65 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	}
 	attachBuildArtifactEvidence(root, &claims)
 
-	if err := store.SaveJSON(checkpointRel, state); err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
-	}
 	attemptRel := binding.Path
+	startedUnbound := !binding.Bound
 	if !binding.Bound {
-		attemptRel, err = beginBuildAttempt(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, "external-task", dispatches)
-		if err != nil {
+		startState, authority, authorityErr := resolveCodexBuildPlanAuthority(root, state)
+		if authorityErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, authorityErr
+		}
+		request, requestErr := newBuildStartRequest(root, buildStartExternalUnbound, startState, authority, phaseNum, selectedTaskIDs, buildExecutionOwner("external-task", false), "external-task", startedAt, manifest.Dispatches, buildStartEffects{
+			CheckpointPath: checkpointRel,
+			Completion:     &completion,
+			ClaimsPath:     claimsRel,
+			Claims:         &claims,
+			PromoteState:   true,
+			MakeLatest:     true,
+		})
+		if requestErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, requestErr
+		}
+		receipt, commitErr := commitBuildStart(root, request, buildStartOptions{})
+		if commitErr != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, commitErr
+		}
+		state = startState
+		attemptRel = receipt.AttemptPath
+		loadedRel, loadedAttempt, ok := loadLatestBuildAttempt(phaseNum)
+		if !ok || loadedRel != attemptRel || loadedAttempt.ID != receipt.AttemptID || loadedAttempt.PlanManifest == nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("external build start receipt does not resolve to its derived manifest binding")
+		}
+		binding = buildAttemptManifestBinding{Bound: true, Path: attemptRel, Record: loadedAttempt, Legacy: true}
+		manifest = loadedAttempt.PlanManifest
+	} else {
+		if err := store.SaveJSON(checkpointRel, state); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
+		}
+		if _, err := bindBuildAttemptCompletion(attemptRel, completion); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
 	}
-	if _, err := bindBuildAttemptCompletion(attemptRel, completion); err != nil {
+	if attemptRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("external build start did not return an attempt path")
+	}
+	checkpointDisplayPath, err := displayBuildAttemptDataPath(checkpointRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	manifestDisplayPath, err := displayBuildAttemptDataPath(manifestRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	claimsDisplayPath, err := displayBuildAttemptDataPath(claimsRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	attemptDisplayPath, err := displayBuildAttemptDataPath(attemptRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	resultCollectionDisplayPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	attemptFinished := false
@@ -583,15 +728,25 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 			_ = transitionBuildAttempt(attemptRel, buildAttemptInterrupted, "build-finalize ended before durable finalization", nil, nil, "external-task", fmt.Errorf("build-finalize ended before durable finalization"))
 		}
 	}()
-	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "external worker results received for validation", dispatches, nil, "external-task", nil); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to persist external result collection start", err)
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	if !startedUnbound {
+		if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "external worker results received for validation", dispatches, nil, "external-task", nil); err != nil {
+			finishAttempt(buildAttemptFailed, "failed to persist external result collection start", err)
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+		}
 	}
-
 	// Prepare the updated state in memory first (needed for downstream writes).
+	// D-08: BUILT means every selected task is actually proven done. A
+	// grouped job that only credited part of its covered tasks (via receipt
+	// finalization above) must NOT falsely report BUILT -- applyCodexBuildState
+	// already leaves state.State at EXECUTING and the phase at
+	// PhaseInProgress, which is the honest "still mid-build" signal; only a
+	// fully-credited build advances it the rest of the way.
+	buildFullyCredited := allSelectedBuildTasksCredited(selectedTaskIDs, dispatches)
 	updatedState := state
 	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
-	updatedState.State = colony.StateBUILT
+	if buildFullyCredited {
+		updatedState.State = colony.StateBUILT
+	}
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	updatedState.Events = append(trimmedEvents(updatedState.Events),
@@ -625,18 +780,47 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 
 	finalManifest := buildCodexBuildManifest(root, updatedState, updatedPhase, checkpointRel, claimsRel, dispatches, startedAt, "external-task", selectedTaskIDs, manifest.WorkerBriefs, false, colony.NormalizeVerificationDepth(manifest.ReviewDepth))
 	finalManifest.GeneratedAt = completedAt.Format(time.RFC3339)
-	finalManifest.AttemptID = strings.TrimSpace(manifest.AttemptID)
-	finalManifest.AttemptPath = filepath.ToSlash(strings.TrimSpace(manifest.AttemptPath))
+	finalManifest.AttemptID = binding.Record.ID
+	finalManifest.AttemptPath = attemptDisplayPath
 	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write build manifest: %w", err)
 	}
+
+	// D-08 / ruling D11 rule 2: the program's own free checks (build, types,
+	// lint, tests, claimed-files-exist, criterion evidence) run at build time
+	// and are recorded as a report on the attempt journal -- never as an
+	// advancement gate here. Advancing the phase is `continue`'s decision
+	// alone (TestBuildFinalizeFreeChecksDoNotAdvanceThePhase). skipVerify
+	// keeps its existing meaning: it is the switch for whether the free
+	// checks run at all at build time; no new flag is added.
+	if !skipVerify {
+		contManifest := codexContinueManifest{Present: true, Path: manifestRel, Data: finalManifest}
+		watcher := evaluateContinueWatcherVerification(contManifest)
+		// D-15a (Phase 201 plan 14): this report never gates advancement --
+		// the comment two lines below says so, and always has. That is
+		// exactly the working loop, not the phase boundary: the tests
+		// command may be scoped to what this phase touched, while the
+		// phase's real advancement decision (continue, below) always pays
+		// for the full suite.
+		floor := runDeterministicFloorAtCyclePoint(context.Background(), root, updatedPhase, contManifest, watcher, 0, verificationCyclePointLoop)
+		report := buildFreeCheckReportFromFloor(phaseNum, completedAt, floor)
+		if err := attachBuildFreeCheckReport(attemptRel, report); err != nil {
+			// A report the runtime failed to write is not a reason to fail a
+			// build that otherwise completed -- warn and move on. It never
+			// gates advancement either way.
+			visualFprintf(stderr, "warning: could not record the build-time check report for phase %d: %v\n", phaseNum, err)
+		} else if !report.Passed {
+			visualFprintf(stderr, "warning: the program's own checks did not all pass for phase %d (%s) -- this does not block the build; the next step (`aether continue`) decides whether the phase can advance\n", phaseNum, report.Summary)
+		}
+	}
+
 	if err := recordExternalBuildSpawnTree(dispatches); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if err := persistExternalBuildHandoffs(root, phaseNum, dispatches, completion.workerResults()); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
-	resultCollection := buildExternalBuildResultCollectionReport(phaseNum, updatedPhase.Name, manifest.Dispatches, completion.workerResults(), dispatches, completedAt)
+	resultCollection := buildExternalBuildResultCollectionReport(phaseNum, updatedPhase.Name, manifest.Dispatches, completion.workerResults(), dispatches, completedAt, selectedTaskIDs)
 	if err := store.SaveJSON(resultCollectionRel, resultCollection); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to write result collection diagnostics: %w", err)
 	}
@@ -662,8 +846,33 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		}
 	}
 
+	// A partial parent cannot be committed honestly unless the unfinished-only
+	// recovery shape is already valid. Derive it before the lifecycle-state
+	// write; the child itself is still committed afterward through canonical
+	// build start, so it can never precede accepted credit.
+	var partialRetryPlan *partialBuildRetryPlan
+	if !buildFullyCredited {
+		partialRetryPlan, err = planPartialBuildRetry(phaseNum, updatedPhase, dispatches)
+		if err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d partial recovery plan is invalid: %w", phaseNum, err)
+		}
+		// D-10: retry follows ACCEPTED credit. A dispatch that credited SOME
+		// of its covered tasks must yield a validated unfinished-only plan;
+		// a dispatch that credited NONE is a whole failure with nothing to
+		// carry forward -- its recovery is the ordinary failed-dispatch
+		// instructions above, and demanding a partial plan there made every
+		// whole-failure finalize impossible to commit.
+		if partialRetryPlan == nil && buildHasPartiallyCreditedDispatch(dispatches) {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d incomplete build has no validated partial recovery plan", phaseNum)
+		}
+	}
+
 	// Atomically commit the colony state mutation (CR-02, 188-REVIEW.md).
 	committedState, err := commitBuildFinalizeState(buildFinalizeCommitParams{
+		Completion:         &completion,
+		AttemptPath:        attemptRel,
+		NativeHooks:        hooks,
+		InitialStateDigest: initialStateDigest,
 		PhaseNum:           phaseNum,
 		StartedAt:          startedAt,
 		SelectedTaskIDs:    selectedTaskIDs,
@@ -673,6 +882,7 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		LegacyManifest:     binding.Legacy,
 		WorktreeMergeEvent: worktreeMergeEvent,
 		UpdatedState:       updatedState,
+		BuildFullyCredited: buildFullyCredited,
 	})
 	if err != nil {
 		finishAttempt(buildAttemptFailed, "failed to commit external built lifecycle state", err)
@@ -685,11 +895,68 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 		}
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to save built colony state: %w", err)
 	}
-	if err := transitionBuildAttempt(attemptRel, buildAttemptBuilt, "external built lifecycle state committed", dispatches, &claims, "external-task", nil); err != nil {
+	// D-10: a fully-credited grouped job seals this attempt as built, exactly
+	// as before. A partially-credited one (buildFullyCredited false) is
+	// neither built nor a plain failure -- it is recorded as `partial`, and a
+	// D-10 append-only recovery job is created below for the unfinished
+	// tasks. The parent attempt's own dispatches/receipts/claims/completion
+	// digest, already durably written above, are never rewritten by this.
+	finalAttemptStatus := buildAttemptBuilt
+	finalAttemptSummary := "external built lifecycle state committed"
+	if !buildFullyCredited {
+		finalAttemptStatus = buildAttemptPartial
+		finalAttemptSummary = "external partial-terminal state committed; unfinished tasks recorded for a D-10 recovery job"
+	}
+	if err := transitionBuildAttempt(attemptRel, finalAttemptStatus, finalAttemptSummary, dispatches, &claims, "external-task", nil); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("built state committed but external build attempt journal is incomplete; rerun build-finalize with the same completion packet: %w", err)
 	}
 	attemptFinished = true
 	updatedState = committedState
+
+	// D-08/CAP-022: computed and attached AFTER the attempt is durably
+	// sealed above, from the exact same fully-resolved `dispatches` the
+	// two-stage receipt boundary just finalised -- never a second, separate
+	// decision about what counts as done. Both are reporting-only:
+	// attachResultFilePrecision/attachBuildPlanRealityReport touch nothing
+	// but their own fields, and a failure to record either is warned, never
+	// fatal to a build that otherwise completed (mirrors
+	// attachBuildFreeCheckReport's own non-fatal discipline below).
+	planRealityEntries := buildPlanRealityForDispatches(root, updatedPhase, dispatches)
+	creditedFiles, uncreditedFiles := deriveResultFilePrecision(dispatches, updatedState.Worktrees, blockedPlanRealityTasks(planRealityEntries))
+	if err := attachResultFilePrecision(attemptRel, creditedFiles, uncreditedFiles); err != nil {
+		visualFprintf(stderr, "warning: could not record the credited/uncredited file split for phase %d: %v\n", phaseNum, err)
+	}
+	if err := attachBuildPlanRealityReport(attemptRel, buildPlanRealityReport{
+		RecordedAt: completedAt.Format(time.RFC3339),
+		Phase:      phaseNum,
+		Tasks:      planRealityEntries,
+	}); err != nil {
+		visualFprintf(stderr, "warning: could not record the plan-versus-reality evidence for phase %d: %v\n", phaseNum, err)
+	}
+	// CAP-066: same reporting-only, warn-never-fail discipline as the two
+	// calls immediately above -- computed from the exact same fully-resolved
+	// `dispatches` this attempt just sealed, never a second decision about
+	// what a worker actually left behind.
+	if err := attachBuildKnowledgeDeltas(attemptRel, deriveBuildKnowledgeDeltas(phaseNum, dispatches)); err != nil {
+		visualFprintf(stderr, "warning: could not record the decision/learning knowledge deltas for phase %d: %v\n", phaseNum, err)
+	}
+
+	var partialRetryOutcome *partialBuildRetryOutcome
+	if !buildFullyCredited {
+		parentAttemptID := strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel))
+		outcome, retryErr := commitPartialBuildRetryPlan(updatedState, phaseNum, updatedPhase, parentAttemptID, time.Now().UTC(), partialRetryPlan, partialRetryStartOptions...)
+		if retryErr != nil {
+			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed; rerun build-finalize with the same completion packet after repairing the reported cause: %w", phaseNum, retryErr)
+		}
+		if outcome == nil && partialRetryPlan != nil {
+			// A validated unfinished-only plan must always yield a durable
+			// recovery attempt. Whole failures (no partial credit) have no
+			// plan and no child attempt -- their recovery is the ordinary
+			// failed-dispatch instructions (D-10).
+			return nil, updatedState, updatedPhase, dispatches, fmt.Errorf("phase %d partial credit did not produce the required durable recovery attempt; inspect the attempt journal before retrying build-finalize", phaseNum)
+		}
+		partialRetryOutcome = outcome
+	}
 	updateSessionSummary("build-finalize", "aether continue", fmt.Sprintf("Phase %d external Task workers recorded (%d dispatches)", phaseNum, len(dispatches)))
 
 	// Collect pheromone suggestions once the build is durably committed.
@@ -697,26 +964,57 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	// above) so re-analysis cost scales with builds, not worker count.
 	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
 
+	// File this run's per-worker token record. This call is what makes both
+	// platform usage readers reachable from a real dispatch path; without it
+	// they would be code nothing invokes, which is this repository's named
+	// signature failure.
+	//
+	// Accounting is a record OF the build, never a gate ON it: a write that
+	// fails is reported and the build still completes. A build must not be
+	// lost because its bookkeeping could not be filed.
+	spendNote := ""
+	spendOutcome, spendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phaseNum,
+		PhaseName:  updatedPhase.Name,
+		Workflow:   spendWorkflowBuild,
+		RepoRoot:   root,
+		Platform:   manifest.HostPlatform,
+		RunID:      spendRunIDFromAttempt(attemptRel),
+		StartedAt:  spendRunStartFromManifest(manifest.GeneratedAt),
+		EndedAt:    time.Now().UTC(),
+		Dispatches: dispatches,
+	})
+	if spendErr != nil {
+		spendNote = fmt.Sprintf("this build's per-worker token record could not be filed: %v", spendErr)
+		visualFprintf(stderr, "warning: %s\n", spendNote)
+	} else if len(spendOutcome.Notes) > 0 {
+		spendNote = strings.Join(spendOutcome.Notes, "; ")
+	}
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"phase_name":               updatedPhase.Name,
 		"state":                    updatedState.State,
 		"plan_only":                false,
 		"dispatch_mode":            "external-task",
+		"spend_rows_written":       spendOutcome.RowsWritten,
+		"spend_rows_measured":      spendOutcome.Reported,
 		"dispatches":               codexBuildDispatchMaps(dispatches),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(updatedState))),
 		"parallel_mode":            string(effectiveParallelMode(updatedState)),
 		"selected_tasks":           selectedTaskIDs,
-		"checkpoint":               displayDataPath(checkpointRel),
-		"manifest":                 displayDataPath(manifestRel),
-		"claims_path":              displayDataPath(claimsRel),
-		"attempt":                  displayDataPath(attemptRel),
-		"result_collection":        displayDataPath(resultCollectionRel),
+		"checkpoint":               checkpointDisplayPath,
+		"manifest":                 manifestDisplayPath,
+		"claims_path":              claimsDisplayPath,
+		"attempt":                  attemptDisplayPath,
+		"result_collection":        resultCollectionDisplayPath,
 		"idempotent":               false,
-		"next":                     "aether continue",
 		"suggest_analyze_ran":      suggestAnalyzeRan,
 		"pending_suggestion_count": pendingSuggestionCount,
+	}
+	if spendNote != "" {
+		result["spend_ledger_note"] = spendNote
 	}
 	if pendingSuggestionCount > 0 {
 		result["pending_suggestions_next"] = "aether suggest-approve"
@@ -724,13 +1022,25 @@ func runCodexBuildFinalize(root string, phaseNum int, completion codexExternalBu
 	if len(recoveryInstructions) > 0 {
 		result["recovery_instructions"] = recoveryInstructions
 	}
+	if partialRetryOutcome != nil {
+		addPartialBuildRecoveryResult(result, *partialRetryOutcome)
+	}
 	addOrchestratorBoundaryGuidance(result, "build", updatedState, "aether continue", manifest.BoundaryQuestions)
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	// This runs LAST because everything above it can still add the more
+	// specific command this run knows about.
+	answer := closeLifecycleRun(result, updatedState, "build")
+	result["next"] = answer.Command
 	return result, updatedState, updatedPhase, dispatches, nil
 }
 
 // buildFinalizeCommitParams carries what commitBuildFinalizeState needs to
 // transition COLONY_STATE.json to StateBUILT for one phase.
 type buildFinalizeCommitParams struct {
+	Completion         *codexExternalBuildCompletion
+	AttemptPath        string
+	NativeHooks        codexNativeFinalizeHooks
+	InitialStateDigest string
 	PhaseNum           int
 	StartedAt          time.Time
 	SelectedTaskIDs    []string
@@ -740,6 +1050,13 @@ type buildFinalizeCommitParams struct {
 	LegacyManifest     bool
 	WorktreeMergeEvent string
 	UpdatedState       colony.ColonyState
+	// BuildFullyCredited is precomputed once in runCodexBuildFinalize from
+	// Dispatches/SelectedTaskIDs before this atomic commit re-reads a fresh
+	// on-disk state -- it does not depend on which state happened to be on
+	// disk, only on the terminal proof this build session actually produced
+	// (D-08). false means a grouped job only proved part of its covered
+	// tasks; the colony stays at EXECUTING (never a false BUILT).
+	BuildFullyCredited bool
 }
 
 // commitBuildFinalizeState is runCodexBuildFinalize's one write against
@@ -768,13 +1085,56 @@ type buildFinalizeCommitParams struct {
 // cannot require state.State == EXECUTING the way the direct path's second
 // commit does; see validateBuildFinalizeStateStillCurrent's own doc comment.
 func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonyState, error) {
+	if params.Completion == nil {
+		return commitBuildFinalizeStateLocked(params, nil)
+	}
+	if params.NativeHooks.BeforeCommit != nil {
+		params.NativeHooks.BeforeCommit()
+	}
+	var committedState colony.ColonyState
+	err := withPlanningMutationSession(buildAttemptWorkspaceRoot(), "build-finalize", func(_ *planningMutationSession) error {
+		buildWorkerRunMutationMu.Lock()
+		defer buildWorkerRunMutationMu.Unlock()
+		var record buildAttemptRecord
+		// Keep the attempt lock until the existing state primitive has committed.
+		err := store.UpdateJSONAtomically(params.AttemptPath, &record, func() error {
+			var err error
+			committedState, err = commitBuildFinalizeStateLocked(params, &record)
+			if err != nil {
+				return err
+			}
+			return errCodexNativeFinalizeReadOnly
+		})
+		if errors.Is(err, errCodexNativeFinalizeReadOnly) {
+			return nil
+		}
+		return err
+	})
+	return committedState, err
+}
+
+func commitBuildFinalizeStateLocked(params buildFinalizeCommitParams, attempt *buildAttemptRecord) (colony.ColonyState, error) {
 	var committedState colony.ColonyState
 	err := store.UpdateJSONAtomically("COLONY_STATE.json", &committedState, func() error {
 		if err := validateBuildFinalizeStateStillCurrent(committedState, params.PhaseNum); err != nil {
 			return err
 		}
+		if attempt != nil {
+			if err := validateCodexNativeFinalizeCurrency(*attempt, *params.Completion, committedState, params.InitialStateDigest); err != nil {
+				return err
+			}
+			// A previously generic packet cannot race a newly reserved native job.
+			if _, current, ok := loadLatestBuildAttempt(params.PhaseNum); ok && current.ID != attempt.ID && buildAttemptHasNativeWorkers(current) {
+				return fmt.Errorf("native completion attempt has been superseded")
+			}
+		}
+		if params.NativeHooks.AfterCurrencyCheck != nil {
+			params.NativeHooks.AfterCurrencyCheck()
+		}
 		applyCodexBuildState(&committedState, params.PhaseNum, params.StartedAt, params.SelectedTaskIDs, params.ReviewDepth)
-		committedState.State = colony.StateBUILT
+		if params.BuildFullyCredited {
+			committedState.State = colony.StateBUILT
+		}
 		reconcileCompletedBuildTasks(&committedState, params.PhaseNum, params.Dispatches)
 		committedState.Events = append(trimmedEvents(committedState.Events),
 			fmt.Sprintf("%s|build_completed|build-finalize|Phase %d external Task workers recorded", params.CompletedAt.Format(time.RFC3339), params.PhaseNum),
@@ -790,6 +1150,184 @@ func commitBuildFinalizeState(params buildFinalizeCommitParams) (colony.ColonySt
 		return nil
 	})
 	return committedState, err
+}
+
+// buildTaskPlanRealityEntry is CAP-022's per-task plan-versus-reality
+// comparison: what the plan declared this task's artifacts to be
+// (declaredPathsForTask, cmd/codex_build_worktree.go), compared against
+// whether each was actually present in the repository at finalisation time
+// (rootBackedArtifactEvidence -- the same root-backed checker the two-stage
+// receipt boundary already uses). A task the plan declares no artifact for
+// reports an empty DeclaredArtifacts and is never treated as missing
+// anything: absence of a declaration is not evidence of an absent file.
+type buildTaskPlanRealityEntry struct {
+	TaskID            string   `json:"task_id"`
+	DeclaredArtifacts []string `json:"declared_artifacts,omitempty"`
+	MissingArtifacts  []string `json:"missing_artifacts,omitempty"`
+}
+
+// buildPlanRealityReport is CAP-022's per-attempt evidence, attached ONLY by
+// attachBuildPlanRealityReport (cmd/build_attempt.go): every finalised
+// task's plan-declared artifacts compared against what finalisation found
+// actually present in the repository, at the exact moment finalisation ran.
+type buildPlanRealityReport struct {
+	RecordedAt string                      `json:"recorded_at"`
+	Phase      int                         `json:"phase"`
+	Tasks      []buildTaskPlanRealityEntry `json:"tasks,omitempty"`
+}
+
+// buildAttemptKnowledgeDelta is CAP-066's content-level decision or learning
+// delta an attempt produced, bound to that attempt's own ID by
+// attachBuildKnowledgeDeltas (cmd/build_attempt.go). Kind is a short label
+// ("decision" or "learning"); Summary is the plain-English content of the
+// delta itself. Rendering (lifecycleCloseoutKnowledgeDeltaEvidence,
+// cmd/lifecycle_closeout.go) is read-only.
+type buildAttemptKnowledgeDelta struct {
+	Kind    string `json:"kind"`
+	Summary string `json:"summary"`
+}
+
+// buildPlanRealityForDispatches computes CAP-022's plan-versus-reality
+// comparison for every task any dispatch in this attempt covers
+// (dispatchCoveredTaskIDs). It is read-only: it stats the repository, it
+// never mutates it and never itself decides credit -- planRealityBlocksCredit
+// and deriveResultFilePrecision's blockedTasks parameter are what a caller
+// uses to turn a missing declared artifact into withheld credit.
+func buildPlanRealityForDispatches(root string, phase colony.Phase, dispatches []codexBuildDispatch) []buildTaskPlanRealityEntry {
+	tasksByID := make(map[string]colony.Task, len(phase.Tasks))
+	for idx := range phase.Tasks {
+		tasksByID[buildTaskID(phase.Tasks[idx], idx)] = phase.Tasks[idx]
+	}
+	seen := map[string]struct{}{}
+	var entries []buildTaskPlanRealityEntry
+	for _, dispatch := range dispatches {
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			if _, ok := seen[taskID]; ok {
+				continue
+			}
+			seen[taskID] = struct{}{}
+			task, ok := tasksByID[taskID]
+			if !ok {
+				continue
+			}
+			declared := declaredPathsForTask(task)
+			var missing []string
+			if len(declared) > 0 {
+				_, missing = rootBackedArtifactEvidence(root, declared)
+			}
+			entries = append(entries, buildTaskPlanRealityEntry{
+				TaskID:            taskID,
+				DeclaredArtifacts: declared,
+				MissingArtifacts:  missing,
+			})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].TaskID < entries[j].TaskID })
+	return entries
+}
+
+// planRealityBlocksCredit reports whether entry names at least one declared
+// artifact that finalisation could not find in the repository -- CAP-022's
+// own credit gate: an absent declared artifact blocks credit rather than
+// being noted and ignored.
+func planRealityBlocksCredit(entry buildTaskPlanRealityEntry) bool {
+	return len(entry.MissingArtifacts) > 0
+}
+
+// blockedPlanRealityTasks reduces a plan-reality report to the set of task
+// IDs deriveResultFilePrecision must withhold credit from.
+func blockedPlanRealityTasks(entries []buildTaskPlanRealityEntry) map[string]struct{} {
+	blocked := map[string]struct{}{}
+	for _, entry := range entries {
+		if planRealityBlocksCredit(entry) {
+			blocked[entry.TaskID] = struct{}{}
+		}
+	}
+	return blocked
+}
+
+// buildFullBuildTaskIDSet resolves the full set of task IDs this build
+// session is actually responsible for: the explicit selection when the
+// caller passed one, else every task ID any dispatch in this build covers
+// (dispatchCoveredTaskIDs). An explicit selection is empty for the common
+// "no --tasks filter" build -- validateSelectedBuildTasks already treats an
+// empty selectedTaskIDs as "no filter, not zero tasks" -- so falling back to
+// the dispatches' own covered-task union is what keeps that ordinary case
+// from being misread as "nothing was selected, so everything trivially
+// counts as credited."
+func buildFullBuildTaskIDSet(selectedTaskIDs []string, dispatches []codexBuildDispatch) map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, id := range selectedTaskIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			set[id] = struct{}{}
+		}
+	}
+	if len(set) > 0 {
+		return set
+	}
+	for _, d := range dispatches {
+		for _, id := range dispatchCoveredTaskIDs(d) {
+			if id = strings.TrimSpace(id); id != "" {
+				set[id] = struct{}{}
+			}
+		}
+	}
+	return set
+}
+
+// allSelectedBuildTasksCredited reports whether every task this build
+// session is responsible for (buildFullBuildTaskIDSet) has actually been
+// credited -- either by an ordinary whole-success dispatch
+// (completed/completed_no_change, crediting every task it covers) or by
+// root-evidenced per-task receipt credit
+// (finalizeCoherentJobTaskReceiptEvidence, via dispatch.CompletedTaskIDs).
+// It is what decides whether an external/wrapper build-finalize may
+// transition the colony to BUILT (D-08): a grouped job that only proved
+// part of its covered tasks must stay honestly mid-build rather than
+// reporting a false BUILT. Uses completedBuildTaskIDs -- the SAME reader
+// reconcileCompletedBuildTasks uses to mark individual tasks complete --
+// so this check and the task statuses it gates can never disagree.
+func allSelectedBuildTasksCredited(selectedTaskIDs []string, dispatches []codexBuildDispatch) bool {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	if len(full) == 0 {
+		return true
+	}
+	credited := completedBuildTaskIDs(dispatches)
+	for id := range full {
+		if _, ok := credited[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// unfinishedBuildTaskIDs returns the full-set task IDs allSelectedBuildTasksCredited
+// found NOT credited, sorted, for diagnostics (result-collection.json) that
+// must name both what finished and what did not (D-08/D-09).
+func unfinishedBuildTaskIDs(selectedTaskIDs []string, dispatches []codexBuildDispatch) []string {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	credited := completedBuildTaskIDs(dispatches)
+	var unfinished []string
+	for id := range full {
+		if _, ok := credited[id]; !ok {
+			unfinished = append(unfinished, id)
+		}
+	}
+	return uniqueSortedStrings(unfinished)
+}
+
+// creditedBuildTaskIDs returns the full-set task IDs allSelectedBuildTasksCredited
+// found credited, sorted, for the same diagnostics.
+func creditedBuildTaskIDs(selectedTaskIDs []string, dispatches []codexBuildDispatch) []string {
+	full := buildFullBuildTaskIDSet(selectedTaskIDs, dispatches)
+	credited := completedBuildTaskIDs(dispatches)
+	var done []string
+	for id := range full {
+		if _, ok := credited[id]; ok {
+			done = append(done, id)
+		}
+	}
+	return uniqueSortedStrings(done)
 }
 
 // validateBuildFinalizeStateStillCurrent re-checks, against a freshly-read
@@ -843,13 +1381,96 @@ func collectPendingSuggestions(root string) (ran bool, count int) {
 	return true, count
 }
 
-func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState) error {
+// legacyBuildCompletionReplayBinding recognizes only the exact old packet
+// already committed through the canonical adapter. The raw packet digest is
+// retained on that attempt while its trusted, modern manifest lives in
+// PlanManifest; both the binding and the receipt must verify before replay can
+// take the ordinary idempotent path.
+func legacyBuildCompletionReplayBinding(manifest codexBuildManifest, state colony.ColonyState, completionDigest string) (buildAttemptManifestBinding, bool, error) {
+	attemptRel, attempt, ok := loadLatestBuildAttempt(manifest.Phase)
+	if !ok || strings.TrimSpace(attempt.CompletionSHA256) != strings.TrimSpace(completionDigest) {
+		return buildAttemptManifestBinding{}, false, nil
+	}
+	if attempt.ExecutionOwner != buildExecutionOwner("external-task", false) || attempt.DispatchMode != "external-task" || attempt.PlanManifest == nil {
+		return buildAttemptManifestBinding{}, false, fmt.Errorf("legacy completion matches an attempt without canonical external build-start identity")
+	}
+	receiptPath := buildStartReceiptPath(manifest.Phase, attempt.ID)
+	var receipt buildStartReceipt
+	if receiptPath == "" || store.LoadJSON(receiptPath, &receipt) != nil {
+		return buildAttemptManifestBinding{}, false, fmt.Errorf("legacy completion attempt %s is missing its canonical build-start receipt", attempt.ID)
+	}
+	if err := validateLegacyBuildStartReceiptEvidence(receipt, receiptPath, attemptRel, attempt); err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	partialReplay := attempt.Status == buildAttemptPartial
+	if err := validateBuildManifestPlanRevision(*attempt.PlanManifest, state, partialReplay); err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	binding, err := validateBuildAttemptManifestBinding(*attempt.PlanManifest, state, partialReplay)
+	if err != nil {
+		return buildAttemptManifestBinding{}, false, err
+	}
+	binding.Legacy = true
+	return binding, true, nil
+}
+
+func validateLegacyBuildStartReceiptEvidence(receipt buildStartReceipt, receiptPath, attemptRel string, attempt buildAttemptRecord) error {
+	if receipt.SchemaVersion != buildStartSchemaVersion || receipt.Path != receiptPath ||
+		receipt.Phase != attempt.Phase || receipt.AttemptID != attempt.ID || receipt.AttemptPath != attemptRel ||
+		attempt.PlanManifest == nil || !reflect.DeepEqual(receipt.PlanAuthority, attempt.PlanManifest.PlanAuthority) {
+		return fmt.Errorf("legacy completion attempt %s has conflicting canonical build-start receipt evidence", attempt.ID)
+	}
+	if len(receipt.RequestSHA256) != 64 || receipt.TransactionID != "build-start-"+receipt.RequestSHA256[:24] ||
+		receipt.ID != "build-start-receipt-"+receipt.RequestSHA256[:24] {
+		return fmt.Errorf("legacy completion attempt %s has conflicting canonical build-start receipt identity", attempt.ID)
+	}
+	payload := receipt
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil || hash != receipt.ContentHash {
+		return fmt.Errorf("legacy completion attempt %s has invalid canonical build-start receipt content", attempt.ID)
+	}
+	checkpointPath, err := canonicalBuildAttemptDataPath(attempt.Checkpoint)
+	if err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid checkpoint evidence: %w", attempt.ID, err)
+	}
+	claimsPath, err := canonicalBuildAttemptDataPath(attempt.ClaimsPath)
+	if err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid claims evidence: %w", attempt.ID, err)
+	}
+	requestShape := buildStartRequest{
+		Phase: attempt.Phase, AttemptID: attempt.ID,
+		Effects: buildStartEffects{
+			CheckpointPath: checkpointPath,
+			Completion:     &codexExternalBuildCompletion{},
+			ClaimsPath:     claimsPath,
+			Claims:         &codexBuildClaims{},
+			PromoteState:   true,
+			MakeLatest:     true,
+		},
+	}
+	if err := validateBuildStartReceiptTargets(receipt.Targets, requestShape); err != nil {
+		return fmt.Errorf("legacy completion attempt %s has invalid canonical build-start receipt targets: %w", attempt.ID, err)
+	}
+	return nil
+}
+
+func validateBuildManifestPlanRevision(manifest codexBuildManifest, state colony.ColonyState, partialReplay bool) error {
 	if revisionID := strings.TrimSpace(manifest.PlanRevisionID); revisionID != "" && revisionID != activePlanRevisionID(state.Plan) {
 		return fmt.Errorf("dispatch_manifest belongs to superseded plan revision %s; active revision is %s", revisionID, activePlanRevisionID(state.Plan))
 	}
 	if state.State == colony.StateBUILT && state.CurrentPhase == manifest.Phase {
 		// Exact retry safety is proved by the durable attempt and completion
 		// hashes. The lifecycle projection legitimately changed task statuses.
+		return nil
+	}
+	if partialReplay {
+		// WR-02: identical reasoning for a committed PARTIAL. Crediting some
+		// of the phase's tasks legitimately changed the plan hash, so the
+		// staleness check would refuse the very packet that produced it. The
+		// packet's own digest already matched the durable attempt
+		// (isCommittedPartialAttemptReplay), which is the same proof the
+		// BUILT branch above relies on.
 		return nil
 	}
 	if expectedHash := strings.TrimSpace(manifest.PlanStateHash); expectedHash != "" {
@@ -878,6 +1499,26 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 	}
 	dispatches := append([]codexBuildDispatch{}, record.Dispatches...)
 	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	checkpointPath, err := displayBuildAttemptDataPath(record.Checkpoint)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid checkpoint path: %w", record.ID, err)
+	}
+	manifestPath, err := displayBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid manifest path: %w", record.ID, err)
+	}
+	claimsPath, err := displayBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid claims path: %w", record.ID, err)
+	}
+	attemptPath, err := displayBuildAttemptDataPath(binding.Path)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid journal path: %w", record.ID, err)
+	}
+	resultCollectionPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	result := map[string]interface{}{
 		"phase":             phaseNum,
 		"phase_name":        phase.Name,
@@ -889,11 +1530,11 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
 		"parallel_mode":     string(effectiveParallelMode(state)),
 		"selected_tasks":    append([]string{}, record.SelectedTasks...),
-		"checkpoint":        record.Checkpoint,
-		"manifest":          record.Manifest,
-		"claims_path":       record.ClaimsPath,
-		"attempt":           displayDataPath(binding.Path),
-		"result_collection": displayDataPath(resultCollectionRel),
+		"checkpoint":        checkpointPath,
+		"manifest":          manifestPath,
+		"claims_path":       claimsPath,
+		"attempt":           attemptPath,
+		"result_collection": resultCollectionPath,
 		"idempotent":        true,
 		"next":              "aether continue",
 	}
@@ -902,6 +1543,125 @@ func idempotentExternalBuildFinalizeResult(state colony.ColonyState, phaseNum in
 		boundaryQuestions = record.PlanManifest.BoundaryQuestions
 	}
 	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	closeLifecycleRun(result, state, "build")
+	return result, state, phase, dispatches, nil
+}
+
+// restatePartialCreditFromCommittedState rebuilds each dispatch's credited
+// task set from the committed phase, which is the durable record of what the
+// first finalize actually credited.
+//
+// A dispatch's CompletedTaskIDs are runtime-owned in-process state and are
+// deliberately never serialized (CR-03, 195-REVIEW.md -- a wrapper-authored
+// manifest must not be able to hand itself completion credit), so a record
+// reloaded from the attempt journal carries none. The phase's own task
+// statuses carry the same information and cannot be authored by a wrapper,
+// which makes them the correct source for a replay.
+func restatePartialCreditFromCommittedState(phase colony.Phase, dispatches []codexBuildDispatch) []codexBuildDispatch {
+	completed := make(map[string]struct{}, len(phase.Tasks))
+	for idx := range phase.Tasks {
+		if phase.Tasks[idx].Status == colony.TaskCompleted {
+			completed[buildTaskID(phase.Tasks[idx], idx)] = struct{}{}
+		}
+	}
+	restated := make([]codexBuildDispatch, len(dispatches))
+	copy(restated, dispatches)
+	for i := range restated {
+		var credited []string
+		for _, id := range dispatchCoveredTaskIDs(restated[i]) {
+			if _, ok := completed[id]; ok {
+				credited = append(credited, id)
+			}
+		}
+		restated[i].CompletedTaskIDs = credited
+	}
+	return restated
+}
+
+// updatedPhaseForPartialReplay returns the phase as it stands after the
+// partial credit was committed. Kept tiny and separate so the replay path
+// cannot accidentally reach for a stale copy.
+func updatedPhaseForPartialReplay(state colony.ColonyState, phaseNum int) colony.Phase {
+	if phaseNum >= 1 && phaseNum <= len(state.Plan.Phases) {
+		return state.Plan.Phases[phaseNum-1]
+	}
+	return colony.Phase{}
+}
+
+// idempotentExternalPartialFinalizeResult is the partial-credit twin of
+// idempotentExternalBuildFinalizeResult (WR-02, 195-REVIEW.md). It re-reports
+// a committed partial from its own durable attempt record and mutates nothing:
+// no colony state write, no attempt transition, no new credit.
+//
+// The recovery projection comes only from the parent and canonical child's
+// verified durable fields. The pure planner is used as a tamper check, never
+// as a substitute command generator. A missing, forged, duplicate, or
+// exhausted child is a read-only refusal with the parent's exact persisted
+// recovery guidance; replay never creates a replacement.
+func idempotentExternalPartialFinalizeResult(state colony.ColonyState, phaseNum int, phase colony.Phase, binding buildAttemptManifestBinding, completionDigest string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	record := binding.Record
+	plan, err := verifiedPartialBuildRetryPlanFromParent(phaseNum, phase, record)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	recovery, found, err := verifiedPartialBuildRetryOutcome(phaseNum, record.ID, plan)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("partial recovery evidence is not executable; repair the journal before using %s: %w", plan.RedispatchCommand, err)
+	}
+	if !found || recovery == nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("partial recovery child is missing; repair the journal before using %s", plan.RedispatchCommand)
+	}
+	if record.CompletionSHA256 == "" || record.CompletionSHA256 != completionDigest {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion packet does not match partial attempt %s; leave credited work unchanged and use %s", record.ID, recovery.RedispatchCommand)
+	}
+	dispatches := restatePartialCreditFromCommittedState(phase, record.Dispatches)
+	resultCollectionRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "result-collection.json"))
+	checkpointPath, err := displayBuildAttemptDataPath(record.Checkpoint)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid checkpoint path: %w", record.ID, err)
+	}
+	manifestPath, err := displayBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid manifest path: %w", record.ID, err)
+	}
+	claimsPath, err := displayBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid claims path: %w", record.ID, err)
+	}
+	attemptPath, err := displayBuildAttemptDataPath(binding.Path)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid journal path: %w", record.ID, err)
+	}
+	resultCollectionPath, err := displayBuildAttemptDataPath(resultCollectionRel)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	result := map[string]interface{}{
+		"phase":             phaseNum,
+		"phase_name":        phase.Name,
+		"state":             state.State,
+		"plan_only":         false,
+		"dispatch_mode":     "external-task",
+		"dispatches":        codexBuildDispatchMaps(dispatches),
+		"dispatch_count":    len(dispatches),
+		"wave_count":        len(buildWaveExecutionPlans(dispatches, effectiveParallelMode(state))),
+		"parallel_mode":     string(effectiveParallelMode(state)),
+		"selected_tasks":    append([]string{}, record.SelectedTasks...),
+		"checkpoint":        checkpointPath,
+		"manifest":          manifestPath,
+		"claims_path":       claimsPath,
+		"attempt":           attemptPath,
+		"result_collection": resultCollectionPath,
+		"idempotent":        true,
+		"next":              "aether continue",
+	}
+	addPartialBuildRecoveryResult(result, *recovery)
+	var boundaryQuestions []discussQuestion
+	if record.PlanManifest != nil {
+		boundaryQuestions = record.PlanManifest.BoundaryQuestions
+	}
+	addOrchestratorBoundaryGuidance(result, "build", state, "aether continue", boundaryQuestions)
+	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 
@@ -925,15 +1685,28 @@ func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum i
 				"run `aether continue`, which re-runs verification and accepts amended artifacts when it passes green",
 			record.ID)
 	}
-	manifestRel := strings.TrimPrefix(filepath.ToSlash(record.Manifest), ".aether/data/")
+	manifestRel, err := canonicalBuildAttemptDataPath(record.Manifest)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid final manifest path: %w", record.ID, err)
+	}
+	if manifestRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no final manifest path", record.ID)
+	}
 	var finalManifest codexBuildManifest
 	if err := store.LoadJSON(manifestRel, &finalManifest); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without its final manifest: %w", record.ID, err)
 	}
-	if finalManifest.PlanOnly || finalManifest.Phase != phaseNum || finalManifest.AttemptID != record.ID || finalManifest.AttemptPath != displayDataPath(binding.Path) {
+	finalAttemptRel, pathErr := canonicalBuildAttemptDataPath(finalManifest.AttemptPath)
+	if pathErr != nil || finalManifest.PlanOnly || finalManifest.Phase != phaseNum || finalManifest.AttemptID != record.ID || finalAttemptRel != binding.Path {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s final manifest does not prove the committed lifecycle state", record.ID)
 	}
-	claimsRel := strings.TrimPrefix(filepath.ToSlash(record.ClaimsPath), ".aether/data/")
+	claimsRel, err := canonicalBuildAttemptDataPath(record.ClaimsPath)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has an invalid persisted claims path: %w", record.ID, err)
+	}
+	if claimsRel == "" {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s has no persisted claims path", record.ID)
+	}
 	var persistedClaims codexBuildClaims
 	if err := store.LoadJSON(claimsRel, &persistedClaims); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("build attempt %s cannot reconcile without persisted claims: %w", record.ID, err)
@@ -956,12 +1729,14 @@ func reconcileCommittedExternalBuildAttempt(state colony.ColonyState, phaseNum i
 func buildExternalBuildRecoveryInstructions(phaseNum int, dispatches []codexBuildDispatch) ([]map[string]interface{}, error) {
 	var failed []codexBuildDispatch
 	for _, dispatch := range dispatches {
-		switch strings.ToLower(strings.TrimSpace(dispatch.Status)) {
-		case "", "completed", "manually-reconciled":
+		// An honest completed_no_change is a success (ruling D6), so it must
+		// never be routed into recovery/redispatch. Asking a worker to redo
+		// work it correctly reported as already done is the fake-edit
+		// pressure the no-change status exists to remove.
+		if !externalBuildDispatchNeedsRecovery(dispatch.Status) {
 			continue
-		default:
-			failed = append(failed, dispatch)
 		}
+		failed = append(failed, dispatch)
 	}
 	if len(failed) == 0 {
 		return nil, nil
@@ -1170,6 +1945,18 @@ const (
 	violationRuleIdentityMismatch = "worker.identity_mismatch"
 	violationRuleStatusTerminal   = "worker.status_terminal"
 	violationRuleHandoffValid     = "handoff.valid"
+	// violationRuleNoChangeEvidence fires when a completed_no_change result
+	// cannot say what it verified. An honest "nothing needed changing" is a
+	// first-class success (owner ruling D6), but only WITH evidence: a
+	// summary stating why, a passing handoff verification_status, and the
+	// commands_run that prove somebody actually checked. Without those it is
+	// indistinguishable from a worker that did nothing — the exact free-pass
+	// loophole the phantom-build guards exist to close.
+	violationRuleNoChangeEvidence = "worker.no_change_evidence"
+	// violationRuleDispositionUnknown fires on a disposition value outside
+	// the vocabulary ("" or "verified_existing"): one success status with a
+	// disposition, never a second terminal state machine (ruling D6).
+	violationRuleDispositionUnknown = "worker.disposition_unknown"
 	// violationRuleCoveredTaskUnknown fires when a worker result's
 	// covered_task_ids names a task ID that resolves to no dispatch anywhere
 	// in the manifest -- an unrecognized claim, never silently accepted or
@@ -1256,8 +2043,8 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				dispatchIndexByTaskID[taskID] = idx
 			}
 		}
-		// A manifest dispatch that is ITSELF a runtime-coalesced chain
-		// (coalesceSequentialDispatches) already covers more than its own
+		// A manifest dispatch that is ITSELF a runtime-grouped coherent job
+		// (planCoherentJobs) already covers more than its own
 		// primary TaskID; a worker's covered_task_ids claim must resolve
 		// against that full chain too, not just the chain's first step.
 		for _, covered := range d.CoveredTaskIDs {
@@ -1309,8 +2096,16 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 		// silent drop) so a buggy or malicious packet is refused with an
 		// actionable reason instead of quietly losing the credit.
 		ownStatus := normalizeExternalBuildStatus(result.Status)
-		genuineSuccess := ownStatus == "completed" || ownStatus == "manually-reconciled"
+		genuineSuccess := isSuccessfulExternalBuildStatus(ownStatus)
 		hasEvidence := len(result.Outputs) > 0 || len(result.FilesCreated) > 0 || len(result.FilesModified) > 0 || len(result.TestsWritten) > 0
+		// A completed_no_change claimant's evidence is the verification it
+		// ran, not files it changed (it changed none, honestly). Its
+		// commands_run satisfy the evidence requirement here; the merge
+		// loop's no_change_evidence gate independently enforces the full
+		// evidence rule on the claimant's own result.
+		if !hasEvidence && isNoChangeExternalBuildStatus(ownStatus) {
+			hasEvidence = len(result.Handoff.CommandsRun) > 0
+		}
 		_, recognizedClaimant := dispatchNameSet[coveringName]
 		if !recognizedClaimant {
 			_, recognizedClaimant = dispatchNameSet[stripWorkerRetrySuffix(coveringName)]
@@ -1374,6 +2169,14 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 	dispatches := make([]codexBuildDispatch, len(manifest.Dispatches))
 	usedResults := make(map[string]bool, len(results))
 	for i, dispatch := range manifest.Dispatches {
+		// CR-03 (195-REVIEW.md): task credit and per-task claims are decided
+		// by the runtime from evidence it checked itself, never accepted from
+		// an inbound manifest. The struct tags already keep them off the wire;
+		// clearing here as well means no in-memory path -- a test fixture, a
+		// future decoder, a hand-built manifest -- can smuggle a verdict past
+		// the receipt boundary either.
+		dispatch.CompletedTaskIDs = nil
+		dispatch.TaskClaims = nil
 		dispatches[i] = dispatch
 		resultName, result, ok, err := selectExternalBuildResultForDispatch(dispatch.Name, resultByName, usedResults)
 		if err != nil {
@@ -1393,7 +2196,21 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 				// into that worker's single call. Credit it directly instead
 				// of reporting a missing result -- the work was actually
 				// done, just not filed under this dispatch's own name.
+				// The credited dispatch inherits the claimant's outcome, not
+				// a hardcoded "completed". A completed_no_change claimant
+				// covered work that produced no files by definition; stamping
+				// it "completed" made the covered dispatch fail continue
+				// provenance for having no outputs -- the honest result
+				// punished one hop downstream.
 				dispatch.Status = "completed"
+				creditStatus := normalizeExternalBuildStatus(credit.coveringResult.Status)
+				if isNoChangeExternalBuildStatus(creditStatus) {
+					dispatch.Status = creditStatus
+					dispatch.Disposition = strings.ToLower(strings.TrimSpace(credit.coveringResult.Disposition))
+					if dispatch.Disposition == "" && rawStatusCarriesVerifiedExisting(credit.coveringResult.Status) {
+						dispatch.Disposition = "verified_existing"
+					}
+				}
 				dispatch.Summary = fmt.Sprintf("covered by %s via covered_task_ids", credit.coveringName)
 				if outputs := uniqueSortedStrings(append(append(append([]string{}, credit.coveringResult.Outputs...), credit.coveringResult.FilesCreated...), append(credit.coveringResult.FilesModified, credit.coveringResult.TestsWritten...)...)); len(outputs) > 0 {
 					dispatch.Outputs = outputs
@@ -1439,13 +2256,56 @@ func mergeExternalBuildResults(manifest codexBuildManifest, results []codexExter
 			})
 			continue
 		}
+		disposition := strings.ToLower(strings.TrimSpace(result.Disposition))
+		if disposition == "" && rawStatusCarriesVerifiedExisting(result.Status) {
+			disposition = "verified_existing"
+		}
+		if disposition != "" && disposition != "verified_existing" {
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "disposition",
+				Value:   result.Disposition,
+				Rule:    violationRuleDispositionUnknown,
+				Message: fmt.Sprintf("external worker result for %s has unknown disposition %q; the only recognized value is verified_existing", dispatch.Name, result.Disposition),
+			})
+			continue
+		}
+		if disposition != "" && !isNoChangeExternalBuildStatus(status) {
+			violations = append(violations, contractViolation{
+				Worker:  dispatch.Name,
+				Field:   "disposition",
+				Value:   result.Disposition,
+				Rule:    violationRuleDispositionUnknown,
+				Message: fmt.Sprintf("external worker result for %s carries disposition %q on status %q; a disposition only qualifies completed_no_change", dispatch.Name, disposition, status),
+			})
+			continue
+		}
+		if isNoChangeExternalBuildStatus(status) {
+			if missing := noChangeEvidenceMissing(result); len(missing) > 0 {
+				violations = append(violations, contractViolation{
+					Worker:  dispatch.Name,
+					Field:   "status",
+					Value:   result.Status,
+					Rule:    violationRuleNoChangeEvidence,
+					Message: fmt.Sprintf("external worker result for %s claims completed_no_change without evidence — missing: %s", dispatch.Name, strings.Join(missing, "; ")),
+				})
+				continue
+			}
+		}
 		dispatch.Status = status
+		dispatch.Disposition = disposition
 		dispatch.Summary = strings.TrimSpace(result.Summary)
 		dispatch.Blockers = uniqueSortedStrings(result.Blockers)
 		dispatch.Duration = result.Duration
 		if outputs := uniqueSortedStrings(append(append(append([]string{}, result.Outputs...), result.FilesCreated...), append(result.FilesModified, result.TestsWritten...)...)); len(outputs) > 0 {
 			dispatch.Outputs = outputs
 		}
+		// Threaded through unchanged, regardless of status (D-08/D-09): this
+		// merge boundary is shared by native and external submissions alike,
+		// and whether any receipt earns credit is a decision for
+		// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+		// (cmd/coherent_job_receipts.go), never this function.
+		dispatch.TaskReceipts = append([]codex.TaskReceipt{}, result.TaskReceipts...)
 		dispatches[i] = dispatch
 	}
 
@@ -1562,7 +2422,12 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			continue
 		}
 		usedResults[resultName] = true
-		status := normalizeExternalBuildStatus(result.Status)
+		// status is read from the MERGED dispatch (dispatch.Status), not
+		// recomputed from the raw submitted result -- mergeExternalBuildResults
+		// already normalized and validated it, and that merge path is the
+		// trust boundary a memory-feed decision (recordDispatchWorkerOutcome,
+		// below) must be made against (T-198.1-03).
+		status := dispatch.Status
 		// A completed worker must relay something to the next phase. Empty
 		// handoffs were previously accepted and persisted, which filled the
 		// handoff store with content-free records — the chain was "written but
@@ -1583,6 +2448,41 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 		if err != nil {
 			return err
 		}
+		// Carry the submitted task receipts onto the runtime result.
+		//
+		// Without this the wrapper lane silently loses them here: the direct
+		// lane copies receipts across (cmd/internal_worker_adapter.go,
+		// cmd/build_worker_run.go), this lane did not, so every receipt-only
+		// file was already gone by the time codex.AllClaimedFiles ran in
+		// buildWorkerHandoffRecord. The union fix for the v1.0.75 downstream
+		// file-loss report was therefore live on the direct path and inert on
+		// the wrapper path -- which is the path that report came from.
+		//
+		// Receipt paths go through the SAME containment validation as the
+		// top-level lists. They are about to be staged by the phase commit,
+		// so an unvalidated receipt path would be a way to name a file
+		// outside the repository root.
+		receipts := make([]codex.TaskReceipt, 0, len(result.TaskReceipts))
+		for ri, receipt := range result.TaskReceipts {
+			label := fmt.Sprintf("worker %s task_receipts[%d]", resultName, ri)
+			receiptCreated, err := validateAndNormalizeClaimPathsToRoot(root, label+" files_created", receipt.FilesCreated)
+			if err != nil {
+				return err
+			}
+			receiptModified, err := validateAndNormalizeClaimPathsToRoot(root, label+" files_modified", receipt.FilesModified)
+			if err != nil {
+				return err
+			}
+			receiptTests, err := validateAndNormalizeClaimPathsToRoot(root, label+" tests_written", receipt.TestsWritten)
+			if err != nil {
+				return err
+			}
+			receipt.FilesCreated = receiptCreated
+			receipt.FilesModified = receiptModified
+			receipt.TestsWritten = receiptTests
+			receipt.Handoff = codex.NormalizeWorkerHandoff(root, receipt.Handoff)
+			receipts = append(receipts, receipt)
+		}
 		workerResult := &codex.WorkerResult{
 			WorkerName:    dispatch.Name,
 			Caste:         dispatch.Caste,
@@ -1592,10 +2492,16 @@ func persistExternalBuildHandoffs(root string, phaseNum int, dispatches []codexB
 			FilesCreated:  filesCreated,
 			FilesModified: filesModified,
 			TestsWritten:  testsWritten,
+			TaskReceipts:  receipts,
 			Blockers:      result.Blockers,
 			Handoff:       codex.NormalizeWorkerHandoff(root, result.Handoff),
 		}
-		if err := persistDispatchWorkerHandoff(codex.WorkerDispatch{
+		// recordDispatchWorkerOutcome is the one boundary both build lanes
+		// call: it persists this handoff exactly as persistDispatchWorkerHandoff
+		// always did, then feeds the failure log (midden.json) and the
+		// observation log (learning-observations.json) from the same
+		// merged-status facts. See cmd/memory_feed.go.
+		if err := recordDispatchWorkerOutcome(codex.WorkerDispatch{
 			WorkerName: dispatch.Name,
 			Caste:      dispatch.Caste,
 			TaskID:     dispatch.TaskID,
@@ -1637,6 +2543,16 @@ func normalizeExternalBuildStatus(status string) string {
 	switch status {
 	case "complete", "done", "success", "succeeded", "passed", "code_written":
 		return "completed"
+	// An honest "nothing needed changing" is one success status (ruling D6);
+	// verified_existing arrives as a raw status from workers but is a
+	// DISPOSITION on completed_no_change, folded in by the merge path.
+	case "no_change", "no-change", "nochange", "unchanged", "completed_no_change",
+		"verified_existing", "already_complete", "already_correct":
+		return "completed_no_change"
+	// A quota/rate-limit stop is a resumable interruption, never an
+	// ordinary code failure (ruling D7, spec §5 StopFailure semantics).
+	case "interrupted", "suspended_quota", "rate_limit", "rate_limited":
+		return "interrupted"
 	case "fail", "error":
 		return "failed"
 	case "timed_out", "cancelled", "canceled":
@@ -1650,11 +2566,81 @@ func normalizeExternalBuildStatus(status string) string {
 
 func isTerminalExternalBuildStatus(status string) bool {
 	switch status {
-	case "completed", "failed", "blocked", "timeout", "manually-reconciled":
+	case "completed", "completed_no_change", "interrupted", "failed", "blocked", "timeout", "manually-reconciled":
 		return true
 	default:
 		return false
 	}
+}
+
+// isSuccessfulExternalBuildStatus reports whether a terminal status counts
+// as the work SUCCEEDING. interrupted is deliberately absent: it is terminal
+// (the worker stopped and the record is final) but the work is unfinished
+// and resumable — counting it as success would complete tasks nobody did.
+func isSuccessfulExternalBuildStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "completed_no_change", "manually-reconciled":
+		return true
+	default:
+		return false
+	}
+}
+
+// externalBuildDispatchNeedsRecovery reports whether a dispatch's terminal
+// status means the work must be redispatched. An honest completed_no_change
+// is a success (ruling D6) and must never be routed into recovery: asking a
+// worker to redo work it correctly reported as already done is exactly the
+// fake-edit pressure the no-change status exists to remove.
+func externalBuildDispatchNeedsRecovery(status string) bool {
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		return false
+	}
+	return !isSuccessfulExternalBuildStatus(status)
+}
+
+func isNoChangeExternalBuildStatus(status string) bool {
+	return status == "completed_no_change"
+}
+
+// rawStatusCarriesVerifiedExisting reports whether the worker's RAW status
+// spelling asserted the stronger claim ("this already exists and I proved
+// it") rather than merely "no change was needed" — folded into the
+// disposition so the distinction survives normalization.
+func rawStatusCarriesVerifiedExisting(rawStatus string) bool {
+	switch strings.ToLower(strings.TrimSpace(rawStatus)) {
+	case "verified_existing", "already_complete", "already_correct":
+		return true
+	default:
+		return false
+	}
+}
+
+// noChangeEvidenceMissing lists which of the three required evidence pieces
+// a completed_no_change result lacks; empty means the evidence rule is met.
+func noChangeEvidenceMissing(result codexExternalBuildWorkerResult) []string {
+	return noChangeEvidenceMissingFrom(result.Summary, result.Handoff.VerificationStatus, result.Handoff.CommandsRun)
+}
+
+// noChangeEvidenceMissingFrom is the single definition of the no-change
+// evidence rule. It takes the three pieces directly so BOTH lanes can apply
+// it: the external/wrapper lane through mergeExternalBuildResults, and the
+// in-process runtime lane through validateRuntimeNoChangeEvidence. When this
+// rule lived only on the external result type, the runtime lane accepted an
+// evidence-free completed_no_change and passed a build with no changes and
+// nothing checked -- the phantom-build loophole, reopened on one lane.
+func noChangeEvidenceMissingFrom(summary, verificationStatus string, commandsRun []string) []string {
+	missing := []string{}
+	if strings.TrimSpace(summary) == "" {
+		missing = append(missing, "summary stating why no change was needed")
+	}
+	if !strings.EqualFold(strings.TrimSpace(verificationStatus), "pass") {
+		missing = append(missing, "handoff verification_status: pass")
+	}
+	if len(commandsRun) == 0 {
+		missing = append(missing, "handoff commands_run naming what was checked")
+	}
+	return missing
 }
 
 func parseManifestGeneratedAt(manifest codexBuildManifest) time.Time {
@@ -1727,6 +2713,33 @@ func (c codexExternalBuildCompletion) claimsOrAggregate(root string, phaseNum in
 		entry.FilesCreated = append(entry.FilesCreated, result.FilesCreated...)
 		entry.FilesModified = append(entry.FilesModified, result.FilesModified...)
 		entry.TestsWritten = append(entry.TestsWritten, result.TestsWritten...)
+	}
+	// D-08/D-09: a grouped job's own Status may be non-whole-success
+	// (failed/blocked/timeout) while still carrying root-evidenced,
+	// receipt-credited task claims (dispatch.TaskClaims, populated only by
+	// finalizeCoherentJobTaskReceiptEvidence). The loop above only walks
+	// whole-success dispatches, so those receipt claims are folded in here,
+	// separately, keyed by the CREDITED task's own ID -- never the covering
+	// dispatch's primary TaskID -- so last-build-claims.json and the exact
+	// per-task credit this build actually proved never disagree.
+	for _, dispatch := range dispatches {
+		for _, tc := range dispatch.TaskClaims {
+			taskID := strings.TrimSpace(tc.TaskID)
+			if taskID == "" {
+				continue
+			}
+			entry, ok := taskClaims[taskID]
+			if !ok {
+				entry = &codexBuildTaskClaim{TaskID: taskID}
+				taskClaims[taskID] = entry
+			}
+			entry.FilesCreated = append(entry.FilesCreated, tc.FilesCreated...)
+			entry.FilesModified = append(entry.FilesModified, tc.FilesModified...)
+			entry.TestsWritten = append(entry.TestsWritten, tc.TestsWritten...)
+			claims.FilesCreated = append(claims.FilesCreated, tc.FilesCreated...)
+			claims.FilesModified = append(claims.FilesModified, tc.FilesModified...)
+			claims.TestsWritten = append(claims.TestsWritten, tc.TestsWritten...)
+		}
 	}
 	claims.FilesCreated = uniqueSortedStrings(claims.FilesCreated)
 	claims.FilesModified = uniqueSortedStrings(claims.FilesModified)
@@ -1819,14 +2832,21 @@ func validateExternalWorkerResultClaimPaths(root string, results []codexExternal
 }
 
 type codexResultCollectionReport struct {
-	Workflow                string                       `json:"workflow"`
-	Phase                   int                          `json:"phase,omitempty"`
-	PhaseName               string                       `json:"phase_name,omitempty"`
-	RecordedAt              string                       `json:"recorded_at"`
-	ExpectedWorkers         int                          `json:"expected_workers"`
-	ReceivedResults         int                          `json:"received_results"`
-	MatchedResults          int                          `json:"matched_results"`
-	StatusCounts            map[string]int               `json:"status_counts,omitempty"`
+	Workflow        string         `json:"workflow"`
+	Phase           int            `json:"phase,omitempty"`
+	PhaseName       string         `json:"phase_name,omitempty"`
+	RecordedAt      string         `json:"recorded_at"`
+	ExpectedWorkers int            `json:"expected_workers"`
+	ReceivedResults int            `json:"received_results"`
+	MatchedResults  int            `json:"matched_results"`
+	StatusCounts    map[string]int `json:"status_counts,omitempty"`
+	// CreditedTaskIDs and UnfinishedTaskIDs (D-08/D-09) name, separately,
+	// exactly which selected tasks this build actually proved complete
+	// (whole-success or root-evidenced receipt credit) and which did not --
+	// never inferred from touched files, a worker's summary, or
+	// covered_task_ids membership alone.
+	CreditedTaskIDs         []string                     `json:"credited_task_ids,omitempty"`
+	UnfinishedTaskIDs       []string                     `json:"unfinished_task_ids,omitempty"`
 	Issues                  []codexResultCollectionIssue `json:"issues,omitempty"`
 	Policy                  string                       `json:"policy"`
 	ApprovedTempPath        string                       `json:"approved_temp_path"`
@@ -1841,7 +2861,7 @@ type codexResultCollectionIssue struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, expected []codexBuildDispatch, results []codexExternalBuildWorkerResult, dispatches []codexBuildDispatch, recordedAt time.Time) codexResultCollectionReport {
+func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, expected []codexBuildDispatch, results []codexExternalBuildWorkerResult, dispatches []codexBuildDispatch, recordedAt time.Time, selectedTaskIDs []string) codexResultCollectionReport {
 	report := codexResultCollectionReport{
 		Workflow:                "build",
 		Phase:                   phaseNum,
@@ -1851,7 +2871,9 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 		ReceivedResults:         len(results),
 		MatchedResults:          len(dispatches),
 		StatusCounts:            map[string]int{},
-		Policy:                  "A structurally valid completed or manually-reconciled worker result wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
+		CreditedTaskIDs:         creditedBuildTaskIDs(selectedTaskIDs, dispatches),
+		UnfinishedTaskIDs:       unfinishedBuildTaskIDs(selectedTaskIDs, dispatches),
+		Policy:                  "A structurally valid successful worker result (completed, completed_no_change, or manually-reconciled) wins over a timeout placeholder for the same worker; malformed JSON, duplicate terminal results, missing claims, stale manifests, and .aether/data completion files are rejected. Claims under sanctioned .aether/data subpaths (planning/, phase-research/, survey/, worker-debug/, reviews/) are tolerated and dropped from the claim set.",
 		ApprovedTempPath:        finalizerCompletionTempPattern,
 		SensitiveOutputRedacted: true,
 	}
@@ -1861,9 +2883,19 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 			status = "unknown"
 		}
 		report.StatusCounts[status]++
-		switch status {
-		case "completed", "manually-reconciled":
-		case "timeout":
+		switch {
+		case isSuccessfulExternalBuildStatus(status):
+			// completed, completed_no_change and manually-reconciled are all
+			// successes; none is an unexpected status at finalization.
+		case status == "interrupted":
+			report.Issues = append(report.Issues, codexResultCollectionIssue{
+				Worker: dispatch.Name,
+				Caste:  dispatch.Caste,
+				Status: status,
+				Kind:   "worker_interrupted",
+				Detail: "worker stopped before finishing its slice; the work is unfinished and the phase can be redispatched",
+			})
+		case status == "timeout":
 			report.Issues = append(report.Issues, codexResultCollectionIssue{
 				Worker: dispatch.Name,
 				Caste:  dispatch.Caste,
@@ -1871,7 +2903,7 @@ func buildExternalBuildResultCollectionReport(phaseNum int, phaseName string, ex
 				Kind:   "collection_timeout",
 				Detail: "worker reached terminal timeout status before a valid completed result was collected",
 			})
-		case "failed", "blocked":
+		case status == "failed" || status == "blocked":
 			report.Issues = append(report.Issues, codexResultCollectionIssue{
 				Worker: dispatch.Name,
 				Caste:  dispatch.Caste,
@@ -2273,4 +3305,23 @@ func bestMatchForClaimedPath(claimed string, candidates []string) string {
 		}
 	}
 	return best
+}
+
+// buildHasPartiallyCreditedDispatch reports whether any dispatch proved some
+// but not all of its covered tasks. Only that shape requires a validated
+// unfinished-only retry plan before a partial parent may commit; dispatches
+// with zero accepted credit are whole failures handled by ordinary recovery
+// instructions (D-10: retry follows accepted credit, never precedes it).
+func buildHasPartiallyCreditedDispatch(dispatches []codexBuildDispatch) bool {
+	for _, dispatch := range dispatches {
+		covered := dispatchCoveredTaskIDs(dispatch)
+		if len(covered) == 0 {
+			continue
+		}
+		credited := completedBuildTaskIDs([]codexBuildDispatch{dispatch})
+		if len(credited) > 0 && len(credited) < len(covered) {
+			return true
+		}
+	}
+	return false
 }

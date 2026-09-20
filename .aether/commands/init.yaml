@@ -1,5 +1,5 @@
 name: ant-init
-description: "🥚 Initialize Aether colony through the Aether CLI runtime"
+description: "Start a guided colony for one goal."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether init --colony-mode <colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\""
@@ -8,9 +8,27 @@ codex_orchestration:
   skill: "aether-colony-creation"
   guide: "aether command-guide init --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+guided_contract:
+  stages:
+    - "Stage 1 — Queen opening"
+    - "Stage 2 — Setup"
+    - "Stage 3 — Accepted intent"
+    - "Stage 4 — Territory"
+    - "Stage 5 — Closeout"
+  runtime_authority: "Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth."
+  accepted_charter: "Persist the owner-approved goal and material constraints as accepted-charter/v1 through aether init."
+  territory: "Territory result is exactly one of Fresh, Refreshed, Stale—refresh required, or Unavailable."
+  active_colony_refusal: "An existing active colony is refused before storage opens; the refusal changes no files."
+  claude_opencode_closeout: "/ant-discuss"
+  codex_closeout: "aether discuss"
+  post_init_journey:
+    - "Init accepts the owner-approved charter, renders runtime truth, and offers discuss without invoking it automatically."
+    - "Discuss settles material intent, then Go creates and immediately renders one DRAFT specification revision."
+    - "Spec owns review, revision, and exact approval of that specification."
+    - "Only an exactly approved specification may proceed to planning; init never creates or approves a specification or plan."
 ceremony_contract:
   class: "guided_ritual"
-  authority: "Go owns colony state creation, session files, charter persistence, and canonical init visuals."
+  authority: "Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth."
   wrapper_role: "Ask scoping questions and synthesize an approved charter, then pass that charter to Go; do not write state files directly."
 intent_refinement:
   - "Shelf Backlog collects the user's chosen shelf IDs only; Approval spends them inside the same `aether init` call, after consent."
@@ -26,6 +44,8 @@ intent_refinement:
   - "Separate deterministic scan warnings from AI-synthesized pheromones. README/changelog/license/formatter suggestions are housekeeping, not strategic colony guidance."
   - "Suggest at most 3 synthesized pheromones, and only when they are specific to the user's clarified intent. Let the user approve each one before writing it."
   - "Run `AETHER_OUTPUT_MODE=visual aether init --colony-mode <selected colony|orchestrator> --charter-json '<synthesized charter JSON>' \"<refined goal>\"` after approval."
+  - "Do not require a separate setup command before init; the runtime performs safe automatic bootstrap during Stage 2 — Setup."
+  - "After success, show the exact Claude/OpenCode closeout `Next Up: /ant-discuss`; ranked runtime proposals may inform context but do not replace the shared lifecycle handoff."
 wrapper_additions:
   stage_skeleton: |
     Every init stage except Required Cross-Stage State and Cross-Platform Drift
@@ -47,6 +67,8 @@ guardrails:
   - "Do not claim init spawned implementation workers; it is a guided setup ritual until later lifecycle commands dispatch work."
   - "All persistence goes through the `aether init` call in Approval (with `--colony-mode` and `--charter-json`) and `aether pheromone-write`; the wrapper never writes state files."
   - "Do not hand-render the init banner or any runtime-owned ceremony banner; init_ceremony.go owns it."
+  - "Do not call plan directly, create SPEC.md, edit specification or plan state, or claim specification approval or plan acceptance during init."
+  - "After discuss, Go creates the DRAFT specification; /ant-spec owns review, revision, and exact approval before /ant-plan becomes available."
   - "If docs and runtime disagree, runtime wins."
   - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper. The promotion itself happens inside that `aether init` call via `--promote-shelf` / `--dismiss-shelf`, after consent -- the wrapper never runs `shelf-promote-batch` or `shelf-dismiss-batch`, so a cancel or a failed init leaves the shelf untouched."
   - "Approved pheromones are written with `aether pheromone-write` only after `aether init` returns success, so a cancelled or failed init persists nothing."

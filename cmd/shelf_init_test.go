@@ -22,8 +22,8 @@ func TestLoadActiveShelf(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -55,8 +55,8 @@ func TestPromoteShelfEntry(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -91,8 +91,8 @@ func TestDismissShelfEntry(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -150,8 +150,8 @@ func TestLoadActiveShelfEmpty(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	active, err := loadActiveShelf(s)
 	if err != nil {
@@ -174,8 +174,8 @@ func TestInitShelfBacklogOutput(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	// Pre-populate shelf
 	sf := colony.NewShelfFile()

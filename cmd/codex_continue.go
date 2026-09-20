@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // VerificationErrorClass classifies why a verification step failed.
@@ -43,6 +45,15 @@ type codexVerificationStep struct {
 	ErrorClass     VerificationErrorClass `json:"error_class,omitempty"`
 	Summary        string                 `json:"summary"`
 	Output         string                 `json:"output,omitempty"`
+	// Duration is the measured wall-clock time the shell-out itself took
+	// (time.Since around runShellCommandContext only), never derived from a
+	// timeout value or estimated (Phase 196 D-01). Left at zero on every
+	// return path that never ran a command -- a step whose command was empty,
+	// unresolved, or unresolvable -- so a skipped check renders as
+	// "not reported", not as a fabricated "0s". SHOW-03 D-03: this is the
+	// same figure both the live progress line (emitVerificationStepFinish)
+	// and the closing verification summary read.
+	Duration float64 `json:"duration_seconds,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -74,9 +85,24 @@ type codexContinueVerificationReport struct {
 	Passed                     bool                         `json:"passed"`
 	BlockingIssues             []string                     `json:"blocking_issues,omitempty"`
 	// Warnings surface non-blocking verification observations — most
-	// importantly "no deterministic verification command resolved", which used
-	// to be a silent hard-block and is now a visible handover to the watcher.
+	// importantly "no tests to run in this project" (D-01, Phase 193), which
+	// used to be a silent hard-block; it is now a visible warning that the
+	// floor is claimed files plus criterion evidence, with no fallback that
+	// hands verification responsibility to a reviewer.
 	Warnings []string `json:"warnings,omitempty"`
+	// CheckFixAttempt is set when a failing check with no reviewer dispatched
+	// drew D-02/D-03's single bounded automatic builder fix attempt. nil
+	// means no attempt ran (the floor passed, a reviewer was dispatched, or
+	// nothing was eligible) -- see applyAutomaticCheckFixAttempt
+	// (cmd/check_fix_attempt.go).
+	CheckFixAttempt *checkFixAttemptRecord `json:"check_fix_attempt,omitempty"`
+	// RepairHandback is D-11's four-part failed-repair handback (plain-
+	// language diagnosis, what was tried and why it did not take, the
+	// restored safe position, and one owner action). Set only by the
+	// check-repair path (applyBoundedCheckFixRepair, cmd/work_repair.go)
+	// and only when that round's fix attempt still failed -- nil on every
+	// other outcome, including a passing fix or no attempt at all.
+	RepairHandback *repairHandback `json:"repair_handback,omitempty"`
 }
 
 type codexWatcherVerification struct {
@@ -143,10 +169,15 @@ type codexContinueOptions struct {
 	WorkerTimeout       time.Duration
 	VerificationTimeout time.Duration
 	ParentContext       context.Context
-	LightFlag           bool
-	HeavyFlag           bool
-	SkipWatchers        bool
-	VerificationDepth   string
+	// AutopilotBlockerBaseline is an in-process run-loop capability, not a
+	// public continue option and not persisted in codexContinueOptionsJSON.
+	// A nil value keeps direct `aether continue` on the strict Iron Law. Only
+	// runCompatibilityAutopilot supplies the live pre-stage snapshot.
+	AutopilotBlockerBaseline *blockerSnapshot
+	LightFlag                bool
+	HeavyFlag                bool
+	SkipWatchers             bool
+	VerificationDepth        string
 	// QueenCastes is the review team the Queen chose after reading the phase.
 	// Continue is the expensive flow — each reviewer is a full agent run — and
 	// until this existed the team came only from keyword scoring, so a phase
@@ -155,6 +186,11 @@ type codexContinueOptions struct {
 	// question. Empty means no judgement was offered and scoring decides.
 	QueenCastes      []string
 	QueenCasteReason string
+	// QueenCasteWhy is one reason per proposed reviewer caste, as
+	// "caste=reason" (D-08, D-09). A caste named in QueenCastes with no
+	// matching entry here, and not required by the phase, is refused by name
+	// rather than sent unexplained.
+	QueenCasteWhy []string
 }
 
 // codexContinueOptionsJSON is a serializable snapshot of continue options,
@@ -168,6 +204,9 @@ type codexContinueOptionsJSON struct {
 	LightFlag              bool     `json:"light_flag,omitempty"`
 	HeavyFlag              bool     `json:"heavy_flag,omitempty"`
 	VerificationDepth      string   `json:"verification_depth,omitempty"`
+	QueenCastes            []string `json:"queen_castes,omitempty"`
+	QueenCasteReason       string   `json:"queen_caste_reason,omitempty"`
+	QueenCasteWhy          []string `json:"queen_caste_why,omitempty"`
 }
 
 const abandonedBuildThreshold = 10 * time.Minute
@@ -190,6 +229,7 @@ func incrementWatcherFailureCount(phaseID int) error {
 		for i := range updated.Plan.Phases {
 			if updated.Plan.Phases[i].ID == phaseID {
 				updated.Plan.Phases[i].WatcherFailureCount++
+				syncActivePlanRevisionExecutionFacts(&updated.Plan)
 				return nil
 			}
 		}
@@ -204,6 +244,7 @@ func resetWatcherFailureCount(phaseID int) error {
 		for i := range updated.Plan.Phases {
 			if updated.Plan.Phases[i].ID == phaseID {
 				updated.Plan.Phases[i].WatcherFailureCount = 0
+				syncActivePlanRevisionExecutionFacts(&updated.Plan)
 				return nil
 			}
 		}
@@ -222,7 +263,40 @@ func continueOptionsToJSON(opts codexContinueOptions) *codexContinueOptionsJSON 
 		LightFlag:              opts.LightFlag,
 		HeavyFlag:              opts.HeavyFlag,
 		VerificationDepth:      opts.VerificationDepth,
+		QueenCastes:            append([]string(nil), opts.QueenCastes...),
+		QueenCasteReason:       opts.QueenCasteReason,
+		QueenCasteWhy:          append([]string(nil), opts.QueenCasteWhy...),
 	}
+}
+
+func normalizedContinueOptionList(values []string, splitCommas bool) []string {
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		parts := []string{value}
+		if splitCommas {
+			parts = strings.Split(value, ",")
+		}
+		for _, part := range parts {
+			if part = strings.ToLower(strings.TrimSpace(part)); part != "" {
+				normalized = append(normalized, part)
+			}
+		}
+	}
+	return uniqueSortedStrings(normalized)
+}
+
+func normalizedContinueOptionsEqual(left, right []string, splitCommas bool) bool {
+	left = normalizedContinueOptionList(left, splitCommas)
+	right = normalizedContinueOptionList(right, splitCommas)
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // continueOptionsMatchCurrent checks whether the current continue options match
@@ -249,6 +323,15 @@ func continueOptionsMatchCurrent(current codexContinueOptions, last *codexContin
 		return false
 	}
 	if current.VerificationDepth != last.VerificationDepth {
+		return false
+	}
+	if !normalizedContinueOptionsEqual(current.QueenCastes, last.QueenCastes, true) {
+		return false
+	}
+	if strings.TrimSpace(current.QueenCasteReason) != strings.TrimSpace(last.QueenCasteReason) {
+		return false
+	}
+	if !normalizedContinueOptionsEqual(current.QueenCasteWhy, last.QueenCasteWhy, false) {
 		return false
 	}
 	// Compare reconcile task IDs (order-independent).
@@ -312,13 +395,14 @@ func detectAbandonedBuild(manifest codexContinueManifest, state colony.ColonySta
 	return true, elapsed, fmt.Sprintf("Build was abandoned %.0f minutes ago: all %d dispatches stuck at 'spawned'", elapsed.Minutes(), len(manifest.Data.Dispatches))
 }
 
-// abandonedBuildTaskIDs extracts unique task IDs from manifest dispatches.
+// abandonedBuildTaskIDs extracts every covered task ID from manifest
+// dispatches. A grouped worker owns more than its primary compatibility ID,
+// and recovery must never leave the later covered tasks invisible.
 func abandonedBuildTaskIDs(manifest codexContinueManifest) []string {
 	seen := make(map[string]struct{})
 	var ids []string
 	for _, d := range manifest.Data.Dispatches {
-		id := strings.TrimSpace(d.TaskID)
-		if id != "" {
+		for _, id := range dispatchCoveredTaskIDs(d) {
 			if _, ok := seen[id]; !ok {
 				seen[id] = struct{}{}
 				ids = append(ids, id)
@@ -446,6 +530,10 @@ type codexContinueRecoveryPlan struct {
 	RedispatchTasks   []string `json:"redispatch_tasks,omitempty"`
 	RedispatchCommand string   `json:"redispatch_command,omitempty"`
 	SkipCommand       string   `json:"skip_command,omitempty"`
+	// CheckFixCommand is set only when D-02's automatic fix attempt ran and
+	// the re-run still failed: the single exact command to re-run the
+	// builder by hand (D-02, FLOOR-02) -- never a menu.
+	CheckFixCommand string `json:"check_fix_command,omitempty"`
 }
 
 type codexContinueAssessment struct {
@@ -474,20 +562,43 @@ type codexContinueClosedWorker struct {
 }
 
 type codexContinueWorkerFlowStep struct {
-	Stage           string               `json:"stage,omitempty"`
-	Caste           string               `json:"caste,omitempty"`
-	Name            string               `json:"name"`
-	Task            string               `json:"task,omitempty"`
-	Status          string               `json:"status"`
-	Summary         string               `json:"summary,omitempty"`
-	Blockers        []string             `json:"blockers,omitempty"`
-	Duration        float64              `json:"duration,omitempty"`
-	Report          string               `json:"report,omitempty"`
-	Findings        []codexReviewFinding `json:"findings,omitempty"`
-	Recommendations []string             `json:"recommendations,omitempty"`
-	WeakSpots       []string             `json:"weak_spots,omitempty"`
-	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
-	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
+	Stage    string   `json:"stage,omitempty"`
+	Caste    string   `json:"caste,omitempty"`
+	Name     string   `json:"name"`
+	Task     string   `json:"task,omitempty"`
+	Status   string   `json:"status"`
+	Summary  string   `json:"summary,omitempty"`
+	Blockers []string `json:"blockers,omitempty"`
+	Duration float64  `json:"duration,omitempty"`
+	// DurationReported records whether Duration was actually measured (a real
+	// WorkerResult existed), so a worker whose duration was never reported
+	// serializes as absent rather than as an indistinguishable zero.
+	DurationReported bool                 `json:"duration_reported,omitempty"`
+	Report           string               `json:"report,omitempty"`
+	Findings         []codexReviewFinding `json:"findings,omitempty"`
+	OverallScore     *int                 `json:"overall_score,omitempty"`
+	EvidenceErrors   []string             `json:"evidence_errors,omitempty"`
+	Recommendations  []string             `json:"recommendations,omitempty"`
+	WeakSpots        []string             `json:"weak_spots,omitempty"`
+	EdgeCases        []string             `json:"edge_cases_discovered,omitempty"`
+	ReusableLessons  []string             `json:"reusable_lessons,omitempty"`
+	// ToolCount is a plain integer sourced from the same trusted in-process
+	// WorkerResult the Duration above already comes from, so -- unlike Usage
+	// below -- it does not carry the outside-caller-assertion risk that keeps
+	// Usage unserialized (cmd/codex_build_finalize.go's codexExternalBuildWorkerResult
+	// carries the same field-for-field pair).
+	ToolCount int `json:"tool_count,omitempty"`
+	// ToolCountReported mirrors DurationReported for ToolCount: a worker whose
+	// tool-call count was never reported (no WorkerResult) is distinguishable
+	// from a worker that genuinely made zero tool calls.
+	ToolCountReported bool `json:"tool_count_reported,omitempty"`
+	// Usage is what this worker's own tool reported the run cost, read by the
+	// Go runtime from the worker's raw output at the dispatch boundary. It is
+	// runtime-owned and NEVER serialized, for the same reason as
+	// codexBuildDispatch.Usage: a figure that crossed a wire could be
+	// asserted by an outside caller rather than measured by the runtime, and
+	// this ledger's entire value is that it cannot be.
+	Usage codex.WorkerUsage `json:"-"`
 }
 
 type codexReviewFinding struct {
@@ -508,6 +619,17 @@ type codexContinueReviewReport struct {
 	Workers        []codexContinueWorkerFlowStep `json:"workers"`
 	Passed         bool                          `json:"passed"`
 	BlockingIssues []string                      `json:"blocking_issues,omitempty"`
+}
+
+// codexContinueAutopilotSignals is the current-result projection consumed by
+// overnight orchestration. It carries typed evidence; callers never recreate
+// a pause by scraping reviewer prose.
+type codexContinueAutopilotSignals struct {
+	Evaluations    []autopilotTriggerEvaluation   `json:"evaluations"`
+	AuditorScore   *int                           `json:"auditor_score,omitempty"`
+	Findings       []codexReviewFinding           `json:"findings,omitempty"`
+	EvidenceErrors []string                       `json:"evidence_errors,omitempty"`
+	Checkpoints    []autopilotCheckpointReference `json:"checkpoints,omitempty"`
 }
 
 var continueContextUpdater = updateCodexContinueContext
@@ -570,9 +692,18 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	}
 	manifest := loadCodexContinueManifest(phase.ID)
 	if !manifest.Present {
-		return missingBuildPacketBlockedResult(state, phase, options), state, phase, nil, nil, false, nil
+		missing := missingBuildPacketBlockedResult(state, phase, options)
+		closeLifecycleRun(missing, state, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, missing, state); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
+		return missing, state, phase, nil, nil, false, nil
 	}
 	if result, blocked := manifestTaskSetBlockedResult(state, phase, manifest, options); blocked {
+		closeLifecycleRun(result, state, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, state); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, state, phase, nil, nil, false, nil
 	}
 	if changed, reconcileErr := reconcileContinueCompletedBuildTasks(&state, &phase, &manifest); reconcileErr != nil {
@@ -656,6 +787,34 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
+	// 202-03 (CEC-05): the check episode. continueEpisodeID reuses the same
+	// run identifier finishRuntimeSpawnRun above persists, so the cockpit
+	// and the durable spawn-run record name the same episode. Wrapped
+	// around every return path below (including the FIELD-04 replay-outcome
+	// early return immediately after) via defer, exactly like build's own
+	// episode boundary in cmd/codex_build.go.
+	continueEpisodeID := ""
+	if runHandle != nil {
+		continueEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(continueEpisodeID, events.EpisodeKindContinue)
+	restoreLiveContinueEpisode := setActiveLiveContinueEpisode(continueEpisodeID)
+	defer restoreLiveContinueEpisode()
+	// 204-15 (SC3a): the NATIVE check lane's episode close now assembles a
+	// fuller episodeLedgerRecord via checkEpisodeCloseRecord
+	// (cmd/episode_ledger.go) -- the SAME helper the delegate check lane
+	// (cmd/codex_continue_finalize.go's runCodexContinueFinalize) calls, so
+	// the two lanes cannot drift into recording different things -- then
+	// still publishes the live episode-ended event, so the cockpit is
+	// unchanged. phase.ID and runStatus are both read at DEFER-EXECUTION
+	// time, after every later reassignment in this function's body.
+	defer func() {
+		record := checkEpisodeCloseRecord(phase.ID, runStatus)
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(continueEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(continueEpisodeID, events.EpisodeKindContinue, record)
+		emitColonyLiveEpisodeEndedEventOnly(continueEpisodeID, events.EpisodeKindContinue, runStatus)
+	}()
+
 	// FIELD-04 (191.1-CONTEXT.md D-07/D-08): a completed, passing
 	// verification from an earlier continue run may have lost the race to a
 	// colony pause and been preserved instead of discarded (see
@@ -686,6 +845,17 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	verification, watcherFlow := runCodexContinueVerification(ctx, root, state, phase, manifest, options.WorkerTimeout, options.VerificationTimeout, options.SkipWatchers)
 	assessment := assessCodexContinue(phase, manifest, verification, options, now)
 	verification = attachContinueClaimVerification(verification, assessment)
+	var runtimeCheckpoints []autopilotCheckpointReference
+	if hasRuntimeVerificationCheckpoint(verification.Criteria) {
+		runtimeGeneration, generationErr := validatedRuntimeCheckpointGeneration(manifest, state, verification.Criteria)
+		if generationErr != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to bind owner verification work: %w", generationErr)
+		}
+		runtimeCheckpoints, err = materializeRuntimeVerificationCheckpoints(phase.ID, verification.Criteria, runtimeGeneration)
+		if err != nil {
+			return nil, state, phase, nil, nil, false, fmt.Errorf("failed to preserve owner verification work: %w", err)
+		}
+	}
 	priorGateResults, _ := gateResultsReadPhase(phase.ID)
 	if priorGateResults == nil {
 		priorGateResults = []GateCheckResult{}
@@ -696,7 +866,20 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// would otherwise deadlock on its own stale flags. Chaos-raised and
 	// user-raised blockers never auto-clear.
 	autoResolveVerificationBlockers(verification.ChecksPassed, phase.ID)
-	gates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	gates := runCodexContinueGatesWithAutopilotBaseline(phase, manifest, verification, assessment, now, priorGateResults, options.AutopilotBlockerBaseline)
+	// SYN-201-04: the direct lane reaches its advancement verdict only
+	// through runContinueAcceptVerifyAdvance (cmd/codex_verify_advance.go) --
+	// called here with review == nil so an already-failing gate report
+	// blocks BEFORE a reviewer is ever dispatched (preserving the existing
+	// cost-avoidance behavior), and again below once a review report exists.
+	preReviewDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, nil, state)
+	// D-05/D-06/D-07 (201-20): the check's own verdict, derived once right
+	// here from the decision this lane just obtained -- never recomputed at
+	// a render site. Only relevant if preReviewDecision itself is what a
+	// caller ends up rendering (the gate-blocked-before-review path below);
+	// finalDecision below supplies its own verdict for the paths that reach
+	// it.
+	preReviewWorkOutcome := checkWorkOutcome(preReviewDecision, verification)
 	if progress != nil {
 		progress.Advance("Verification")
 	}
@@ -767,7 +950,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write gate report: %w", err)
 	}
 
-	if !gates.Passed {
+	if !preReviewDecision.Advances() {
 		blockers := append([]string{}, gates.BlockingIssues...)
 		summary := "Continue blocked by verification or gate failures"
 		if len(blockers) > 0 {
@@ -775,6 +958,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowForVerification(verification, nil, watcherFlow)
+		fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, blockers, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -811,26 +995,28 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		updateSessionSummary("continue", nextCommand, summary)
 
 		result := map[string]interface{}{
-			"advanced":            false,
-			"blocked":             true,
-			"partial_success":     assessment.PartialSuccess,
-			"current_phase":       blockedState.CurrentPhase,
-			"phase_name":          phase.Name,
-			"state":               blockedState.State,
-			"next":                nextCommand,
-			"verification":        verification,
-			"assessment":          assessment,
-			"task_evidence":       assessment.Tasks,
-			"gates":               gates,
-			"verification_report": displayDataPath(verificationReportRel),
-			"gate_report":         displayDataPath(gateReportRel),
-			"continue_report":     displayDataPath(continueReportRel),
-			"worker_flow":         workerFlow,
-			"operational_issues":  assessment.OperationalIssues,
-			"recovery":            assessment.Recovery,
-			"reconciled_tasks":    assessment.ReconciledTasks,
-			"blocking_issues":     blockers,
-			"review_depth":        string(reviewDepth),
+			"advanced":                false,
+			"blocked":                 true,
+			"partial_success":         assessment.PartialSuccess,
+			"current_phase":           blockedState.CurrentPhase,
+			"phase_name":              phase.Name,
+			"state":                   blockedState.State,
+			"next":                    nextCommand,
+			"verification":            verification,
+			checkWorkOutcomeResultKey: preReviewWorkOutcome,
+			"assessment":              assessment,
+			"task_evidence":           assessment.Tasks,
+			"gates":                   gates,
+			"verification_report":     displayDataPath(verificationReportRel),
+			"gate_report":             displayDataPath(gateReportRel),
+			"continue_report":         displayDataPath(continueReportRel),
+			"worker_flow":             workerFlow,
+			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+			"operational_issues":      assessment.OperationalIssues,
+			"recovery":                assessment.Recovery,
+			"reconciled_tasks":        assessment.ReconciledTasks,
+			"blocking_issues":         blockers,
+			"review_depth":            string(reviewDepth),
 			"plan_revision_option": planRevisionRecommendation(
 				colony.PlanRevisionVerificationFailure,
 				fmt.Sprintf("Verification blocked phase %d: %s", phase.ID, summary),
@@ -838,21 +1024,39 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			),
 		}
 		runStatus = "blocked"
+		closeLifecycleRun(result, blockedState, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
-	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers)
+	mergedContinueQueenCastes, continueQueenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	review := runCodexContinueReview(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, options.SkipWatchers, mergedContinueQueenCastes, options.QueenCasteReason, continueQueenCasteWhyReasons)
 	reviewReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "review.json"))
 	if err := store.SaveJSON(reviewReportRel, review); err != nil {
 		return nil, state, phase, nil, nil, false, fmt.Errorf("failed to write review report: %w", err)
 	}
-	if !review.Passed {
+	// SYN-201-04: the second and final call into the shared decision body --
+	// runDeterministicFloor (folded into gates.Passed above) remains the
+	// ONLY source of a pass; this call can only ADD a block on top of it,
+	// never supply one.
+	finalDecision := runContinueAcceptVerifyAdvance(phase, assessment, gates, &review, state)
+	// D-05/D-06/D-07 (201-20): this decision's own verdict, derived once
+	// here and reused for both the review-blocked result below and the
+	// advancing result further down -- never recomputed twice.
+	finalWorkOutcome := checkWorkOutcome(finalDecision, verification)
+	if !finalDecision.Advances() {
+		// Critical findings retain the established Critics Bring Solutions
+		// bridge on the in-process lane as well as continue-finalize.
+		appendReviewFindingsGateResult(phase.ID, review.Workers, now)
 		summary := "Continue blocked because the review wave did not clear"
 		if len(review.BlockingIssues) > 0 {
 			summary = review.BlockingIssues[0]
 		}
 		continueReportRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase.ID), "continue.json"))
 		workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
+		fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 		emitContinueCeremonyFlowSequence("aether-continue", phase, workerFlow)
 		nextCommand := continueNextCommandForBlocked(assessment, review.BlockingIssues, options, phase.ID)
 		if strings.Contains(nextCommand, "build --force") || strings.Contains(nextCommand, "force-redispatch") {
@@ -889,28 +1093,30 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		}
 		updateSessionSummary("continue", nextCommand, summary)
 		result := map[string]interface{}{
-			"advanced":            false,
-			"blocked":             true,
-			"partial_success":     assessment.PartialSuccess,
-			"current_phase":       blockedState.CurrentPhase,
-			"phase_name":          phase.Name,
-			"state":               blockedState.State,
-			"next":                nextCommand,
-			"verification":        verification,
-			"assessment":          assessment,
-			"task_evidence":       assessment.Tasks,
-			"gates":               gates,
-			"review":              review,
-			"verification_report": displayDataPath(verificationReportRel),
-			"gate_report":         displayDataPath(gateReportRel),
-			"review_report":       displayDataPath(reviewReportRel),
-			"continue_report":     displayDataPath(continueReportRel),
-			"worker_flow":         workerFlow,
-			"operational_issues":  append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
-			"recovery":            assessment.Recovery,
-			"reconciled_tasks":    assessment.ReconciledTasks,
-			"blocking_issues":     append([]string{}, review.BlockingIssues...),
-			"review_depth":        string(reviewDepth),
+			"advanced":                false,
+			"blocked":                 true,
+			"partial_success":         assessment.PartialSuccess,
+			"current_phase":           blockedState.CurrentPhase,
+			"phase_name":              phase.Name,
+			"state":                   blockedState.State,
+			"next":                    nextCommand,
+			"verification":            verification,
+			checkWorkOutcomeResultKey: finalWorkOutcome,
+			"assessment":              assessment,
+			"task_evidence":           assessment.Tasks,
+			"gates":                   gates,
+			"review":                  review,
+			"verification_report":     displayDataPath(verificationReportRel),
+			"gate_report":             displayDataPath(gateReportRel),
+			"review_report":           displayDataPath(reviewReportRel),
+			"continue_report":         displayDataPath(continueReportRel),
+			"worker_flow":             workerFlow,
+			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+			"operational_issues":      append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
+			"recovery":                assessment.Recovery,
+			"reconciled_tasks":        assessment.ReconciledTasks,
+			"blocking_issues":         append([]string{}, review.BlockingIssues...),
+			"review_depth":            string(reviewDepth),
 			"plan_revision_option": planRevisionRecommendation(
 				colony.PlanRevisionVerificationFailure,
 				fmt.Sprintf("Review blocked phase %d: %s", phase.ID, summary),
@@ -919,6 +1125,10 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			),
 		}
 		runStatus = "blocked"
+		closeLifecycleRun(result, blockedState, "continue")
+		if err := writePhaseOutcomeDocument(phase.ID, result, blockedState); err != nil {
+			fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+		}
 		return result, blockedState, phase, nil, nil, false, nil
 	}
 
@@ -978,6 +1188,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		return nil, state, phase, nil, nil, false, err
 	}
 	workerFlow := continueWorkerFlowForVerification(verification, review.Workers, watcherFlow)
+	fileDirectContinueSpendRows(root, phase, now, time.Now().UTC(), workerFlow)
 	workerFlow = append(workerFlow, continueHousekeepingFlowStep(housekeeping))
 	if err := recordContinueWorkerFlow(workerFlow); err != nil {
 		return nil, state, phase, nil, &housekeeping, false, err
@@ -991,7 +1202,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// pkg/learn, hypothesis promotion, and auto-skill creation were unreachable
 	// in normal daily use. Gates have passed by this point; state is committed;
 	// learning failure is non-blocking inside the function.
-	captureContinueLearning(phase, workerFlow, gates, "", false, now)
+	captureContinueMemory(phase, workerFlow, gates, "", false, now)
 	// D-04: phase-end consolidation fires only now, beside the learning
 	// capture above, because this point is reached only after the atomic
 	// COLONY_STATE.json write (above) committed PhaseCompleted -- the phase
@@ -999,6 +1210,19 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	// consolidation failure is reported via the summary, never propagated
 	// as an error (D-05).
 	consolidationSummary := runPhaseEndConsolidation(phase.ID)
+	// 198.1-05/FEED-05: strong lessons (confidence >= 0.8) reach the shared
+	// cross-project store at every check, not only at project close --
+	// under the same AETHER_HIVE_POLICY switch seal already honours. Placed
+	// right after consolidation, before attachConsolidationSummary below, so
+	// an instinct this phase's consolidation pass just promoted is also
+	// considered for the shared store this same phase.
+	hiveEligible, hivePromoted := promotePhaseEndInstinctsToHive(phase.ID)
+	// 203-13 (BIO-08/CEC-07): outcome-weighted strength tuning runs right
+	// after hive promotion, on both continue lanes -- the same
+	// non-blocking discipline as consolidation and hive promotion above. A
+	// tuning failure is recorded in the summary, never propagated as an
+	// error.
+	outcomeTuning := runPheromoneOutcomeTuning()
 	workerFlow = append(workerFlow, continueLearningFlowStep(consolidationSummary))
 	// The phase save-point: one git commit of exactly the files this phase's
 	// workers reported changing, so repo history mirrors colony history.
@@ -1047,36 +1271,45 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 		progress.Finish()
 	}
 	result := map[string]interface{}{
-		"advanced":            true,
-		"completed":           final,
-		"partial_success":     assessment.PartialSuccess,
-		"current_phase":       updated.CurrentPhase,
-		"state":               updated.State,
-		"next":                nextCommand,
-		"verification":        verification,
-		"assessment":          assessment,
-		"task_evidence":       assessment.Tasks,
-		"gates":               gates,
-		"review":              review,
-		"verification_report": displayDataPath(verificationReportRel),
-		"gate_report":         displayDataPath(gateReportRel),
-		"review_report":       displayDataPath(reviewReportRel),
-		"continue_report":     displayDataPath(continueReportRel),
-		"closed_workers":      closedWorkers,
-		"worker_flow":         workerFlow,
-		"operational_issues":  assessment.OperationalIssues,
-		"recovery":            assessment.Recovery,
-		"reconciled_tasks":    assessment.ReconciledTasks,
-		"signal_housekeeping": housekeeping,
-		"review_depth":        string(reviewDepth),
+		"advanced":                true,
+		"completed":               final,
+		"partial_success":         assessment.PartialSuccess,
+		"current_phase":           updated.CurrentPhase,
+		"state":                   updated.State,
+		"next":                    nextCommand,
+		"verification":            verification,
+		checkWorkOutcomeResultKey: finalWorkOutcome,
+		"assessment":              assessment,
+		"task_evidence":           assessment.Tasks,
+		"gates":                   gates,
+		"review":                  review,
+		"verification_report":     displayDataPath(verificationReportRel),
+		"gate_report":             displayDataPath(gateReportRel),
+		"review_report":           displayDataPath(reviewReportRel),
+		"continue_report":         displayDataPath(continueReportRel),
+		"closed_workers":          closedWorkers,
+		"worker_flow":             workerFlow,
+		"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
+		"operational_issues":      assessment.OperationalIssues,
+		"recovery":                assessment.Recovery,
+		"reconciled_tasks":        assessment.ReconciledTasks,
+		"signal_housekeeping":     housekeeping,
+		"review_depth":            string(reviewDepth),
 	}
 	if nextPhase != nil {
 		result["next_phase"] = nextPhase.ID
 		result["next_phase_name"] = nextPhase.Name
 	}
 	attachConsolidationSummary(result, consolidationSummary)
+	attachHivePromotionSummary(result, hiveEligible, hivePromoted)
+	attachPheromoneOutcomeTuningSummary(result, outcomeTuning)
 	attachPhaseCommitResult(result, phaseCommit)
 	runStatus = "completed"
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	closeLifecycleRun(result, updated, "continue")
+	if err := writePhaseOutcomeDocument(phase.ID, result, updated); err != nil {
+		fmt.Fprintf(os.Stderr, "This phase's closing summary could not be saved, so the next phase's helpers will not see it: %v\n", err)
+	}
 	return result, updated, updated.Plan.Phases[currentIdx], nextPhase, &housekeeping, final, nil
 }
 
@@ -1167,6 +1400,7 @@ func reconcileContinueCompletedBuildTasks(state *colony.ColonyState, phase *colo
 				}
 				break
 			}
+			syncActivePlanRevisionExecutionFacts(&updated.Plan)
 			return nil
 		}); err != nil {
 			return false, fmt.Errorf("failed to reconcile completed build tasks in colony state: %w", err)
@@ -1190,6 +1424,10 @@ func reconcileContinueCompletedBuildTasks(state *colony.ColonyState, phase *colo
 type codexContinueReviewSpec struct {
 	Caste string
 	Task  string
+	// Rationale is the plain-English reason a forced reviewer (D-01..D-05,
+	// cmd/queen_risk_signals.go) was sent — empty for a Queen-proposed or
+	// keyword-selected spec, which carries no per-caste reason today.
+	Rationale string
 }
 
 // codexContinueReviewSpecs' task text must never instruct a caste to run a
@@ -1218,27 +1456,115 @@ var codexContinueReviewSpecs = []codexContinueReviewSpec{
 }
 
 func queenContinueDispatches(phase colony.Phase, reviewDepth colony.VerificationDepth) []CasteDispatch {
-	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "")
+	return queenContinueDispatchesWithJudgement(phase, reviewDepth, nil, "", nil, nil)
 }
 
 // queenContinueDispatchesWithJudgement applies the Queen's chosen review team,
 // bounded by the same floors as a build: the Watcher is restored if omitted,
-// and a phase that requires a security or quality review keeps it.
-func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []CasteDispatch {
+// and a phase that requires a security or quality review keeps it. forced is
+// the build-recorded D-01..D-05 forced-reviewer set (codexBuildManifest's
+// ForcedReviewers, threaded in by callers that have a manifest); nil falls
+// back to re-deriving from the phase's own wording
+// (queenForcedContinueReviewers). changedFiles is the union of the builder's
+// own reported changed_files for this phase and an independent `git diff`
+// (phaseChangedFilesForRiskSignals, WR-01, supplied by both continue
+// boundaries — D-02, plan 194-06): it can only ADD a forced reviewer via
+// unionForcedContinueReviewers, never remove one.
+func queenContinueDispatchesWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, changedFiles []string, reasons ...map[string]string) []CasteDispatch {
 	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
+	var dispatches []CasteDispatch
 	if len(proposed) == 0 {
-		return queenOrchestrate(phase, "continue", state)
+		dispatches = queenOrchestrate(phase, "continue", state)
+	} else {
+		judgement := queenApplyJudgement(proposed, reason, phase, "continue", state, reasons...)
+		dispatches = make([]CasteDispatch, 0, len(judgement.Final))
+		for _, caste := range judgement.Final {
+			dispatches = append(dispatches, CasteDispatch{
+				Caste: caste,
+				// A per-worker reason (D-08, D-10) beats the team summary
+				// when one exists for this caste -- the summary survives
+				// only as the fallback for a caste judgement.Reasons has
+				// nothing entered for (a required/added caste the runtime
+				// itself has not yet written a reason for).
+				Rationale: casteDispatchRationale(judgement, caste),
+				FlowType:  "continue",
+			})
+		}
 	}
-	judgement := queenApplyJudgement(proposed, reason, phase, "continue", state)
-	dispatches := make([]CasteDispatch, 0, len(judgement.Final))
-	for _, caste := range judgement.Final {
-		dispatches = append(dispatches, CasteDispatch{
-			Caste:     caste,
-			Rationale: judgement.Rationale,
+	return unionForcedContinueReviewers(dispatches, phase, forced, changedFiles, proposed, reviewDepth)
+}
+
+// casteDispatchRationale prefers the judgement's per-caste reason (D-08,
+// D-10) over its single team-level Rationale string, so a continue dispatch
+// states why THIS worker was sent rather than reusing the whole team's
+// summary sentence for every member of it.
+func casteDispatchRationale(judgement queenCasteJudgement, caste string) string {
+	if r := strings.TrimSpace(judgement.Reasons[caste]); r != "" {
+		return r
+	}
+	return judgement.Rationale
+}
+
+// unionForcedContinueReviewers adds any D-01..D-05 forced-reviewer caste
+// missing from dispatches AFTER the proposal/budget handling above, so
+// neither a Queen proposal nor a budget trim can ever drop one (D-05: "one
+// derivation, one boundary" — closes .planning/WINDOWS.md #1's continue
+// side). A forced caste already present has its Rationale overwritten with
+// the forced reason, so the owner sees the real reason it is there even if
+// it was also proposed or keyword-selected. changedFiles carries the D-02
+// file-detected hits into the same union.
+func unionForcedContinueReviewers(dispatches []CasteDispatch, phase colony.Phase, forced []codexForcedReviewerRecord, changedFiles []string, proposed []string, reviewDepth colony.VerificationDepth) []CasteDispatch {
+	reviewers := queenForcedContinueReviewers(phase, forced, changedFiles)
+	liveReviewerCastes := make(map[string]bool, len(reviewers))
+	for _, reviewer := range reviewers {
+		liveReviewerCastes[reviewer.Caste] = true
+	}
+
+	// queenFallbackTeam and queenApplyJudgement both consult the phase-wording
+	// requirement before the owner waiver is applied. Reconcile that earlier
+	// snapshot here, at the shared dispatch boundary, so a waived signal cannot
+	// survive merely because it was already present in dispatches. Preserve a
+	// reviewer that has an independent reason to run: another live signal for
+	// the same caste, an explicit Queen proposal, or the owner's heavy-depth
+	// review panel.
+	phaseSignalCastes := make(map[string]bool)
+	for _, reviewer := range queenForcedReviewersForPhase(phase) {
+		phaseSignalCastes[reviewer.Caste] = true
+	}
+	// Preserve explicit reviewers using the exact same normalization as
+	// queenApplyJudgement. Comparing raw flag values here dropped accepted
+	// aliases ("security" -> gatekeeper), separator variants, and comma-packed
+	// proposals after judgement had already produced the canonical dispatch.
+	normalizedProposed, _ := normalizeProposedCastes(proposed)
+	proposedCastes := stringSet(normalizedProposed)
+	state := colony.ColonyState{VerificationDepth: string(reviewDepth)}
+	result := make([]CasteDispatch, 0, len(dispatches)+len(reviewers))
+	for _, dispatch := range dispatches {
+		caste := strings.ToLower(strings.TrimSpace(dispatch.Caste))
+		waivedSignalOnly := phaseSignalCastes[caste] && !liveReviewerCastes[caste] &&
+			!proposedCastes[caste] && !isAlwaysRequired(caste, "continue", phase, state)
+		if waivedSignalOnly {
+			continue
+		}
+		result = append(result, dispatch)
+	}
+
+	indexByCaste := make(map[string]int, len(result))
+	for i, dispatch := range result {
+		indexByCaste[dispatch.Caste] = i
+	}
+	for _, reviewer := range reviewers {
+		if idx, ok := indexByCaste[reviewer.Caste]; ok {
+			result[idx].Rationale = reviewer.Reason
+			continue
+		}
+		result = append(result, CasteDispatch{
+			Caste:     reviewer.Caste,
+			Rationale: reviewer.Reason,
 			FlowType:  "continue",
 		})
 	}
-	return dispatches
+	return result
 }
 
 func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
@@ -1251,11 +1577,22 @@ func queenContinueHasCaste(dispatches []CasteDispatch, caste string) bool {
 }
 
 func queenContinueReviewSpecs(phase colony.Phase, reviewDepth colony.VerificationDepth) []codexContinueReviewSpec {
-	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "")
+	return queenContinueReviewSpecsWithJudgement(phase, reviewDepth, nil, "", nil, nil)
 }
 
-func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string) []codexContinueReviewSpec {
-	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason)
+// changedFiles is the union of the builder's own reported changed_files for
+// this phase and an independent `git diff` (phaseChangedFilesForRiskSignals,
+// WR-01), supplied identically by both continue boundaries —
+// plannedContinueReviewDispatches (this file) and
+// plannedExternalContinueDispatches (cmd/codex_continue_plan.go) — so the
+// two lanes can never derive a different forced-reviewer set for the same
+// phase and the same changed files (D-02, two-lane parity discipline).
+func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colony.VerificationDepth, proposed []string, reason string, forced []codexForcedReviewerRecord, changedFiles []string, reasons ...map[string]string) []codexContinueReviewSpec {
+	queenDispatches := queenContinueDispatchesWithJudgement(phase, reviewDepth, proposed, reason, forced, changedFiles, reasons...)
+	forcedReasons := make(map[string]string, len(forced))
+	for _, reviewer := range queenForcedContinueReviewers(phase, forced, changedFiles) {
+		forcedReasons[reviewer.Caste] = reviewer.Reason
+	}
 	specs := make([]codexContinueReviewSpec, 0, len(queenDispatches))
 	for _, dispatch := range queenDispatches {
 		if dispatch.Caste == "watcher" {
@@ -1264,6 +1601,14 @@ func queenContinueReviewSpecsWithJudgement(phase colony.Phase, reviewDepth colon
 		spec, ok := continueReviewSpecForCaste(dispatch.Caste)
 		if !ok {
 			continue
+		}
+		// A forced signal's own sentence (D-01..D-05) always wins when this
+		// caste was forced; otherwise the dispatch already carries the best
+		// reason available (per-worker if the proposal gave one, the team
+		// summary otherwise) via casteDispatchRationale.
+		spec.Rationale = dispatch.Rationale
+		if forcedReason := strings.TrimSpace(forcedReasons[dispatch.Caste]); forcedReason != "" {
+			spec.Rationale = forcedReason
 		}
 		specs = append(specs, spec)
 	}
@@ -1316,7 +1661,79 @@ func continueReviewSpecForCaste(caste string) (codexContinueReviewSpec, bool) {
 	return codexContinueReviewSpec{}, false
 }
 
-func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool) codexContinueReviewReport {
+// reviewJudgementAlreadyLandedAtBuildEnd reads (never re-derives) the
+// verification-boundary decision recorded on the phase's current build
+// attempt. It reports true only when a decision was actually recorded AND
+// that decision names build-end -- an attempt with no recorded decision, or
+// no attempt at all, falls through to the check-step default (D-01).
+func reviewJudgementAlreadyLandedAtBuildEnd(phaseID int) bool {
+	attemptRel, _, hasAttempt := loadLatestBuildAttempt(phaseID)
+	if !hasAttempt {
+		return false
+	}
+	decision, hasDecision := verificationBoundaryForAttempt(attemptRel)
+	return hasDecision && decision.Choice == verificationBoundaryChoiceBuildEnd
+}
+
+// continueReviewCastes names every caste that can appear in a continue
+// review wave (the base specs plus continueReviewSpecForCaste's switch
+// cases) -- used to pick the build-end worker runs that were acting as
+// reviewers, not task implementers, out of a build attempt's full run list.
+var continueReviewCastes = map[string]bool{
+	"gatekeeper": true, "auditor": true, "probe": true, "watcher": true,
+	"measurer": true, "chaos": true, "includer": true, "keeper": true,
+	"sage": true, "medic": true, "fixer": true,
+}
+
+// continueReviewReportFromBuildEndFindings builds the check step's review
+// report from the SAME reviewer results already bound to the build attempt,
+// instead of re-dispatching a second review wave for judgement that already
+// happened once, at the boundary the Queen recorded (D-05). A build attempt
+// with no reviewer worker runs recorded (the boundary was set to build-end,
+// but no build-end reviewer actually ran -- e.g. the Queen's build-time team
+// selected none) reports as skipped, not as passed by default silence.
+func continueReviewReportFromBuildEndFindings(phase colony.Phase, record buildAttemptRecord, decision verificationBoundaryDecision) codexContinueReviewReport {
+	report := codexContinueReviewReport{
+		Phase:       phase.ID,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		Workers:     []codexContinueWorkerFlowStep{},
+	}
+	var blockers []string
+	found := false
+	for _, run := range record.WorkerRuns {
+		caste := strings.ToLower(strings.TrimSpace(run.Caste))
+		if !continueReviewCastes[caste] {
+			continue
+		}
+		found = true
+		step := codexContinueWorkerFlowStep{
+			Stage:  "review",
+			Caste:  run.Caste,
+			Name:   run.WorkerName,
+			Task:   continueReviewTaskForCaste(run.Caste),
+			Status: normalizeRuntimeDispatchStatus(run.Status),
+		}
+		if run.Result != nil {
+			step.Blockers = uniqueSortedStrings(run.Result.Blockers)
+			step.Summary = strings.TrimSpace(run.Result.Summary)
+		}
+		if step.Summary == "" {
+			step.Summary = "Reviewed at build end -- " + decision.Summary()
+		}
+		blockers = append(blockers, step.Blockers...)
+		report.Workers = append(report.Workers, step)
+	}
+	if !found {
+		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(
+			"review already happened at build end ("+decision.Summary()+"); no build-end reviewer findings were recorded on this attempt",
+		))
+	}
+	report.BlockingIssues = uniqueSortedStrings(blockers)
+	report.Passed = len(report.BlockingIssues) == 0
+	return report
+}
+
+func runCodexContinueReview(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string, reasons ...map[string]string) codexContinueReviewReport {
 	report := codexContinueReviewReport{
 		Phase:       phase.ID,
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
@@ -1331,6 +1748,12 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		return report
 	}
 
+	if attemptRel, record, hasAttempt := loadLatestBuildAttempt(phase.ID); hasAttempt {
+		if decision, hasDecision := verificationBoundaryForAttempt(attemptRel); hasDecision && decision.Choice == verificationBoundaryChoiceBuildEnd {
+			return continueReviewReportFromBuildEndFindings(phase, record, decision)
+		}
+	}
+
 	invoker := newCodexWorkerInvoker()
 	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
 		availabilityMessage := dispatchAvailabilityMessage(invoker)
@@ -1340,7 +1763,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		return report
 	}
 
-	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth)
+	dispatches := plannedContinueReviewDispatches(root, phase, manifest, verification, assessment, invoker, workerTimeout, reviewDepth, queenCastes, queenCasteReason, reasons...)
 	if len(dispatches) == 0 {
 		report.Workers = append(report.Workers, continueReviewSkippedFlowStep(continueReviewSkippedSummary(reviewDepth)))
 		report.Passed = true
@@ -1378,6 +1801,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 			result := results[i]
 			step.Name = result.WorkerName
 			step.Status = normalizeRuntimeDispatchStatus(result.Status)
+			var reviewArtifacts map[string]json.RawMessage
 			if result.WorkerResult != nil {
 				if len(result.WorkerResult.Blockers) > 0 {
 					step.Summary = strings.Join(result.WorkerResult.Blockers, "; ")
@@ -1386,8 +1810,19 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				}
 				step.Blockers = uniqueSortedStrings(result.WorkerResult.Blockers)
 				step.Duration = result.WorkerResult.Duration.Seconds()
+				step.DurationReported = true
 				step.Report = codex.SanitizeWorkerDiagnosticOutput(result.WorkerResult.RawOutput)
+				// The tool-call count the runtime already measures, carried the
+				// same way Duration above is -- from the trusted in-process
+				// WorkerResult, not from anything an outside caller submitted.
+				step.ToolCount = result.WorkerResult.ToolCount
+				step.ToolCountReported = result.WorkerResult.ToolCountReported
+				// What this reviewer's own tool reported it cost, carried from
+				// the dispatch boundary so the direct check can file it.
+				step.Usage = result.WorkerResult.Usage
+				reviewArtifacts = result.WorkerResult.Artifacts
 			}
+			step = normalizeContinueReviewEvidence(step, reviewArtifacts)
 			if step.Summary == "" && result.Error != nil {
 				step.Summary = codex.SanitizeWorkerDiagnosticOutput(result.Error.Error())
 			}
@@ -1398,6 +1833,7 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 				step.Status = watcherStatusEnvironmentBlocked
 				step.Summary = environmentBlockedLaunchSummary(step.Summary)
 			}
+			blockers = append(blockers, continueReviewEvidenceBlockingIssues(step)...)
 			if continueReviewStepBlocks(step, verification) {
 				for _, blocker := range step.Blockers {
 					if strings.TrimSpace(blocker) != "" {
@@ -1409,6 +1845,24 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 		}
 		flow = append(flow, step)
 	}
+	for _, step := range flow {
+		for _, finding := range step.Findings {
+			if !strings.EqualFold(strings.TrimSpace(finding.Severity), "CRITICAL") {
+				continue
+			}
+			description := strings.TrimSpace(finding.Description)
+			if description == "" {
+				description = strings.TrimSpace(finding.Title)
+			}
+			if description != "" {
+				if suggestion := strings.TrimSpace(finding.Suggestion); suggestion != "" {
+					blockers = append(blockers, fmt.Sprintf("%s critical finding: %s (fix: %s)", step.Name, description, suggestion))
+				} else {
+					blockers = append(blockers, fmt.Sprintf("%s critical finding: %s (next step: aether unblock --dispatch — dispatch the Fixer)", step.Name, description))
+				}
+			}
+		}
+	}
 
 	report.Workers = flow
 	report.BlockingIssues = uniqueSortedStrings(blockers)
@@ -1416,7 +1870,18 @@ func runCodexContinueReview(root string, phase colony.Phase, manifest codexConti
 	return report
 }
 
-func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth) []codex.WorkerDispatch {
+// plannedContinueReviewDispatches is the check-step half of D-05's single
+// boundary: when the phase's current build attempt has a recorded
+// verification-boundary decision (verificationBoundaryForAttempt,
+// cmd/verification_boundary.go) naming build-end, reviewer judgement already
+// happened there, so the check step dispatches no reviewer of its own --
+// runCodexContinueReview reads the build-end findings back instead of
+// re-running them. Absent a recorded decision, or a recorded check-step
+// choice, this proceeds exactly as before (the check-step default, D-01).
+func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, invoker codex.WorkerInvoker, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, queenCastes []string, queenCasteReason string, reasons ...map[string]string) []codex.WorkerDispatch {
+	if reviewJudgementAlreadyLandedAtBuildEnd(phase.ID) {
+		return nil
+	}
 	capsule := resolveCodexWorkerContext()
 	// PheromoneSection is deliberately left unset (D-190-03-A / 190-05): capsule
 	// already renders "## Pheromone Signals" unconditionally whenever a signal is
@@ -1425,7 +1890,19 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 	// AssemblePrompt/AssembleHostedPrompt. See resolvePheromoneSection's doc
 	// comment for which callers still need it.
 	timeout := effectiveContinueReviewTimeout(workerTimeout)
-	specs := queenContinueReviewSpecs(phase, reviewDepth)
+	// The Queen's --castes proposal used to be honoured only on the heavy
+	// plan-only path; the default path called the nil-proposal variant, so on
+	// the continue users actually run the keyword engine was unchallenged.
+	// changedFiles feeds the D-02 file-detected forced-reviewer union
+	// (queenForcedContinueReviewers): what the builder actually touched can
+	// raise a reviewer the plan's own wording missed, on this lane exactly
+	// as on the wrapper lane (plannedExternalContinueDispatches).
+	// phaseChangedFilesForRiskSignals (not the raw phaseChangedFilesFromHandoffs)
+	// per WR-01, 194-REVIEW.md: unions the builder's own self-report with an
+	// independent `git diff`, so an incomplete or dishonest handoff cannot
+	// defeat this detector by itself.
+	changedFiles := phaseChangedFilesForRiskSignals(phase.ID)
+	specs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, changedFiles, reasons...)
 	dispatches := make([]codex.WorkerDispatch, 0, len(specs))
 	for idx, spec := range specs {
 		agentName := codexAgentNameForCaste(spec.Caste)
@@ -1459,6 +1936,7 @@ func plannedContinueReviewDispatches(root string, phase colony.Phase, manifest c
 func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, spec codexContinueReviewSpec) string {
 	var b strings.Builder
 	b.WriteString("# Continue Review\n\n")
+	b.WriteString("Prior continue.json and review.json outcomes are historical. A result-collection.json report describes only its recorded attempt; compare its recorded_at with the current manifest and later attempt journal before treating unfinished tasks as current. Reassess their findings against current evidence; their old status alone is not a current blocker.\n\n")
 	b.WriteString("- Phase: ")
 	b.WriteString(fmt.Sprintf("%d — %s\n", phase.ID, phase.Name))
 	b.WriteString("- Repo: ")
@@ -1468,11 +1946,19 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 	b.WriteString("\n\n")
 	b.WriteString(spec.Task)
 	b.WriteString("\n\n")
+	if strings.TrimSpace(spec.Rationale) != "" {
+		// D-05/D-10: a forced reviewer states why it was sent, in the same
+		// plain-English sentence the owner sees on the check-in card and
+		// manifest — the worker should not have to guess why it was called.
+		b.WriteString("Why you were sent: ")
+		b.WriteString(spec.Rationale)
+		b.WriteString("\n\n")
+	}
 	if spec.Caste == "gatekeeper" || spec.Caste == "auditor" {
 		// These two castes have no Bash tool by design — never instruct them
 		// to run a CLI command. They return findings in result JSON and the
 		// runtime persists to the ledger (persistReviewFindingsToLedgers).
-		b.WriteString("This is a review task. Return your findings in this result's findings array — the runtime records them in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
+		b.WriteString("This is a review task. Return structured evidence in `artifacts.review` as a JSON object with a findings array; each finding severity must be CRITICAL, HIGH, MEDIUM, LOW, or INFO. Completed Auditors must also return integer `overall_score` from 0 through 100. A blocked or failed reviewer without review evidence must report null rather than invent findings or a score. The artifact is authoritative over prose and legacy top-level findings. The runtime records findings in the domain review ledger for you. Do not modify repo source files. Return status `blocked` if advancement is unsafe.\n\n")
 	} else {
 		b.WriteString("This is a read-only review. Do not modify repo files. Return status `blocked` if advancement is unsafe.\n\n")
 	}
@@ -1521,6 +2007,15 @@ func renderCodexContinueReviewBrief(root string, phase colony.Phase, manifest co
 		b.WriteString("\n")
 	}
 	b.WriteString(renderVerificationCommandSection())
+	// CR-05/WR-08 (203-REVIEW.md): the continue lane's review castes were
+	// dispatched with no way to ask the program for backup at all -- the
+	// invitation only ever reached the build lane. Gatekeeper and Auditor are
+	// excluded, matching the branch above: they have no Bash tool by design,
+	// so telling them to run a CLI command would be an instruction they
+	// cannot follow, not a normal refusal.
+	if spec.Caste != "gatekeeper" && spec.Caste != "auditor" {
+		b.WriteString(renderRecruitmentInvitation())
+	}
 	return b.String()
 }
 
@@ -1554,115 +2049,176 @@ func isCodexWorkerAvailable() bool {
 	return invoker.IsAvailable(context.Background())
 }
 
+// recordCodexContinueVerificationTelemetry records the verification segment
+// for this phase's latest build attempt (Phase 201 plan 12, WORK-08,
+// CEC-06) -- the deterministic floor run runCodexContinueVerification just
+// timed, and nothing else. It merges into whatever the build lane already
+// recorded for the same attempt (queue/context/work, cmd/codex_build.go)
+// rather than overwriting it: build and continue are separate process
+// invocations writing to the same attempt-bound file, and a naive
+// overwrite here would silently erase the build's own measurements. A
+// phase with no recorded build attempt at all (a fixture, an out-of-band
+// verification path) records nothing -- there is no attempt identifier to
+// bind to. Like every other telemetry write, this is never a gate: a
+// failure is reported and swallowed.
+func recordCodexContinueVerificationTelemetry(phase colony.Phase, startedAt, endedAt time.Time) {
+	// loadLatestBuildAttempt's first return is the attempt's STORE-RELATIVE
+	// FILE PATH, not its bare identifier -- the bare identifier this record
+	// is keyed by (matching cmd/spend_cost_line.go's own attempt.ID usage)
+	// is the loaded record's own ID field.
+	_, attempt, ok := loadLatestBuildAttempt(phase.ID)
+	attemptID := strings.TrimSpace(attempt.ID)
+	if !ok || attemptID == "" {
+		return
+	}
+	capture := newJobTelemetryCapture()
+	capture.measure(jobTelemetrySegmentVerification, endedAt.Sub(startedAt), "codex_continue.go: runDeterministicFloor")
+	incoming := newJobTelemetryRecord(attemptID, "", capture, time.Now())
+	if existing, ok := readJobTelemetryRecord(attemptID); ok {
+		incoming = jobTelemetryMergeRecords(existing, incoming)
+	}
+	if err := writeJobTelemetryRecord(incoming); err != nil {
+		visualFprintf(stderr, "note: could not record verification timing for build attempt %s: %v\n", attemptID, err)
+	}
+}
+
+// jobTelemetryMergeSegment picks the more informative of two independently
+// captured facts about the SAME segment: a measured value always wins over
+// an unmeasured one, and between two measured values the incoming (freshly
+// captured) one wins as the newer measurement. This is a selection between
+// two real facts, never an average and never a subtraction -- the record's
+// own no-derived-segment discipline (cmd/job_telemetry.go) is unaffected by
+// merging two writes of the same attempt.
+func jobTelemetryMergeSegment(existing, incoming jobTelemetrySegment) jobTelemetrySegment {
+	if incoming.Measured {
+		return incoming
+	}
+	if existing.Measured {
+		return existing
+	}
+	if strings.TrimSpace(incoming.Source) != "" {
+		return incoming
+	}
+	return existing
+}
+
+// jobTelemetryMergeRecords merges incoming (a fresh, partial write) on top
+// of existing (whatever was already on disk for this attempt), segment by
+// segment.
+func jobTelemetryMergeRecords(existing, incoming jobTelemetryRecord) jobTelemetryRecord {
+	merged := incoming
+	merged.Queue = jobTelemetryMergeSegment(existing.Queue, incoming.Queue)
+	merged.Preflight = jobTelemetryMergeSegment(existing.Preflight, incoming.Preflight)
+	merged.Model = jobTelemetryMergeSegment(existing.Model, incoming.Model)
+	merged.ToolCall = jobTelemetryMergeSegment(existing.ToolCall, incoming.ToolCall)
+	merged.Context = jobTelemetryMergeSegment(existing.Context, incoming.Context)
+	merged.Work = jobTelemetryMergeSegment(existing.Work, incoming.Work)
+	merged.Verification = jobTelemetryMergeSegment(existing.Verification, incoming.Verification)
+	merged.Wait = jobTelemetryMergeSegment(existing.Wait, incoming.Wait)
+	if strings.TrimSpace(merged.JobName) == "" {
+		merged.JobName = existing.JobName
+	}
+	return merged
+}
+
 func runCodexContinueVerification(ctx context.Context, root string, state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, workerTimeout time.Duration, verificationTimeout time.Duration, skipWatchers bool) (codexContinueVerificationReport, *codexContinueWorkerFlowStep) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	now := time.Now().UTC()
-	verificationTimeout = effectiveContinueVerificationTimeout(verificationTimeout)
-	commands := resolveCodexVerificationCommands(root)
-	requiredChecks := requiredVerificationChecks(phase)
-	steps := []codexVerificationStep{
-		runVerificationStep(ctx, root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
-		runVerificationStep(ctx, root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
-		runVerificationStep(ctx, root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
-		runVerificationStep(ctx, root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
-	}
-	steps = applyExpectedTestFailure(steps, phase)
-	claims := verifyCodexBuildClaims(root, manifest)
 	buildWatcher := evaluateContinueWatcherVerification(manifest)
 
-	// Compute shell verification pass/fail before deciding whether to spawn watcher.
-	shellChecksPassed := true
-	executedChecks := 0
-	for _, step := range steps {
+	// The deterministic floor is computed first, with whatever watcher value
+	// is already resolved (buildWatcher -- from the manifest, no live action
+	// needed) -- never with a live dispatch this call might still make below.
+	// It is what sets checksPassed (ruling D11 rule 2): a reviewer dispatched
+	// afterward can only ever ADD a block on top of this result, never
+	// supply the pass (TestDeterministicFloorIsTheOnlySourceOfAPass).
+	//
+	// Phase 201 plan 12 (WORK-08): these two timestamps bound exactly this
+	// call and nothing else -- the verification segment covers the
+	// deterministic check run, never a reviewer dispatch that might happen
+	// afterward.
+	jobTelemetryVerificationStartedAt := time.Now()
+	floor := runDeterministicFloor(ctx, root, phase, manifest, buildWatcher, verificationTimeout)
+	jobTelemetryVerificationEndedAt := time.Now()
+	recordCodexContinueVerificationTelemetry(phase, jobTelemetryVerificationStartedAt, jobTelemetryVerificationEndedAt)
+	// 202-03 (CEC-05): one check-started followed by exactly one terminal
+	// check event per check the deterministic floor actually ran -- a
+	// skipped step (no resolved command) never ran, so it emits nothing.
+	// Check names come directly from floor.Steps, the floor's own result
+	// handling, never a separately maintained list.
+	liveContinueEpisodeID := currentLiveContinueEpisode()
+	for _, step := range floor.Steps {
 		if step.Skipped {
 			continue
 		}
-		executedChecks++
-		if !step.Passed {
-			shellChecksPassed = false
+		emitColonyLiveCheckStarted(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name)
+		if step.Passed {
+			emitColonyLiveCheckPassed(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name)
+		} else {
+			emitColonyLiveCheckFailed(liveContinueEpisodeID, events.EpisodeKindContinue, step.Name, step.Summary)
 		}
 	}
-	// Zero executed checks no longer hard-fails. It used to set
-	// shellChecksPassed=false, which blocked any repo outside the five detected
-	// ecosystems from ever advancing past its first continue — with no remedy
-	// visible to the user. When nothing shell-verifiable resolved, verification
-	// responsibility passes to the watcher below (shellChecksPassed stays true,
-	// so the watcher path runs); a warning makes the situation visible. A user
-	// who also passes --skip-watchers has explicitly chosen to advance on
-	// claims alone, and that choice is theirs.
 
+	// continueWatcherDecision resolves only whether a reviewer is dispatched
+	// at all -- it never consults the floor's result, so the deterministic
+	// outcome can never cause a dispatch (D-08): dispatch happens because
+	// the Queen sent a reviewer and none of the existing auto-skip reasons
+	// apply, full stop. Dispatch (when it happens) reuses floor.Steps and
+	// floor.Claims for the reviewer's brief context rather than re-running
+	// verification a second time.
+	dispatchReviewer, skipped := continueWatcherDecision(state, phase, manifest, buildWatcher, skipWatchers)
 	var continueWatcher codexWatcherVerification
 	var watcherFlow *codexContinueWorkerFlowStep
-	if skipWatchers {
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on verification commands"}
-	} else if shellChecksPassed && isEnvironmentBlockedWatcher(buildWatcher) {
-		continueWatcher = buildWatcher
-	} else if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
-		continueWatcher = resolveHostBoundaryWatcher(buildWatcher, summary)
-	} else if shellChecksPassed {
-		invoker := newCodexWorkerInvoker()
-		if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
-			// Auto-skip: shell verification passed but no authenticated worker provider is available.
-			// No point spawning a watcher that will immediately fail.
-			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; " + dispatchAvailabilityMessage(invoker) + " but runtime verification passed"}
-		} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
-			// LOOP-01: Auto-skip watcher after consecutive failure threshold.
-			emitLoopBreakEvent("watcher_skip",
-				fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
-				"auto-skipped watcher, advancing on runtime verification",
-				"aether-continue")
-			continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
-		} else {
-			continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+	if dispatchReviewer {
+		// Persist the current deterministic evidence before a reviewer is asked
+		// to read it. Pending review must never look like completed verification.
+		snapshot := codexContinueVerificationReport{
+			Phase: phase.ID, GeneratedAt: now.Format(time.RFC3339),
+			VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+			Steps:                      floor.Steps, Claims: floor.Claims,
+			Watcher:        codexWatcherVerification{Status: "pending"},
+			CriteriaPolicy: floor.Criteria.Policy, CriteriaEnforced: floor.Criteria.Enforced,
+			CriteriaPassed: floor.Criteria.Passed, Criteria: floor.Criteria.Criteria,
+			ChecksPassed: floor.ChecksPassed, Passed: false,
+			BlockingIssues: append([]string{}, floor.BlockingIssues...), Warnings: floor.Warnings,
 		}
-	} else if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
-		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
-		emitLoopBreakEvent("watcher_skip",
-			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
-			"auto-skipped watcher, advancing on runtime verification",
-			"aether-continue")
-		continueWatcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on runtime verification.", getWatcherFailureCount(state, phase.ID))}
+		if err := store.SaveJSON(continuePlanArtifactsPath(phase.ID, "verification.json"), snapshot); err != nil {
+			snapshot.ChecksPassed = false
+			snapshot.BlockingIssues = append(snapshot.BlockingIssues, fmt.Sprintf("could not persist verification snapshot: %v", err))
+			return snapshot, nil
+		}
+		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, floor.Steps, floor.Claims, buildWatcher, workerTimeout)
 	} else {
-		continueWatcher, watcherFlow = runCodexContinueWatcherVerification(ctx, root, phase, manifest, steps, claims, buildWatcher, workerTimeout)
+		continueWatcher = skipped
 	}
 	watcher := continueWatcher
 	if !watcher.Present {
 		watcher = buildWatcher
 	}
 
-	checksPassed := shellChecksPassed
-	blockers := []string{}
-	warnings := []string{}
-	if executedChecks == 0 && !phaseHasBoundArtifactRequirements(phase) {
-		warnings = append(warnings, "no deterministic verification command resolved in this repository; verification relies on the watcher — add real build/test commands to CLAUDE.md to enable shell checks")
-	}
-	if !shellChecksPassed {
-		for _, step := range steps {
-			if !step.Passed && !step.Skipped {
-				if step.ErrorClass == ErrorClassEnvironment && phase.Mode != colony.PhaseModeProduction {
-					warnings = append(warnings, fmt.Sprintf("%s environment issue (not blocking for %s phase): %s", step.Name, phase.Mode, step.Summary))
-				} else {
-					blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
-				}
-			}
-		}
-		// If all failures were environment warnings, allow checks to pass.
-		if len(blockers) == 0 && len(warnings) > 0 {
-			checksPassed = true
-			for _, w := range warnings {
-				fmt.Fprintf(os.Stderr, "⚠ %s\n", w)
-			}
-		}
-	}
+	// D-02/D-03/D-09/D-10: when a free check failed and no reviewer was
+	// dispatched, attempt exactly one bounded automatic builder fix,
+	// wrapped in D-09's checkpoint/restore discipline (applyBoundedCheckFixRepair,
+	// cmd/work_repair.go), and use its result as the effective floor for
+	// the rest of this function. Eligibility (the floor already passing, a
+	// reviewer having been dispatched, no failing shell step, or a fix
+	// attempt already recorded for this phase and check) is still decided
+	// in exactly one place, inside planCheckFixAttempt -- this call site
+	// never re-derives that decision.
+	floor, checkFixAttempt, checkFixHandback := applyBoundedCheckFixRepair(ctx, root, state, phase, manifest, floor, buildWatcher, workerTimeout, verificationTimeout, dispatchReviewer)
+
+	checksPassed := floor.ChecksPassed
+	blockers := append([]string{}, floor.BlockingIssues...)
+	warnings := append([]string{}, floor.Warnings...)
 	if watcher.Present && !watcher.Passed && watcher.Status != "skipped" {
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
 			summary = "watcher verification did not complete cleanly"
 		}
 		if watcher.Status == "timeout" && checksPassed {
-			// Advisory: watcher timed out but runtime verification (build, types, lint, tests)
+			// Advisory: watcher timed out but the deterministic floor
 			// passed independently. Treat as warning, not a hard block.
 			blockers = append(blockers, fmt.Sprintf(
 				"watcher %s timed out; runtime verification passed independently", watcher.Worker))
@@ -1672,12 +2228,6 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 			checksPassed = false
 			blockers = append(blockers, summary)
 		}
-	}
-
-	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
-	if criteria.Enforced && !criteria.Passed {
-		checksPassed = false
-		blockers = append(blockers, criteria.BlockingIssues...)
 	}
 
 	// LOOP-01: Update watcher failure counter based on watcher outcome.
@@ -1691,19 +2241,64 @@ func runCodexContinueVerification(ctx context.Context, root string, state colony
 	return codexContinueVerificationReport{
 		Phase:                      phase.ID,
 		GeneratedAt:                now.Format(time.RFC3339),
-		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
-		Steps:                      steps,
-		Claims:                     claims,
+		VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+		Steps:                      floor.Steps,
+		Claims:                     floor.Claims,
 		Watcher:                    watcher,
-		CriteriaPolicy:             criteria.Policy,
-		CriteriaEnforced:           criteria.Enforced,
-		CriteriaPassed:             criteria.Passed,
-		Criteria:                   criteria.Criteria,
+		CriteriaPolicy:             floor.Criteria.Policy,
+		CriteriaEnforced:           floor.Criteria.Enforced,
+		CriteriaPassed:             floor.Criteria.Passed,
+		Criteria:                   floor.Criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
 		Warnings:                   warnings,
+		CheckFixAttempt:            checkFixAttempt,
+		RepairHandback:             checkFixHandback,
 	}, watcherFlow
+}
+
+// continueWatcherDecision decides whether continue dispatches a reviewer
+// worker at all. It never consults the deterministic verification result --
+// the removed comment block above named the exact fallback this replaces
+// ("zero executed checks hands verification to a watcher"); that coupling is
+// gone. Every existing non-dispatch reason keeps its own explicit skipped
+// status: --skip-watchers, a build-side watcher already environment-blocked,
+// a host-boundary (wrapper-mediated) skip, no worker provider available, or
+// the consecutive-failure circuit breaker (LOOP-01). Returning dispatch=true
+// means only "none of those apply" -- the caller still runs the reviewer and
+// its own outcome is evaluated afterward.
+func continueWatcherDecision(state colony.ColonyState, phase colony.Phase, manifest codexContinueManifest, buildWatcher codexWatcherVerification, skipWatchers bool) (bool, codexWatcherVerification) {
+	if skipWatchers {
+		// Matches the identical --skip-watchers summary text on the other two
+		// continue lanes (cmd/codex_continue_plan.go, cmd/codex_continue_finalize.go)
+		// -- discovered diverging during 198.2-05's dual-lane outcome text
+		// parity test (TestBothCheckLanesLeaveTheSameOutcomeText); the wording
+		// mismatch was a pre-existing bug, not a deliberate difference.
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
+	}
+	if isEnvironmentBlockedWatcher(buildWatcher) {
+		return false, buildWatcher
+	}
+	if summary, ok := continueWatcherHostBoundarySkipSummary(manifest); ok {
+		return false, resolveHostBoundaryWatcher(buildWatcher, summary)
+	}
+	invoker := newCodexWorkerInvoker()
+	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(context.Background()) {
+		// Auto-skip: no authenticated worker provider is available. No point
+		// dispatching a watcher that will immediately fail; the deterministic
+		// floor still decides.
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: "watcher auto-skipped; " + dispatchAvailabilityMessage(invoker) + "; advancing on the deterministic floor"}
+	}
+	if getWatcherFailureCount(state, phase.ID) >= defaultWatcherFailureThreshold {
+		// LOOP-01: Auto-skip watcher after consecutive failure threshold.
+		emitLoopBreakEvent("watcher_skip",
+			fmt.Sprintf("%d consecutive watcher failures", getWatcherFailureCount(state, phase.ID)),
+			"auto-skipped watcher, advancing on the deterministic floor",
+			"aether-continue")
+		return false, codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "auto-skip", Summary: fmt.Sprintf("watcher auto-skipped after %d consecutive failures. Advancing on the deterministic floor.", getWatcherFailureCount(state, phase.ID))}
+	}
+	return true, codexWatcherVerification{}
 }
 
 func runCodexContinueWatcherVerification(ctx context.Context, root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, workerTimeout time.Duration) (codexWatcherVerification, *codexContinueWorkerFlowStep) {
@@ -1806,7 +2401,7 @@ func runCodexContinueWatcherVerification(ctx context.Context, root string, phase
 
 	return codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  workerName,
 			Summary: summary,
@@ -1817,7 +2412,18 @@ func runCodexContinueWatcherVerification(ctx context.Context, root string, phase
 			Task:    "Independent verification before advancement",
 			Status:  status,
 			Summary: continueWatcherFlowSummary(workerName, status, summary),
+			Usage:   continueWatcherResultUsage(result),
 		}
+}
+
+// continueWatcherResultUsage is what the watcher's own tool reported. A
+// dispatch that produced no result at all carries nothing, which the ledger
+// records as "not reported" rather than as a zero.
+func continueWatcherResultUsage(result codex.DispatchResult) codex.WorkerUsage {
+	if result.WorkerResult == nil {
+		return codex.WorkerUsage{}
+	}
+	return result.WorkerResult.Usage
 }
 
 func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest codexContinueManifest, steps []codexVerificationStep, claims codexClaimVerification, buildWatcher codexWatcherVerification, invoker codex.WorkerInvoker, workerTimeout time.Duration) codex.WorkerDispatch {
@@ -1849,9 +2455,11 @@ func plannedContinueWatcherDispatch(root string, phase colony.Phase, manifest co
 		// home each.
 		HandoffSection: renderRelatedWorkflowHandoffSection("continue", phase.ID,
 			deterministicAntName("watcher", fmt.Sprintf("phase:%d:continue:watcher", phase.ID))),
-		Root:    root,
-		Timeout: effectiveContinueReviewTimeout(workerTimeout),
-		Wave:    1,
+		Workflow: "continue",
+		Phase:    phase.ID,
+		Root:     root,
+		Timeout:  effectiveContinueReviewTimeout(workerTimeout),
+		Wave:     1,
 	}
 }
 
@@ -1917,6 +2525,7 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 	}
 	b.WriteString("\nFull verification output: see .aether/data/build/phase-")
 	b.WriteString(fmt.Sprintf("%d/verification.json\n", phase.ID))
+	b.WriteString("This snapshot contains current command results; watcher status is pending until your review completes. Prior continue.json and review.json outcomes are historical: reassess their findings against current evidence. A result-collection.json report describes only its recorded attempt; compare its recorded_at with the current manifest and later attempt journal before treating unfinished tasks as current.\n")
 	if len(phase.Tasks) > 0 {
 		b.WriteString("\nPhase tasks:\n")
 		if phase.Mode == colony.PhaseModeDiscovery && len(phase.Tasks) > 5 {
@@ -1932,6 +2541,11 @@ func renderCodexContinueWatcherBrief(root string, phase colony.Phase, manifest c
 		}
 	}
 	b.WriteString(renderVerificationCommandSection())
+	// CR-05/WR-08 (203-REVIEW.md): the continue lane's Watcher -- the most
+	// expensive single worker in the whole flow -- never received the
+	// recruit invitation either. Watcher has a Bash tool, so unlike
+	// Gatekeeper/Auditor above there is no reason to withhold it.
+	b.WriteString(renderRecruitmentInvitation())
 	return b.String()
 }
 
@@ -1948,8 +2562,8 @@ func evaluateContinueWatcherVerification(manifest codexContinueManifest) codexWa
 		status := continueWorkerFlowStatus(dispatch.Status)
 		summary := strings.TrimSpace(dispatch.Summary)
 		if summary == "" {
-			switch status {
-			case "completed", "manually-reconciled":
+			switch {
+			case isSuccessfulExternalBuildStatus(status):
 				summary = "watcher verification completed before advancement"
 			default:
 				summary = fmt.Sprintf("watcher verification did not complete cleanly: %s", status)
@@ -1957,7 +2571,7 @@ func evaluateContinueWatcherVerification(manifest codexContinueManifest) codexWa
 		}
 		watcher := codexWatcherVerification{
 			Present: true,
-			Passed:  status == "completed" || status == "manually-reconciled",
+			Passed:  isSuccessfulExternalBuildStatus(status),
 			Status:  status,
 			Worker:  strings.TrimSpace(dispatch.Name),
 			Summary: summary,
@@ -2000,6 +2614,20 @@ func environmentBlockedLaunchSummary(original string) string {
 	return summary + ": " + original
 }
 
+// mergeReconcileTaskIDs unions --reconcile-task values recorded live at
+// continue-finalize time with the reconcile task IDs already persisted on
+// the plan manifest (recorded at `aether continue --plan-only` time),
+// deduplicated and sorted. Closes the 2026-08-01 folded todo: before this,
+// continue-finalize had no --reconcile-task flag at all, so an operator
+// could only record reconciliation up front at plan-only time, never after.
+func mergeReconcileTaskIDs(planIDs, flagIDs []string) []string {
+	if len(flagIDs) == 0 {
+		return append([]string{}, planIDs...)
+	}
+	merged := append(append([]string{}, planIDs...), flagIDs...)
+	return uniqueSortedStrings(merged)
+}
+
 func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []string) error {
 	if len(reconcileTaskIDs) == 0 {
 		return nil
@@ -2020,6 +2648,57 @@ func validateContinueReconcileTasks(phase colony.Phase, reconcileTaskIDs []strin
 	return nil
 }
 
+// priorAttemptDispatchStatuses fills per-task dispatch-evidence gaps from the
+// phase's append-only attempt journal (build/phase-<N>/attempts/*.json).
+//
+// build/phase-<N>/manifest.json carries only the CURRENT attempt's dispatches
+// -- every build overwrites it -- so a task proven in an EARLIER partial
+// attempt has no status there at all, classifies as "missing", and produces a
+// recovery command naming exactly the tasks the other attempt already proved.
+// Alternating two partial redispatches then loops forever, which is precisely
+// what was reported downstream on v1.0.74. The journal is the durable
+// cross-attempt record and already exists; nothing consulted it here.
+//
+// Gap-fill ONLY: a task the current manifest has any status for is left
+// completely untouched, so a current failure can never be masked by an older
+// success. Simulated/synthetic attempts contribute nothing -- simulated
+// evidence must not become credit by outliving its own manifest.
+//
+// Returns the statuses to merge, and the set of task IDs whose evidence came
+// from a real (non-synthetic) earlier attempt, so the caller can trust those
+// statuses per task rather than reading trust off the current manifest alone.
+func priorAttemptDispatchStatuses(phaseID int, current map[string][]string) (map[string][]string, map[string]struct{}) {
+	filled := map[string][]string{}
+	trusted := map[string]struct{}{}
+	if phaseID < 1 {
+		return filled, trusted
+	}
+	for taskID, record := range latestPhaseTaskAttempts(phaseID) {
+		if len(current[taskID]) > 0 {
+			continue
+		}
+		for _, dispatch := range record.Dispatches {
+			for _, covered := range dispatchCoveredTaskIDs(dispatch) {
+				if covered != taskID {
+					continue
+				}
+				status := strings.TrimSpace(dispatch.Status)
+				if _, credited := completedBuildTaskIDs([]codexBuildDispatch{dispatch})[taskID]; credited {
+					status = "completed"
+				}
+				if record.Status != buildAttemptBuilt && record.Status != buildAttemptPartial {
+					status = "failed"
+				}
+				if status != "" {
+					filled[taskID] = append(filled[taskID], status)
+					trusted[taskID] = struct{}{}
+				}
+			}
+		}
+	}
+	return filled, trusted
+}
+
 func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, options codexContinueOptions, now time.Time) codexContinueAssessment {
 	reconciled := make(map[string]struct{}, len(options.ReconcileTaskIDs))
 	for _, taskID := range options.ReconcileTaskIDs {
@@ -2030,14 +2709,22 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	operationalIssues := []string{}
 	for _, dispatch := range manifest.Data.Dispatches {
 		status := strings.TrimSpace(dispatch.Status)
-		if dispatch.TaskID != "" {
-			dispatchStatuses[dispatch.TaskID] = append(dispatchStatuses[dispatch.TaskID], status)
+		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+			dispatchStatuses[taskID] = append(dispatchStatuses[taskID], status)
 		}
 		if status != "" && status != "completed" {
 			operationalIssues = append(operationalIssues, fmt.Sprintf("%s (%s)", dispatch.Name, status))
 		}
 	}
 	operationalIssues = uniqueSortedStrings(operationalIssues)
+
+	// A phase can be built across several partial attempts. Credit every
+	// attempt's evidence, not just the latest manifest's -- see
+	// priorAttemptDispatchStatuses.
+	priorStatuses, priorTrusted := priorAttemptDispatchStatuses(phase.ID, dispatchStatuses)
+	for taskID, statuses := range priorStatuses {
+		dispatchStatuses[taskID] = append(dispatchStatuses[taskID], statuses...)
+	}
 
 	requiresBuilderClaims := manifestRequiresBuilderClaims(manifest)
 	dispatchEvidenceTrusted := !manifestUsesSyntheticDispatch(manifest)
@@ -2050,7 +2737,13 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
 		_, reconciledTask := reconciled[taskID]
 		taskArtifactEvidenceTrusted := !requiresBuilderClaims || claimsSatisfied
-		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, dispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
+		// Trust is per task: statuses recovered from a real earlier attempt
+		// are real evidence even when the CURRENT manifest is synthetic.
+		taskDispatchEvidenceTrusted := dispatchEvidenceTrusted
+		if _, fromPriorAttempt := priorTrusted[taskID]; fromPriorAttempt {
+			taskDispatchEvidenceTrusted = true
+		}
+		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, taskDispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
 		taskAssessment := codexContinueTaskAssessment{
 			TaskID:           taskID,
 			Goal:             strings.TrimSpace(task.Goal),
@@ -2106,6 +2799,16 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		recovery.RedispatchTasks = uniqueSortedStrings(redispatchTasks)
 		recovery.RedispatchCommand = buildTargetedRedispatchCommand(phase.ID, recovery.RedispatchTasks)
 	}
+	// D-02: when the automatic fix attempt ran and the re-run still failed,
+	// the recovery plan carries the single exact command to re-run the
+	// builder by hand -- never a menu.
+	if fix := verification.CheckFixAttempt; fix != nil && fix.Outcome == "still_failing" {
+		fixCommand := buildTargetedRedispatchCommand(phase.ID, fix.FailureIndex.ImplicatedTaskIDs)
+		if strings.TrimSpace(fixCommand) == "" {
+			fixCommand = buildForceRedispatchCommand(phase.ID)
+		}
+		recovery.CheckFixCommand = fixCommand
+	}
 
 	passed := verification.ChecksPassed && positiveEvidence
 	if len(options.ReconcileTaskIDs) > 0 {
@@ -2154,13 +2857,25 @@ func continueTasksSupportAdvancement(tasks []codexContinueTaskAssessment, claims
 		case "missing", "needs_redispatch", "implemented_unverified", "simulated":
 			return false
 		case "manually_reconciled":
-			// H-04: a manually reconciled task must be able to advance when
-			// phase verification passed — the runtime's own recovery hint is
-			// `--reconcile-task <id>`, and excluding reconciled tasks here
-			// made that hint a dead loop. Reconcile is still not a bypass:
-			// builder-claim verification must also pass, so a failed dispatch
-			// with an empty claims file stays blocked.
-			if !task.Verified || !claimsSatisfied {
+			// H-04, extended by FLOOR-03 (.planning/todos/pending/2026-08-01-
+			// finalize-reconcile-task-evidence-gate.md, folded into 193-04): a
+			// manually reconciled task must be able to advance when the
+			// deterministic floor (build/types/lint/tests, claimed-files-exist,
+			// and each criterion's evidence -- task.Verified is
+			// verification.ChecksPassed, which already folds criterion evidence
+			// in via runDeterministicFloor) passed, even when no builder-claims
+			// file exists to satisfy claimsSatisfied. An operator reconciling
+			// work done entirely outside the pipeline has no claims file to
+			// satisfy by construction -- requiring one anyway is precisely the
+			// asymmetry that deadlocked the finalize lane (the direct
+			// `aether continue` path could still hand-record claims; the
+			// external wrapper lane had no way to record --reconcile-task at
+			// finalize time at all until this plan added the flag). Reconcile
+			// is still not a bypass: a reconciled task whose deterministic
+			// floor failed still blocks, and an UNRECONCILED task's builder-
+			// claim failure still blocks via the "implemented_unverified" /
+			// "needs_redispatch" outcomes above, untouched by this change.
+			if !task.Verified {
 				return false
 			}
 		}
@@ -2251,6 +2966,30 @@ func buildTargetedRedispatchCommand(phaseID int, taskIDs []string) string {
 
 func buildForceRedispatchCommand(phaseID int) string {
 	return fmt.Sprintf("aether build %d --force", phaseID)
+}
+
+// buildUnfinishedRetryRedispatchCommand is the D-10 recovery command: a forced
+// redispatch of the active phase RESTRICTED to the tasks that were never
+// credited. `--force` supersedes the dead attempt; the `--task` filter is what
+// makes the runtime plan only the named tasks, so no worker is ever sent to
+// redo work another worker already proved (CR-04, 195-REVIEW.md -- the plain
+// `--force` command this replaced re-planned the whole phase, credited tasks
+// included, which is the opposite of what every surface promised the owner).
+//
+// With no task IDs it degrades to the plain forced redispatch, because there
+// is nothing to narrow to.
+func buildUnfinishedRetryRedispatchCommand(phaseID int, taskIDs []string) string {
+	unique := uniqueSortedStrings(taskIDs)
+	if len(unique) == 0 {
+		return buildForceRedispatchCommand(phaseID)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "aether build %d --force", phaseID)
+	for _, taskID := range unique {
+		b.WriteString(" --task ")
+		b.WriteString(taskID)
+	}
+	return b.String()
 }
 
 func buildSkipPhaseCommand(phaseID int) string {
@@ -2561,10 +3300,19 @@ func loadVerificationCommandsFromMarkdown(path, heading string) codexVerificatio
 	}
 
 	content := string(data)
-	if section := extractMarkdownSection(content, heading); section != "" {
-		content = section
+	section := extractMarkdownSection(content, heading)
+	if section == "" {
+		return extractVerificationCommands(content)
 	}
-	return extractVerificationCommands(content)
+	// The named section is the more precise signal, so it wins slot by slot
+	// -- but it must never DELETE a command the rest of the file already
+	// provided. Narrowing to the section discarded everything outside it, so
+	// adding a "## Verification Commands" section naming only a build command
+	// silently unresolved the test command the same file had been supplying
+	// all along, and the phase then failed a check it had been passing.
+	commands := extractVerificationCommands(section)
+	mergeCodexVerificationCommands(&commands, extractVerificationCommands(content))
+	return commands
 }
 
 func extractMarkdownSection(content, heading string) string {
@@ -2892,7 +3640,12 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 // that actionable pointer, shared by both blocked-return sites below so the
 // three locations never drift apart.
 func blockedVerificationConfigGuidance() string {
-	return `configure a real command in AGENTS.md, in CLAUDE.md under "## Verification Commands", or in .aether/data/codebase.md`
+	// .aether/data/codebase.md is deliberately NOT offered here. It is read
+	// as a source, but .aether/data is a protected path -- an agent following
+	// this guidance to write there is refused by the write guard, which left
+	// the operator alternating between a blocked halt and a blocked write
+	// with no exit. Only the two paths anyone can actually edit are named.
+	return `configure a real command in AGENTS.md, or in CLAUDE.md under "## Verification Commands" (one line per check, e.g. "- tests: go test ./...")`
 }
 
 // applyExpectedTestFailure inverts the tests check's expectation for a
@@ -2926,10 +3679,25 @@ func applyExpectedTestFailure(steps []codexVerificationStep, phase colony.Phase)
 	return steps
 }
 
-func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) codexVerificationStep {
+// runVerificationStep runs one of the four shell checks (build, types, lint,
+// tests) and reports the result. It is the single body runDeterministicFloor
+// calls four times per lane, and both continue lanes call runDeterministicFloor
+// — so hooking the live progress emit here (rather than in either lane's
+// caller) is what makes SHOW-03's start/finish lines stream identically on
+// both the ordinary fast path and the deeper review path.
+//
+// The named return plus deferred finish emit guarantees the start line
+// (emitVerificationStepStart) and the finish line (emitVerificationStepFinish)
+// stay paired on every return path, including any a future edit adds.
+func runVerificationStep(ctx context.Context, root, name string, required bool, command string, timeout time.Duration) (step codexVerificationStep) {
+	emitVerificationStepStart(name)
+	defer func() {
+		emitVerificationStepFinish(step)
+	}()
+
 	if strings.TrimSpace(command) == "" {
 		if required {
-			return codexVerificationStep{
+			step = codexVerificationStep{
 				Name:     name,
 				Skipped:  true,
 				Blocked:  true,
@@ -2937,19 +3705,23 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 				Passed:   false,
 				Summary:  fmt.Sprintf("blocked: no verification command resolved for %s; %s", name, blockedVerificationConfigGuidance()),
 			}
+			return
 		}
-		return codexVerificationStep{
+		step = codexVerificationStep{
 			Name:     name,
 			Skipped:  true,
 			Passed:   true,
 			Required: false,
 			Summary:  "no command resolved; skipped",
 		}
+		return
 	}
 
 	timeout = effectiveContinueVerificationTimeout(timeout)
+	start := time.Now()
 	output, exitCode, timedOut, err := runShellCommandContext(ctx, root, command, timeout)
-	step := codexVerificationStep{
+	measured := time.Since(start).Seconds()
+	step = codexVerificationStep{
 		Name:           name,
 		Command:        command,
 		Passed:         err == nil,
@@ -2959,6 +3731,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 		ExitCode:       exitCode,
 		Summary:        successSummaryForStep(name, exitCode, output, err),
 		Output:         output,
+		Duration:       measured,
 	}
 	if err != nil {
 		// A command that does not exist is not a failed verification — it is a
@@ -2971,7 +3744,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 		// here would directly contradict evaluateCriterionCheck's gate below.
 		if isCommandUnresolvable(output, exitCode) {
 			if required {
-				return codexVerificationStep{
+				step = codexVerificationStep{
 					Name:     name,
 					Command:  command,
 					Skipped:  true,
@@ -2981,8 +3754,9 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 					ExitCode: exitCode,
 					Summary:  fmt.Sprintf("blocked: verification command %q for %s could not run (exit %d); %s", command, name, exitCode, blockedVerificationConfigGuidance()),
 				}
+				return
 			}
-			return codexVerificationStep{
+			step = codexVerificationStep{
 				Name:     name,
 				Command:  command,
 				Skipped:  true,
@@ -2991,6 +3765,7 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 				ExitCode: exitCode,
 				Summary:  fmt.Sprintf("%s: command unavailable in this repository (%s); skipped — configure a real command in CLAUDE.md to enable this check", name, command),
 			}
+			return
 		}
 		step.Summary = failureSummaryForStep(name, exitCode, output, err, timedOut, timeout)
 		if timedOut {
@@ -2999,7 +3774,80 @@ func runVerificationStep(ctx context.Context, root, name string, required bool, 
 			step.ErrorClass = classifyVerificationError(output, exitCode)
 		}
 	}
-	return step
+	return
+}
+
+// verificationStepDisplayName maps a verification step's internal key
+// ("build", "types", "lint", "tests") to the plain-English label the owner
+// sees on the live progress lines (SHOW-03 D-01). The internal key never
+// reaches the owner directly.
+func verificationStepDisplayName(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "build":
+		return "Build"
+	case "types":
+		return "Types"
+	case "lint":
+		return "Lint"
+	case "tests":
+		return "Tests"
+	default:
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			return "Check"
+		}
+		// WR-03 (198-REVIEW.md): sentenceCase decodes a whole rune rather
+		// than slicing the first byte, so a check name whose first
+		// character takes more than one byte to store degrades to a
+		// capitalized label instead of panicking.
+		return sentenceCase(trimmed)
+	}
+}
+
+// emitVerificationStepStart prints the "Running {check}…" line the instant a
+// verification check begins (SHOW-03 D-01) — before the shell command runs,
+// not after. Goes through emitVisualProgress, never a direct write to stdout,
+// so writeVisualOutput's command-name translation cannot be bypassed. Paired
+// with emitVerificationStepFinish.
+func emitVerificationStepStart(name string) {
+	emitVisualProgress(fmt.Sprintf("Running %s…", strings.ToLower(verificationStepDisplayName(name))))
+}
+
+// emitVerificationStepFinish prints the paired result line once a
+// verification check ends:
+//   - skipped: a skip line naming why, with no duration claimed at all —
+//     a skipped check never ran, so it has nothing measured to report.
+//   - passed: a pass mark and the measured elapsed time read straight off
+//     step.Duration, the same figure the closing verification summary
+//     renders (D-03 / Phase 196 D-01: measured, never estimated).
+//   - failed: a fail mark with the step's own one-line Summary inline on the
+//     same line (D-02) — never a second, invented summary format.
+func emitVerificationStepFinish(step codexVerificationStep) {
+	label := verificationStepDisplayName(step.Name)
+	if step.Skipped {
+		reason := strings.TrimSpace(step.Summary)
+		if reason == "" {
+			reason = "skipped"
+		}
+		emitVisualProgress(fmt.Sprintf("%s — skipped: %s", label, reason))
+		return
+	}
+
+	duration := ""
+	if step.Duration > 0 {
+		duration = fmt.Sprintf(" (%.1fs)", step.Duration)
+	}
+
+	if step.Passed {
+		emitVisualProgress(fmt.Sprintf("%s ✓%s", label, duration))
+		return
+	}
+
+	reason := strings.TrimSpace(step.Summary)
+	if reason == "" {
+		reason = "failed"
+	}
+	emitVisualProgress(fmt.Sprintf("%s ✗%s — %s", label, duration, reason))
 }
 
 // requiredVerificationChecks derives the set of shell verification checks
@@ -3063,6 +3911,8 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 			Summary: missingClaimsSummary(manifest),
 		}
 	}
+
+	claims = phaseClaimsForContinue(manifest, claims)
 
 	// The union of everything the claims file says changed this phase — the
 	// single notion of "what changed" that both mismatch checking above and
@@ -3155,6 +4005,10 @@ func verifyCodexBuildClaims(root string, manifest codexContinueManifest) codexCl
 }
 
 func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult) codexContinueGateReport {
+	return runCodexContinueGatesWithAutopilotBaseline(phase, manifest, verification, assessment, now, priorGateResults, nil)
+}
+
+func runCodexContinueGatesWithAutopilotBaseline(phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, now time.Time, priorGateResults []GateCheckResult, autopilotBlockerBaseline *blockerSnapshot) codexContinueGateReport {
 	checks := []gateCheck{}
 	blockers := []string{}
 	warnings := []string{}
@@ -3184,8 +4038,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			manifestCheck.Detail = fmt.Sprintf("build manifest is missing for phase %d", phase.ID)
 			manifestCheck.FixHint = "Ensure the build completed successfully and produced a manifest.json"
 			manifestCheck.RecoveryOptions = []string{
-				"Fix the build issue and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix the build issue and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, manifestCheck.Detail)
 		}
@@ -3204,8 +4058,8 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 		if !verification.ChecksPassed {
 			verifCheck.FixHint = gateRecoveryTemplate("verification_loop")
 			verifCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix manually and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, verification.BlockingIssues...)
 		}
@@ -3221,12 +4075,68 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 			evidenceCheck.Detail = "verification passed but no implementation evidence or reconciliation was recorded"
 			evidenceCheck.FixHint = "Ensure workers reported task completion or claims were filed"
 			evidenceCheck.RecoveryOptions = []string{
-				"Fix manually and run /ant-continue",
-				"Run /ant-unblock for guided recovery",
+				"Fix manually and run aether continue",
+				"Run aether unblock --dispatch for guided recovery",
 			}
 			blockers = append(blockers, assessment.BlockingIssues...)
 		}
 		checks = append(checks, evidenceCheck)
+	}
+
+	// owner_confirmation_pending gate (D-05, 193-CONTEXT.md): surfaces every
+	// outstanding needs_owner_confirmation criterion without blocking
+	// continue -- every phase, including the final phase, still advances.
+	// The durable runtime-verification decision carries the owner work across
+	// that boundary and `aether seal` is the one place that refuses until it
+	// is answered. No reviewer is dispatched because of this gate.
+	ownerPending := outstandingOwnerConfirmations(phase.ID, verification.Criteria)
+	ownerCheck := gateCheck{Name: "owner_confirmation_pending", Passed: true, Detail: "nothing is waiting on your confirmation"}
+	if len(ownerPending) > 0 {
+		details := make([]string, 0, len(ownerPending))
+		recovery := make([]string, 0, len(ownerPending))
+		for _, c := range ownerPending {
+			details = append(details, fmt.Sprintf("%q%s", c.Criterion, criterionTaskSuffix(c.TaskID)))
+			recovery = append(recovery, ownerConfirmationCommand(phase.ID, c.TaskID, c.Criterion))
+		}
+		ownerCheck.Detail = fmt.Sprintf("%d requirement(s) could not be checked automatically or by a reviewer and need your confirmation: %s", len(ownerPending), strings.Join(details, "; "))
+		ownerCheck.RecoveryOptions = recovery
+	}
+	checks = append(checks, ownerCheck)
+
+	// check_fix_attempt gate (D-02, D-03): when a failing check with no
+	// reviewer dispatched drew the single bounded automatic builder fix
+	// attempt and the re-run still failed, this gate fails and names the
+	// exact command to re-run the builder by hand -- more specific than the
+	// generic verification_steps_passed gate above, which already blocks for
+	// the same underlying reason. nil CheckFixAttempt (no attempt ran)
+	// carries no gate entry at all -- there is nothing to report.
+	if fix := verification.CheckFixAttempt; fix != nil {
+		// WR-02 (193-REVIEW.md): fix.Outcome is one of two internal
+		// snake_case enum values ("fixed"/"still_failing", set in
+		// check_fix_attempt.go). CLAUDE.md requires every string this
+		// program writes to the (explicitly non-technical) project owner
+		// to be plain English with no raw code-style tokens, so this
+		// translates the enum before it ever reaches Detail rather than
+		// interpolating it directly.
+		outcomeText := "fixed it"
+		if fix.Outcome == "still_failing" {
+			outcomeText = "the check is still failing"
+		}
+		fixCheck := gateCheck{
+			Name:   "check_fix_attempt",
+			Passed: fix.Outcome != "still_failing",
+			Detail: fmt.Sprintf("one automatic fix attempt ran for the %s check — %s", fix.Check, outcomeText),
+		}
+		if !fixCheck.Passed {
+			fixCommand := buildTargetedRedispatchCommand(phase.ID, fix.FailureIndex.ImplicatedTaskIDs)
+			if strings.TrimSpace(fixCommand) == "" {
+				fixCommand = buildForceRedispatchCommand(phase.ID)
+			}
+			fixCheck.FixHint = fmt.Sprintf("The automatic fix attempt did not resolve the %s check; run this command by hand", fix.Check)
+			fixCheck.RecoveryOptions = []string{fixCommand}
+			blockers = append(blockers, fixCheck.Detail)
+		}
+		checks = append(checks, fixCheck)
 	}
 
 	// The operational_evidence gate was removed: it hardcoded Passed=true
@@ -3246,9 +4156,9 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 	if !flagCheck.Passed {
 		flagCheck.FixHint = "Resolve critical flags before continuing"
 		flagCheck.RecoveryOptions = []string{
-			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
-			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
-			"Fix manually and run /ant-continue",
+			"Fix the issue, then resolve its flag: aether flag-resolve --id <id> --message \"what fixed it\"",
+			"Run aether unblock --dispatch to dispatch the Fixer against the blocking issues",
+			"Fix manually and run aether continue",
 		}
 		blockers = append(blockers, flagCheck.Detail)
 	}
@@ -3256,13 +4166,29 @@ func runCodexContinueGates(phase colony.Phase, manifest codexContinueManifest, v
 
 	// The Iron Law gate (classic Flags Gate): no phase advancement with
 	// unresolved blockers. Advancement-scoped only — build is allowed with
-	// an open blocker; passing this line is not.
-	blockerFlagCheck := checkUnresolvedBlockerFlags()
+	// an open blocker; passing this line is not. The one narrow exception is
+	// an in-process autopilot run whose explicit before-stage snapshot proves
+	// the unresolved blocker set neither grew nor gained escalation evidence.
+	// Direct continue and every wrapper lane omit that capability and remain
+	// strict. No flag is resolved, hidden, or rewritten here.
+	currentBlockers, blockerDescriptions, blockerSnapshotErr := readBlockerSnapshotEvidence(store)
+	blockerFlagCheck := checkUnresolvedBlockerSnapshot(currentBlockers, blockerDescriptions, blockerSnapshotErr)
+	if !blockerFlagCheck.Passed && blockerSnapshotErr == nil && autopilotBlockerBaseline != nil {
+		baseline := *autopilotBlockerBaseline
+		movement := compareBlockerSnapshots(baseline, currentBlockers)
+		if !movement.CountIncreased && !movement.EscalationAdded {
+			blockerFlagCheck.Passed = true
+			blockerFlagCheck.Detail = fmt.Sprintf(
+				"existing blocker baseline did not increase or escalate; %d blocker(s) remain unresolved and visible for follow-up",
+				currentBlockers.Count,
+			)
+		}
+	}
 	if !blockerFlagCheck.Passed {
 		blockerFlagCheck.FixHint = "Every blocker must be resolved before the phase can advance"
 		blockerFlagCheck.RecoveryOptions = []string{
-			"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\"",
-			"Run /ant-unblock to dispatch the Fixer against the blocking issues",
+			"Fix the issue, then resolve its flag: aether flag-resolve --id <id> --message \"what fixed it\"",
+			"Run aether unblock --dispatch to dispatch the Fixer against the blocking issues",
 		}
 		blockers = append(blockers, blockerFlagCheck.Detail)
 	}
@@ -3600,8 +4526,16 @@ func continueWorkerFlowStatus(status string) string {
 }
 
 func continueReviewStatusBlocks(status string) bool {
-	switch continueWorkerFlowStatus(status) {
-	case "completed", "manually-reconciled", "skipped", watcherStatusEnvironmentBlocked:
+	status = continueWorkerFlowStatus(status)
+	// A reviewer that honestly reports completed_no_change verified the work
+	// and found nothing to change (ruling D6). Blocking advancement on it
+	// would punish the honest answer and force a fabricated finding --
+	// interrupted still blocks, because that work is genuinely unfinished.
+	if isSuccessfulExternalBuildStatus(status) {
+		return false
+	}
+	switch status {
+	case "skipped", watcherStatusEnvironmentBlocked:
 		return false
 	default:
 		return true
@@ -3641,8 +4575,8 @@ func emitContinueVerificationStart(phase colony.Phase, verificationTimeout time.
 }
 
 func continueWatcherDefaultSummary(status string) string {
-	switch continueWorkerFlowStatus(status) {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(continueWorkerFlowStatus(status)):
 		return "Continue watcher completed independent verification"
 	default:
 		return fmt.Sprintf("continue watcher finished with status %s", continueWorkerFlowStatus(status))
@@ -3655,8 +4589,8 @@ func continueWatcherFlowSummary(name, status, summary string) string {
 		name = "watcher"
 	}
 	status = continueWorkerFlowStatus(status)
-	switch status {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(status):
 		return fmt.Sprintf("Watcher %s completed independent verification before advancement", name)
 	default:
 		summary = strings.TrimSpace(summary)
@@ -3895,8 +4829,8 @@ func continueReviewFlowSummary(step codexContinueWorkerFlowStep) string {
 	if role == "" {
 		role = "Review"
 	}
-	switch status {
-	case "completed", "manually-reconciled":
+	switch {
+	case isSuccessfulExternalBuildStatus(status):
 		return fmt.Sprintf("%s %s completed continue review before advancement", role, name)
 	default:
 		return fmt.Sprintf("%s %s closed continue review with status %s", role, name, status)

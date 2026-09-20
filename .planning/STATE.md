@@ -1,66 +1,46 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.26
-milestone_name: Intelligent Orchestration (rescoped to hardening 2026-08-14)
-status: ready_to_plan
-stopped_at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-last_updated: "2026-08-21T09:38:13.075Z"
-last_activity: 2026-08-21
+milestone: v1.28
+milestone_name: Classic Colony Restoration
+status: paused
+stopped_at: Phase 204.2 PARKED 2026-09-20 at Plan 25 (see decisions/2026-09-20-park-codex-native-lifecycle.md). Next work is publishing 1.0.82 with the direct-dispatch Codex route as default, then a slim Claude-side trial.
+last_updated: "2026-09-20T00:00:00+00:00"
+last_activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
 progress:
-  total_phases: 52
+  total_phases: 13
   completed_phases: 8
-  total_plans: 63
-  completed_plans: 122
-  percent: 15
+  total_plans: 215
+  completed_plans: 206
+  percent: 62
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-08)
+See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 191 — dead-wood
-**Milestone:** v1.26 — hardening (rescoped 2026-08-14) plus the Audit Addendum (2026-08-17, phases 186-192). Governing documents: `.planning/HARDENING-PLAN.md` (with its 2026-08-17 addendum) and ROADMAP.md's "Audit Addendum" section; the frozen 12-outcome target lives in the approved implementation plan of 2026-08-17.
-**Previous milestone:** v1.25 Switch It On — SUPERSEDED at 24% (7 of 29 phases)
-**Product version:** v1.0.58 (binary is authoritative)
+**Current focus:** Phase 204.2 — codex-native-worker-lifecycle
+**Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
+**Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
+**Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
+**Qualification:** Owner selection 1 prospectively corrects the proof contract (7654348b). Plan 24 admission and Task 25.1 are complete. Plan 26 now passes actual safe-refusal capture and strict independent replay on 2d7137df: all seven guards, 3,178 unchanged original artifacts and 19 focused normal/race tests. The storage-stopped first replay runner remains unchanged; a separately admitted replay passed. Unknown termination still has no cancellation/no-write/credit claim. Actual successful child plaintext output is demonstrated, enabling the prospectively versioned child-fetch design; child-fetch/v1 implementation is committed as 1f905181 and 93 focused checks pass normally and with race detection. Actual full context/answer/ACK and ordinary/review/question qualification remain incomplete. The first actual child-fetch ordinary attempt remains incomplete. Its passive-wait and literal-operation verifier corrections, plus isolated-fixture repairs, are now committed as 850ea7f0; all 24 affected test families pass normally and with race detection (400 individual results per run, no skips). Three failed focused attempts and their exact outcomes remain retained. Phase204.2 Plan25 executing: 9f9194e6 listing repair passes 24 families normal/race (780 each). Eighth ordinary/replay incomplete after client usage limit. Owner reports quota reset and authorizes fresh admitted ordinary capture; all-three delivery remains pending. Fresh ordinary/replay and review/question qualification remain required. See 204.2-25-CHECKPOINT.md. All 11 final scenarios, 4 standard regression runs, canonical gaps_found and Phase 205 owner acceptance remain pending. See 204.2-26-SUMMARY.md and 204.2-CHILD-FETCH-DESIGN.md.
+**Governing backlog:** priority spec v3, ratified 2026-08-21 (D1), order amended 2026-08-22 (D12) — `.planning/research/priority-spec-v3-backlog.md`
 
 ## Current Position
 
-Phase: 192
-Plan: Not started
-Status: Ready to plan
-Progress: 9 of 16 phases in this milestone
-Last activity: 2026-08-21
-
-**Order from here (revised 2026-08-18):** 187, 188, 189→190 and 191 may start
-NOW, in any order and in parallel — the 186 rescope removed their only
-dependency, and each carries its own fail-able wiring criteria. Then 185, then
-
-192. Phase 186's remaining plan is one smoke run: fire it when convenient, it
-
-gates nothing. 192 is
-the full benchmark with the acceptance gate; the milestone completes only when
-that gate passes, not when the tasks are done.
-
-**The finish line (HARDENING-PLAN.md + 2026-08-17 addendum):** a small job
-costs one or two workers and finishes in minutes; one screen says who was
-dispatched, why, and what it cost; Aether never sends its own internals into
-someone else's project; the audit fix phases land; and the full benchmark
-shows both Aether lanes at least as good as GSD without brute-forcing tokens.
-When Phase 192's gate passes, building stops.
-
-**Owner constraints (2026-08-17):** auxiliary commands stay (/ant-oracle,
-/ant-dream, chaos, archaeology, swarm, council...); simplification touches
-only the main lifecycle path. Both Aether lanes (interactive and /ant-run)
-must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
+Phase: 204.2 (codex-native-worker-lifecycle) — PARKED at Plan 25 (2026-09-20 decision)
+Next phase: Publish 1.0.82 (direct-dispatch Codex route as default, native bridge opt-in), then the slim Claude trial
+Status: Paused — Phase 204.2-204.5 parked, not cancelled
+Plan: 25 of 26 — parked mid-plan; see decisions/2026-09-20-park-codex-native-lifecycle.md for what is kept
+Last activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 69 (v1.26, all Phase 172)
+- Active v1.27 plans completed: 84 of 84 across nine phases
 - Average duration: — (v1.25 phases averaged 6-11 plans each)
 - Total execution time: 0 hours
 
@@ -70,6 +50,159 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 |------|----------|-------|-------|
 | Phase 172 P05 | 25min | 2 tasks | 4 files |
 | Phase 173 P10 | 70min | 4 tasks | 5 files |
+| Phase 193 P01 | 50min | 2 tasks | 7 files |
+| Phase 196 P04 | 20min | 2 tasks | 8 files |
+| Phase 193 P02 | 62min | 3 tasks | 13 files |
+| Phase 193 P03 | 23min | 2 tasks | 2 files |
+| Phase 193 P04 | 70min | 3 tasks | 12 files |
+| Phase 193 P05 | 43min | 3 tasks | 7 files |
+| Phase 194 P01 | 75min | 2 tasks | 9 files |
+| Phase 194 P02 | 130min | 2 tasks | 22 files |
+| Phase 194 P03 | 210min | 2 tasks | 18 files |
+| Phase 194 P04 | 55min | 2 tasks | 5 files |
+| Phase 194 P05 | 87min | 2 tasks | 28 files |
+| Phase 194 P06 | 55min | 2 tasks | 11 files |
+| Phase 194 P07 | 45min | 2 tasks | 5 files |
+| Phase 194 P08 | 40min | 2 tasks | 3 files |
+| Phase 194 P09 | 48min | 2 tasks | 9 files |
+| Phase 195 P01 | 40min | 2 tasks | 2 files |
+| Phase 195 P02 | 23min | 2 tasks | 6 files |
+| Phase 195 P03 | 95min | 2 tasks | 9 files |
+| Phase 195 P04 | 25min | 2 tasks | 8 files |
+| Phase 195 P05 | 50min | 2 tasks | 5 files |
+| Phase 195 P06 | 100min | 2 tasks | 6 files |
+| Phase 195 P07 | 70min | 2 tasks | 7 files |
+| Phase 195 P08 | 55 min | 2 tasks | 6 files |
+| Phase 195 P10 | 55 min | 1 tasks | 4 files |
+| Phase 196 P01 | 22 min | 2 tasks | 2 files |
+| Phase 196 P02 | 13 min | 3 tasks | 14 files |
+| Phase 196 P03 | 41min | 2 tasks | 5 files |
+| Phase 196 P05 | 20min | 3 tasks | 17 files |
+| Phase 196 P06 | 41 min | 2 tasks | 9 files |
+| Phase 196 P07 | 78 min | 2 tasks | 10 files |
+| Phase 196 P08 | 24min | 2 tasks | 12 files |
+| Phase 199 P01 | 27min | 2 tasks | 4 files |
+| Phase 199 P02 | 18min | 3 tasks | 5 files |
+| Phase 199 P03 | 22 min | 2 tasks | 5 files |
+| Phase 199 P04 | 31min | 3 tasks | 9 files |
+| Phase 199 P05 | 27min | 2 tasks | 4 files |
+| Phase 199 P06 | 29min | 3 tasks | 14 files |
+| Phase 199 P08 | 58min | 3 tasks | 12 files |
+| Phase 199 P09 | 19min | 2 tasks | 9 files |
+| Phase 199 P07 | 26min | 2 tasks | 10 files |
+| Phase 199 P10 | 27min | 3 tasks | 5 files |
+| Phase 199 P19 | 7min | 2 tasks | 5 files |
+| Phase 199 P11 | 29min | 3 tasks | 11 files |
+| Phase 199 P20 | 12min | 3 tasks | 9 files |
+| Phase 199 P12 | 16min | 2 tasks | 6 files |
+| Phase 199 P13 | 40min | 2 tasks | 11 files |
+| Phase 199 P14 | 28min | 2 tasks | 9 files |
+| Phase 199 P15 | 65min | 2 tasks | 7 files |
+| Phase 199 P16 | 71min | 3 tasks | 8 files |
+| Phase 199 P22 | 13min | 2 tasks | 4 files |
+| Phase 199 P17 | 36min | 2 tasks | 8 files |
+| Phase 199 P18 | 80min | 2 tasks | 8 files |
+| Phase 199 P26 | 62min | 3 tasks | 9 files |
+| Phase 199 P21 | 16 min | 3 tasks | 8 files |
+| Phase 199 P24 | 10 min | 2 tasks | 5 files |
+| Phase 199 P25 | 59min | 2 tasks | 4 files |
+| Phase 199 P32 | 9min | 2 tasks | 8 files |
+| Phase 199 P23 | 6 min | 3 tasks | 8 files |
+| Phase 199 P30 | 5 min | 3 tasks | 10 files |
+| Phase 199 P34 | 6 min | 2 tasks | 8 files |
+| Phase 199 P27 | 12 min | 2 tasks | 4 files |
+| Phase 199 P31 | 35min | 2 tasks | 8 files |
+| Phase 199 P33 | 31min | 2 tasks | 9 files |
+| Phase 199 P28 | 1d 1h | 2 tasks | 10 files |
+| Phase 200 P01 | 25 min | 2 tasks | 5 files |
+| Phase 200 P02 | 40 min | 2 tasks | 7 files |
+| Phase 200 P03 | 24 min | 2 tasks | 2 files |
+| Phase 200 P04 | 23 min | 2 tasks | 2 files |
+| Phase 200 P05 | 36 min | 2 tasks | 2 files |
+| Phase 200 P06 | 37 min | 2 tasks | 2 files |
+| Phase 200 P07 | 27 min | 2 tasks | 2 files |
+| Phase 200 P08 | 49 min | 2 tasks | 5 files |
+| Phase 200 P09 | 46 min | 2 tasks | 4 files |
+| Phase 200 P10 | 16 min | 2 tasks | 4 files |
+| Phase 200 P11 | 35 min | 2 tasks | 3 files |
+| Phase 200 P12 | 25 min | 2 tasks | 6 files |
+| Phase 200 P13 | 55 min | 3 tasks | 7 files |
+| Phase 200 P14 | 34m | 2 tasks | 3 files |
+| Phase 200 P15 | 42m | 3 tasks | 3 files |
+| Phase 200 P16 | 35m | 2 tasks | 9 files |
+| Phase 200 P17 | 46m | 3 tasks | 10 files |
+| Phase 200 P18 | 32min | 2 tasks | 6 files |
+| Phase 200 P19 | 22min | 2 tasks | 4 files |
+| Phase 200 P20 | 13min | 2 tasks | 7 files |
+| Phase 200 P24 | 18 min | 2 tasks | 10 files |
+| Phase 200 P21 | 15 min | 2 tasks | 7 files |
+| Phase 200 P25 | 8 min | 2 tasks | 7 files |
+| Phase 200 P22 | 24min | 2 tasks | 11 files |
+| Phase 200 P23 | 1h 44m | 3 tasks | 22 files |
+| Phase 200 P26 | 48 min | 2 tasks | 3 files |
+| Phase 200 P27 | 22 min | 2 tasks | 6 files |
+| Phase 200 P28 | 24 min | 3 tasks | 5 files |
+| Phase 200 P29 | 21 min | 3 tasks | 6 files |
+| Phase 200 P30 | 45 min | 3 tasks | 9 files |
+| Phase 200 P31 | 57min | 3 tasks | 6 files |
+| Phase 200 P32 | 1h 15min | 3 tasks | 6 files |
+| Phase 200 P33 | 30min | 3 tasks | 3 files |
+| Phase 200 P34 | 27min | 3 tasks | 6 files |
+| Phase 200 P37 | 34min | 3 tasks | 6 files |
+| Phase 200 P35 | 24min | 2 tasks | 6 files |
+| Phase 200 P38 | 31min | 2 tasks | 6 files |
+| Phase 200 P36 | 21min | 2 tasks | 6 files |
+| Phase 200 P39 | 50min | 3 tasks | 6 files |
+| Phase 200 P41 | 7min | 3 tasks | 5 files |
+| Phase 200 P42 | 9min | 2 tasks | 6 files |
+| Phase 200 P43 | 13min | 2 tasks | 6 files |
+| Phase 200 P44 | 17min | 2 tasks | 5 files |
+| Phase 200 P45 | 10min | 2 tasks | 5 files |
+| Phase 200 P46 | 27min | 2 tasks | 6 files |
+| Phase 200 P47 | 39min | 2 tasks | 5 files |
+| Phase 200 P48 | 31min | 2 tasks | 5 files |
+| Phase 200 P49 | 48min | 3 tasks | 5 files |
+| Phase 200 P50 | 32min | 3 tasks | 5 files |
+| Phase 200 P51 | 35min | 2 tasks | 7 files |
+| Phase 200 P52 | 83min | 3 tasks | 9 files |
+| Phase 200 P53 | 20min | 2 tasks | 3 files |
+| Phase 200 P54 | 38min | 3 tasks | 9 files |
+| Phase 201 P01 | 55min | 2 tasks | 4 files |
+| Phase 201 P02 | 110min | 3 tasks | 5 files |
+| Phase 201 P03 | 50min | 3 tasks | 3 files |
+| Phase 201 P04 | 45min | 3 tasks | 4 files |
+| Phase 201 P05 | 50min | 3 tasks | 6 files |
+| Phase 201 P06 | 45min | 3 tasks | 5 files |
+| Phase 201 P07 | 40min | 3 tasks | 5 files |
+| Phase 201 P08 | 50 min | 3 tasks | 5 files |
+| Phase 201 P09 | 35min | 3 tasks | 5 files |
+| Phase 201 P10 | 55min | 3 tasks | 5 files |
+| Phase 201 P11 | 40 min | 3 tasks | 5 files |
+| Phase 201 P12 | 55min | 3 tasks | 8 files |
+| Phase 201 P13 | 6min | 3 tasks | 3 files |
+| Phase 201 P14 | 55min | 3 tasks | 7 files |
+| Phase 201 P15 | 75min | 3 tasks | 4 files |
+| Phase 201 P16 | 16min | 3 tasks | 3 files |
+| Phase 201 P17 | 27min | 3 tasks | 4 files |
+| Phase 201 P18 | 45min | 3 tasks | 5 files |
+| Phase 201 P19 | 55min | 3 tasks | 5 files |
+| Phase 201 P20 | 70min | 3 tasks | 7 files |
+| Phase 202 P01 | 33min | 2 tasks | 4 files |
+| Phase 202 P02 | 9min | 3 tasks | 10 files |
+| Phase 202 P03 | 58min | 3 tasks | 9 files |
+| Phase 202 P04 | 25min | 2 tasks | 7 files |
+| Phase 202 P05 | 55min | 3 tasks | 4 files |
+| Phase 202 P08 | 9min | 2 tasks | 5 files |
+| Phase 202 P07 | 40min | 3 tasks | 3 files |
+| Phase 202 P11 | 55min | 3 tasks | 7 files |
+| Phase 202 P09 | 18min | 2 tasks | 5 files |
+| Phase 202 P10 | 55min | 3 tasks | 3 files |
+| Phase 202 P12 | 19min | 3 tasks | 6 files |
+| Phase 202 P13 | 25min | 2 tasks | 4 files |
+| Phase 202 P14 | 55min | 3 tasks | 8 files |
+| Phase 202 P15 | 75min | 3 tasks | 18 files |
+| Phase 202 P16 | 55min | 3 tasks | 10 files |
+| Phase 202 P17 | 40min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -77,9 +210,18 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 - v1.26 roadmap created 2026-08-08 from 35 requirements across 7 categories (WIRE, SPAWN, SPEND, SEEN, ROSTER, SKILL, PROOF), continuing phase numbering from v1.25's Phase 171
 - Research suggested 7 phases; the roadmap ships 8. The single deviation is splitting ROSTER into **176 Roster Reader** (ROSTER-01..02, the shipped 27 YAMLs) and **177 Operator-Authored Agents** (ROSTER-03..08, the user path), so the reader must demonstrably change dispatch output before the user-extension path is planned
-- Research's suggested "Phase 6 — Delegation Delivery" is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
+- Research's suggested sixth phase ("Delegation Delivery") is **not** in this milestone. The SPAWN requirements cover the *guard* only; nothing gains the ability to delegate recursively in v1.26. Delivery (child result plumbing, follow-on-wave channel, parent-direct spawn) carries a research flag and belongs to a later milestone
+- Phase 204.1 inserted after Phase 204: Codex Ant Skill Surface; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.2 inserted after Phase 204: Codex Native Worker Lifecycle; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.3 inserted after Phase 204: Codex Workflow Parity; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.4 inserted after Phase 204: Governed Recruitment and Recovery; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
+- Phase 204.5 inserted after Phase 204: Codex Parity Proof and Acceptance Handoff; owner-requested Codex ant parity before the remaining Phase 205 walkthrough (2026-09-16) (URGENT)
 
 ### Decisions
+
+- [Phase 204.2, 2026-09-18]: Owner selected “Design a scoped evidence collector while preserving current proof requirements”. Design recorded in `204.2-COLLECTOR-DESIGN.md`: passive fixture recorder, immutable originals, strict source/identity replay, no replacement launcher or manufactured coverage. The later owner-selected Plan 24 amendment scopes offline implementation and feasibility checks; the subsequent instruction to proceed authorized execution: Tasks 1a/1b now delivered with 19 offline tests passing and live admission blocked; no vendor upgrade, proof relaxation or requirement credit.
+
+- [Phase 204.1, 2026-09-16]: User response “i trust you” delegated the three guidance/claim-boundary reviews. Record assistant provenance, retain the 17 historical suite failures, and keep the separate Phase 205 owner walkthrough and verdict pending.
 
 - **The organising finding: most of v1.26 already exists and was never wired to a caller.** Four independent researchers converged on this by reading and *running* this repo's code. The recursion policy engine (`.aether/ts-host/src/spawn-orchestrator.ts`), the depth guard (`spawn-can-spawn` ignores its own `--depth`), the 27-caste roster (`colony/agents/*.yaml`, zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, carried to the manifest, discarded), and token measurement (parsed, never persisted). The framing is **switch on and prove**, not **design and build**
 - **Phase ordering is load-bearing, not stylistic.** WIRE first (a ratchet written after the capabilities gets shaped to whatever shipped) → SPAWN before SPEND (parent/depth linkage is recorded at spawn time and cannot be retrofitted to past runs) → SPEND before ROSTER/SKILL (extensibility changes what workers cost; without a ledger every later claim is unfalsifiable) → ROSTER reader before the user path → SKILL security inside the skill phase → PROOF last
@@ -93,6 +235,418 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 - [Phase 172]: ROADMAP.md Phase 172/178 criteria corrected to the scan's real numbers: 278 seeded orphans, 6 owned by phase 178, replacing the pre-scan assumption of 8
 - [Phase 173]: Plan 10: orphan_allowlist.json earned zero removals -- all five spawn-related candidates remain genuine orphans against the live reachability ratchet because .aether/workers.md is not a caller corpus this ratchet scans
 - [Phase 173]: Plan 10: ROADMAP criterion 4 left byte-identical -- the cross-guard fail-closed proof establishes a narrower claim than the criterion's literal wording; whether it is satisfied is left to verification, per 173-RESIDUE.md residue 7
+- [Phase 193]: The deterministic floor (`runDeterministicFloor`, one body for both continue lanes) is the only source of a pass; a reviewer verdict can only add a block. Locked by `TestDeterministicFloorIsTheOnlySourceOfAPass` and `TestBothContinueLanesApplyTheSameFloor`
+- [Phase 193]: Build-side reviewer dispatch is gated on the Queen's explicit proposal, not the required-caste floor; the Watcher is verified once (`TestPhaseVerifiedOnce`). Probe/Auditor/Gatekeeper double-dispatch is recorded in `.planning/WINDOWS.md` #1 for Phase 194
+- [Phase 193]: Builder-reported commands are re-run only when they match a fixed allowlist of build/test runners, contain no shell metacharacters, and run via argv — never `sh -c` (code-review fix CR-01); owner-facing commands are shell-quoted (CR-02)
+- [Phase 193]: An unprovable criterion becomes `needs_owner_confirmation`: the phase advances, seal blocks until `aether decision-answer` records the answer; a failing free check with no reviewer sent gets exactly one automatic builder fix attempt, append-only in the attempt journal, then blocks with one command
+- [Phase 193]: Deterministic floor promoted to the primary verification anchor; a dispatched reviewer verdict can only ADD a block, never supply the pass — runDeterministicFloor uses the build-time watcher (already resolved), never a live continue-time dispatch -- avoids re-running shell verification twice for a reviewer brief and guarantees a reviewer cannot supply a pass. Both continue lanes now share this one function.
+- [Phase 193]: syntheticCriterionRequirements default checks drop watcher (D-06) — Unbound criteria now get claims plus the matching free check, never a reviewer caste by default; a dispatched reviewer that fails still blocks separately.
+- [Phase 193]: [Phase 193 P02] Build's verification-stage watcher dispatch now gates on the Queen's explicit proposal (queenAskedFor/queenJudgement.Proposed), not the effective caste set that always includes watcher via the required-caste floor -- the required-caste floor itself is untouched (Phase 194's territory).
+- [Phase 193]: [Phase 193 P02] Discovered (flagged, not fixed): probe, auditor and gatekeeper still legitimately double-dispatch on production/security phases with no explicit Queen proposal, because build and continue independently derive the same required caste from the same phase content. Recorded in .planning/WINDOWS.md for Phase 194 (moves the required-caste floor).
+- [Phase 193]: 193-03: no implementation change needed in cmd/codex_continue.go -- runDeterministicFloor (193-01) already runs unconditionally before every reviewer-skip path is consulted, so all ten FLOOR-01 skip-path rows pass against pre-existing code — Plan explicitly allows this outcome; tests kept as regression guards
+- [Phase 193]: 193-03: --skip-watchers help text corrected to state plainly that only AI reviewer workers are skipped and the program's own checks (build, types, lint, tests) always run; TestNoContinueFlagClaimsToSkipAChecked guards every continueCmd flag going forward — D-01 (193-CONTEXT.md); plain-English mandate (CLAUDE.md)
+- [Phase 193]: FLOOR-03 closed: reconcile-task counted as evidence on both continue lanes, builder evidence re-run by the program (D-04), unprovable criteria marked needs_owner_confirmation and seal blocks until answered (D-05) — continueTasksSupportAdvancement's H-04 branch now requires only task.Verified for a reconciled task; reRunBuilderReportedEvidence re-executes a builder's reported commands itself; owner_confirmation_pending gate + checkSealBlockers extension route through the existing decision-answer and force-override paths
+- [Phase 193]: 193-04: Tasks 2 (builder evidence re-run) and 3 (owner confirmation) landed in one commit, not two -- both edit the same per-check evaluation loop in evaluatePhaseCriterionEvidence and could not be cleanly split by git hunk — Task 1 (reconciliation) was cleanly separable via git add -p and is its own commit
+- [Phase 193]: Verification tests are scoped to the Go packages a phase's changed files touched (D-07), falling back to the full run whenever that scope cannot be honestly derived or on the plan's final phase; only the tests command is ever scoped. — Narrowing a compiler or linter changes what it can see, so build/types/lint always run as configured; only the tests command has a safe scoped runner (go test ./dir/...).
+- [Phase 193]: A failing free check with no reviewer dispatched draws exactly one automatic builder fix attempt (D-02/D-03), recorded as a brand-new append-only entry in the build attempt journal; a second automatic attempt never happens and continue blocks with one exact re-run command if the re-run still fails. — The fix attempt must never overwrite the original result and must be visibly countable on the team card and cost line; a new attempt record is the same append-only discipline the out-of-band verification record already established.
+- [Phase 194]: Ordinary non-discovery work gets exactly the Builder by default; five named risks can force one explained reviewer at continue, and build never dispatches that forced reviewer.
+- [Phase 194]: Every proposed worker needs its own `--caste-why` reason; missing reasons are refused by name, while runtime-added workers get plain-English reasons rather than score arithmetic or roster blurbs.
+- [Phase 194]: Light and standard add no unconditional reviewers, heavy adds the full applicable panel, changed files can only add risk, and both continue lanes use the same forced-reviewer derivation.
+- [Phase 194]: Forced-reviewer waivers are owner-only, one signal on one phase, capability-protected, and accepted only before dispatch; the pending one-worker check-in-pause reversal moves to Phase 195 discussion.
+- [Phase 194]: `TestOneTaskBugFixIsOneWorkerPlusChecks` proves 1 worker on both paths, `TestNoCasteIsDispatchedAtBothBoundaries` closes WINDOWS #1, and the shipped documentation is test-locked to the runtime.
+- [Phase 195]: Automatic grouping contracts the full phase graph only when the prospective same-caste component remains dependency-safe. — This prevents a valid task DAG from becoming a cyclic job DAG.
+- [Phase 195]: Only exact declared implementation paths create automatic edges; ubiquitous documentation, manifests, and lockfiles are incidental. — Bookkeeping overlap must not collapse independent work.
+- [Phase 195]: Automatic groups split against briefTaskContentAllowanceChars, while a single oversized task or accepted Queen proposal remains intact. — Brief content, not a magic task count, governs automatic job size.
+- [Phase 195]: Keep covered_task_ids as assignment scope and task_receipts as distinct optional evidence. — Semantic receipt admission belongs to Plan 195-04.
+- [Phase 195]: Reuse one codex.TaskReceipt and WorkerHandoff vocabulary across native and external completion JSON. — One reflected Go contract prevents lane drift and excludes worker-authored criteria or authoritative hashes.
+- [Phase 195]: Coherent-job planning runs before task waves and before declared-worktree-ownership validation on every build lane, so same-wave declared overlap becomes one job instead of a pre-dispatch conflict error; `coalesceSequentialDispatches` keeps no live production caller.
+- [Phase 195]: Grouped briefs gain an additive `## Covered Task Contracts` section carrying only what has no legacy single-task home (evidence requirements and otherwise-unlisted declared paths), so a one-task brief stays byte-for-byte unchanged.
+- [Phase 195]: Every dispatch consumer iterates `dispatchCoveredTaskIDs` rather than the bare `TaskID` — abandoned-build recovery and continue assessment both previously lost every covered task after the first.
+- [Phase 195]: Owner-facing wording is `covered tasks`, not `dependent tasks`; automatic grouping is no longer dependency-only, so the old phrase had become false.
+- [Phase 195]: Two-stage receipt trust boundary (admitCoherentJobTaskReceipts / finalizeCoherentJobTaskReceiptEvidence) is the only path that can populate CompletedTaskIDs; completedBuildTaskIDs keeps whole-success crediting all covered tasks and reads CompletedTaskIDs for any other terminal status, never touched files or CoveredTaskIDs membership.
+- [Phase 195]: Native/in-repo lane (executeCodexBuildDispatches) resolves receipts through both stages immediately after a worker's terminal result is known, since in-repo files already live in root; the external/wrapper lane's crediting wiring is deferred to plan 195-06, which reuses the same two functions unchanged.
+- [Phase ?]: [Phase 195] decideBuildCheckin implements D-11..D-14 as a pure policy; buildHasPendingOwnerDecision reads three live sources (forced-reviewer waiver, orchestrator boundary question, worker handoff open decision) -- never dispatch count alone.
+- [Phase ?]: [Phase 195] 195-05 Tasks 1 and 2 landed in one commit (9ca561c0) -- both edit the same buildCheckinDecisionInput/buildCheckinDecision types and the same plan-only branch, could not be cleanly split by git hunk (same precedent as 193-04).
+- [Phase 195]: External build-finalize reuses the native lane's shared receipt admission/finalization boundary unchanged -- no second, external-only validator was written.
+- [Phase 195]: BUILT-transition gating falls back to the union of every dispatch's own covered tasks when no explicit task selection is passed, so the ordinary no-filter build isn't misread as trivially fully-credited.
+- [Phase 195]: Provenance's phantom-build guard now accepts a failed worker carrying genuine, evidenced task receipts as real partial provenance; zero receipts still reject the whole packet, unchanged.
+- [Phase 195]: [Phase 195]: planCoherentJobRetry reuses the canonical planCoherentJobs grouping pass for a parent job's unfinished tasks (single all-inclusive proposal over the uncredited subset) rather than a second dependency graph; a new buildAttemptPartial attempt status (distinct from built/failed) plus ParentAttemptID/ParentJobName (begin-then-attach, same discipline as checkFixAttemptRecord) make D-10 recovery append-only on both build lanes -- retry only ever follows accepted credit, never a total failure with zero receipts.
+- [Phase 195]: Build coherent-job contract defined once and asserted by three guards over five surfaces — Each guard re-typing its own anchor list would be a fourth surface able to go stale, reproducing the drift the guards exist to catch
+- [Phase 195]: Three Go-authority sentences are compared byte-for-byte across YAML, guide, skill and wrappers — A keyword check would accept five surfaces each paraphrasing ownership differently, which is this repo's documented failure mode
+- [Phase 198.1]: One memory-feed boundary (`recordDispatchWorkerOutcome`, cmd/memory_feed.go) is the only place a build worker's terminal result becomes a failure record or an observation; both build lanes call it and an AST guard (`TestEveryBuildLaneFeedsMemoryThroughOneBoundary`) refuses a third path. Feeding memory never fails a build or a check (`TestFeedingMemoryNeverFailsABuild`, `TestHiveFailureNeverBlocksThePhase`).
+- [Phase 198.1]: Worker-authored text is untrusted on every store: all four midden writers and the observation path run `colony.SanitizeSignalContent` before storing, because midden entries are replayed verbatim into later worker briefs (review CR-02, fixed cc48873a). Dedup is exact (category, message) among unacknowledged entries, so a caller's message must carry phase/worker/status attribution (documented on `appendMiddenEntryOnce`).
+- [Phase 198.1]: An instinct's "use" is a recorded fact — counted once per passing phase only when its text genuinely appeared in the capsule a worker received (`TestQueenPromotionNeverHappensWithoutRecordedUse`); the three-use gate to QUEEN.md is therefore satisfiable for the first time.
+- [Phase 198.1]: Notes (pheromones) are written by the program at exactly three moments — a finished check, an answered worker question (never the seal's own "finish anyway?" confirmation), and three unacknowledged failures of one kind — and a valuable expiring note is copied to eternal memory first. Nothing is emitted during a build.
+- [Phase 198.1]: Hive promotion runs at the end of every check under the same `AETHER_HIVE_POLICY` switch and ≥0.8 gate as seal; `--no-learn` skips only the legacy learning-entry capture — observations and failure records are still written so a blocked check leaves a trail (documented on the flag; review WR-01).
+- [Phase 198.1]: Every learning-loop sentence in CLAUDE.md now names its test, and an AST guard fails if a cited test name stops existing (plan 05).
+- [Phase 196]: spendTotals.ProviderUSD deleted rather than gated: nothing read it and an unread money field on the totals struct is a standing invitation to render one (D-01)
+- [Phase 196]: The currency ban is scoped to the ledger's own types; codex.WorkerUsage keeps its USDCost and is skipped by name
+- [Phase 196]: An empty ledger row status is refused rather than folded to failed, so a durable ledger never records a wrong outcome
+- [Phase 196]: FIX 1-2's independence is enforced by an AST guard, not a comment, per CLAUDE.md's Definition of Done
+- [Phase 196]: Pool-converted usage rows are tagged session-transcript, never provider-grade and never estimate, so a real measurement is not filed under the guessed subtotal
+- [Phase 196]: The no-length-derivation ratchet scopes by package directory, not filename — a filename-scoped scan would have excluded the one file the violation lived in
+- [Phase 196]: The guard-file inventory floor is raised to its live count on every registration, making the inventory itself a ratchet
+- [Phase 196]: Deduplicate Claude transcript usage by message.id, corroborated by requestId; a usage-bearing line with no identifier is counted once on its own — Re-measured on this machine's whole corpus (1,726 transcripts): only two top-level line types carry usage — assistant at .message.usage and user at .toolUseResult.usage, at different positions. The user line is a subagent completion record with no message.id.
+- [Phase 196]: The spend containment helper resolves symlinks on the deepest existing ancestor of a path that does not exist yet — The old fallback compared an evaluated root against an unevaluated candidate, so on macOS containment depended on whether the file had been written. Every existing refusal case still fails closed.
+- [Phase 196]: The salvaged OpenCode reader was merged only inside the plan that wires it (D-03); its unsynchronised worker-name pattern cache is deleted outright rather than locked, because it was also unbounded and per-call compilation costs nothing
+- [Phase 196]: One containment helper, validateSpendContainedPath, serves both platform validators, and the singleness is asserted by an AST count rather than a comment
+- [Phase 196]: The closeout cost block is the LAST thing on every ending screen, on every lane, so its position is one rule rather than two that can drift apart
+- [Phase 196]: The finalizers render no cost block; the three terminal screens do — that placement is what makes exactly-one-per-lane structural rather than dependent on output mode
+- [Phase 196]: Compact magnitudes are truncated, never rounded up, so a headline can never claim a run cost more than its rows say it did
+- [Phase 196]: The check files its rows before any result envelope is assembled, so a blocked check still records what it spent
+- [Phase 196]: A run that filed no rows leaves no ledger file at all — an empty file is indistinguishable from a run that cost nothing
+- [Phase 196]: A worker is accounted under codexBuildDispatch.Name (the deterministic per-worker name the platform's session titles carry), never AgentName, which several workers in one build share
+- [Phase 196]: "Reported" keys on the usage source tag, never on a number — a worker that genuinely billed zero and one whose tool said nothing both present as zero, and D-01 renders those two differently
+- [Phase 196]: The orchestrating session's own turns are returned separately from the worker list, neither shown as a dispatched worker nor discarded (the choice 196-03 left open)
+- [Phase 196]: A dispatch whose status is outside the ledger vocabulary is dropped with a named note rather than sinking the whole fail-closed ledger; nothing invents a status the dispatch never stated
+- [Phase 196]: Figures print exactly as recorded, unabbreviated, because shortening is arithmetic the read-only view is forbidden to do
+- [Phase 196]: aether spend reads the current phase through loadColonyState, not loadActiveColonyState, which can persist a legacy repair and would make an inspection command a writer
+- [Phase 196]: An estimated ledger row renders the dash sentinel exactly like an empty one — D-01 as amended forbids rendering an estimate at all
+- [Phase 198.2]: Plan and colonize delegate manifests carry one runtime-assembled memory capsule; wrappers only pass it through, and triplet parity prevents the installed Claude/OpenCode lane from silently receiving less context.
+- [Phase 198.2]: Oracle finish and stop paths share one file/register/promote body; useful partial research is labelled, strong findings carry origin labels, and empty runs write nothing.
+- [Phase 198.2]: `decisions` and `learnings` were removed from the memory pack because nothing wrote them; an AST-discovered writer invariant with a zero-floor exception ratchet prevents another permanently empty part.
+- [Phase 198.2]: The survey digest and previous-phase carry-forward use two separate named brief budgets, sanitise helper-authored text, and add no worker dispatch or owner check-in.
+- [Phase 198.2]: The owner chose to advance while the WIRE-06 real-world check remains untested; this is verification debt, not a pass and not evidence of a defect.
+- [Phase 198.3]: External swarm finalization now validates durable IDs before mutation, accepts only runtime-issued manifest digests, makes exact replay read-only, and rejects changed replay before rewriting strike truth.
+- [Phase 198.3]: Seal and reviewer compatibility paths use the same fail-closed storage/severity rules as current schemas; malformed legacy evidence cannot become an empty safe set.
+- [Phase 198.3]: Visual checkpoint paths and generations derive only after persisted claims match the exact built attempt's terminal claims; replan cadence filters active session/goal before revision projection.
+- [Phase 198.3]: Complete verification is no longer inconclusive: 8,566 normal and 8,566 race-instrumented Go tests passed across 20 packages; Phase 198.3 scored 94/94 truths and 6/6 STAM requirements.
+- [Milestone sequencing]: The owner rejected a standalone Phase 198.4 planning gate. v1.27 ends at verified Phase 198.3; the 35,921-word Dreams report is v1.28's authoritative brief, and the 72-row ledger is traceability rather than a 69-question owner gate.
+- [Milestone sequencing]: Classic functional/experience restoration belongs inside v1.28. Owner-watched proof follows the restored product; Codex lifecycle skills remain a separate later milestone.
+- [Milestone method]: Classic feature names are research headings, not selected implementations. Every Phase 199-204 must reconstruct the exact old mechanism and owner value, audit the current Go path, compare keep/restore/replace choices, and link a written synthesis into its plans, tests, CAP dispositions, and verification.
+- [Milestone audit]: v1.27 scored 48/48 requirements, 9/9 delivered phases, 8/8 integration seams, and 4/4 end-to-end flows. Verdict `tech_debt`: no blocking gaps; Phase 198.2 field UAT and documented warnings carry forward.
+- [Phase 199]: Every test that can allocate a worktree in the source checkout registers ownership before command execution. — Pre-registration guarantees bounded cleanup even when allocation exits partway through.
+- [Phase 199]: Test teardown may delete only exact repository/path/branch triples registered by the creating test. — Naming conventions and Aether-shaped paths are not evidence of test ownership.
+- [Phase 199]: Restore Classic information grammar and ceremony through modern Go truth, not prompt-owned writes or shell-era handling. — Preserves Classic intent without reviving superseded implementation mechanisms.
+- [Phase 199]: Require every behavior corpus case to combine semantic assertions with causal state assertions or forbidden artifacts. — Prevents output-only proof from masking wrong state transitions.
+- [Phase 199]: Compose source hygiene from production discovery, managed headers, sync rules, and peer parity while ignoring unmanaged paths. — Keeps the gate aligned with the real source-of-truth pipeline and preserves custom files.
+- [Phase 199]: All Phase 199 lifecycle evidence uses one lifecycle/v1 schema and exported validated Go contracts. — One durable vocabulary prevents command-specific maps and incompatible wire meanings.
+- [Phase 199]: New lifecycle evidence is pointer-backed and omitted when absent. — Legacy colonies remain readable and missing evidence stays unknown rather than becoming fabricated success.
+- [Phase 199]: Forced-incomplete seal outcomes never satisfy verified completion. — Owner-forced closure must remain visibly distinct from evidence-backed verification.
+- [Phase 199]: Lifecycle orientation reads direct bytes and records missing, malformed, or unavailable provenance instead of repairing state.
+- [Phase 199]: Accepted plans expose guided build and Autopilot as a coequal choice set with no preferred marker.
+- [Phase 199]: Ambiguous recovery uses resume; sealed colonies use status with entomb retained only as an optional alternative.
+- [Phase 199]: Keep immutable coordinator intent separate from mutable progress so recovery never rewrites the evidence that authorized a mutation.
+- [Phase 199]: Stage outputs and pre-images on each destination root, then replace targets only through temporary files in the target directory.
+- [Phase 199]: Classify missing transaction evidence as unknown and altered evidence as conflicting; only matching digests may finish or roll back.
+- [Phase 199]: Read-only and store-free command annotations suppress first-run and lock initialization writes for expert inspections.
+- [Phase 199]: Live skills use source plus relative path identity and SHA-256 byte digests, with every inventory read directly from repository and hub sources.
+- [Phase 199]: Skill inventory and drift remain nested below maintenance; standalone cache/list/diff root commands stay deleted.
+- [Phase 199]: A fresh territory snapshot authenticates repository identity, canonical root, source revision, and every consumed artifact digest, including anchors.json.
+- [Phase 199]: Automatic refresh writes worker output to a canonical candidate directory and publishes only a complete, validated snapshot through lifecycle_transaction.
+- [Phase 199]: The plan manifest carries immutable territory evidence and finalization revalidates that exact evidence against the current repository before accepting a plan.
+- [Phase 199]: Status loads lifecycle facts once, projects once, and treats full/compact as views of that same result. — One semantic result prevents the compact and full dashboards from disagreeing.
+- [Phase 199]: Health and readiness use discrete evidence-backed states instead of percentage-derived maturity labels. — Verified, blocked, degraded, unavailable, and unknown remain distinguishable and cite their evidence.
+- [Phase 199]: Status wrappers only invoke the Go runtime with argument passthrough; they never inspect host files, costs, or activity. — The Go lifecycle projection stays the sole authority across Claude and OpenCode.
+- [Phase 199]: Root help is a curated journey map backed by the shared lifecycle projection; raw Cobra inventory remains command-specific or expert.
+- [Phase 199]: Guided Claude and OpenCode init refuse an existing colony before storage opens; the raw runtime confirmation escape hatch remains compatible.
+- [Phase 199]: Accepted intent is durable accepted-charter/v1 episode data, not presentation text reconstructed after initialization.
+- [Phase 199]: Help wrappers invoke the visual Go command once and return stdout unchanged instead of maintaining a second help implementation.
+- [Phase 199]: History event sources remain evidence sources; only recorded spawn-tree identities become actors. — This prevents command names from being presented as people or workers without evidence.
+- [Phase 199]: Untimestamped lifecycle receipts remain visible after timestamped history evidence. — History must not invent a chronology from the read time or a nearby event.
+- [Phase 199]: Phase exposes shared current_phase separately from requested detail/list/all selection. — All focused selectors must retain the same phase standing as status and history.
+- [Phase 199]: Use the live Go maintenance catalog as the operation-inventory authority and require canonical/generated surfaces to match its ordered IDs. — This keeps wrapper discoverability mechanically tied to executable runtime truth.
+- [Phase 199]: Keep every public maintenance wrapper to one visual runtime invocation; Go alone reads evidence, mutates state, verifies results, emits receipts, and rolls back. — A thin adapter cannot become a competing lifecycle authority.
+- [Phase 199]: Expose live skill inspection only below /ant-maintenance and add no Codex-native $ant-* maintenance surface in this milestone. — This preserves the Phase 191 root-command deletion and the approved later-Codex boundary.
+- [Phase 199]: Autopilot validates one accepted goal and an ordered remaining-phase set from immutable LifecycleFacts before opening its mutating loop. — Invalid entry must remain zero-write.
+- [Phase 199]: Owner-authority changes use a separate typed fence outside the legacy ordered stage-trigger catalogue. — This preserves catalogue compatibility while pausing before owner-controlled changes.
+- [Phase 199]: Without a Phase 202 typed event source, Watch reports idle and treats spawn/history rows as timestamped recorded evidence, never current liveness. — Stale files cannot prove an active ant.
+- [Phase 199]: Run wrappers invoke the Go runtime exactly once; invocation is consent to displayed bounds and typed owner-authority results stop the wrapper. — The runtime remains the sole lifecycle authority.
+- [Phase 199]: Claude and OpenCode init close with exact /ant-plan, while Codex closes with exact aether plan.
+- [Phase 199]: Guided init surfaces synthesize intent, while Go alone owns setup, persistence, territory evidence, refusal, and result truth.
+- [Phase 199]: Codex parity extends raw aether orchestration without restoring a native $ant-* lifecycle surface.
+- [Phase 199]: A signal can claim live delivery or acknowledgement only from linked named lifecycle evidence, and measured effect only from linked changed-decision evidence.
+- [Phase 199]: Swarm localizes only from an exact recorded active task ID and treats both dependencies and dependent tasks as the affected path; only other active tasks may continue independently.
+- [Phase 199]: Go remains the only signal mutator and evidence authority; wrappers invoke the runtime but cannot manufacture acknowledgement or causal-effect claims.
+- [Phase 199]: Pause and resume use the handoff ID as their idempotency key, so interrupted commits resume one journal and verified replay returns one existing receipt.
+- [Phase 199]: Resume mutates only confirmed or explicitly reconstructed evidence; conflicting state, session, repository, worktree, activity, or receipt facts stop with no runnable-state write.
+- [Phase 199]: Legacy pause-colony/resume-colony inputs are exact-token pre-Cobra redirects only through 1.28 and never appear in Cobra aliases, help, completion, or canonical pause wrappers.
+- [Phase 199]: Hidden pre-Cobra lifecycle redirects are input migration only and are excluded from public wrapper inventory and alias repair. — Parser compatibility must not become product vocabulary.
+- [Phase 199]: Retired installed wrappers are deleted only when the managed header proves Aether ownership; same-named custom files survive unchanged. — A filename alone cannot authorize deletion of user content.
+- [Phase 199]: The current recovery contract teaches canonical resume only; bounded compatibility remains expiring parser plumbing. — There is one public return path while the migration window remains invisible.
+- [Phase 199]: Use one typed SealPreflight and durable SealOutcome as completion truth; only a direct owner may request forced_incomplete with --force and a nonblank reason.
+- [Phase 199]: Commit every authoritative seal artifact through the lifecycle transaction while retaining active COLONY_STATE.json for review; status remains primary and entomb optional.
+- [Phase 199]: Treat issue-severity findings as retained residual risks, while blockers and unresolved owner checkpoints prevent normal verified closure.
+- [Phase 199]: Permit Hive promotion only after verified closure under promote/unset policy, after sanitization and sensitivity filtering, with deterministic replay-safe receipts.
+- [Phase 199]: Derive one stable entomb transaction and chamber identity from the verified seal outcome so interruption resumes instead of creating duplicate archives. — Stable identity makes retry and replay converge on one chamber and receipt.
+- [Phase 199]: Treat an archive as valid only when every enumerated source byte, digest, kind, path, and closure cross-reference verifies before any publication or clear. — Directory existence cannot prove content integrity or closure truth.
+- [Phase 199]: Keep invocation and owner confirmation separate from seal; platform wrappers call the Go runtime exactly once and never reproduce archive or clearing logic. — D-17 keeps sealed state reviewable until the owner explicitly chooses archive-and-clear.
+- [Phase 199]: Keep legacy recover and abandon tokens parseable but hidden, store-free, and zero-write so old automation receives safe migration guidance without retaining authority. — Parser compatibility must not preserve product vocabulary or mutation authority.
+- [Phase 199]: Read recovery evidence directly through LifecycleFacts and raw manifest/claims readers, while reserving all restoration for aether resume. — Expert diagnosis stays causally read-only and cannot become a second recovery owner.
+- [Phase 199]: Maintenance previews close over exact typed targets and expected baseline digests; commit never performs a second broad discovery pass.
+- [Phase 199]: Cleanup prefixes, globs, and content guesses are not deletion authority; a versioned aether-runtime manifest with exact path, owner, and current digest is required.
+- [Phase 199]: Registry identity is derived from the canonical repository path, and duplicate identity/path or active-plus-final-stats conflicts fail before any write.
+- [Phase 199]: A live maintenance interruption after durable intent attempts coordinator rollback immediately and returns its rollback receipt; unprovable rollback retains recovery-required evidence.
+- [Phase 199]: Focused closeouts consume an existing LifecycleProjection and fail closed on revision disagreement. — This keeps lifecycle policy and Next Up owned by one projection.
+- [Phase 199]: Zero-write refusals resolve from already-read, read-only state facts. — Rendering must not initialize a store or create lock files.
+- [Phase 199]: Sealed colonies keep status primary and entomb optional; only verified archive-and-clear may offer init. — This preserves owner review authority and prevents failed archival from claiming a fresh-start boundary.
+- [Phase 199]: Resume wrappers invoke the Go runtime exactly once and render its Confirmed, Reconstructed, Conflicting, or Unknown result without inspecting or selecting recovery evidence themselves.
+- [Phase 199]: The existing Codex command guide exposes pause and resume only; bounded legacy parser compatibility remains invisible runtime plumbing.
+- [Phase 199]: After seal, status is the primary review action and entomb remains a separate optional owner-confirmed archive-and-clear action.
+- [Phase 199]: Only the active state's exact archive reference makes live context markers part of chamber inspection. — Historical chambers remain judged by their own published bytes.
+- [Phase 199]: Archive repair targets are closed to manifest-owned entries or exact active context files. — Desired archive bytes must preserve published manifest and closure identity.
+- [Phase 199]: Archive repair approval binds manifest, complete inspection baseline, seal disposition, and shared mutation preview. — Plan 18 remains the sole mutation, journal, rollback, and receipt engine.
+- [Phase 199]: Use raw aether resume as the sole lifecycle-restoration command. — One recovery door keeps inspection read-only and restoration unambiguous.
+- [Phase 199]: Use aether maintenance recovery-inspect only to inspect preserved work with State effect: none. — Inspection must never become a second lifecycle state mutator.
+- [Phase 199]: Managed wrappers preserve a force flag supplied directly by the owner but never offer, construct, or rerun force authority; forced-incomplete closure is not verified success.
+- [Phase 199]: Codex lifecycle guidance keeps status as the primary post-seal review and entomb a separate optional owner-confirmed action.
+- [Phase 199]: Sealed colonies stay reviewable through status; entomb is optional and only verified archive-and-clear permits init. — D-17 lifecycle guidance must preserve owner review and forced-incomplete truth across generated surfaces.
+- [Phase 199]: Use a 73-row JSON ledger as the exact source for Phase 199 coverage and proof. — Exact cardinality and named proof resolution prevent presence-only signoff.
+- [Phase 199]: Treat retired lifecycle spellings as exact tracked path/family inventory entries; only normalize_args.go accepts old input through 1.29. — Current documentation and runtime output cannot hide behind historical evidence.
+- [Phase 199 transition]: One read-only lifecycle projection now owns orientation and Next Up across the ordinary journey; absent facts stay explicit rather than being repaired during inspection.
+- [Phase 199 transition]: Pause/resume are the only public interruption and recovery pair; replay is exactly once, and conflicting evidence fails without runnable-state mutation.
+- [Phase 199 transition]: Verified seal and owner-forced incomplete seal remain distinct; sealed state stays reviewable, while optional entomb verifies archive content before clearing it.
+- [Phase 199 transition]: Expert maintenance separates zero-write inspection from exact previewed, rollback-capable mutation and preserves unmanaged/custom files.
+- [Phase 199 transition]: Claude/OpenCode `/ant-*` journeys and runtime-native Codex guidance share Go-owned truth, proven by the executable Classic corpus and final normal/race receipts.
+- [Phase 200]: Keep canonical specification snapshots in optional ColonyState.Specification while treating .aether/SPEC.md as a projection. — Atomic state commits preserve exact immutable approval lineage; the readable file remains derivable.
+- [Phase 200]: Represent specification approval, candidate stopping, and active-plan acceptance with separate exact records and status transitions. — Each authority boundary must be independently auditable and impossible to grant through Queen advice or a stop decision.
+- [Phase 200]: Retain ordinal IDs for build and display compatibility while adding optional immutable semantic IDs and proof bindings. — Existing consumers keep working while revisions gain durable trace and impact identity.
+- [Phase 200]: Classify only executable pre-Phase-200 plans as legacy_unbound; never synthesize current authority. — Older colonies stay buildable without fabricated specification approval, candidates, semantic IDs, freshness, or acceptance receipts.
+- [Phase 200]: Re-index legacy planning files deterministically only after every path passes containment validation. — Old planning bytes remain readable as authority-neutral evidence or timeline material without allowing traversal, symlink escape, or malformed JSON.
+- [Phase 200]: Keep state loads observational and persist legacy classification with the next ordinary safe state transaction. — Preview, report-only, and read-only commands must not mutate COLONY_STATE.json.
+- [Phase 200]: Canonicalize the additive legacy_unbound marker out of stale-packet plan hashes. — Classification metadata does not change executable phases and must not invalidate an otherwise unchanged pre-upgrade planning packet.
+- [Phase 200]: Evidence identity excludes observation time, so exact rediscovery cannot manufacture freshness.
+- [Phase 200]: Planning evidence is fresh only under the exact active scope, source hash, frontier, and source-state policy.
+- [Phase 200]: Owner-answer reuse requires exact goal, session, specification, base-plan, meaning, behavior, impact, risk, and acceptance equivalence.
+- [Phase 200]: Route-Setter owns proposed dimension values, while Go alone validates their evidence and computes the weighted overall with integer half-up rounding.
+- [Phase 200]: Stop precedence is target met, configured pass cap, specific stalled gap, general diminishing returns, then continue; a material residual gap converts any below-target automatic stop to owner_decision.
+- [Phase 200]: The grounded_two_pass_lt2 policy requires two latest grounded sub-two-point absolute movements and no material semantic change after at least three completed passes.
+- [Phase 200]: Authority impacts remain separate from executable semantic movement and therefore do not masquerade as plan improvement in convergence diagnostics.
+- [Phase 200]: Executable plan hashes exclude timestamps, renderer text, lifecycle status, and owner-authority transitions; authority changes remain separate impacts.
+- [Phase 200]: Proposal acceptance evidence requires at least one deterministic build, types, lint, or tests check; claims and watcher alone are not automated checks.
+- [Phase 200]: Any predecessor phase or task omitted from a proposal needs a typed removed entry with a nonempty rationale.
+- [Phase 200]: Current proposal validation keeps exact files, no-file reasons, and user-facing applicability in a boundary envelope so legacy Plan loading stays unchanged.
+- [Phase 200]: An append identity binds receipt ID, run ID, ordinal, card ID/hash, and the exact predecessor hash; reusing the receipt for any other payload is a typed conflict.
+- [Phase 200]: Historical replay validates the immutable lifecycle journal and returns the digest of that append's original prefix, while full-chain validation permits the shared index to advance through later appends.
+- [Phase 200]: Only an exact PlanRevision timeline ID and digest pair upgrades a candidate-only timeline to accepted, after which both prune and reorder operations fail with typed protection errors.
+- [Phase 200]: Unindexed legacy iteration JSON is readable only as legacy_unbound evidence and never receives a current timeline binding.
+- [Phase 200]: Only evidence-unresolved choices in behavior, authority, risk tolerance, scope, or acceptance meaning may interrupt the owner. — Routine research depth, worker mechanics, scoring, formatting, generic preferences, and evidence-answerable questions remain autonomous.
+- [Phase 200]: Pass one may batch owner decisions after Scout, while later passes require matching Scout and Route-Setter receipts plus the persisted iteration-card hash. — A later discovery cannot truncate the complete planning pass needed to explain its impact.
+- [Phase 200]: Owner answers are reusable only under an exact content-addressed goal, session, specification, plan, meaning, impact, and affected-ID key. — Any drift leaves the prior answer visible as evidence but removes its authority.
+- [Phase 200]: Only contract-equivalent answers return direct_resume; contract changes require successor_spec_required with stable affected IDs and normalized revision evidence. — The specification engine receives an auditable revision request instead of an implicit planning-state rebind.
+- [Phase 200]: Derive each specification body ID from typed section plus normalized semantic lineage, while material revision hashes exclude observation time and authority state. — Reordering cannot rename contract items, and approval cannot masquerade as a product edit.
+- [Phase 200]: Bind specification approval to the exact specification ID, current revision ID, content hash, action token, and owner identity. — Specification approval remains independently auditable and never accepts a plan.
+- [Phase 200]: Treat ColonyState as canonical and .aether/SPEC.md as a deterministic one-way projection that is never parsed into authority. — Manual Markdown edits can be detected and repaired without changing revision or approval records.
+- [Phase 200]: Commit specification state and projection in one recoverable lifecycle transaction, allocating a fresh attempt only after a proven rollback. — Interrupted writes resume exactly, while a rolled-back failure can be retried without returning a false no-change success.
+- [Phase 200]: Persist dispatch, worker output, and finalization as distinct durable boundaries. — Resume derives retry versus finalize from verified evidence instead of worker liveness.
+- [Phase 200]: Keep StageReceipt limited to a completed boundary. — Each later worker manifest or plan acceptance requires separate authority.
+- [Phase 200]: Commit Route receipt, resulting state, iteration card, and timeline index through one existing lifecycle transaction. — Route recovery stays atomic without introducing Phase 202 event transport.
+- [Phase 200]: Bind finalization recovery to exact manifest identity. — Divergent staged bytes fail before any frontier mutation.
+- [Phase 200]: Keep all nine specification body categories separately typed in the public command result. — Visual and JSON consumers retain each stable ID's owner-contract meaning instead of receiving generic items.
+- [Phase 200]: Validate command exclusivity and exact revision inputs before state access, and contain file-backed text reads to regular repository files. — Invalid authority attempts and path escapes fail before colony state or arbitrary filesystem bytes are touched.
+- [Phase 200]: Derive the restored journey at root-help render time while preserving the Phase 199 canonical host catalogue until the parity plan. — Codex receives truthful native commands now without partially updating managed Claude and OpenCode wrappers.
+- [Phase 200]: Discuss uses scoped pending decisions as the only question candidates; evidence may suppress them, but no generic fallback menu is invented. — Only unresolved material owner boundaries should interrupt the planning journey.
+- [Phase 200]: The legacy max-questions flag remains compatible but cannot truncate a material behavior, authority, risk, scope, or acceptance batch. — The owner must see every currently known material consequence in one decision boundary.
+- [Phase 200]: Settled Discuss creates a fresh whole-goal draft, retains any canonical whole-goal or feature draft exactly, and never replaces an approved revision. — Stable specification identity and explicit successor operations preserve authority and unaffected scoped content.
+- [Phase 200]: Settled intent always closes at aether spec review; draft creation never implies specification approval or plan acceptance. — Specification approval and candidate-plan acceptance are separate owner authority transitions.
+- [Phase 200]: Keep specification approval, plan-candidate readiness, and accepted-plan execution authority as independent lifecycle facts. — No authority state may imply another.
+- [Phase 200]: Make a pending candidate the primary owner-facing boundary without revoking the previously accepted revision. — Candidate guidance must not advertise build or Autopilot before review.
+- [Phase 200]: Resume persisted planning stages through aether plan, review through aether plan --candidate, and name exact acceptance with --accept-candidate plus the content-addressed ID. — One enumerable runtime vocabulary now drives all projections.
+- [Phase 200]: Preserve legacy_unbound execution routing while malformed specification or planning authority fails closed through aether resume. — Compatibility cannot fabricate modern authority, and corrupted authority cannot authorize work.
+- [Phase 200]: Planning requires one exact Fast 80/4, Balanced 90/6, Deep 95/8, or Exhaustive 99/12 preset, whether named or supplied as the complete matching pair. — An unflagged call is a read-only selection boundary and cannot dispatch or create a planning run.
+- [Phase 200]: The public planning boundary authorizes only one Scout stage and persists its exact run, specification, base-plan, preset, gap, and evidence bindings before any later worker or owner authority. — Route-Setter, scoring, candidate, acceptance, and activation authority belong to receipt-bound later stages.
+- [Phase 200]: Routine phase research is selected automatically from the preset, weakest gap, and evidence freshness, while material product ambiguity remains an owner decision after Scout evidence exists. — Research depth is a runtime policy; it is not an approval prompt and cannot self-approve a specification or plan.
+- [Phase 200]: Scout and configured repository research become planning evidence only through contained regular-file paths with source revision, freshness, applicability, hash, producer attribution, and privacy rejection. — Typed provenance keeps research useful without expanding filesystem or owner authority.
+- [Phase 200]: Persist an answer-free boundary token with the first-pass batch; issue the completed resume token only after every exact card has an owner answer. — A completed resume token must never fabricate unanswered owner authority.
+- [Phase 200]: Bind later-pass material candidates into Route-Setter through the candidate snapshot hash and a content-addressed authorization envelope. — Plan 15 needs the exact evidence-bearing candidate set after the full pass, without widening the narrow worker manifest.
+- [Phase 200]: Contract-changing Scout answers minimally revise affected stable specification items and stop at exact approval plus scoped reconciliation. — An owner answer may propose a contract change but cannot itself approve the specification or authorize planning against stale scope.
+- [Phase 200]: Route-Setter supplies only an evidence-linked semantic proposal and five dimension proposals; Go owns accepted scores, weighted overall, weakest gap, stop reason, and every authority transition.
+- [Phase 200]: Bind later material choices to the completed Route card before owner review; equivalent answers resume the next Scout, while contract changes require a successor specification.
+- [Phase 200]: Persist stopped candidates as write-once pending_review run artifacts and leave active plan state unchanged until the explicit review and acceptance contract lands.
+- [Phase 200]: Candidate review returns persisted evidence and Queen recommendation unchanged; renderer logic cannot invent authority.
+- [Phase 200]: Exact acceptance validates candidate, approved specification, immutable base, complete timeline, proposal, and deterministic owner token before one transaction.
+- [Phase 200]: Completed lifecycle state is restored onto the newly bound candidate definition without mutating predecessor revisions.
+- [Phase 200]: Run headers retain mutable state hashes for stale-work detection while candidates bind immutable revision hashes; plan-unbound is genesis-only.
+- [Phase 200]: Specification impact is a deterministic transitive closure over stable semantic IDs; ordinal phase/task numbers remain display and execution metadata only.
+- [Phase 200]: Only exact candidate acceptance against the approved current specification clears live affected scope; recorded historical impact remains immutable evidence.
+- [Phase 200]: Current-schema insert-phase is a proposal operation, while genuinely spec-less legacy plans retain their documented direct compatibility path.
+- [Phase 200]: Seal enforces structural specification/plan truth without becoming Phase 205 product acceptance; forced-incomplete closure remains explicitly non-verified.
+- [Phase 200]: Build and run consume the same structured planAuthorityDecision rather than independently inferring acceptance.
+- [Phase 200]: Current authority requires exact approved SPEC, accepted candidate, immutable proposal, timeline, and receipt bindings; legacy authority requires the explicit legacy_unbound marker.
+- [Phase 200]: A newer pending candidate remains inactive but does not revoke an already accepted plan.
+- [Phase 200]: Terminal width changes layout only; typed planning facts and authority remain unchanged.
+- [Phase 200]: JSON retains machine stop enums and adds explicit public-label siblings.
+- [Phase 200]: Build and run appear coequally only after receipt-backed plan acceptance.
+- [Phase 200]: Canonical Phase 200 planning results route before the legacy whole-plan renderer.
+- [Phase 200]: Wrappers render the complete Go-issued material batch and never compose, classify, truncate, or answer decision cards.
+- [Phase 200]: Every answer is bound to the runtime-issued decision ID and followed by a fresh Discuss result; prior answers remain reusable only under exact equivalence.
+- [Phase 200]: Settled discussion ends at a draft or retained approved specification and routes to Specification review, never directly to planning.
+- [Phase 200]: Oracle guidance remains unchanged while Codex Discuss orchestration adopts the same runtime-owned evidence boundary as Claude and OpenCode.
+- [Phase 200]: Repository-aware init proposals remain visible context, but only the shared lifecycle projection determines persisted or displayed next-action authority. — Exploration may explain options without skipping the owner-governed lifecycle.
+- [Phase 200]: Init ends at Discuss; Discuss creates the draft specification, Specification owns exact approval, and only then may Planning begin. — Specification approval and plan acceptance remain separate authority transitions.
+- [Phase 200]: Claude and OpenCode use slash commands while direct Codex output remains runtime-native aether syntax. — Platform parity preserves equal lifecycle truth without advertising unsupported aliases.
+- [Phase 200]: Planning wrappers require an exact approved Specification before preset selection and expose Fast 80/4, Balanced 90/6, Deep 95/8, and Exhaustive 99/12 without a default. — The owner chooses the quality budget while Go retains contract and preset authority.
+- [Phase 200]: Claude and OpenCode dispatch only the single planning stage currently authorized by Go. — Scout, Route-Setter, later Scout passes, and owner boundaries stay receipt-bound instead of wrapper-predicted.
+- [Phase 200]: Every completed Scout to Route-Setter pass renders its causal iteration card before continuation, later material pause, or candidate review. — Visible evidence, score movement, semantic change, weakest gap, and stop causality remain append-only.
+- [Phase 200]: A reasoned stop creates a NOT ACTIVE candidate and the wrapper executes only the full runtime-issued acceptance command. — Specification approval, stopping, candidate review, and exact plan acceptance remain separate authority transitions.
+- [Phase 200]: Wrappers remain guidance-only and delegate every specification mutation to Go-owned aether spec.
+- [Phase 200]: Specification approval remains separate from plan-candidate acceptance; only the matching plan draft may enter the executable queue.
+- [Phase 200]: Claude and OpenCode expose /ant-spec while Codex uses direct aether spec guidance.
+- [Phase 200]: Codex planning dispatches only the single Scout or Route-Setter stage currently authorized by Go. — Receipt-bound one-stage authority prevents wrapper prediction and cross-stage replay.
+- [Phase 200]: Specification approval, planning stop, and exact candidate acceptance remain separate owner boundaries. — Only the final acceptance receipt may expose build or Autopilot.
+- [Phase 200]: Specification is runtime-native in Codex while Claude and OpenCode retain slash-command projections. — All platforms preserve the same Go-owned authority through their supported command spelling.
+- [Phase 200]: The canonical Plan YAML owns the singular wrapper-host contract pointer. — Managed projections remain synchronized without duplicating host-contract authority text.
+- [Phase 200]: Keep Phase 199 corpus compatibility while making Phase 200 proof requirements additive and closed under source, capability, and case references. — The new contract proves causality without weakening or rewriting historical evidence.
+- [Phase 200]: Exercise production planning kernels in real temporary Git repositories without live providers or network access. — This gives deterministic end-to-end authority proof suitable for CI.
+- [Phase 200]: Migrate legacy immediate-dispatch fixtures to explicit Specification and preset authority boundaries. — Current lifecycle safety boundaries remain authoritative.
+- [Phase 200]: Do not claim a green repository gate while the protected Phase 199 vocabulary inventory remains mismatched. — All Phase 200-owned gates pass, but required full and race commands remain nonzero for one inherited root cause.
+- [Phase 200]: Exact Specification approval, repair, and Plan preset advice comes from the shared next-action candidate registry. — Run-specific commands remain live-tree-gated without creating new hand-typed advice sites.
+- [Phase 200]: Fresh staged Plan manifests materialize Orchestrator boundary questions before the one-Scout authorization. — After Discuss, planning re-enters through the owner's exact selected preset instead of bypassing or reusing the stale manifest.
+- [Phase 200]: Historical Phase 199 STATE evidence is verified from the recorded Git blob and never compared with later live STATE bytes. — This keeps the receipt durable after legitimate planning-state advancement while preserving immutable historical evidence.
+- [Phase 200]: Only the exact .gsd/dispatch-isolation-sentinel.json path may change; every other pre-existing .gsd entry is protected by closed membership and lstat identity. — This permits the orchestrator-owned sentinel mutation without weakening scratch-tree tamper detection.
+- [Phase 200]: Config verification accepts exact bytes or the single semantic workflow._auto_chain_active true-to-false reset. — This permits the documented orchestrator cleanup and rejects every unrelated config mutation.
+- [Phase 200]: Repository storage keeps an open physical root directory handle and performs every data and lock open relative to that authority.
+- [Phase 200]: Store BasePath preserves its established caller-visible spelling, while filesystem authority comes only from the canonical root handle.
+- [Phase 200]: Lock filenames digest the complete normalized logical data path instead of filepath.Base.
+- [Phase 200]: Use one repository-authorized synthetic data target as the shared mutation-lock identity. — Store.UpdateFile holds the cross-process lock for the whole callback without rewriting planning state.
+- [Phase 200]: Require every session-backed transaction target to have an exact captured present-or-absent baseline before declaration. — A transaction cannot silently recapture newer state or write an undeclared target.
+- [Phase 200]: Keep read-only loader compatibility while mutating timeline and stage entrypoints use session-only helpers. — Plan 28 strengthens scoped writers without changing out-of-scope callers.
+- [Phase 200]: Stable specification item IDs derive from their typed section and visible canonical lineage, and the item hash binds that exact ID.
+- [Phase 200]: Revision created_at is immutable body material; status and approval remain separate receipt-bound lifecycle authority.
+- [Phase 200]: Persisted specification loads and repository-backed planning, build, and run gates require canonical recomputation while explicit specification-less legacy plans remain compatible.
+- [Phase 200]: Candidate identity excludes only mutable status/acceptance and clears only proposal-, phase-, and task-level candidate back-references plus the recommendation candidate ID while deriving the immutable digest. — This avoids a fixed-point hash while binding every actual review and authority input.
+- [Phase 200]: Retained state permits structural legacy compatibility, while artifact review and build/run authority require loader-attested canonical candidate, timeline, and acceptance-receipt validation. — Legacy pre-addressed in-memory shapes remain readable without allowing them to grant execution authority.
+- [Phase 200]: Acquire the Plan 28 repository mutation session before reading any candidate, state, specification, base, timeline, or receipt authority.
+- [Phase 200]: Treat candidate semantic delta, authority impacts, and affected markers only as claims to compare with a pure base/specification/proposal derivation.
+- [Phase 200]: Use the verified final iteration only for evidence and generation-only classifications that cannot be reconstructed from PlanRevision, while requiring every stable semantic identity to exist in the independently derived tuple.
+- [Phase 200]: Preserve completed work using the independently verified activation scope, not the broader proof-reachability graph.
+- [Phase 200]: Every mutating public planning entry acquires the Plan 28 repository session before its first authoritative read; internal InSession helpers carry that authority through branch selection and commit. — This prevents both stale derivation and nested repository-lock deadlocks.
+- [Phase 200]: Locally generated planning artifacts are prepared off-tree and published with cleanup, colony state, session.json, CONTEXT.md, and HANDOFF.md in one declared target set. — No successful return can expose only part of the selected planning branch.
+- [Phase 200]: Validated worker-authored artifacts are represented as exact no-op write targets, so refresh cleanup cannot delete them and their baseline remains part of atomic publication. — Worker output preservation and cleanup now participate in the same all-or-none transaction.
+- [Phase 200]: Whole-integer JSON validation applies at the staged evidence boundary while legacy weighted confidence calculations retain their established fractional compatibility. — External evidence cannot round or overflow, and existing internal score aggregation remains backward compatible.
+- [Phase 200]: Every named build-start variant maps to one finite required/allowed effect rule; unsupported combinations fail before mutation. — A closed matrix prevents future callers from silently acquiring partial start effects.
+- [Phase 200]: Build start holds one repository session across authority reload, target derivation, baseline validation, commit, and rollback. — One lock prevents workers from starting against mixed planning authority.
+- [Phase 200]: The content-addressed build-start receipt is declared last and exact replay validates its semantic target contract without dispatching again. — Durability must precede worker authority while retries remain duplicate-free.
+- [Phase 200]: Attempt derivation accepts clock, process, run, platform, workspace, tasks, and provenance explicitly. — Pure derivation makes every build-start byte available before mutation and preserves the legacy adapter.
+- [Phase 200]: All six production build-start families commit one authority-bound transaction before dispatch or completion work. — A receipt-last boundary prevents partial attempts, pointers, manifests, reviewer state, and provenance.
+- [Phase 200]: Plan-only and Queen-led starts share one prepared path selected by a closed transaction variant. — Queen reuse must not create or rewrite a second attempt.
+- [Phase 200]: Worker briefs are prepared before start but published only after the durable receipt. — Stale or faulted starts must authorize no runnable worker artifact.
+- [Phase 200]: ExpiresAt is an acceptance deadline — Pending candidates require observed time strictly before expiry, while timely accepted authority remains valid later.
+- [Phase 200]: Review and acceptance share one injected UTC time — The public command samples the clock once and passes that exact value through repository-session assessment.
+- [Phase 200]: Candidate expiry reuses the terminal failed stage with candidate_expired reason — This records durable expiry without widening the closed planning-stage vocabulary.
+- [Phase 200]: Planning-stage snapshot base and immutable candidate base remain distinct — Phase-insert stages bind a mutable state snapshot while candidate authority binds the retained active revision.
+- [Phase 200]: Canonical test starts seed accepted prerequisites, call commitBuildStart once, and return durable repository evidence. — This makes test setup exercise the same atomic boundary as production.
+- [Phase 200]: Arbitrary test statuses are reached only through transitionBuildAttempt after a canonical start. — Fixtures cannot recreate attempt and latest-pointer state directly.
+- [Phase 200]: Public-build goal prerequisites use the repository mutation session; build-start targets are never written directly. — Tests reach their intended preflight boundary without bypassing repository authority.
+- [Phase 200]: Valid attempt-ID filtering remains test-local until Plan 36 fixes start-receipt enumeration. — The known production compatibility issue stays within its already assigned scope.
+- [Phase 200]: Lifecycle facts assess candidate standing once at CapturedAt; renderers and Next Up consume that captured result without another clock read or state write.
+- [Phase 200]: The newest reviewable authority frontier wins: a newer expired candidate continues to require refresh instead of silently exposing an older accepted plan build action.
+- [Phase 200]: The complete D-16 acceptance command is captured in lifecycle facts and passed through unchanged; the resolver never reconstructs security-sensitive flags.
+- [Phase 200]: The existing lifecyclePlanningFromSnapshot signature remains as a compatibility adapter over the captured-time implementation, keeping production callers outside the six-file scope unchanged.
+- [Phase 200]: Plan 36 preserves six-task retry semantics through explicit legacy-unbound authority while every start effect uses the canonical transaction. — The compatibility fixture stays realistic without weakening production authority validation.
+- [Phase 200]: Plan 36 keeps child retries journal-visible but never latest, and repository AST enforcement rejects retired partial start writers. — Recovery records cannot impersonate dispatched work or reopen multi-write bypasses.
+- [Phase 200]: Integrated lifecycle claims must execute real Cobra or named causal test processes; source-text counters are not sufficient proof.
+- [Phase 200]: Managed wrappers remain read-only projections of Go authority; source-check drift requires a separately owned plan.
+- [Phase 200]: Only a current candidate exposes exact acceptance; stale and expired candidates expose only aether plan --refresh.
+- [Phase 200]: [P41] Command fixtures bind AETHER_ROOT, COLONY_DATA_DIR, store, and tracer to one physical temporary repository.
+- [Phase 200]: [P41] Test cleanup clears repository-backed store and tracer globals rather than restoring deleted temporary authority.
+- [Phase 200]: [P41] Legacy recovery keeps non-default configured-data coverage inside the repository containment boundary.
+- [Phase 200]: [P42] Seeded command fixtures copy legacy data into one repository-authorized binding. — Root, data, store, and tracer now share physical authority.
+- [Phase 200]: [P42] Memory and phase fixture cleanup is proved in both execution orders. — A deleted temporary repository cannot survive through environment or package globals.
+- [Phase 200]: [P42] The memory-details verification collision was repaired only in its Cobra-backed fixtures. — The same test-only root/data mismatch blocked the declared gate; product assertions stayed unchanged.
+- [Phase 200]: Pheromone and shelf fixtures pair AETHER_ROOT and COLONY_DATA_DIR with exact testing-owned cleanup. — Deleted temporary repositories cannot survive as process authority.
+- [Phase 200]: Plan 43 verification selectors name only owned fixture cases. — Unrelated integration failures remain visible and assigned to later plans.
+- [Phase 200]: Real Git fixtures reuse the shared command-test authority contract against their existing temporary repository root. — One physical root owns data, store, tracer, and cleanup.
+- [Phase 200]: The cleanup ratchet matches executable Go AST nodes rather than source text. — Comments and strings cannot trigger or evade the exact anti-pattern check.
+- [Phase 200]: Worktree cleanup and operator-destruction behavior remains unchanged. — Plan 44 changes only test-owned repository authority and teardown.
+- [Phase 200]: [P45] Only genuine platform ENOENT results normalize to os.ErrNotExist; every other repository-open failure keeps its identity and fails closed.
+- [Phase 200]: [P45] Repository UpdateFile uses errors.Is so optional-file absence survives nested contextual wrappers.
+- [Phase 200]: Memory retains eligibility policy while cmd owns the repository authority and persists only the typed, already-approved instinct.
+- [Phase 200]: The Queen callback captures the lifecycle data root when assembled so timed-out goroutines never consult mutable global store state.
+- [Phase 200]: A refused Queen write stays absent from QueenPromoted and visible in pipeline errors without turning best-effort consolidation into a lifecycle gate.
+- [Phase 200]: Build-attempt filesystem operations consume canonical data-root-relative paths; public output adds .aether/data exactly once. — This prevents doubled-root reconciliation and traversal ambiguity.
+- [Phase 200]: Only complete historical manifests enter the legacy adapter; partial modern claims fail closed. — Compatibility cannot bypass D-16 or supplied execution identity.
+- [Phase 200]: Exact legacy replay requires both the raw packet digest and valid canonical attempt/receipt evidence. — Replay remains idempotent without trusting the old artifact.
+- [Phase 200]: Partial finalize reports success only after canonical build start has durably committed exactly one unfinished-only recovery child; a child-start fault returns an error while retaining honest credited evidence.
+- [Phase 200]: Partial parents and children persist the exact unfinished task IDs and redispatch command; replay projects persisted values and uses pure derivation only to detect tampering.
+- [Phase 200]: A recovery child is executable evidence only while prepared and bound to a valid canonical start receipt; missing, forged, duplicate, or exhausted evidence fails closed without repair writes.
+- [Phase 200]: A current partial manifest may reach the read-only replay verifier before stale-state checks, but completion digest, accepted task graph, child journal, and receipt checks still gate every result.
+- [Phase 200]: Plan 49 accepted build fixtures use real specification approval, candidate coordination, owner acceptance, and commitBuildStart; mutable execution status is synchronized without replacing immutable authority bindings.
+- [Phase 200]: Plan 49 execution fixtures name phase, owner, mode, and live or dead process state explicitly; live recovery uses the current test process.
+- [Phase 200]: Plan 49 trusted completed manifests are written by commitBuildStart with transaction-derived authority fields, never by direct fixture journal writes.
+- [Phase 200]: Plan 50 downstream continue, run, redispatch, reviewer-waiver, and narrator fixtures cross approved specification, accepted plan, and canonical build start before testing lifecycle behavior.
+- [Phase 200]: Plan 50 reviewer-window failure validates then corrupts the legitimate build-start target and requires preserved bytes plus parseable JSON with truthful exit code 2.
+- [Phase 200]: Plan 50 models the one-worker forced-reviewer policy at exact phase 25 with twenty-four honestly completed prerequisites.
+- [Phase 200]: Plan 51: partial_recovery is the renderer canonical fact; established top-level recovery fields remain compatibility projections.
+- [Phase 200]: Plan 51: build_advisory is computed once per runtime lane and drives both terminal and JSON presentation.
+- [Phase 200]: Plan 51: direct build checks boundary questions read-only against accepted pre-build authority before its start transaction.
+- [Phase 200]: Plan 51: missing durable partial recovery evidence renders an explicit error and never an ordinary completed-build screen.
+- [Phase 200]: Plan 52: valid planning fixtures derive nested identities through production addressers; negative tests re-address only changed valid setup.
+- [Phase 200]: Plan 52: force-replan captures each cleanup baseline before classification and commits selected removals through one planning mutation session.
+- [Phase 200]: Plan 52: generated hard-decision lineage preserves short IDs and hashes only when the -hard companion would exceed the specification limit.
+- [Phase 200]: Plan 52: plan-only safety enters through approved specification and accepted-plan authority while lifecycle state remains byte-stable.
+- [Phase 200]: Build visual fixtures enter through accepted plan authority. — Presentation assertions are meaningful only after the runtime reaches its intended screen.
+- [Phase 200]: Visual parity rejects actual extra dispatches, not truthful not-called rationale. — Owner-visible explanations may name a caste precisely because the Queen did not send it.
+- [Phase 200]: Wrapper spend follows the completion manifest phase after state advances. — The cost block belongs to the run being closed, not the next durable current phase.
+- [Phase 200]: Keep the existing output-mode and shared spend renderer unchanged when real-lane proofs pass. — A stale test fixture does not justify production churn or duplicate rendering authority.
+- [Phase 200]: Lifecycle projections select canonical resolver candidates; renderers do not author command advice. — One typed action must govern cards, envelopes, and compatibility fields.
+- [Phase 200]: Partial build cards and envelopes consume typed partial_recovery authority. — Loose recovery fields are compatibility projections, not independent sources of truth.
+- [Phase 200]: Golden snapshots refresh only after canonical authority and semantic assertions pass. — Approved specifications, accepted plans, receipts, attempts, and claims prevent refusal output from masquerading as a valid golden.
+- [Phase 200]: Static debt inventories may only move one-for-one or shrink. — The live and frozen command-advice copies remain byte-identical, and no new writer waiver was accepted.
+- [Phase 201]: SYN-201-03/04/10/14 resolve RESEARCH.md's 3 open questions + Assumption A2 as explicit synthesis rows (boundary decision type, lane error-surface split, model-routing policy layer, pause-handoff reuse for repair checkpoints).
+- [Phase 201]: Classic's double build-time-Watcher + continue-time-review-squad pattern predates the modern double-verification defect (OLD-03/04); SYN-201-03 disposes replace-better, not restore-modern, so the phase does not restore the wasteful pattern it exists to remove.
+- [Phase 201]: Continue lanes' shared accept/verify/advance body takes an already-evaluated gate report as input rather than recomputing gates internally — The finalize lane's soft_block auto-resolve pass mutates its own gates value before the decision is made; recomputing gates inside the shared body would silently discard that resolution. Each lane still funnels through the one shared gate evaluator; it is each lane's own responsibility to call it before reaching the decision body.
+- [Phase 201]: 201-03: Verification-boundary normalisation is trim-plus-ASCII-lowercase with EXACT comparison -- no fuzzy matching or separator-substitution fallback, unlike caste-name resolution elsewhere in the package.
+- [Phase 201]: 201-03: attachVerificationBoundary refuses to silently rewrite an already-recorded decision, naming both the stored and offered choice -- mirrors attachCheckFixAttempt/attachBuildFreeCheckReport's narrow-setter discipline.
+- [Phase ?]: WorkOutcome is never folded into OutcomeKind; a total LifecycleOutcome() mapping is used instead so old binaries keep decoding new records. — OutcomeKind is a closed durable wire vocabulary validated strictly by validateLifecycleHeader; widening it would break backward decoding.
+- [Phase ?]: The closeout's generic default summary now reads from WorkOutcomeLabels() when a verdict is present, fixing a real word collision with the success label. — The generic fallback text shared the word finished with the success verdict's label, which would have borrowed success-shaped language onto every non-success card.
+- [Phase 201]: queenBuildPostWaveDispatches and plannedContinueReviewDispatches now derive attemptRel internally via loadLatestBuildAttempt(phase.ID) rather than taking a new parameter, avoiding a signature change across dozens of existing call sites — Threading attemptRel as a new parameter through plannedBuildDispatchesWithJobProposals/plannedContinueReviewDispatches would have broken ~15 existing test call sites across the cmd package; deriving it internally from the phase ID (already available) keeps every existing signature stable while still reading the real per-attempt record
+- [Phase 201]: With no verification-boundary decision recorded for an attempt (the common case until a later plan wires up the write side), build-end now dispatches zero post-wave reviewers unconditionally, even under --heavy or explicit --castes — The plan's own behavior spec is unconditional on this point (check-step is the safe default, D-01); this required updating 7 pre-existing tests that asserted measurer/chaos present at build time under heavy depth to record a build-end boundary fixture first
+- [Phase ?]: Elapsed time is attempt-bound (renderSpendCostLine(phase) only); an absent attempt renders no line at all, distinct from an incomplete one which renders the dash sentinel.
+- [Phase ?]: Cost-and-time block in lifecycle_closeout.go is gated strictly on WorkOutcome != nil, reusing appendSpendCostLine as the single placement rule rather than a workflow allowlist.
+- [Phase ?]: Colony-wide running total sums cost across every attempt via loadSpendLedgersForPhase but elapsed from only each phase's latest build attempt via loadLatestBuildAttempt.
+- [Phase ?]: [Phase 201]: CAP-022's absent-declared-artifact credit block is enforced at the new result-card precision layer (deriveResultFilePrecision's blockedTasks), not by rewriting the core phase-advancement crediting engine (completedBuildTaskIDs/dispatch.Status) other paths depend on.
+- [Phase ?]: [Phase 201]: recommendedActionForWorkOutcome invents no new command vocabulary -- partial reuses the attempt's own buildUnfinishedRetryRedispatchCommand, blocker points at the locked aether unblock --dispatch, interrupted points at the sole aether resume recovery door, timeout follows the attempt's recorded recovery command, success/no_change point at aether continue.
+- [Phase ?]: [Phase 201]: CAP-066's knowledge-delta storage/rendering (attachBuildKnowledgeDeltas, lifecycleCloseoutKnowledgeDeltaEvidence) is built and tested but has no live production writer -- no existing pipeline in this repo yet produces a structured decision/learning delta payload; a later plan must wire a real source.
+- [Phase 201]: Read waves/job ownership from stored dispatches, not a new parallel jobPlan field — Dispatches already carry Wave/JobName/JobReason/JobSource/DependsOn from the pure planner; adding a second stored representation risked exactly the divergence this task exists to close.
+- [Phase 201]: Plan-only lane stamps its own returned dispatches with AttemptID but never resaves manifest.json — manifest.json's bytes are bound to attempt.ManifestSHA256; resaving a stamped copy broke the completion-packet digest check on the finalize lane (caught by go test ./cmd -run TestBuild).
+- [Phase ?]: 201-09: repair-checkpoint identity reuses the /ant-pause idempotency-key pattern (checkpoint ID -> receipt lookup -> replay) rather than the full PauseHandoff lifecycle-transaction machinery, per SYN-201-10.
+- [Phase 201]: Attempt/job identity resolved via loadLatestBuildAttempt rather than threaded through codex.WorkerDispatch; worker-reported blockers become durable FlagEntry records reusing the existing pending-decisions.json store (no second blocker store); same-run repair signal delivered as an active pheromone REDIRECT signal so no changes to check_fix_attempt.go were needed
+- [Phase ?]: Job telemetry is attempt-bound and merges across build+continue writes rather than overwriting; only the direct/native build lane can measure queue/context/work today, so the wrapper-driven lane has no telemetry until a later plan adds capture there.
+- [Phase ?]: Owner ratified 4m30s turnaround target for small single-task jobs (down from measured 408s), applied only via slimmer briefs + proven suite speedups — Measured job was named lighter than owner's typical request; target is a floor-setting benchmark, not a claim about all job sizes
+- [Phase 201]: Model routing (D-15c) starts with exactly one routed caste (porter), justified by the existing quality-sensitivity evidence table rather than invented benchmarks; runDeterministicFloor's signature stayed unchanged, with a new sibling function carrying the loop/boundary cycle-point parameter to avoid touching 13 pre-existing test call sites.
+- [Phase 201]: Phase 201 causal proofs reuse existing, already-passing Go tests from plans 201-01..14 as go_test_symbol -- never new fixtures invented for the contract corpus — Only design that honestly satisfies the plan's prohibition against a fixture in a shape the runtime cannot produce
+- [Phase 201]: Fixed a pre-existing bug in cmd/lifecycle_closeout.go where the interrupted-verdict recovery text borrowed the success label's 'finished' token — Needed as the real causal proof for the required negative case: a non-success outcome never renders as success
+- [Phase 201]: 201-16: wired the Queen's verification-boundary write side (queenApplyVerificationBoundary/attachVerificationBoundary) into both build lanes, closing the D-01 gap from 201-VERIFICATION.md
+- [Phase 201]: 201-17: Closed D-11 — applyBoundedCheckFixRepair now returns a real four-part failed-repair handback (diagnosis, attempted action, restored position, owner action), rendered on the blocked check screen both continue lanes share; fixed a latent restored-position bug along the way.
+- [Phase 201]: [Phase 201] 201-18: native/in-repo build lane now attaches the credited/uncredited file split (D-08) and both lanes attach knowledge deltas (CAP-066) to the exact sealed attempt, warn-never-fail, proven by AST call-graph guard and real end-to-end builds.
+- [Phase ?]: Added a dedup guard (excludeLifecycleEvidenceByID) to buildLifecycleCloseout so a knowledge delta never renders twice now that a real work verdict reaches production for the first time
+- [Phase ?]: buildEndReviewerCastes is derived from queenBuildPostWavePlans at init time rather than a hand-typed caste list
+- [Phase ?]: [Phase 201] checkWorkOutcome derives the check's verdict once per continueAcceptVerifyAdvanceDecision and codex_continue.go stores it on the result at all three save sites; checkWorkCloseoutDetails reads it back, never recomputes
+- [Phase ?]: [Phase 201] The check screen (both continueCmd's direct lane and the wrapper's chat-path closeout) and both autopilot closeout sites (per-phase build card, terminal run screen) now carry a verdict, a recommended next action, and exactly one cost-and-time block
+- [Phase ?]: [Phase 201] cmd/codex_continue_finalize.go (the --classic-ceremony external lane) is deliberately left without check-verdict wiring -- not in this plan's declared files, its pre-review blocked path never reaches the shared decision body, and it falls back safely; the default/fast aether continue path and autopilot's own checks (same direct lane) are fully wired
+- [Phase 202]: [Phase 202] Extend pkg/events.Bus with typed swarm.*/oracle.*/watch.* topics rather than reviving the dead cmd/event_types.go trio or building a second bus. — The dead trio has zero production callers; pkg/events.Bus already has three live callers (spawn.go, status.go, oracle_promote.go/memory_feed.go) whose fragmentation across two buses would reproduce the repo's own documented 'three parallel implementations' pattern.
+- [Phase 202]: [Phase 202] CAP-045 scope ruling: this phase proposes scoped FOCUS/REDIRECT learning from successful Swarm evidence; measuring that learning's later effect is explicitly Phase 204's boundary. — The capability ledger routed CAP-045 here without splitting its two halves; the synthesis rules in writing which half belongs to this phase so the boundary with Phase 204's learning governance work is explicit, not discovered later.
+- [Phase 202]: executeSwarmWave gained a liveEpisode bool parameter (investigation wave true, fix/verification waves false) so the investigation wave emits live events without touching the other two waves — plan 202-03 owns wiring the rest of the lifecycle lanes.
+- [Phase 202]: watch-mode resolution reads event-bus.jsonl via a lock-free os.ReadFile rather than events.Bus.Query, mirroring cmd/lifecycle_facts.go's discipline, to preserve aether watch's locked-in read-only guarantee (TestWatchIdle199ReadOnly).
+- [Phase 202]: Real build per-worker live wiring lives in cmd/codex_build_worktree.go (both in-repo and worktree dispatch loops), not cmd/codex_build.go -- that file only holds the build's episode boundary. — The plan named codex_build.go for wiring, but the actual per-worker dispatch loop and existing ceremony emission calls live in codex_build_worktree.go.
+- [Phase 202]: orchestrateRecovery refactored to funnel all four classification branches through one outcome variable and one emitColonyLiveRecoveryChanged call before its single return. — Avoids duplicating the live emission call at four separate return sites while preserving the function's pure classify/decide/log/return contract.
+- [Phase 202]: 202-04: caller-freedom for the retired event stream was proven by a repository-wide symbol search (Go/TS/wrapper docs), not assumed — Deletion decisions require positive evidence of zero callers, not absence-of-grep-hits-so-far assumptions
+- [Phase 202]: 202-04: the second-transport guard uses same-function co-occurrence, not unrestricted call-graph reachability — The cmd package has 70+ unrelated os.WriteFile call sites; full transitive reachability would produce false positives from unrelated call chains
+- [Phase 202]: Swarm's four lenses (tracker/scout/archaeologist/oracle) are dispatched unconditionally via a floor in buildSwarmPlansForWave, not by changing isAlwaysRequired -- avoids reversing the pinned TestSwarmTrivialBugSkipsHistoryAndResearch decision and starving gatekeeper/medic's optional budget slots.
+- [Phase ?]: 202-08: reused cmd/planning_stage.go's planningStagePreset type for Oracle's preset IDs instead of a parallel enum -- one shared vocabulary, not a copy of it
+- [Phase 202]: 202-06: the unfinished-worker-interrupted rule reads spawn-runs.json lock-free (os.ReadFile), mirroring the event-bus read discipline -- storage.Store.ReadFile/agent.SpawnTree.CurrentRun() would create a lock file on every `aether watch` invocation, breaking the command's read-only guarantee.
+- [Phase 202]: 202-06: the redraw loop is gated on isTerminalWriter(stdout), not shouldRenderVisualOutput(stdout) -- the latter is also true for a forced/piped/test-forced render that wants exactly one frame back; gating on visual mode alone hung a pre-existing test (TestWatchVisualOutputShowsHonestIdleFallback) until its timeout killed it.
+- [Phase 202]: 202-06: watchCmd's Args changed from cobra.NoArgs to cobra.MaximumNArgs(1) to carry an optional drill-down selector (worker identity or wave number); Cobra derives the command name from the first word of Use, so name-based references to `watch` are unaffected.
+- [Phase 202]: 202-07: Swarm's repair checkpoint (cmd/swarm_repair_checkpoint.go) is a thin adapter calling saveRepairCheckpoint/restoreRepairCheckpoint directly, never runBoundedRepairRound/applyBoundedCheckFixRepair (the phase-and-check-shaped wrappers); whether the repair held is decided from the verification wave's own outcome alone, and a restore failure gets a distinct repair_failed_not_restored status rather than being folded into failed/blocked.
+- [Phase 202]: 202-07: the third-strike architectural case is additive to swarmArchitecturalConcernResult's existing payload and reads entirely from durable swarmResultRecord history (loadSwarmResultRecordByID) plus 202-05's hypothesesFromSwarmRuns/detectSwarmSharedCauses reused unmodified -- cmd/swarm_strikes.go's counting/persistence machinery stays untouched.
+- [Phase 202]: Oracle's pre-existing propose/brief/--from-brief ritual (built 2026-08-16) already satisfies D-08; no new clarification gate was built, only tests proving it. — Gating the direct-topic path would have broken pre-existing tests that rely on it completing synchronously with no approved brief, and the wrapper contract documents direct-topic invocation as a sanctioned skip-scoping escape hatch.
+- [Phase 202]: Episode 'start event' for recency ranking is its boundary-start event (episode.started, or earliest wave.started), not literally its first-ever event -- per-episode sequence counters always reset to 1.
+- [Phase 202]: Swarm episode retention recomputes eligibility fresh from the whole episode set (latest-for-target, unresolved strike sequence) rather than caching it, and removal requires the exact identifier plus a previewed digest -- never a directory sweep. — Retention.Class stored on the episode; age/eligibility derived at plan time so it can never go stale.
+- [Phase 202]: [Phase 202]: 202-12: Oracle synthesis documents now render recommendation-first (recommendation, plain-English confidence, unsettled questions, sources, evidence trail); a claim citing a source not in the run's own recorded sources is refused by name at render time; resaving a run replaces its own document (keyed on run_identifier) instead of duplicating it.
+- [Phase 202]: One shared standing vocabulary (verified/useful notes/standing unknown) resolved through workStandingLabel; Oracle's rendered text kept byte-identical, only its internal branch decision rewired — Existing tests assert Oracle's exact 'partial — stopped after N rounds' wording; changing it was out of scope
+- [Phase 202]: 202-14: one read-only projection (loadColonyEpisodeIndex) over Swarm episodes, Oracle research, and build/check attempts backs status's Most Recent Episode section and history's full listing; history renders the same full cost block as status so the two can be compared byte-for-byte. — Avoids a fourth durable record type and proves status/history/watch cannot silently disagree about what ran.
+- [Phase 202]: 202-15: extended validateClassicContractCorpus's Phase 200/201 front-door-journey exemption to SYN-202- cases — without it no Phase 202 corpus case could ever validate; the exemption existed for exactly this reason on the two prior phases.
+- [Phase 202]: 202-15: the Go-test-symbol resolver for Phase 202 corpus cases (classicContractCmdTestSymbols) parses the whole cmd package once rather than only each case's own cited _test.go file — a case's go_test_symbol must exist in the package regardless of which file its source_citations happen to name.
+- [Phase 202]: 202-15: Task 3's full-suite sweep caught two regressions from Task 1's wrapper edits that Task 1's own scoped verify list never covered (a stale CMD-04 command-hash ledger entry, and stale flat .claude/commands/ant-{watch,swarm,oracle}.md mirrors) — both fixed in the same commit rather than deferred, since both are directly caused by this plan's own Task 1.
+- [Phase 202]: Recovery decisions now route onto the real open build/continue episode instead of a synthetic recovery-phase-N episode, closing CR-02 (the live-view hijack).
+- [Phase 202]: The live view selects the most recently started STILL-OPEN episode via a shared colonyLiveBoundaryDelta rule, never whichever episode owns the newest single event, so aether watch never abandons a running build for a closed one.
+- [Phase 202]: 202-17: Oracle's round-based run now opens/closes its own live-colony episode boundary and is judged abandoned by its own durable state and controller process (never another lane's spawn-run record), closing CR-01 (a running Oracle round could never register as live). The episode-open guard for a never-started run was applied: no boundary opens until the loaded state carries a non-empty StartedAt.
+- [Phase 204]: A requirement is ticked only when its own wording is true of the running program and a named test fails when the wiring is removed; two truths that stayed partial (check-lane usage/cost recorded as absent; 30 of 51 fixtures unguarded) were accepted as deferred by owner override with the limit named, not rounded up.
+- [Phase 204]: The post-closure code review caught a green-tested feature that is dead in production (the automatic hypothesis promoter: learn-entry IDs and guidance-application IDs come from disconnected pipelines, and no production writer records a helpful application at all). Recorded as WINDOWS.md entry 44 reopened and the CLAUDE.md claim corrected, never faked.
+- [Phase 204]: WINDOWS.md rows with status fixed seed the regression-fixture bank, so closing a ledger entry obliges a bank regeneration (`go test ./cmd -run '^TestSeededBankUpdate$' -update-bank`) plus a real guard for each new fixture; the unguarded floor is a two-sided ratchet and is never raised.
+- [Phase 204]: Fixture dates the compiled binary reads must derive from the wall clock; in-process fixtures pin the candidate clock instead. Two families of literal September dates crossed the seven-day candidate window mid-phase and turned fifteen tests red with no code change.
+- [Phase 204.1-204.5]: Owner moved canonical Codex ant skills and behavioral parity into v1.28 before remaining Phase 205 acceptance (2026-09-16); prior later-milestone deferral is superseded. — Five inserted phases own ANT-01..16; preserve completed 205 evidence and original inventory, and qualify the changed candidate before any owner walkthrough.
 
 ### Pending Todos
 
@@ -104,7 +658,26 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 - [x] Phase 175: Orchestration Visibility — shipped 2026-08-16 (outside the phase system; SHIP-PROGRESS Item 3)
 - [x] Truth audit + hostile review + implementation programme approved — 2026-08-17
 - [~] Phase 186: rescoped 2026-08-18 — plans 01-06 shipped; plan 07 cut from twelve runs to one non-gating smoke run, to be fired when convenient
-- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality ← **next**
+- [x] Phase 193: Free Checks Are the Floor — executed and verified 2026-08-22 (v1.27)
+- [x] Discuss + plan Phase 194: The Queen Decides the Team — planned 2026-08-23 (9 plans, 9 waves)
+- [x] Execute and verify Phase 194: The Queen Decides the Team — complete 2026-08-26 (9/9 plans, 9/9 UAT)
+- [x] Phase 195: Coherent Jobs — complete 2026-08-27 (10/10 plans; decision-free one-worker fast path shipped)
+- [x] Plan Phase 196: See What It Cost — planned 2026-08-27 (8 plans, 4 waves; checked twice, 2 blockers found and fixed)
+- [x] Plan and execute Phase 196: See What It Cost — complete 2026-08-28 (8/8 plans, 5/5 criteria, 3 review rounds + verification)
+- [x] Phase 197: One Answer to "What Next?" — complete 2026-08-29 (7/7 plans)
+- [x] Phase 198: Put the Thrown-Away Data Back on Screen — complete 2026-08-29 (9/9 plans)
+- [x] Phase 198.1: Feed the Memory — complete 2026-08-30 (6/6 plans)
+- [x] Phase 198.2: Memory Reaches Every Helper — complete 2026-08-31 (8/8 plans; one real-world UAT carried as debt)
+- [x] Phase 198.3: Overnight Stamina — 22/22 formal plans plus six final trust-boundary repairs; verified complete 2026-09-02
+- [x] Audit v1.27 at Phase 198.3 — complete 2026-09-02 (`tech_debt`, no blockers)
+- [x] Close and archive v1.27 with the audited debt acknowledged — complete 2026-09-02
+- [x] Initialize v1.28 Classic Colony Restoration from the comprehensive Dreams report — approved 2026-09-02
+- [x] Route the 72-row capability ledger without re-interviewing the owner — 72/72 routed; final dispositions require phase synthesis
+- [x] Discuss, plan, execute, and verify Phase 199 — 34/34 plans and 12/12 UAT checks complete 2026-09-07
+- [x] Discuss Phase 200 and complete its Scout/Route-Setter Classic-to-Go synthesis before implementation planning
+- [ ] Resume Phase 205 at plan 205-11 (wave 3); plans 205-01 through 205-10 are complete ← **current**
+- [ ] Run owner-watched proof only after v1.28 restoration is usable
+- [ ] Plan Phase 187: Crash-Safe Worktrees & Ecosystem Neutrality
 - [ ] Plan Phase 188: One Truth for Failures and Advances (independent — may run in parallel with 187)
 - [ ] Plan Phase 189: Complete Worker Contract (≥2 plans; independent — may run in parallel with 187/188)
 - [ ] Plan Phase 190: Lean, Non-Duplicated Delivery (after 189)
@@ -115,15 +688,26 @@ must pass the benchmark gate. Light baseline first, full 3-repeat at the end.
 
 ### Blockers/Concerns
 
+- [Phase 204.1] Verified and complete after the user delegated the three guidance/scope reviews; 204.1-UAT.md records 3/3 assistant-reviewed passes and the explicit authority boundary. CR-01 is resolved. Final broad-suite raw exit 1 retains 17 historical failures with no new diagnostic regression; details are in 204.1-FINAL-GATE.md. These failures are not waived, and full workflow/native-helper parity plus Phase 205 owner acceptance remain pending.
+- ⛔ [Classic preservation] No historical capability may be deleted merely because current code has no caller. The report and 72-row ledger must inform v1.28 requirements and phase traceability.
+- 🧭 [Owner intent] Do not repeat the Golden Era discovery interview. Ask only genuinely unresolved choices not answered by the comprehensive report.
+- ℹ️ [Phase 198.2 verification] One real-world memory-pack UAT remains untested because the owner has not yet used the finished behavior on another project. It is acknowledged debt; review with `$gsd-audit-uat` and rerun with `$gsd-verify-work 198.2` after field use.
+- ℹ️ [Phase 198.2 transition] `phase.complete` returned Phase 198.3 correctly but again left the roadmap checkbox and STATE `current_phase` frontmatter stale; both were corrected inline. The transition mutation still needs a later runtime fix.
+- ℹ️ [Phase 198.2 side finding] This repo's local wisdom file contains backticks rejected by the current safety filter, so that local wisdom is withheld from helper prompts. This predates Phase 198.2 and was not changed here.
+- ℹ️ [Phase 199 carry-forward] `cmd/recover_repair.go` retains a pre-existing informational `build-reconcile` placeholder inside an unreachable legacy helper. It is not a public route; revisit only if the Phase 201 work-cycle/reconciliation design makes that helper live.
 - ~~Roadmap is unapproved~~ — resolved 2026-08-14. This line was stale: it said not to start Phase 172 until sign-off, and 172, 173 and part of 174 were then executed anyway. Recorded because a gate that gets ignored without anyone noticing is the failure mode this project keeps rediscovering.
 - **Phases 176, 177 and 178 are cut, not deferred.** If a future session finds Phase 173's delegation guards bounding a capability nobody has, that is expected and accepted — Phase 177 was the grant, and it was cut deliberately. Do not "restore" it.
 - **Phase 173 and Phase 178 carry research flags from the research phase.** Platform nested-spawn behaviour is MEDIUM confidence and both vendors broke it within the last quarter (Claude Code strips the Agent tool from some subagent types; OpenCode has an open "subagents can infinitely recurse, no max depth" defect). The skill supply-chain threat surface is actively evolving. Re-verify vendor docs and open issues at planning time for both
 - **OpenCode hook parity is unverified.** No confirmed equivalent to Claude Code's `PreToolUse` deny gate was found. If SPAWN-04's guard must hold on OpenCode, Go-side depth enforcement becomes mandatory rather than defence-in-depth — verify before planning that requirement
-- **Codex has no native subagent nesting.** Delegation on the Codex lane must be *off* and reported honestly, never emulated. Emulation would create a second divergent orchestration path — the exact failure v1.24 and v1.25 spent two milestones unwinding
+- **Codex host capability must be revalidated.** The old blanket no-delegation assumption is superseded by the 2026-09-16 native-agent research. Phase 204.2 proves the supported nesting/permission/cancellation behavior, and Phase 204.4 binds recruitment to Go admission and useful result handback. Do not infer either availability or absence from the historical note, and never emulate success or create a second state authority.
 - Two gaps surfaced during roadmapping that have **no supporting requirement** and were deliberately not added to scope (see Coverage Notes in the roadmap return): the char-budget-vs-spend naming guardrail (Pitfall 8), and orphaned-child reaping with an operator command (Pitfall 5). Both are recorded as phase guardrails; if either is to be enforced, it needs a requirement and a user decision
-- **`pkg/trace/cost.go` holds a stale model-price table that contradicts Phase 174's D-02 ("no model-price table is ever built"), and it repeats the 186x undercount shape** — `CalculateCost` multiplies only input and output tokens and ignores cache tokens entirely, against hardcoded rates for retired model names. It is called from `pkg/agent/pool.go:192`; no live caller was found under `cmd/` for any of the three dispatch platforms, so it is probably dead, but that was not proven exhaustively. **Deliberately OUT OF SCOPE for Phase 174** (surfaced by 174-RESEARCH.md Open Question 1, resolved there as owner residue). Phase 174 prevents a second instance — the new spend surface carries greps that fail if a price table or any token-to-dollar arithmetic appears — but the existing one needs an owner ruling: delete it as dead code, or fix its arithmetic. Plan 174-09's SUMMARY must restate this so it does not evaporate with the phase.
+- ~~`pkg/trace/cost.go` holds a stale model-price table~~ — **RESOLVED, found stale 2026-08-27.** The file no longer exists and no price table or token-to-dollar arithmetic remains anywhere in the Go source (`grep -rln 'CalculateCost|pricePerToken|costPerToken|InputPrice' --include='*.go'` returns nothing). The owner ruling this blocker demanded — delete as dead code, or fix its arithmetic — is moot; it was deleted at some point between v1.26 and now. Phase 174's D-02 ("no model-price table is ever built") therefore holds in fact as well as in principle, which is what Phase 196 needs before it puts a cost line on screen.
 
 - `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. The migration to `go.yaml.in/yaml/v3` is a mechanical import swap and is deliberately unbundled — it gets its own plan, not a rider on the roster work
+- Phase 200 full and race gates remain nonzero because protected Phase 199 file 199-UAT.md contains legacy_pause and legacy_resume occurrences absent from the Phase 199 exhaustive vocabulary inventory; Phase 200-owned gates pass.
+- ℹ️ [Phase 204 carry-forward] The automatic hypothesis-to-validated promoter is wired but cannot fire in production (WINDOWS.md entry 44, reopened); check-lane token usage and cost stay recorded as absent (entry 48); 30 of 51 confirmed incidents still have no guard test (entry 42); swarm worker names can collide about one run in fifty and the manifest refuses instead of de-duplicating (entry 47).
+- ℹ️ [Phase 204 side finding] The fixture bank's sanitiser silently drops any confirmed incident whose text contains backticks or XML-looking tags; eight pre-existing incidents have never been in the bank for that reason and WINDOWS.md descriptions that must seed a fixture need plain names.
+- Historical Plan204.2-24 acquisition remains blocked under its original contract. Owner-approved prospective amendment now completes admission-only Plan 24; actual full context/answer/ACK source remains unresolved even after owned history DB/WAL inspection. See 204.2-PROOF-AMENDMENT.md and 204.2-25-CHECKPOINT.md.
 
 ## Deferred Items
 
@@ -143,8 +727,105 @@ Carried forward from v1.25 (superseded) and v1.23:
 | Workflow | WORKFLOW-01 … WORKFLOW-09 | Deferred | v1.25 roadmap |
 | Runtime | RUNTIME-01, RUNTIME-02 | Deferred | v1.25 roadmap |
 
+Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/research/v1.27-milestone-brief.md` or is an archived-phase leftover; acknowledging suppresses the audit line only until the artifact changes again.
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| uat_gaps | 173/173-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| uat_gaps | 72/72-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| uat_gaps | 76/76-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
+| verification_gaps | 173/173-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| verification_gaps | 71/71-VERIFICATION.md | gaps_found | 2026-08-22 | v1.26 |
+| verification_gaps | 72/72-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| verification_gaps | 76/76-VERIFICATION.md | human_needed | 2026-08-22 | v1.26 |
+| todos | 2026-08-01-finalize-reconcile-task-evidence-gate.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-01-ts-host-preflight-hardcoded-timeout.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-20-spec-builder-feature.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-completion-packet-cannot-express-bundled-work.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-continue-checker-captures-wrong-field.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-finalize-covered-tasks-DISPROVEN.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-no-reentry-path-for-out-of-band-work.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-stage-finalize-deadlock-FIXED.md | (presence-only) | 2026-08-22 | v1.26 |
+| todos | 2026-08-21-weight-classes-pipeline-fits-the-task.md | (presence-only) | 2026-08-22 | v1.26 |
+| deferred_items | 172/deferred-items.md: 172-00 (Task 1)  - **`.aether/docs/command-playbooks/continue-advance.md` — malf | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 172/deferred-items.md: 172-07 (both tasks)  - **`pkg/codex` `TestCodexReadOnlyProfileSelectsReadOnlySan | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 188/deferred-items.md: 2. `cmd/colony_prime_audit_test.go` and `cmd/medic_repair_test.go` seed the nest | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 190/deferred-items.md: D-190-01-A: Pheromone signals and prior-worker handoffs render twice in the plan | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 190/deferred-items.md: Stale ceremony-adapter snapshot fixtures (pre-existing, unrelated to hive_sectio | acknowledged | 2026-08-22 | v1.26 |
+| deferred_items | 191.1/deferred-items.md: 191.1-01: `TestPackedNPMReleaseCandidateContract` fails on a pre-existing versio | acknowledged | 2026-08-22 | v1.26 |
+
+Acknowledged at the v1.27 close (2026-09-02). These five artifacts are carried
+forward explicitly; none is a failed v1.27 automated requirement or integration
+flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-------------|
+| todos | 2026-08-01-ts-host-preflight-hardcoded-timeout.md | pending | 2026-09-02 | v1.27 |
+| todos | 2026-08-20-spec-builder-feature.md | pending | 2026-09-02 | v1.27 |
+| todos | 2026-08-27-worker-turnaround-is-too-slow.md | pending (high) | 2026-09-02 | v1.27 |
+| uat_gaps | 198.2/198.2-UAT.md | partial | 2026-09-02 | v1.27 |
+| verification_gaps | 198.2/198.2-VERIFICATION.md | human_needed | 2026-09-02 | v1.27 |
+
 ## Session Continuity
 
-Last session: 2026-08-13T20:44:38.413Z
-Stopped at: Phase 174 context gathered; roadmap reshaped per owner-approved alignment review
-Resume file: .planning/phases/174-spend-ledger/174-CONTEXT.md
+Last session: 2026-09-19T16:57:36.492768+00:00
+Stopped at: Phase204.2 Plan25 executing: 9f9194e6 listing repair passes 24 families normal/race (780 each). Eighth ordinary/replay incomplete after client usage limit. Owner reports quota reset and authorizes fresh admitted ordinary capture; all-three delivery remains pending.
+Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-25-CHECKPOINT.md
+
+Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
+
+## CalVault Runtime Hotfix — 2026-09-17
+
+Installed and verified the narrow local 1.0.79 hotfix from `fd137a55b80a27596fe9b33a8211af13469f02cb` on branch `hotfix/calvault-semantic-dependencies-20260917`, based on the prior installed source `3be6765150092517cb72f7e53e725380b29f2f53`. This excludes the unverified native-worker changes. Only the executable was replaced; the hub and platform homes remain unchanged. All 149 focused normal and 149 race cases passed. The installed binary now passes the actual CalVault `plan --repair-artifact` and `build 1 --plan-only` commands, preserving the byte-identical colony state, accepted revision/candidate/approval bindings and vault Git content. One job is planned, no workers launched. Installation evidence and guarded rollback: [calvault-runtime-hotfix-20260917T193454Z](/Users/callumcowie/.aether-backups/calvault-runtime-hotfix-20260917T193454Z/README.md). This local hotfix remains version 1.0.79; use the commit and binary hash in its receipt to identify it. Phase 204.2 remains gaps_found.
+
+## Phase 204.2 Execution — 2026-09-17
+
+- Final execution disposition: all nine reports are delivered after the reviewed Plan08 merge and required execute:post code review. Frozen source `f9e32ca0` has complete focused and full normal/race accounting, with 27 failed cases in each full run. The final `cf51e9ac` npm fixture safety fix has 6/6 focused normal and 6/6 race passes; the full suites were not repeated against that changed test corpus. The mandatory native-evidence failure, 18 historical failed cases and 8 additional failed cases remain separately recorded; subsequent bounded checks do not replace original outcomes. Standard verification is `gaps_found`, with 0/5 fully qualified current-candidate success criteria and ANT-04 through ANT-07 pending. Source review does not certify actual-host qualification. Next: `$gsd plan-phase 204.2 --gaps`.
+- Semantic dependency repair is committed and validated against a disposable copy of the actual accepted CalVault plan, with approval hashes preserved and no workers launched. The shared installed runtime/hub was not updated. MASTER-AlanFraser duplicate-role cleanup and disabling its missing global node_repl MCP entry produced a fresh Codex startup with zero issues; an already-open session needs restarting.
+- Verification incident: the under-home npm fixture changed the home npm project. The test now pins its consumer prefix. Proven accidental Aether entries were backed up and removed; broader prior dependency versions could not be reconstructed from available evidence, so recovery is partial. See the npm-isolation incident report linked from phase verification.
+
+- Wave 3 complete: Plans 03/05/06 source and summaries were reviewed, merged through the original three-entry manifest, and only those worktrees removed. Five of eight plans are complete; Plan 04 is next. Combined schema regenerated at `cd8c05ab`; test-only pause/finalizer integration corrected at `fbf153a3`. Build passed. The 233 executed focused cases account for 232 passes after the affected follow-up and one explicit `TestCodexNativeWorkerFreshHost` skip. Initial three stale pre-pause test failures and the first root assertion-type error remain preserved; no production weakening or broad repeat. Exact source, raw counts, hashes and all nonblocking wave gates: `wave3-reviewed-integration.json` in the evidence root.
+- Plans 03/05/06 deliver exact context and acknowledged deltas, journal-derived finalization, and current-identity recovery with pending cancellation. Plan 05 preserves the owner rule: failed real checks can retain receipt-backed BUILD credit but prevent VERIFIED advancement; see external `plan05-check-credit-resolution.md`. This explicit plan-wording resolution must carry into Plan 08. Actual final host qualification and whole-phase ANT requirements remain pending.
+- Host ENOSPC interrupted focused checks; only rebuildable Go compilation cache was cleared. All affected normal/race checks were rerun successfully and original infrastructure failures retained. No source, evidence or unrelated worktrees were deleted.
+- Wave 2 and Plan 02 are complete; 2/8 plans are complete. Source `15a71c01`, summary `c98b522f` and whitespace-only `0044a32b` merged at `8cabf151`. `plan02-final-code-review.md` resolves the pause/admission race and reports no new material findings. The original manifest removed only this worktree; its authorized scope extension was `cmd/session_flow_cmds.go`. Post-merge build and all 63 selected tests/cases passed, with raw identities in `wave2-integration.json`; schema/codebase/UI gates did not block.
+- Plan 02 shares the existing repository mutation session between native admission and pause first-read/derivation/commit. The prior-source negative control actually reproduces pause-then-launch; repaired orderings pass. Terminal results and observations retain immutable replay, honest cancellation/no-launch/unknown states and provider separation. Plan 06 must preserve the pause session and captured target baselines; Plans 03/05/06 consume the interface handoff in the committed summary. Whole-phase ANT requirements and final host qualification remain pending.
+- Wave 1 completed Plan 01, the first of eight plans. Source/evidence summary `2fabf075` merged at `fcc5b6ed`; the original manifest-scoped cleanup removed only this plan worktree. Its one advisory scope addition was the required `cmd/codex_native_worker_live_test.go` harness. Post-merge build and all 30 focused tests passed; schema/codebase/UI gates did not block.
+- Durable orchestration/evidence root: `/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/`. `wave1-worktrees.json` owns this run's worktree only. The pre-existing unrelated worktree and untracked `.gsd/` remain untouched. Use the matching GSD shim at `~/.claude/gsd-core/bin/gsd-tools.cjs` with `GSD_RUNTIME=codex`; the PATH gsd-tools is older and lacks required isolation routes.
+- Focused native command/fixture/guide checks, focused race checks and targeted existing journal/finalizer checks passed. The first actual ordinary tracer **failed**: native Builder Brick-46 performed a real failing-test → edit → passing-test sequence, plus build/vet, but `record` accepted an invalid handoff status and made its result immutable before `stage` rejected it. The corrected result then conflicted with saved terminal provenance; **no finalizer credit**. Raw evidence is preserved under `plan01-20260917T070252Z/native-ordinary-2899336655/`; its result is not a native-parity pass.
+- The five original review findings and the later historical-terminal parser finding are resolved in source; exact follow-up reviews are retained externally. `plan01-code-review-final-recheck.md` pins the final bounded source review through `c249b547`. The final focused race set passed 30 tests, including registered native commands, evidence refusal controls, platform isolation and existing journal/finalizer regressions.
+- Ordinary proof is qualified at executable source `56ba471c` with separately pinned validator `ad2411c7`; the original incomplete receipt remains unchanged. Compact checked-in receipt commit `8f92d8b0` references `plan01-repair-20260917T075942Z/native-ordinary-validated.json`. Root checked ten essential artifact hashes and the unchanged Phase 205 inventory. One actual Builder performed a failing test, its own code edit, full passing tests, and earned finalizer credit. Exact launch-message plaintext is host-encrypted; complete context qualification remains Plans 03/07.
+- Early resume uses candidate `c7c235cb`: the first actual parent saved the real child terminal and exited before staging; a distinct second parent inspected and finalized the same attempt, replayed finalization, and observed unchanged worker/source/state with no new spawn. Both parent processes exited successfully. The source-pinned raw capture is retained while bounded validator command-shape controls finish. Task 2 is qualified by validator `09159870`; both compact receipts pass executable replay, and `plan01-resume-live-review.md` independently supports the chain. Plan 01 is complete within its explicit early-tracer scope.
+- The first headless executor was stopped after the failed live run (recorded SIGINT, exit 1) to transfer preserved work and review to steerable `/root/repair_and_finish_tracer` in the same isolated worktree. Read `orchestrator-state.json` and the repair progress before recovery. No duplicate worktree or second native launch for the failed reservation is authorized by elapsed time.
+- No broad suites, shared installation, publication, owner project/session, or Phase 205 artifact changes occurred. The original owner inventory hash still matches `3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd`; `baseline-and-owner-boundary.json` records the hash-only check and 17 historical failure identities.
+
+## Preserved Phase 205 Execution — 2026-09-16 (Europe/Zurich)
+
+Historical receipts below describe the prepared 1.0.79 candidate. The owner subsequently inserted Phases 204.1-204.5 before the remaining walkthrough. These receipts remain valid for their recorded candidate and do not qualify later code changes.
+
+- Plan 205-11 is complete: 72 distinct capabilities reconciled across seven phase records; all 40 focused coverage/parity tests passed. Task commits `d924fbe8`/`759cc446`, summary `c2ede9fa`, merge `7508fc73`.
+- The first complete normal gate exposed two verifier defects beyond the unchanged 17-name baseline. They are fixed in `10e5251d`, merged at `8391fef9cfc7ba122d8834d83009c4006ed5af3e`; see `205-GATE-REPAIR.md`. The superseded race run was deliberately interrupted, not counted as evidence.
+- The repaired gate is COMPLETE at `8391fef9`: build and vet pass; both normal and race runs execute 5,573/5,573 cmd tests across 59 lanes. Each raw suite exits 1 with exactly the 17 recorded pre-existing failures; all 18 other tested packages pass. No new failures, data races or timeouts. This satisfies plan 205-12's explicit baseline-comparison rule; it is not an all-green test claim or a new baseline exception.
+- Final review/results/logs are durably preserved at `/Users/callumcowie/.aether-backups/phase205-execution-evidence-20260915/repaired-gate/`; scratch copy `/tmp/aether-phase205-execution/repaired-gates/final-review.json`. The pinned checkout remains clean. Do not repeat these full suites without a new code change or unresolved failure.
+- Plan 205-12 is complete and reviewed, merged at `c255fc42a6167a32de1f66e9cd83fa7bffd89d95`: original brief `72fd2768`, readiness/cost correction `bee656d1`, summary `92d71866`. Read `205-12-SUMMARY.md` and `205-PRE-SESSION-READINESS.md`. Its worktree was merged/removed through the recorded manifest. No Go checks were repeated. Live register: 34 open/14 fixed/0 waived; measured free space 12.44 GiB. Do not repeat snapshots or switch target branches.
+- Plan 12 prepared the owner project on `p205-owner-session-20260915` at `363fd07630d9028d2d1a18edf3f5cc21e7dece2d`; plan 13 advanced it to `fe1ec13284bf60a3e3205cbc7028f1c275eee5e2` for two managed files, with a clean working tree; original `codex/skills-as-commands` remains at `ccf18264`. Snapshot `p205-owner-work-snapshot-20260915` at `e8941d6f5e1f3f1834357d4746e7ffcf0f77b962` preserves all 1,906 expanded changed entries (764 grouped entries). The nested research repository has the same named snapshot at `f09a3a27e7a81f3e50bb5e79b86d0d97c9a0f61f`; restore both named snapshots to retrieve the full experiment.
+- Before release, all 383 data files, 1,305 extended record files and 12,605 ignored files were verified unchanged. Two pre-existing modified context/handoff records are carried verbatim on the session branch; the completed 3-phase/20-task colony remains unsealed. Durable inventory/receipts: the evidence root's `owner-preparation/`. Three already-ignored cache paths retain their prior ignored classification via exact local `.git/info/exclude` entries.
+- Verified pre-release backup: `/Users/callumcowie/.aether-backups/phase205-pre-release-20260915T213324Z/manifest.json`, covering hub, binary and platform-home assets (1,427 verified files). Revalidated immediately before the successful local 1.0.79 publish. Keep this verified 1.0.78 restore point.
+
+- Plan 205-13 is complete, reviewed and merged at `11d7eb27dcdca54a39c884b6e7b5a8d979fe6968`. Release source `3be6765150092517cb72f7e53e725380b29f2f53`, record `79adc910`, summary `73107694`; its recorded worktree was merged/removed. Source, binary and hub agree on **1.0.79**; all five source and four downstream integrity checks passed. No remote push, tag or npm publication. Do not republish or restart task 1.
+- Parent verified all 167 artifacts in `/Users/callumcowie/.aether-backups/phase205-release-20260916/evidence-manifest.json`; no Go, TypeScript-host or dependency changes occurred after the completed full gates. Focused version/package checks and all 11 npm tests passed. Full tests retain the same 17 known failures. Read `205-RELEASE-RECORD.md` for guarded shared-installation and target rollback commands.
+- Target update committed only `.claude/settings.json` and `.claude/rules/aether-colony.md` at `fe1ec13284bf60a3e3205cbc7028f1c275eee5e2`. Its installation marker intentionally changed from 1.0.63 to 1.0.79; all other 1,304 existing extended records (382 data files) kept bytes, modes and mtimes. Original colony SHA-256 remains `883c58156730f89d329acf97aeb1ce954ba96efb3c6b5996ccf3ec2a83cbaa0d`, completed and unsealed. The update's 70 new recovery records are retained and inventoried; one exact local journal exclusion keeps Git clean. Original and snapshot refs remain unchanged.
+- Known release limitations, including the existing js-yaml advisory reported by npm audit and preserved local Codex agent variants, remain documented in `205-13-SUMMARY.md` and `205-RELEASE-RECORD.md`; carry them into the limitations card. No owner acceptance is implied.
+
+- Plan 205-14 **task 1 is complete**, task commit `34b7f24d9cee227c735abc5902b7d82e7520d1bf`, durable checkpoint `5bf3164d90d1763758a75f4d5cc11459fb5b092c`, merged at `aa535593e0b7ea139cf618eff0bf945c2aba26bc`. The executor finished and its manifest-owned worktree was removed; the unrelated pre-existing worktree remains untouched. All 32 preflight checks passed; parent independently verified the three artifact hashes, four scope digests and all 1,375 live records, plus clean repositories and original/snapshot refs. Drift/UI checks were nonblocking. No runtime code or tests changed.
+- Durable authority: `205-14-CHECKPOINT.md`, `205-SESSION-LOG.md` and `205-SESSION-BEFORE-INVENTORY.json` beside the plan. Inventory artifact SHA-256 `3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd`; data aggregate `49fa826817d0f6caa8c4d10a0fdb5724c8d85466c972c45977187ccc2273f3ee`. Captured 2026-09-16T00:02:04.612544+00:00 (02:02 Europe/Zurich): 398 data files, 1,320 extended records including those data files, plus 55 existing update-journal files. Release maintenance is explicitly pre-session evidence. **Never rerun task 1 or overwrite this before-inventory after the owner session.**
+- Task 2 is the explicit **blocking-human** owner walkthrough. No owner session has begun or verdict been received. Task 3 readback is pending. No `205-14-SUMMARY.md` exists and plan 14, phase 205 and PROOF-05 remain incomplete. Resume only after the actual owner action; silence, elapsed time or auto-approval cannot satisfy it.
+- Execution receipts and capture script are preserved at `/Users/callumcowie/.aether-backups/phase205-execution-evidence-20260915/owner-preflight/`, with a manifest and parent review. `/tmp/aether-phase205-execution/plan14-progress.json` now points at merged artifact paths; the archive retains the original executor receipt as well. The committed checkpoint remains sufficient if scratch files disappear.
+
+## Operator Next Steps
+
+- **Phase204.2 Plans21–23 remain blocked on supported actual host evidence.** Plans17–20 execution reports do not qualify missing provenance. Codex 0.155.0 help reinspection did not establish the required exporter; unchanged expensive retries were not run. ANT-04/05/06/07 remain pending. Separate owner-authorized local stable 1.0.81 delivers the routing/bookkeeping repairs only; see the 2026-09-18 hotfix receipts.
+- Follow the inserted dependency order: names/updates, native worker lifecycle, full workflow coverage, shared recruitment/recovery, then real parity proof and candidate handoff. GSD plan checking remains enabled. Use disposable projects for engineering work.
+- **Preserved owner checkpoint:** .planning/phases/205-owner-acceptance-and-restoration-seal/205-14-CHECKPOINT.md. Plans 205-01..13 and task 205-14.1 remain complete; task 2 is still blocking-human and task 3 is pending. The Claude limit reset alone no longer determines the next engineering action.
+- Before the remaining owner walkthrough, Phase 204.5 must produce 205-CODEX-PARITY-HANDOFF.md for the exact new candidate and any controlled local preparation. Preserve the original release receipts, snapshots, and before-inventory; any new pre-session inventory is separately named and linked with preparation changes distinguished from owner evidence. If a session has already begun, preserve it and its original baseline.
+- After that handoff, the owner still performs the original ten journeys alone in a fresh Claude Code chat, supplies the ten personal verdicts and overall answer, and only then can a fresh continuation executor complete 205-14 and proceed through 205-15..18. No assistant-run Codex proof substitutes for those owner actions.
+- Carry existing and newly discovered limitations, unreported usage, relevant WINDOWS.md entries, the exact known-failure comparison, preserved local variants, and platform limitations into the candidate handoff and final limitations card. The milestone seal still requires the owner's explicit acceptance.

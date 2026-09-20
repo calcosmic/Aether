@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -27,14 +28,83 @@ const (
 )
 
 type discussQuestion struct {
-	ID             string   `json:"id,omitempty"`
-	Category       string   `json:"category"`
-	Question       string   `json:"question"`
-	Options        []string `json:"options"`
-	Reasoning      string   `json:"reasoning"`
-	HardConstraint bool     `json:"hard_constraint,omitempty"`
-	Status         string   `json:"status,omitempty"`
-	Source         string   `json:"source,omitempty"`
+	ID                  string                       `json:"id,omitempty"`
+	StableID            string                       `json:"stable_id,omitempty"`
+	Category            string                       `json:"category"`
+	Domain              planningDecisionDomain       `json:"domain,omitempty"`
+	Question            string                       `json:"question"`
+	Decision            string                       `json:"decision,omitempty"`
+	Options             []string                     `json:"options"`
+	Reasoning           string                       `json:"reasoning"`
+	WhyNow              string                       `json:"why_now,omitempty"`
+	Evidence            []colony.PlanningEvidenceRef `json:"evidence,omitempty"`
+	QueenRecommendation string                       `json:"queen_recommendation,omitempty"`
+	Choices             []planningDecisionChoice     `json:"choices,omitempty"`
+	AffectedSemanticIDs []string                     `json:"affected_semantic_ids,omitempty"`
+	PriorAnswer         string                       `json:"prior_answer,omitempty"`
+	Revalidation        string                       `json:"revalidation,omitempty"`
+	PlanningResumes     string                       `json:"planning_resumes,omitempty"`
+	ExactAnswerSyntax   string                       `json:"exact_answer_syntax,omitempty"`
+	HardConstraint      bool                         `json:"hard_constraint,omitempty"`
+	Status              string                       `json:"status,omitempty"`
+	Source              string                       `json:"source,omitempty"`
+}
+
+type discussMaterialBatch struct {
+	ID          string            `json:"id"`
+	ContentHash string            `json:"content_hash"`
+	Cards       []discussQuestion `json:"cards"`
+}
+
+// discussSpecificationBody keeps the nine owner-readable specification
+// categories separate in the discuss closeout. The specification engine owns
+// their canonical forms; this is only the structured presentation of the
+// exact revision it committed or retained.
+type discussSpecificationBody struct {
+	Outcomes             []colony.SpecOutcome             `json:"outcomes"`
+	IncludedBehaviors    []colony.SpecIncludedBehavior    `json:"included_behaviors"`
+	Exclusions           []colony.SpecExclusion           `json:"exclusions"`
+	BindingDecisions     []colony.SpecBindingDecision     `json:"binding_decisions"`
+	Requirements         []colony.SpecRequirement         `json:"requirements"`
+	AcceptanceChecks     []colony.SpecAcceptanceCheck     `json:"acceptance_checks"`
+	NegativeExpectations []colony.SpecNegativeExpectation `json:"negative_expectations"`
+	RecoveryExpectations []colony.SpecRecoveryExpectation `json:"recovery_expectations"`
+	AffectedPublicPaths  []colony.SpecPublicPath          `json:"affected_public_paths"`
+}
+
+type discussSpecificationCloseout struct {
+	SpecificationID       string                    `json:"specification_id"`
+	RevisionID            string                    `json:"revision_id"`
+	RevisionNumber        int                       `json:"revision_number"`
+	ContentHash           string                    `json:"content_hash"`
+	Status                colony.SpecRevisionStatus `json:"status"`
+	Scope                 colony.SpecScope          `json:"scope"`
+	SectionCounts         map[string]int            `json:"section_counts"`
+	Body                  discussSpecificationBody  `json:"body"`
+	UnresolvedCount       int                       `json:"unresolved_count"`
+	ProjectionPath        string                    `json:"projection_path"`
+	ProjectionDigest      string                    `json:"projection_digest"`
+	ProjectionRepaired    bool                      `json:"projection_repaired"`
+	ExactNextCommand      string                    `json:"exact_next_command"`
+	ApprovalCommand       string                    `json:"approval_command,omitempty"`
+	RevisionGuidance      string                    `json:"revision_guidance,omitempty"`
+	Replayed              bool                      `json:"replayed"`
+	WouldCreate           bool                      `json:"would_create,omitempty"`
+	ApprovedSpecPreserved bool                      `json:"approved_spec_preserved,omitempty"`
+	Receipt               *colony.LifecycleReceipt  `json:"receipt,omitempty"`
+}
+
+// discussEvidenceItem retains source text only while deciding whether current
+// evidence already answers a question. Only the safe record projection leaves
+// this file in a command result.
+type discussEvidenceItem struct {
+	Record  planningEvidenceRecord
+	Content string
+}
+
+type discussEvidenceFrontier struct {
+	Scope planningEvidenceScope
+	Items []discussEvidenceItem
 }
 
 type clarifiedIntentEntry struct {
@@ -45,9 +115,11 @@ type clarifiedIntentEntry struct {
 }
 
 type clarifiedIntentRenderResult struct {
-	Lines    []string
-	Blocked  []colonyPrimeLedgerItem
-	Warnings []string
+	// DecisionIDs correspond one-for-one with admitted Lines, after integrity and budget checks.
+	DecisionIDs []string
+	Lines       []string
+	Blocked     []colonyPrimeLedgerItem
+	Warnings    []string
 }
 
 type pendingDecisionScope struct {
@@ -115,7 +187,7 @@ var discussCmd = &cobra.Command{
 }
 
 func init() {
-	discussCmd.Flags().Int("max-questions", 3, "Maximum number of clarification questions to surface")
+	discussCmd.Flags().Int("max-questions", 3, "Legacy compatibility flag; every material clarification is returned in one batch")
 	discussCmd.Flags().Bool("dry-run", false, "Analyze and preview questions without writing pending decisions")
 	discussCmd.Flags().String("resolve", "", "Clarification decision ID to resolve")
 	discussCmd.Flags().String("answer", "", "Resolution text for --resolve")
@@ -129,20 +201,20 @@ func init() {
 }
 
 // composedQuestionCategories is the closed category vocabulary for
-// wrapper-composed questions — the same four the canned generator uses plus
-// "analysis". Closed on purpose: a typed category is what downstream
+// wrapper-composed questions. Closed on purpose: a typed category is what downstream
 // suppression (clarificationSuppressedBySignals) and rendering key on.
 var composedQuestionCategories = map[string]bool{
-	"surface": true, "integration": true, "scope": true, "verification": true, "analysis": true,
+	"behavior": true, "authority": true, "risk_tolerance": true, "scope": true, "acceptance_meaning": true,
+	// Legacy wrapper vocabulary remains accepted so already-integrated hosts
+	// do not lose their exact intake path during the migration.
+	"surface": true, "integration": true, "verification": true, "analysis": true,
 }
 
 // addComposedDiscussQuestion materializes ONE wrapper-composed question into
 // pending-decisions.json — the typed intake behind the Queen-composed
 // discuss flow. Grounding is refused when empty: a composed question must
-// cite the scan fact or state datum it derives from, or it is the
-// same-three-canned-questions problem wearing a new coat. Dedup is by
-// source slug, exactly as canned questions dedup, so re-running the
-// composition never doubles questions.
+// cite the scan fact or state datum it derives from. Dedup is by source
+// slug, so re-running the composition never doubles questions.
 func addComposedDiscussQuestion(question, optionsRaw, category, grounding, source string, hard bool) (map[string]interface{}, error) {
 	state, err := loadActiveColonyState()
 	if err != nil {
@@ -160,11 +232,12 @@ func addComposedDiscussQuestion(question, optionsRaw, category, grounding, sourc
 	}
 	category = strings.ToLower(strings.TrimSpace(category))
 	if category == "" {
-		category = "analysis"
+		category = string(planningDecisionDomainBehavior)
 	}
 	if !composedQuestionCategories[category] {
-		return nil, fmt.Errorf("unknown --category %q: must be one of surface, integration, scope, verification, analysis", category)
+		return nil, fmt.Errorf("unknown --category %q: must be one of behavior, authority, risk_tolerance, scope, acceptance_meaning, surface, integration, verification, or analysis", category)
 	}
+	domain := planningDecisionDomainForCategory(category)
 
 	options := []string{}
 	for _, opt := range strings.Split(optionsRaw, "|") {
@@ -173,36 +246,47 @@ func addComposedDiscussQuestion(question, optionsRaw, category, grounding, sourc
 		}
 	}
 
-	source = strings.TrimSpace(source)
-	if source == "" {
-		digest := sha256.Sum256([]byte(strings.ToLower(question)))
-		source = "wrapper:q-" + hex.EncodeToString(digest[:4])
-	} else if !strings.HasPrefix(source, "wrapper:") {
-		source = "wrapper:" + source
-	}
+	source = composedDiscussSource(domain, source, question)
+	sourceBase := logicalDiscussSource(source)
+	description := formatClarificationDescription(question, options)
 
 	scope := pendingDecisionScopeFromState(state)
 	pending := loadPendingDecisionFile()
 	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
-	if existing, ok := clarificationDecisionIndex(activePending)[source]; ok {
-		status := "pending"
-		if existing.Resolved {
-			status = "already_resolved"
+	var priorResolved *PendingDecision
+	for index := range activePending.Decisions {
+		existing := activePending.Decisions[index]
+		if existing.Type != clarificationDecisionType || logicalDiscussSource(existing.Source) != sourceBase {
+			continue
 		}
-		return map[string]interface{}{
-			"created":   false,
-			"id":        existing.ID,
-			"status":    status,
-			"source":    source,
-			"question":  question,
-			"grounding": grounding,
-		}, nil
+		if existing.Resolved {
+			candidate := existing
+			if priorResolved == nil || clarificationSortKey(candidate).After(clarificationSortKey(*priorResolved)) {
+				priorResolved = &candidate
+			}
+		}
+		if equivalentComposedDiscussDecision(existing, source, description, grounding, hard, domain) {
+			status := "pending"
+			if existing.Resolved {
+				status = "already_resolved"
+			}
+			return map[string]interface{}{
+				"created":               false,
+				"id":                    existing.ID,
+				"status":                status,
+				"source":                existing.Source,
+				"category":              string(domain),
+				"question":              question,
+				"grounding":             grounding,
+				"revalidation_required": false,
+			}, nil
+		}
 	}
 
 	decision := PendingDecision{
 		ID:             fmt.Sprintf("pd_%d", time.Now().UnixNano()),
 		Type:           clarificationDecisionType,
-		Description:    formatClarificationDescription(question, options),
+		Description:    description,
 		Source:         source,
 		HardConstraint: hard,
 		Grounding:      grounding,
@@ -216,17 +300,76 @@ func addComposedDiscussQuestion(question, optionsRaw, category, grounding, sourc
 	}
 
 	return map[string]interface{}{
-		"created":   true,
-		"id":        decision.ID,
-		"status":    "new",
-		"source":    source,
-		"category":  category,
-		"question":  question,
-		"options":   options,
-		"grounding": grounding,
-		"hard":      hard,
-		"next":      fmt.Sprintf("Resolve with `aether discuss --resolve %s --answer \"...\"` after the user picks.", decision.ID),
+		"created":               true,
+		"id":                    decision.ID,
+		"status":                "new",
+		"source":                source,
+		"category":              string(domain),
+		"question":              question,
+		"options":               options,
+		"grounding":             grounding,
+		"hard":                  hard,
+		"revalidation_required": priorResolved != nil,
+		"prior_answer":          resolvedDecisionAnswer(priorResolved),
+		"next":                  fmt.Sprintf("Resolve with `aether discuss --resolve %s --answer \"...\"` after the user picks.", decision.ID),
 	}, nil
+}
+
+func planningDecisionDomainForCategory(category string) planningDecisionDomain {
+	switch strings.ToLower(strings.TrimSpace(category)) {
+	case "authority", "integration":
+		return planningDecisionDomainAuthority
+	case "risk_tolerance":
+		return planningDecisionDomainRiskTolerance
+	case "scope", "surface":
+		return planningDecisionDomainScope
+	case "acceptance_meaning", "verification":
+		return planningDecisionDomainAcceptanceMeaning
+	default:
+		return planningDecisionDomainBehavior
+	}
+}
+
+func composedDiscussSource(domain planningDecisionDomain, raw, question string) string {
+	base := strings.TrimSpace(raw)
+	base = strings.TrimPrefix(base, "wrapper:")
+	parts := strings.Split(base, ":")
+	if len(parts) > 1 && planningDecisionDomain(parts[0]).isMaterialDomain() {
+		base = strings.Join(parts[1:], ":")
+	}
+	if base == "" {
+		digest := sha256.Sum256([]byte(strings.ToLower(strings.Join(strings.Fields(question), " "))))
+		base = "q-" + hex.EncodeToString(digest[:4])
+	}
+	return "wrapper:" + string(domain) + ":" + base
+}
+
+func logicalDiscussSource(source string) string {
+	source = strings.TrimSpace(source)
+	parts := strings.Split(source, ":")
+	if len(parts) >= 3 && parts[0] == "wrapper" && planningDecisionDomain(parts[1]).isMaterialDomain() {
+		return "wrapper:" + strings.Join(parts[2:], ":")
+	}
+	return source
+}
+
+func equivalentComposedDiscussDecision(existing PendingDecision, expectedSource, description, grounding string, hard bool, domain planningDecisionDomain) bool {
+	if normalizePlanningDecisionText(existing.Description) != normalizePlanningDecisionText(description) ||
+		normalizePlanningDecisionText(existing.Grounding) != normalizePlanningDecisionText(grounding) ||
+		clarificationIsHardConstraint(existing) != hard {
+		return false
+	}
+	if existingDomain := planningDecisionDomainForClarification(existing); existingDomain != domain {
+		return false
+	}
+	return existing.Source == expectedSource || logicalDiscussSource(existing.Source) == logicalDiscussSource(expectedSource)
+}
+
+func resolvedDecisionAnswer(decision *PendingDecision) string {
+	if decision == nil {
+		return ""
+	}
+	return normalizePlanningDecisionText(decision.Resolution)
 }
 
 func renderComposedQuestionVisual(result map[string]interface{}) string {
@@ -276,73 +419,467 @@ func runDiscuss(root string, maxQuestions int, dryRun bool) (map[string]interfac
 	activeSignals := activeSignalTexts()
 
 	analyze := runDiscussAnalyze(root, goal)
-	questions, createdCount, existingCount, err := materializeDiscussQuestions(goal, survey, analyze, pending, activeSignals, maxQuestions, dryRun, scope)
+	frontier, err := buildDiscussEvidenceFrontier(state, survey, analyze, activePending, activeSignals)
+	if err != nil {
+		return nil, err
+	}
+	questions, materialBatch, suppressedCount, err := materializeDiscussQuestions(activePending, &frontier, activeSignals)
 	if err != nil {
 		return nil, err
 	}
 
-	// Surface unresolved orchestrator boundary questions alongside discuss questions.
-	discussSources := map[string]bool{}
-	for _, q := range questions {
-		if s := strings.TrimSpace(q.Source); s != "" {
-			discussSources[s] = true
-		}
-	}
-	for _, decision := range activePending.Decisions {
-		if decision.Type != clarificationDecisionType || decision.Resolved {
-			continue
-		}
-		source := strings.TrimSpace(decision.Source)
-		if !strings.HasPrefix(source, orchestratorBoundarySourcePrefix+":") {
-			continue
-		}
-		if discussSources[source] {
-			continue
-		}
-		q, opts := parseClarificationDescription(decision.Description)
-		if strings.TrimSpace(q) == "" {
-			continue
-		}
-		questions = append(questions, discussQuestion{
-			ID:             decision.ID,
-			Category:       "orchestrator_boundary",
-			Question:       q,
-			Options:        opts,
-			HardConstraint: clarificationIsHardConstraint(decision),
-			Status:         "pending",
-			Source:         decision.Source,
-		})
-		existingCount++
-		discussSources[source] = true
-	}
-
 	resolved := resolvedClarifiedIntentEntries(activePending)
 
-	next := "Run `aether plan` once the critical clarifications are resolved."
+	next := "Review the settled intent before creating its draft specification."
 	if len(questions) > 0 {
-		next = "Resolve a question with `aether discuss --resolve <id> --answer \"...\"`, then run `aether plan`."
+		next = "Resolve every material card with its exact `aether discuss --resolve <id> --answer \"...\"` command."
 	}
 	staleNotice := pendingDecisionStaleNotice(staleClarificationCount)
+	evidenceRecords := make([]planningEvidenceRecord, 0, len(frontier.Items))
+	for _, item := range frontier.Items {
+		evidenceRecords = append(evidenceRecords, item.Record)
+	}
 
-	return map[string]interface{}{
-		"goal":                    goal,
-		"question_count":          len(questions),
-		"created_count":           createdCount,
-		"existing_count":          existingCount,
-		"dry_run":                 dryRun,
-		"survey_docs":             survey.SurveyDocs,
-		"questions":               questions,
-		"resolved":                resolved,
-		"resolved_count":          len(resolved),
-		"pending_count":           countPendingClarifications(activePending),
-		"ignored_stale_count":     staleClarificationCount,
-		"quarantined_stale_count": staleClarificationCount,
-		"stale_state_notice":      staleNotice,
-		"signal_count":            len(activeSignals),
-		"survey_available":        len(survey.SurveyDocs) > 0 || len(survey.Frameworks) > 0 || len(survey.Directories) > 0,
-		"next":                    next,
-		"discussion_status":       discussionStatus(len(questions), createdCount, existingCount),
-	}, nil
+	var specificationCloseout *discussSpecificationCloseout
+	if len(questions) == 0 {
+		closeout, settleErr := settleDiscussSpecification(root, state, survey, analyze, activePending, frontier, activeSignals, dryRun)
+		if settleErr != nil {
+			return nil, settleErr
+		}
+		specificationCloseout = &closeout
+		if closeout.WouldCreate {
+			next = "Rerun `aether discuss` without --dry-run to create this exact draft, then run `aether spec` to review it."
+		} else if closeout.ApprovedSpecPreserved {
+			next = closeout.RevisionGuidance
+		} else {
+			next = "Run `aether spec` to review, revise, or explicitly approve this exact draft."
+		}
+	}
+
+	result := map[string]interface{}{
+		"goal":                      goal,
+		"question_count":            len(questions),
+		"created_count":             0,
+		"existing_count":            len(questions),
+		"dry_run":                   dryRun,
+		"survey_docs":               survey.SurveyDocs,
+		"evidence_count":            len(evidenceRecords),
+		"evidence_frontier":         evidenceRecords,
+		"evidence_suppressed_count": suppressedCount,
+		"questions":                 questions,
+		"material_batch":            materialBatch,
+		"resolved":                  resolved,
+		"resolved_count":            len(resolved),
+		"pending_count":             len(questions),
+		"stored_pending_count":      countPendingClarifications(activePending),
+		"ignored_stale_count":       staleClarificationCount,
+		"quarantined_stale_count":   staleClarificationCount,
+		"stale_state_notice":        staleNotice,
+		"signal_count":              len(activeSignals),
+		"survey_available":          len(survey.SurveyDocs) > 0 || len(survey.Frameworks) > 0 || len(survey.Directories) > 0,
+		"next":                      next,
+		"discussion_status":         discussionStatus(len(questions), 0, len(questions)),
+	}
+	closeOverride := ""
+	closeWhy := ""
+	if specificationCloseout != nil {
+		result["specification"] = *specificationCloseout
+		result["specification_status"] = specificationCloseout.Status
+		result["unresolved_count"] = specificationCloseout.UnresolvedCount
+		result["projection_path"] = specificationCloseout.ProjectionPath
+		result["exact_next_command"] = specificationCloseout.ExactNextCommand
+		if specificationCloseout.ApprovedSpecPreserved {
+			result["approved_spec"] = *specificationCloseout
+		} else {
+			result["draft_spec"] = *specificationCloseout
+		}
+		if specificationCloseout.WouldCreate {
+			closeOverride = "aether discuss"
+			closeWhy = "This was a dry run. Create the reviewed draft before opening the specification lifecycle."
+		} else {
+			closeOverride = specificationCloseout.ExactNextCommand
+			closeWhy = "Settled intent now belongs to the specification lifecycle; planning remains unauthorized until the exact contract is approved."
+		}
+	}
+	closeLifecycleCommand(result, "discuss", closeOverride, closeWhy)
+	return result, nil
+}
+
+func settleDiscussSpecification(
+	root string,
+	state colony.ColonyState,
+	survey codexSurveyContext,
+	analyze analyzeScanData,
+	pending PendingDecisionFile,
+	frontier discussEvidenceFrontier,
+	activeSignals []string,
+	dryRun bool,
+) (discussSpecificationCloseout, error) {
+	repositoryRoot, err := canonicalSpecificationRoot(root)
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("settle discuss specification: %w", err)
+	}
+
+	if state.Specification != nil {
+		current, ok := currentSpecificationRevision(*state.Specification)
+		if !ok {
+			return discussSpecificationCloseout{}, fmt.Errorf("settle discuss specification: existing specification has no current revision")
+		}
+		inspection, inspectErr := inspectSpecificationProjection(repositoryRoot)
+		if inspectErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("inspect settled specification projection: %w", inspectErr)
+		}
+		projectionRepaired := false
+		if current.Status == colony.SpecStatusDraft && inspection.Drifted && !dryRun {
+			repair, repairErr := repairSpecificationProjection(repositoryRoot, specificationMutationOptions{})
+			if repairErr != nil {
+				return discussSpecificationCloseout{}, fmt.Errorf("render settled specification projection: %w", repairErr)
+			}
+			inspection = repair.Inspection
+			projectionRepaired = repair.Repaired
+		}
+		approvedPreserved := current.Status == colony.SpecStatusApproved
+		return newDiscussSpecificationCloseout(
+			*state.Specification,
+			current,
+			nil,
+			current.Status == colony.SpecStatusDraft,
+			approvedPreserved,
+			false,
+			inspection,
+			projectionRepaired,
+		), nil
+	}
+
+	request, err := buildSettledDiscussDraftRequest(state, survey, analyze, pending, frontier, activeSignals, time.Now().UTC())
+	if err != nil {
+		return discussSpecificationCloseout{}, err
+	}
+	if dryRun {
+		specification, revision, buildErr := buildSpecificationDraft(request)
+		if buildErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("preview settled specification draft: %w", buildErr)
+		}
+		projection, renderErr := renderSpecificationProjection(specification, state.Plan)
+		if renderErr != nil {
+			return discussSpecificationCloseout{}, fmt.Errorf("preview settled specification projection: %w", renderErr)
+		}
+		inspection := specificationProjectionInspection{
+			Path:           filepath.Join(repositoryRoot, specificationProjectionRelativePath),
+			RevisionID:     revision.ID,
+			ExpectedDigest: lifecycleDigest(projection),
+			Missing:        true,
+			Drifted:        true,
+		}
+		return newDiscussSpecificationCloseout(specification, revision, nil, false, false, true, inspection, false), nil
+	}
+
+	mutation, err := createSpecificationDraft(repositoryRoot, request, specificationMutationOptions{})
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("create settled specification draft: %w", err)
+	}
+	inspection, err := inspectSpecificationProjection(repositoryRoot)
+	if err != nil {
+		return discussSpecificationCloseout{}, fmt.Errorf("inspect created specification projection: %w", err)
+	}
+	receipt := mutation.Receipt
+	return newDiscussSpecificationCloseout(
+		mutation.Specification,
+		mutation.Revision,
+		&receipt,
+		mutation.Replayed,
+		false,
+		false,
+		inspection,
+		false,
+	), nil
+}
+
+func buildSettledDiscussDraftRequest(
+	state colony.ColonyState,
+	survey codexSurveyContext,
+	analyze analyzeScanData,
+	pending PendingDecisionFile,
+	frontier discussEvidenceFrontier,
+	activeSignals []string,
+	createdAt time.Time,
+) (specificationDraftRequest, error) {
+	goal := strings.TrimSpace(derefGoal(state.Goal))
+	if state.AcceptedCharter != nil && strings.TrimSpace(state.AcceptedCharter.Goal) != "" {
+		goal = strings.TrimSpace(state.AcceptedCharter.Goal)
+	}
+	if goal == "" {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion cannot create a specification without an accepted goal")
+	}
+	allEvidence := discussSpecificationEvidenceIDs(frontier, "", "")
+	if len(allEvidence) == 0 {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion cannot create a specification without admissible evidence")
+	}
+	charterEvidence := discussSpecificationEvidenceIDs(frontier, "", "state:")
+	if len(charterEvidence) == 0 {
+		charterEvidence = discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceCharter), "")
+	}
+	charterEvidence = discussSpecificationEvidenceFallback(charterEvidence, allEvidence)
+	contextEvidence := discussSpecificationEvidenceFallback(
+		discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceContext), ""),
+		allEvidence,
+	)
+	surveyEvidence := discussSpecificationEvidenceFallback(
+		discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceSurvey), ""),
+		contextEvidence,
+	)
+
+	request := specificationDraftRequest{
+		Scope: colony.SpecScope{
+			Kind:      colony.SpecScopeWholeGoal,
+			GoalID:    frontier.Scope.GoalID,
+			SessionID: frontier.Scope.SessionID,
+		},
+		CreatedAt: createdAt,
+	}
+	if strings.TrimSpace(request.Scope.GoalID) == "" || strings.TrimSpace(request.Scope.SessionID) == "" {
+		return specificationDraftRequest{}, fmt.Errorf("settled discussion lacks current goal/session identity")
+	}
+
+	charter := state.Charter
+	if state.AcceptedCharter != nil && state.AcceptedCharter.Charter != nil {
+		charter = state.AcceptedCharter.Charter
+	}
+	add := func(destination *[]specificationItemInput, lineage, description, verification, publicPath string, evidence []string) {
+		description = specificationProjectionText(description)
+		if description == "" {
+			return
+		}
+		for _, existing := range *destination {
+			if specificationProjectionText(existing.Description) == description {
+				return
+			}
+		}
+		*destination = append(*destination, specificationItemInput{
+			Lineage:      lineage,
+			Description:  description,
+			Verification: specificationProjectionText(verification),
+			Path:         filepath.ToSlash(strings.TrimSpace(publicPath)),
+			EvidenceIDs:  append([]string(nil), evidence...),
+		})
+	}
+
+	add(&request.Outcomes, "accepted-goal", "Deliver the accepted goal: "+goal, "", "", charterEvidence)
+	if charter != nil {
+		add(&request.Outcomes, "charter-vision", charter.Vision, "", "", charterEvidence)
+		included := charter.Intent
+		if strings.TrimSpace(included) == "" {
+			included = charter.Goals
+		}
+		add(&request.IncludedBehaviors, "charter-included-behavior", included, "", "", charterEvidence)
+		add(&request.IncludedBehaviors, "charter-goals", charter.Goals, "", "", charterEvidence)
+		if strings.TrimSpace(charter.TechStack) != "" {
+			add(&request.BindingDecisions, "charter-technology-context", "Use the accepted implementation context: "+charter.TechStack, "", "", charterEvidence)
+		}
+		add(&request.BindingDecisions, "charter-governance", charter.Governance, "", "", charterEvidence)
+		if strings.TrimSpace(charter.Constraints) != "" {
+			add(&request.Exclusions, "charter-explicit-boundary", "Work outside these accepted constraints is excluded: "+charter.Constraints, "", "", charterEvidence)
+			add(&request.NegativeExpectations, "charter-constraint-negative", "The result must not violate these accepted constraints: "+charter.Constraints, "", "", charterEvidence)
+		}
+		if strings.TrimSpace(charter.KeyRisks) != "" {
+			add(&request.NegativeExpectations, "charter-known-risk", "The result must not silently realize this known risk: "+charter.KeyRisks, "", "", charterEvidence)
+			add(&request.RecoveryExpectations, "charter-risk-recovery", "If the known risk occurs, preserve the last valid state and report it before continuing: "+charter.KeyRisks, "", "", charterEvidence)
+		}
+	}
+	if len(request.IncludedBehaviors) == 0 {
+		add(&request.IncludedBehaviors, "accepted-goal-behavior", "Implement only behavior needed to satisfy the accepted goal: "+goal, "", "", charterEvidence)
+	}
+	if len(request.Exclusions) == 0 {
+		add(&request.Exclusions, "outside-accepted-goal", "Behavior outside the accepted goal is excluded unless the owner revises this specification.", "", "", charterEvidence)
+	}
+
+	resolved := append([]PendingDecision(nil), pending.Decisions...)
+	sort.SliceStable(resolved, func(left, right int) bool { return resolved[left].ID < resolved[right].ID })
+	for _, decision := range resolved {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+			continue
+		}
+		question, _ := parseClarificationDescription(decision.Description)
+		answer := specificationProjectionText(decision.Resolution)
+		decisionText := specificationProjectionText(question + " — Owner decision: " + answer)
+		lineage := discussSpecificationDecisionLineage(decision)
+		decisionEvidence := discussSpecificationEvidenceFallback(
+			discussSpecificationEvidenceIDs(frontier, string(colony.PlanningEvidenceDecision), "decision:"+decision.ID),
+			allEvidence,
+		)
+		add(&request.BindingDecisions, lineage, decisionText, "", "", decisionEvidence)
+		switch planningDecisionDomainForClarification(decision) {
+		case planningDecisionDomainBehavior:
+			add(&request.IncludedBehaviors, lineage, "Settled behavior: "+decisionText, "", "", decisionEvidence)
+		case planningDecisionDomainScope:
+			add(&request.Exclusions, lineage, "Settled scope boundary: "+decisionText, "", "", decisionEvidence)
+		case planningDecisionDomainAcceptanceMeaning:
+			add(&request.AcceptanceChecks, lineage, "Owner-checkable acceptance: "+decisionText, "Review the delivered behavior and its evidence against this exact accepted answer.", "", decisionEvidence)
+		case planningDecisionDomainRiskTolerance:
+			add(&request.NegativeExpectations, lineage, "Settled risk boundary: "+decisionText, "", "", decisionEvidence)
+			add(&request.RecoveryExpectations, lineage, "If the settled risk boundary is crossed, preserve the last valid state and return to the owner: "+answer, "", "", decisionEvidence)
+		}
+		if clarificationIsHardConstraint(decision) {
+			add(&request.NegativeExpectations, lineage+"-hard", "The result must not violate this explicit owner constraint: "+decisionText, "", "", decisionEvidence)
+		}
+	}
+
+	for index, signal := range uniqueSortedStrings(activeSignals) {
+		if index >= 8 {
+			break
+		}
+		add(&request.BindingDecisions, fmt.Sprintf("active-owner-constraint-%02d", index+1), "Active owner constraint: "+signal, "", "", contextEvidence)
+		add(&request.NegativeExpectations, fmt.Sprintf("active-owner-constraint-%02d", index+1), "The result must not violate this active owner constraint: "+signal, "", "", contextEvidence)
+	}
+
+	requirementText := goal
+	if charter != nil && strings.TrimSpace(charter.Goals) != "" {
+		requirementText = charter.Goals
+	}
+	add(&request.Requirements, "accepted-goal-requirement", "Required result: "+requirementText, "", "", charterEvidence)
+	if len(request.BindingDecisions) == 0 {
+		add(&request.BindingDecisions, "explicit-specification-authority", "The accepted goal and current evidence define this draft; only the owner may approve or revise it.", "", "", allEvidence)
+	}
+	if len(request.AcceptanceChecks) == 0 {
+		add(&request.AcceptanceChecks, "owner-verifies-accepted-goal", "The owner can verify that the delivered behavior satisfies the accepted goal: "+goal, "Review the delivered behavior and its verification evidence against the accepted goal.", "", charterEvidence)
+	}
+	if len(request.NegativeExpectations) == 0 {
+		add(&request.NegativeExpectations, "no-unapproved-scope", "The result must not add behavior outside the owner-approved specification.", "", "", allEvidence)
+	}
+	if len(request.RecoveryExpectations) == 0 {
+		add(&request.RecoveryExpectations, "preserve-last-valid-state", "If the accepted result cannot be delivered safely, preserve the last valid state and report the blocker before continuing.", "", "", allEvidence)
+	}
+
+	paths := uniqueSortedStrings(survey.EntryPoints)
+	if len(paths) == 0 {
+		paths = []string{specificationProjectionRelativePath}
+	}
+	for index, path := range paths {
+		if index >= 12 {
+			break
+		}
+		evidence := surveyEvidence
+		if path == specificationProjectionRelativePath {
+			evidence = contextEvidence
+		}
+		add(&request.AffectedPublicPaths, "known-public-path-"+path, "Known owner-visible or public path affected by this contract: "+path, "", path, evidence)
+	}
+	if len(request.AffectedPublicPaths) == 0 {
+		add(&request.AffectedPublicPaths, "specification-projection", "The owner-readable specification projection created by settled discussion.", "", specificationProjectionRelativePath, contextEvidence)
+	}
+
+	_ = analyze // The inventory is already bound into current-context evidence.
+	return request, nil
+}
+
+// discussSpecificationDecisionLineage preserves established short decision
+// identities while bounding generated IDs for both the base specification item
+// and its optional "-hard" negative-expectation companion. The hash input is
+// domain-separated so the compact identity cannot be confused with another
+// digest use elsewhere in the planning lifecycle.
+func discussSpecificationDecisionLineage(decision PendingDecision) string {
+	identity := emptyFallback(strings.TrimSpace(decision.ID), logicalDiscussSource(decision.Source))
+	lineage := "owner-decision-" + identity
+	if _, err := colony.CanonicalSpecItemID(colony.SpecSectionBindingDecisions, lineage); err == nil {
+		if _, hardErr := colony.CanonicalSpecItemID(colony.SpecSectionNegativeExpectations, lineage+"-hard"); hardErr == nil {
+			return lineage
+		}
+	}
+
+	digest := sha256.Sum256([]byte("aether/discuss/specification-decision-lineage/v1\x00" + identity))
+	return "owner-decision-" + hex.EncodeToString(digest[:8])
+}
+
+func discussSpecificationEvidenceIDs(frontier discussEvidenceFrontier, kind, originPrefix string) []string {
+	ids := []string{}
+	for _, item := range frontier.Items {
+		reference := item.Record.Reference
+		if kind != "" && string(reference.Kind) != kind {
+			continue
+		}
+		if originPrefix != "" && !strings.HasPrefix(reference.Origin, originPrefix) {
+			continue
+		}
+		if strings.TrimSpace(reference.ID) != "" {
+			ids = append(ids, reference.ID)
+		}
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func discussSpecificationEvidenceFallback(preferred, fallback []string) []string {
+	if len(preferred) > 0 {
+		return append([]string(nil), preferred...)
+	}
+	return append([]string(nil), fallback...)
+}
+
+func newDiscussSpecificationCloseout(
+	specification colony.Specification,
+	revision colony.SpecRevision,
+	receipt *colony.LifecycleReceipt,
+	replayed bool,
+	approvedPreserved bool,
+	wouldCreate bool,
+	projection specificationProjectionInspection,
+	projectionRepaired bool,
+) discussSpecificationCloseout {
+	body := discussSpecificationBody{
+		Outcomes:             revision.Outcomes,
+		IncludedBehaviors:    revision.IncludedBehaviors,
+		Exclusions:           revision.Exclusions,
+		BindingDecisions:     revision.BindingDecisions,
+		Requirements:         revision.Requirements,
+		AcceptanceChecks:     revision.AcceptanceChecks,
+		NegativeExpectations: revision.NegativeExpectations,
+		RecoveryExpectations: revision.RecoveryExpectations,
+		AffectedPublicPaths:  revision.AffectedPublicPaths,
+	}
+	closeout := discussSpecificationCloseout{
+		SpecificationID: specification.ID,
+		RevisionID:      revision.ID,
+		RevisionNumber:  specificationRevisionIndex(specification, revision.ID) + 1,
+		ContentHash:     revision.ContentHash,
+		Status:          revision.Status,
+		Scope:           revision.Scope,
+		SectionCounts: map[string]int{
+			"outcomes":              len(revision.Outcomes),
+			"included_behaviors":    len(revision.IncludedBehaviors),
+			"exclusions":            len(revision.Exclusions),
+			"binding_decisions":     len(revision.BindingDecisions),
+			"requirements":          len(revision.Requirements),
+			"acceptance_checks":     len(revision.AcceptanceChecks),
+			"negative_expectations": len(revision.NegativeExpectations),
+			"recovery_expectations": len(revision.RecoveryExpectations),
+			"affected_public_paths": len(revision.AffectedPublicPaths),
+		},
+		Body:                  body,
+		UnresolvedCount:       0,
+		ProjectionPath:        specificationProjectionRelativePath,
+		ProjectionDigest:      projection.ExpectedDigest,
+		ProjectionRepaired:    projectionRepaired,
+		ExactNextCommand:      "aether spec",
+		Replayed:              replayed,
+		WouldCreate:           wouldCreate,
+		ApprovedSpecPreserved: approvedPreserved,
+		Receipt:               receipt,
+	}
+	if revision.Status == colony.SpecStatusDraft {
+		closeout.ApprovalCommand = fmt.Sprintf(
+			"aether spec --approve --revision-id %s --revision-hash %s --approval-token '%s'",
+			revision.ID,
+			revision.ContentHash,
+			specificationApprovalToken(specification.ID, revision.ID, revision.ContentHash),
+		)
+	}
+	if approvedPreserved {
+		closeout.RevisionGuidance = fmt.Sprintf(
+			"Run `aether spec` to inspect approved revision %s (%s). Any material change requires an explicit scoped successor through `aether spec --add`, `aether spec --modify`, or `aether spec --remove`; `aether discuss` will not replace it.",
+			revision.ID,
+			revision.ContentHash,
+		)
+	}
+	return closeout
 }
 
 func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
@@ -368,6 +905,9 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 	}
 	if found == -1 {
 		return nil, fmt.Errorf("clarification %q not found", id)
+	}
+	if isCodexNativeDecision(file.Decisions[found]) {
+		return nil, fmt.Errorf("native questions require decision-answer --native-request")
 	}
 	if file.Decisions[found].Type != clarificationDecisionType {
 		return nil, fmt.Errorf("decision %q is not a clarification", id)
@@ -411,12 +951,31 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 
 	activeFile, _ := filterPendingDecisionFileForScope(file, scope)
 	remaining := countPendingClarifications(activeFile)
-	next := "Run `aether discuss` to review remaining questions before planning."
+	next := "Run `aether discuss` to review the remaining material questions."
+	override := ""
+	var settled map[string]interface{}
 	if remaining == 0 {
-		next = nextAfterClarificationResolution(file.Decisions[found])
+		if _, stateErr := loadActiveColonyState(); stateErr != nil {
+			// Legacy pending-decision files can outlive the colony state that
+			// created them. Preserve their exact resolution behavior, but do not
+			// pretend a specification can be created without a current goal.
+			next = "Run `aether init \"goal\"` before creating a draft specification for this resolved answer."
+		} else {
+			root := repoRootFromStore(store)
+			settledResult, settleErr := runDiscuss(root, 3, false)
+			if settleErr != nil {
+				return nil, fmt.Errorf("clarification resolved, but draft specification handoff failed: %w", settleErr)
+			}
+			settled = settledResult
+			next = stringValue(settled["next"])
+			override = stringValue(settled["exact_next_command"])
+			if override == "" {
+				override = "aether spec"
+			}
+		}
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"resolved":         true,
 		"id":               id,
 		"answer":           answer,
@@ -424,268 +983,521 @@ func resolveDiscussQuestion(id, answer string) (map[string]interface{}, error) {
 		"redirect_text":    redirectText,
 		"remaining":        remaining,
 		"next":             next,
-	}, nil
-}
-
-func materializeDiscussQuestions(goal string, survey codexSurveyContext, analyze analyzeScanData, pending PendingDecisionFile, activeSignals []string, maxQuestions int, dryRun bool, scope pendingDecisionScope) ([]discussQuestion, int, int, error) {
-	activePending, _ := filterPendingDecisionFileForScope(pending, scope)
-	existingBySource := clarificationDecisionIndex(activePending)
-	candidates := generateDiscussCandidates(goal, survey, analyze)
-	questions := make([]discussQuestion, 0, maxQuestions)
-	createdCount := 0
-	existingCount := 0
-	dirty := false
-
-	for _, candidate := range candidates {
-		if len(questions) >= maxQuestions {
-			break
-		}
-		if clarificationSuppressedBySignals(candidate.Category, activeSignals) {
-			continue
-		}
-		if existing, ok := existingBySource[candidate.Source]; ok {
-			if existing.Resolved {
-				continue
+	}
+	if settled != nil {
+		for _, key := range []string{
+			"discussion_status", "specification", "specification_status", "draft_spec", "approved_spec",
+			"unresolved_count", "projection_path", "exact_next_command",
+		} {
+			if value, ok := settled[key]; ok {
+				result[key] = value
 			}
-			candidate.ID = existing.ID
-			candidate.Question, candidate.Options = parseClarificationDescription(existing.Description)
-			candidate.Status = "pending"
-			questions = append(questions, candidate)
-			existingCount++
-			continue
-		}
-
-		candidate.Status = "new"
-		if !dryRun {
-			decision := PendingDecision{
-				ID:          fmt.Sprintf("pd_%d", time.Now().UnixNano()+int64(createdCount)),
-				Type:        clarificationDecisionType,
-				Description: formatClarificationDescription(candidate.Question, candidate.Options),
-				Source:      candidate.Source,
-				Resolved:    false,
-				CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-			}
-			stampPendingDecisionScope(&decision, scope)
-			pending.Decisions = append(pending.Decisions, decision)
-			candidate.ID = decision.ID
-			dirty = true
-		}
-		questions = append(questions, candidate)
-		createdCount++
-	}
-
-	if dirty {
-		if err := store.SaveJSON(pendingDecisionsFile, pending); err != nil {
-			return nil, 0, 0, fmt.Errorf("failed to save clarification decisions: %w", err)
 		}
 	}
-	return questions, createdCount, existingCount, nil
+	closeLifecycleCommand(result, "discuss", override,
+		"The last material answer is now captured in a draft specification. Review that exact contract before planning can begin.")
+	return result, nil
 }
 
-func generateDiscussCandidates(goal string, survey codexSurveyContext, analyze analyzeScanData) []discussQuestion {
-	goalLower := strings.ToLower(goal)
-	candidates := []discussQuestion{
-		buildDiscussSurfaceQuestion(survey),
-		buildDiscussIntegrationQuestion(goalLower, survey),
+func buildDiscussEvidenceFrontier(state colony.ColonyState, survey codexSurveyContext, analyze analyzeScanData, pending PendingDecisionFile, activeSignals []string) (discussEvidenceFrontier, error) {
+	goalID := pendingDecisionGoalHash(derefGoal(state.Goal))
+	if goalID == "" {
+		return discussEvidenceFrontier{}, fmt.Errorf("cannot build discuss evidence without a goal identity")
 	}
-	candidates = append(candidates, rankDiscussAnalyzeQuestions(goalLower, analyze)...)
-	candidates = append(candidates,
-		buildDiscussScopeQuestion(goalLower),
-		buildDiscussVerificationQuestion(survey),
-	)
-
-	filtered := make([]discussQuestion, 0, len(candidates))
-	seen := map[string]bool{}
-	for _, candidate := range candidates {
-		if strings.TrimSpace(candidate.Question) == "" || strings.TrimSpace(candidate.Source) == "" {
-			continue
-		}
-		source := strings.TrimSpace(candidate.Source)
-		if seen[source] {
-			continue
-		}
-		seen[source] = true
-		filtered = append(filtered, candidate)
+	sessionID := "session-" + goalID[:16]
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" {
+		sessionID = strings.TrimSpace(*state.SessionID)
 	}
-	return filtered
-}
-
-func rankDiscussAnalyzeQuestions(goalLower string, scan analyzeScanData) []discussQuestion {
-	if !discussAnalyzeHasContext(scan) {
+	specificationRevisionID := "specification-unsettled"
+	if state.Specification != nil && strings.TrimSpace(state.Specification.CurrentRevisionID) != "" {
+		specificationRevisionID = strings.TrimSpace(state.Specification.CurrentRevisionID)
+	}
+	planRevisionID := strings.TrimSpace(state.Plan.ActiveRevisionID)
+	if planRevisionID == "" {
+		planRevisionID = "plan-unbound"
+	}
+	frontier := discussEvidenceFrontier{Scope: planningEvidenceScope{
+		GoalID:                  goalID,
+		SessionID:               sessionID,
+		SpecificationRevisionID: specificationRevisionID,
+		PlanRevisionID:          planRevisionID,
+	}}
+	observedAt := discussEvidenceObservedAt(state)
+	add := func(kind colony.PlanningEvidenceKind, origin string, content []byte, observed time.Time, dimensions []colony.PlanningDimension) error {
+		if len(strings.TrimSpace(string(content))) == 0 {
+			return nil
+		}
+		record, err := normalizePlanningEvidence(planningEvidenceSource{
+			Kind:                 kind,
+			Origin:               origin,
+			Content:              content,
+			Scope:                frontier.Scope,
+			SourceRevision:       discussEvidenceSourceRevision(origin, content),
+			ObservedAt:           observed,
+			ApplicableDimensions: dimensions,
+			State:                planningEvidenceSourceCurrent,
+		})
+		if err != nil {
+			return fmt.Errorf("build discuss evidence %s: %w", origin, err)
+		}
+		frontier.Items = append(frontier.Items, discussEvidenceItem{Record: record, Content: string(content)})
 		return nil
 	}
-	questions := generateAnalyzeQuestions(scan)
-	type scoredQuestion struct {
-		score    int
-		question discussQuestion
+
+	if state.AcceptedCharter != nil {
+		content, err := json.Marshal(state.AcceptedCharter)
+		if err != nil {
+			return discussEvidenceFrontier{}, fmt.Errorf("encode accepted charter evidence: %w", err)
+		}
+		charterObservedAt := state.AcceptedCharter.AcceptedAt
+		if charterObservedAt.IsZero() {
+			charterObservedAt = observedAt
+		}
+		if err := add(colony.PlanningEvidenceCharter, "state:accepted-charter", content, charterObservedAt, []colony.PlanningDimension{
+			colony.PlanningDimensionKnowledge,
+			colony.PlanningDimensionRequirements,
+			colony.PlanningDimensionRisks,
+		}); err != nil {
+			return discussEvidenceFrontier{}, err
+		}
+	} else if state.Charter != nil {
+		content, err := json.Marshal(state.Charter)
+		if err != nil {
+			return discussEvidenceFrontier{}, fmt.Errorf("encode charter evidence: %w", err)
+		}
+		if err := add(colony.PlanningEvidenceCharter, "state:charter", content, observedAt, []colony.PlanningDimension{
+			colony.PlanningDimensionKnowledge,
+			colony.PlanningDimensionRequirements,
+			colony.PlanningDimensionRisks,
+		}); err != nil {
+			return discussEvidenceFrontier{}, err
+		}
 	}
-	scored := make([]scoredQuestion, 0, len(questions))
-	for _, question := range questions {
-		if strings.TrimSpace(question.Question) == "" || strings.TrimSpace(question.Source) == "" {
+
+	if discussSurveyHasEvidence(survey) {
+		content, err := json.Marshal(survey)
+		if err != nil {
+			return discussEvidenceFrontier{}, fmt.Errorf("encode survey evidence: %w", err)
+		}
+		if err := add(colony.PlanningEvidenceSurvey, "survey:current-workspace", content, observedAt, []colony.PlanningDimension{
+			colony.PlanningDimensionKnowledge,
+			colony.PlanningDimensionRisks,
+			colony.PlanningDimensionDependencies,
+			colony.PlanningDimensionEffort,
+		}); err != nil {
+			return discussEvidenceFrontier{}, err
+		}
+	}
+
+	contextContent, err := json.Marshal(struct {
+		Goal          string   `json:"goal"`
+		Signals       []string `json:"owner_constraints,omitempty"`
+		DetectedType  string   `json:"detected_type,omitempty"`
+		Languages     []string `json:"languages,omitempty"`
+		Frameworks    []string `json:"frameworks,omitempty"`
+		TopLevelDirs  []string `json:"top_level_dirs,omitempty"`
+		TestFramework []string `json:"test_frameworks,omitempty"`
+	}{
+		Goal:          strings.TrimSpace(derefGoal(state.Goal)),
+		Signals:       append([]string(nil), activeSignals...),
+		DetectedType:  analyze.DetectedType,
+		Languages:     append([]string(nil), analyze.Languages...),
+		Frameworks:    append([]string(nil), analyze.Frameworks...),
+		TopLevelDirs:  append([]string(nil), analyze.TopLevelDirs...),
+		TestFramework: append([]string(nil), analyze.Governance.TestFrameworks...),
+	})
+	if err != nil {
+		return discussEvidenceFrontier{}, fmt.Errorf("encode current context evidence: %w", err)
+	}
+	if err := add(colony.PlanningEvidenceContext, "context:current-goal", contextContent, observedAt, []colony.PlanningDimension{
+		colony.PlanningDimensionKnowledge,
+		colony.PlanningDimensionRisks,
+		colony.PlanningDimensionDependencies,
+		colony.PlanningDimensionEffort,
+	}); err != nil {
+		return discussEvidenceFrontier{}, err
+	}
+
+	for _, decision := range pending.Decisions {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
-		score := 10
-		switch question.Category {
-		case "architecture":
-			score += 20
-			if len(scan.TopLevelDirs) > 3 || scan.HasDockerCompose || scan.HasK8s {
-				score += 20
-			}
-			if containsAnyOracleKeyword(goalLower, "architecture", "refactor", "module", "surface", "system") {
-				score += 20
-			}
-		case "dependencies":
-			score += 15 + len(scan.Frameworks)*3 + len(scan.Languages)*2
-			if containsAnyOracleKeyword(goalLower, "dependency", "library", "package", "tool", "integration") {
-				score += 20
-			}
-		case "testing_infrastructure":
-			score += len(scan.Governance.TestFrameworks) * 5
-			if containsAnyOracleKeyword(goalLower, "test", "verify", "coverage", "quality", "regression") {
-				score += 25
-			}
-		case "deployment":
-			if scan.HasDocker || scan.HasDockerCompose || scan.HasK8s {
-				score += 30
-			}
-			if containsAnyOracleKeyword(goalLower, "deploy", "release", "production", "ship") {
-				score += 20
-			}
-		case "performance":
-			if containsAnyOracleKeyword(goalLower, "performance", "speed", "latency", "throughput", "scale") {
-				score += 35
-			}
+		content, err := json.Marshal(struct {
+			Question   string `json:"question"`
+			Answer     string `json:"answer"`
+			Grounding  string `json:"grounding,omitempty"`
+			Source     string `json:"source"`
+			ResolvedAt string `json:"resolved_at,omitempty"`
+		}{
+			Question:   decision.Description,
+			Answer:     decision.Resolution,
+			Grounding:  decision.Grounding,
+			Source:     decision.Source,
+			ResolvedAt: decision.ResolvedAt,
+		})
+		if err != nil {
+			return discussEvidenceFrontier{}, fmt.Errorf("encode prior decision evidence: %w", err)
 		}
-		scored = append(scored, scoredQuestion{score: score, question: question})
+		answerObservedAt := observedAt
+		if parsed, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(decision.ResolvedAt)); parseErr == nil {
+			answerObservedAt = parsed
+		}
+		if err := add(colony.PlanningEvidenceDecision, "decision:"+decision.ID, content, answerObservedAt, []colony.PlanningDimension{
+			colony.PlanningDimensionKnowledge,
+			colony.PlanningDimensionRequirements,
+			colony.PlanningDimensionRisks,
+			colony.PlanningDimensionDependencies,
+			colony.PlanningDimensionEffort,
+		}); err != nil {
+			return discussEvidenceFrontier{}, err
+		}
 	}
-	sort.SliceStable(scored, func(i, j int) bool {
-		if scored[i].score == scored[j].score {
-			return scored[i].question.Category < scored[j].question.Category
-		}
-		return scored[i].score > scored[j].score
+
+	sort.Slice(frontier.Items, func(left, right int) bool {
+		return frontier.Items[left].Record.Reference.ID < frontier.Items[right].Record.Reference.ID
 	})
-	result := make([]discussQuestion, 0, len(scored))
-	for _, item := range scored {
-		result = append(result, item.question)
+	return frontier, nil
+}
+
+func discussEvidenceObservedAt(state colony.ColonyState) time.Time {
+	if state.InitializedAt != nil && !state.InitializedAt.IsZero() {
+		return state.InitializedAt.UTC()
 	}
-	return result
+	return time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
 }
 
-func discussAnalyzeHasContext(scan analyzeScanData) bool {
-	return strings.TrimSpace(scan.DetectedType) != "" && scan.DetectedType != "unknown" ||
-		len(scan.Languages) > 0 ||
-		len(scan.Frameworks) > 0 ||
-		len(scan.TopLevelDirs) > 0 ||
-		len(scan.Governance.TestFrameworks) > 0 ||
-		len(scan.Governance.CIConfigs) > 0 ||
-		scan.HasDocker ||
-		scan.HasDockerCompose ||
-		scan.HasK8s ||
-		scan.HasMakefile
+func discussEvidenceSourceRevision(origin string, content []byte) string {
+	sum := sha256.Sum256(append([]byte(strings.TrimSpace(origin)+"\x00"), content...))
+	return "discuss-" + hex.EncodeToString(sum[:8])
 }
 
-func buildDiscussSurfaceQuestion(survey codexSurveyContext) discussQuestion {
-	options := uniqueSortedStrings(append(append([]string{}, limitStrings(survey.Frameworks, 3)...), limitStrings(survey.Directories, 3)...))
-	options = limitStrings(options, 3)
-	reasoning := "The goal can be built in more than one place unless you pin down which existing surface should own the first slice."
+func discussSurveyHasEvidence(survey codexSurveyContext) bool {
+	return len(survey.SurveyDocs) > 0 || len(survey.Languages) > 0 || len(survey.Frameworks) > 0 ||
+		len(survey.Directories) > 0 || len(survey.EntryPoints) > 0 || len(survey.Dependencies) > 0 ||
+		len(survey.TestFiles) > 0 || len(survey.Issues) > 0 || len(survey.SecurityPatterns) > 0 || len(survey.SourceAnchors) > 0
+}
+
+func materializeDiscussQuestions(activePending PendingDecisionFile, frontier *discussEvidenceFrontier, activeSignals []string) ([]discussQuestion, *discussMaterialBatch, int, error) {
+	latest := make(map[string]PendingDecision)
+	for _, decision := range activePending.Decisions {
+		if decision.Type != clarificationDecisionType || decision.Resolved || strings.TrimSpace(decision.Description) == "" {
+			continue
+		}
+		key := logicalDiscussSource(decision.Source)
+		if key == "" {
+			key = decision.ID
+		}
+		if existing, ok := latest[key]; !ok || clarificationSortKey(decision).After(clarificationSortKey(existing)) {
+			latest[key] = decision
+		}
+	}
+
+	questions := make([]discussQuestion, 0, len(latest))
+	suppressed := 0
+	for _, decision := range latest {
+		candidate, evidenceItems, err := planningDecisionCandidateForClarification(decision, frontier)
+		if err != nil {
+			return nil, nil, suppressed, err
+		}
+		category := string(candidate.Domain)
+		if clarificationSuppressedBySignals(category, activeSignals) {
+			suppressed++
+			continue
+		}
+		candidate.AnswerableEvidenceIDs = discussAnswerableEvidenceIDs(decision, evidenceItems)
+		classification, err := classifyPlanningDecision(candidate)
+		if err != nil {
+			return nil, nil, suppressed, fmt.Errorf("classify discuss decision %s: %w", decision.ID, err)
+		}
+		if !classification.RequiresOwner {
+			suppressed++
+			continue
+		}
+
+		prior := priorPlanningDecisionAnswer(activePending, decision, candidate, frontier.Scope)
+		card, err := projectPlanningDecisionCard(planningDecisionCardRequest{
+			Candidate: candidate,
+			Scope: planningDecisionEquivalenceScope{
+				GoalID:                          frontier.Scope.GoalID,
+				SessionID:                       frontier.Scope.SessionID,
+				ApprovedSpecificationRevisionID: frontier.Scope.SpecificationRevisionID,
+				BasePlanRevisionID:              frontier.Scope.PlanRevisionID,
+			},
+			Prior: prior,
+		})
+		if err != nil {
+			return nil, nil, suppressed, fmt.Errorf("project discuss decision %s: %w", decision.ID, err)
+		}
+		question, options := parseClarificationDescription(decision.Description)
+		questions = append(questions, discussQuestion{
+			ID:                  decision.ID,
+			StableID:            card.DecisionID,
+			Category:            category,
+			Domain:              candidate.Domain,
+			Question:            question,
+			Decision:            question,
+			Options:             options,
+			Reasoning:           card.WhyNow,
+			WhyNow:              card.WhyNow,
+			Evidence:            card.Evidence,
+			QueenRecommendation: card.QueenRecommendation,
+			Choices:             card.Choices,
+			AffectedSemanticIDs: card.AffectedSemanticIDs,
+			PriorAnswer:         card.PriorAnswer,
+			Revalidation:        card.Revalidation,
+			PlanningResumes:     card.PlanningResumes,
+			ExactAnswerSyntax:   fmt.Sprintf("aether discuss --resolve %s --answer \"<answer>\"", decision.ID),
+			HardConstraint:      clarificationIsHardConstraint(decision),
+			Status:              "pending",
+			Source:              decision.Source,
+		})
+	}
+	sort.Slice(questions, func(left, right int) bool {
+		leftRank := planningDecisionDomainRank(questions[left].Domain)
+		rightRank := planningDecisionDomainRank(questions[right].Domain)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return questions[left].StableID < questions[right].StableID
+	})
+	if len(questions) == 0 {
+		return questions, nil, suppressed, nil
+	}
+	contentHash, err := jsonSHA256(struct {
+		GoalID    string            `json:"goal_id"`
+		SessionID string            `json:"session_id"`
+		Cards     []discussQuestion `json:"cards"`
+	}{GoalID: frontier.Scope.GoalID, SessionID: frontier.Scope.SessionID, Cards: questions})
+	if err != nil {
+		return nil, nil, suppressed, fmt.Errorf("hash discuss material batch: %w", err)
+	}
+	return questions, &discussMaterialBatch{
+		ID:          "discuss-material-batch-" + contentHash[:16],
+		ContentHash: contentHash,
+		Cards:       questions,
+	}, suppressed, nil
+}
+
+func planningDecisionCandidateForClarification(decision PendingDecision, frontier *discussEvidenceFrontier) (planningDecisionCandidate, []discussEvidenceItem, error) {
+	domain := planningDecisionDomainForClarification(decision)
+	question, options := parseClarificationDescription(decision.Description)
+	if strings.TrimSpace(question) == "" {
+		return planningDecisionCandidate{}, nil, fmt.Errorf("clarification %s has no question text", decision.ID)
+	}
+	baseEvidence := append([]discussEvidenceItem(nil), frontier.Items...)
+	grounding := strings.TrimSpace(decision.Grounding)
+	if grounding == "" {
+		grounding = "This current-goal clarification was already pending and remains an unresolved owner boundary."
+	}
+	groundingRecord, err := normalizePlanningEvidence(planningEvidenceSource{
+		Kind:                 colony.PlanningEvidenceContext,
+		Origin:               "context:clarification:" + emptyFallback(decision.ID, logicalDiscussSource(decision.Source)),
+		Content:              []byte(grounding),
+		Scope:                frontier.Scope,
+		SourceRevision:       discussEvidenceSourceRevision(decision.Source, []byte(grounding)),
+		ObservedAt:           discussDecisionObservedAt(decision),
+		ApplicableDimensions: []colony.PlanningDimension{colony.PlanningDimensionKnowledge, colony.PlanningDimensionRisks},
+		State:                planningEvidenceSourceCurrent,
+	})
+	if err != nil {
+		return planningDecisionCandidate{}, nil, fmt.Errorf("build grounding for clarification %s: %w", decision.ID, err)
+	}
+	frontier.Items = append(frontier.Items, discussEvidenceItem{Record: groundingRecord, Content: grounding})
+	evidence := []colony.PlanningEvidenceRef{groundingRecord.Reference}
+	for _, item := range baseEvidence {
+		if len(evidence) >= 4 {
+			break
+		}
+		evidence = append(evidence, item.Record.Reference)
+	}
+	impact := planningDecisionImpactForDomain(domain, question)
+	affectedID := discussAffectedSemanticID(domain, logicalDiscussSource(decision.Source), question)
+	choices := discussPlanningDecisionChoices(domain, affectedID, options)
+	recommendation := "Preserve the current contract until the owner explicitly chooses a different consequence."
+	if len(options) > 0 {
+		recommendation = fmt.Sprintf("Choose %q because it is the first viable outcome recorded at this evidence boundary.", options[0])
+	}
+	stableSource := logicalDiscussSource(decision.Source)
+	if stableSource == "" {
+		stableSource = decision.ID
+	}
+	stableHash := sha256.Sum256([]byte(stableSource))
+	return planningDecisionCandidate{
+		StableID:            "decision-" + string(domain) + "-" + hex.EncodeToString(stableHash[:6]),
+		Domain:              domain,
+		Decision:            question,
+		WhyNow:              grounding,
+		Evidence:            evidence,
+		QueenRecommendation: recommendation,
+		Impact:              impact,
+		AffectedSemanticIDs: []string{affectedID},
+		Choices:             choices,
+		ResumeInstruction:   fmt.Sprintf("Resolve this card with aether discuss --resolve %s, then rerun aether discuss.", decision.ID),
+	}, baseEvidence, nil
+}
+
+func planningDecisionDomainForClarification(decision PendingDecision) planningDecisionDomain {
+	source := strings.TrimSpace(decision.Source)
+	parts := strings.Split(source, ":")
+	if len(parts) >= 3 && parts[0] == "wrapper" {
+		if domain := planningDecisionDomain(parts[1]); domain.isMaterialDomain() {
+			return domain
+		}
+	}
+	if strings.HasPrefix(source, discussSourcePrefix) {
+		category := strings.TrimSuffix(strings.TrimPrefix(source, discussSourcePrefix), ":hard")
+		return planningDecisionDomainForCategory(category)
+	}
+	question := strings.ToLower(decision.Description)
+	switch {
+	case strings.Contains(question, "accept") || strings.Contains(question, "verify") || strings.Contains(question, "test"):
+		return planningDecisionDomainAcceptanceMeaning
+	case strings.Contains(question, "risk") || strings.Contains(question, "safe") || strings.Contains(question, "failure"):
+		return planningDecisionDomainRiskTolerance
+	case strings.Contains(question, "scope") || strings.Contains(question, "surface") || strings.Contains(question, "boundary"):
+		return planningDecisionDomainScope
+	case strings.Contains(question, "authority") || strings.Contains(question, "approve") || clarificationIsHardConstraint(decision):
+		return planningDecisionDomainAuthority
+	default:
+		return planningDecisionDomainBehavior
+	}
+}
+
+func planningDecisionImpactForDomain(domain planningDecisionDomain, question string) planningDecisionContractImpact {
+	value := "owner answer changes the " + strings.ReplaceAll(string(domain), "_", " ") + " contract for: " + normalizePlanningDecisionText(question)
+	impact := planningDecisionContractImpact{}
+	switch domain {
+	case planningDecisionDomainAuthority:
+		impact.Authority = value
+	case planningDecisionDomainRiskTolerance:
+		impact.Risk = value
+	case planningDecisionDomainScope:
+		impact.Scope = value
+	case planningDecisionDomainAcceptanceMeaning:
+		impact.Acceptance = value
+	default:
+		impact.Behavior = value
+	}
+	return impact
+}
+
+func discussAffectedSemanticID(domain planningDecisionDomain, source, question string) string {
+	seed := strings.TrimSpace(source)
+	if seed == "" {
+		seed = normalizePlanningDecisionText(question)
+	}
+	sum := sha256.Sum256([]byte(string(domain) + "\x00" + seed))
+	return "intent:" + string(domain) + ":" + hex.EncodeToString(sum[:6])
+}
+
+func discussPlanningDecisionChoices(domain planningDecisionDomain, affectedID string, options []string) []planningDecisionChoice {
 	if len(options) == 0 {
-		options = []string{
-			"keep it in the current primary stack",
-			"create a new isolated module",
-			"research the best surface before deciding",
-		}
-		reasoning = "The survey did not expose a single obvious surface, so planning needs an explicit ownership choice before it guesses."
-	} else if len(options) == 1 {
-		options = append(options,
-			"create a new isolated module",
-			"research the best surface before deciding",
-		)
-		reasoning = fmt.Sprintf("The survey only highlighted %s as an obvious surface, but it is still worth confirming whether you want to stay there or carve out a separate module.", options[0])
-	} else {
-		options = append(options, "follow the dominant existing pattern")
-		reasoning = fmt.Sprintf("The survey surfaced multiple plausible implementation surfaces (%s), so the plan should not guess which one owns the work.", strings.Join(limitStrings(options, 3), ", "))
+		options = []string{"Provide the bounded owner answer"}
 	}
-	return discussQuestion{
-		Category:       "surface",
-		Question:       "Which existing surface should own the first implementation slice?",
-		Options:        limitStrings(options, 3),
-		Reasoning:      reasoning,
-		HardConstraint: true,
-		Source:         discussSource("surface", true),
+	choices := make([]planningDecisionChoice, 0, len(options))
+	for index, option := range options {
+		option = normalizePlanningDecisionText(option)
+		if option == "" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(option))
+		choices = append(choices, planningDecisionChoice{
+			ID:                  fmt.Sprintf("choice-%02d-%s", index+1, hex.EncodeToString(sum[:3])),
+			Label:               option,
+			Consequence:         fmt.Sprintf("Choosing %s sets the %s contract for %s.", option, strings.ReplaceAll(string(domain), "_", " "), affectedID),
+			Impact:              planningDecisionImpactForDomain(domain, option),
+			AffectedSemanticIDs: []string{affectedID},
+		})
+	}
+	return choices
+}
+
+func discussAnswerableEvidenceIDs(decision PendingDecision, evidence []discussEvidenceItem) []string {
+	_, options := parseClarificationDescription(decision.Description)
+	if len(options) == 0 {
+		return nil
+	}
+	matchedIDs := []string{}
+	matchedOptions := 0
+	for _, option := range options {
+		normalizedOption := normalizeDecisionText(option)
+		if normalizedOption == "" {
+			continue
+		}
+		matchedThisOption := false
+		for _, item := range evidence {
+			if strings.Contains(normalizeDecisionText(item.Content), normalizedOption) {
+				matchedIDs = append(matchedIDs, item.Record.Reference.ID)
+				matchedThisOption = true
+			}
+		}
+		if matchedThisOption {
+			matchedOptions++
+		}
+	}
+	if matchedOptions != 1 {
+		return nil
+	}
+	return nonEmptyPlanningDecisionIDs(matchedIDs)
+}
+
+func priorPlanningDecisionAnswer(file PendingDecisionFile, current PendingDecision, candidate planningDecisionCandidate, scope planningEvidenceScope) *planningDecisionAnswerRecord {
+	var prior *PendingDecision
+	currentSource := logicalDiscussSource(current.Source)
+	for index := range file.Decisions {
+		decision := file.Decisions[index]
+		if !decision.Resolved || decision.Type != clarificationDecisionType || strings.TrimSpace(decision.Resolution) == "" || logicalDiscussSource(decision.Source) != currentSource {
+			continue
+		}
+		copyDecision := decision
+		if prior == nil || clarificationSortKey(copyDecision).After(clarificationSortKey(*prior)) {
+			prior = &copyDecision
+		}
+	}
+	if prior == nil {
+		return nil
+	}
+	priorCandidate := candidate
+	priorQuestion, priorOptions := parseClarificationDescription(prior.Description)
+	priorCandidate.Domain = planningDecisionDomainForClarification(*prior)
+	priorCandidate.Decision = priorQuestion
+	priorCandidate.Impact = planningDecisionImpactForDomain(priorCandidate.Domain, priorQuestion)
+	priorCandidate.AffectedSemanticIDs = []string{discussAffectedSemanticID(priorCandidate.Domain, currentSource, priorQuestion)}
+	priorCandidate.Choices = discussPlanningDecisionChoices(priorCandidate.Domain, priorCandidate.AffectedSemanticIDs[0], priorOptions)
+	key, err := buildPlanningDecisionEquivalenceKey(planningDecisionEquivalenceScope{
+		GoalID:                          scope.GoalID,
+		SessionID:                       scope.SessionID,
+		ApprovedSpecificationRevisionID: scope.SpecificationRevisionID,
+		BasePlanRevisionID:              scope.PlanRevisionID,
+	}, priorCandidate)
+	if err != nil {
+		return nil
+	}
+	return &planningDecisionAnswerRecord{
+		DecisionID: priorCandidate.StableID,
+		ChoiceID:   discussChoiceIDForAnswer(prior.Resolution, priorCandidate.Choices),
+		Answer:     prior.Resolution,
+		Key:        key,
 	}
 }
 
-func buildDiscussIntegrationQuestion(goalLower string, survey codexSurveyContext) discussQuestion {
-	if !goalTouchesIntegration(goalLower) && len(survey.EntryPoints) == 0 && len(survey.Dependencies) == 0 {
-		return discussQuestion{}
-	}
-
-	options := []string{
-		"reuse existing contracts where possible",
-		"add a thin adapter around current contracts",
-		"allow a new contract if the current one blocks the goal",
-	}
-	reasoning := "Planning needs to know how aggressively it should reuse current APIs, data flows, or integration boundaries."
-	if len(survey.EntryPoints) > 0 || len(survey.Dependencies) > 0 {
-		reasoning = fmt.Sprintf("The survey found live entry points (%s) and dependencies (%s), so the plan should know whether to reuse them or introduce a new boundary.", renderCSV(limitStrings(survey.EntryPoints, 3), "none detected"), renderCSV(limitStrings(survey.Dependencies, 3), "none detected"))
-	}
-
-	return discussQuestion{
-		Category:       "integration",
-		Question:       "How tightly should this work reuse existing contracts and integrations?",
-		Options:        options,
-		Reasoning:      reasoning,
-		HardConstraint: true,
-		Source:         discussSource("integration", true),
-	}
-}
-
-func buildDiscussScopeQuestion(goalLower string) discussQuestion {
-	options := []string{
-		"smallest end-to-end slice first",
-		"broader feature coverage first",
-		"architecture groundwork first",
-	}
-	if goalTouchesUI(goalLower) {
-		options = []string{
-			"smallest working slice first",
-			"balanced function and polish",
-			"polish-heavy first pass",
+func discussChoiceIDForAnswer(answer string, choices []planningDecisionChoice) string {
+	normalized := normalizeDecisionText(answer)
+	for _, choice := range choices {
+		if normalizeDecisionText(choice.Label) == normalized {
+			return choice.ID
 		}
 	}
-	return discussQuestion{
-		Category:  "scope",
-		Question:  "What should planning optimize for on the first pass?",
-		Options:   options,
-		Reasoning: "This keeps the plan from guessing the wrong tradeoff between speed, breadth, and cleanup.",
-		Source:    discussSource("scope", false),
-	}
+	return "owner-answer"
 }
 
-func buildDiscussVerificationQuestion(survey codexSurveyContext) discussQuestion {
-	options := []string{
-		"focused regression tests only",
-		"happy path and failure path coverage",
-		"prototype first, tighten tests after feedback",
-	}
-	reasoning := "Workers routinely guess the verification bar; making it explicit prevents overbuilding or under-testing."
-	if len(survey.TestFiles) == 0 {
-		options = []string{
-			"add one meaningful validation path now",
-			"prototype first without tests",
-			"research the test harness before committing",
+func discussDecisionObservedAt(decision PendingDecision) time.Time {
+	for _, candidate := range []string{decision.CreatedAt, decision.ResolvedAt} {
+		if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(candidate)); err == nil {
+			return parsed
 		}
-		reasoning = "The survey did not find obvious tests, so the plan needs an explicit answer about how much verification to front-load."
-	} else {
-		reasoning = fmt.Sprintf("The repo already contains tests such as %s, so the colony should know whether to keep that bar, raise it, or intentionally relax it for the first slice.", renderCSV(limitStrings(survey.TestFiles, 3), "existing tests"))
 	}
-	return discussQuestion{
-		Category:  "verification",
-		Question:  "What verification bar do you want on the first pass?",
-		Options:   options,
-		Reasoning: reasoning,
-		Source:    discussSource("verification", false),
-	}
+	return time.Date(1970, time.January, 1, 0, 0, 0, 0, time.UTC)
 }
 
 func discussionStatus(questionCount, createdCount, existingCount int) string {
@@ -707,59 +1519,139 @@ func renderDiscussVisual(result map[string]interface{}) string {
 	b.WriteString(visualDividerStr())
 
 	if resolved, _ := result["resolved"].(bool); resolved {
-		b.WriteString("Clarification locked in.\n")
-		b.WriteString("Decision: ")
-		b.WriteString(stringValue(result["id"]))
-		b.WriteString("\n")
-		b.WriteString("Answer: ")
-		b.WriteString(stringValue(result["answer"]))
-		b.WriteString("\n")
+		b.WriteString(voiceLine("decision", "Clarification locked in.") + "\n")
+		b.WriteString(voiceLine("decision", "Decision: "+stringValue(result["id"])) + "\n")
+		b.WriteString(voiceLine("decision", "Answer: "+stringValue(result["answer"])) + "\n")
 		if emitted, _ := result["redirect_emitted"].(bool); emitted {
-			b.WriteString("REDIRECT emitted: ")
-			b.WriteString(stringValue(result["redirect_text"]))
-			b.WriteString("\n")
+			b.WriteString(signalTypeGlyph("REDIRECT") + " REDIRECT emitted: " + stringValue(result["redirect_text"]) + "\n")
 		}
-		b.WriteString(renderNextUp(stringValue(result["next"])))
+		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
+			b.WriteString(renderDiscussSpecificationCloseout(closeout))
+		}
+		b.WriteString(renderLifecycleClosing(result, "discuss"))
 		return b.String()
 	}
 
-	b.WriteString("Goal: ")
-	b.WriteString(stringValue(result["goal"]))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("Questions: %d (%d new, %d existing)\n", intValue(result["question_count"]), intValue(result["created_count"]), intValue(result["existing_count"])))
+	b.WriteString(voiceLine("goal", "Goal: "+stringValue(result["goal"])) + "\n")
+	b.WriteString(voiceLine("question", fmt.Sprintf("Questions: %d (%d new, %d existing)", intValue(result["question_count"]), intValue(result["created_count"]), intValue(result["existing_count"]))) + "\n")
 	if intValue(result["resolved_count"]) > 0 {
-		b.WriteString(fmt.Sprintf("Resolved clarifications already on file: %d\n", intValue(result["resolved_count"])))
+		b.WriteString(voiceLine("question", fmt.Sprintf("Resolved clarifications already on file: %d", intValue(result["resolved_count"]))) + "\n")
 	}
 	if notice := stringValue(result["stale_state_notice"]); notice != "" {
-		b.WriteString(notice)
+		b.WriteString(voiceLine("warning", notice))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
 
 	if questions, ok := result["questions"].([]discussQuestion); ok && len(questions) > 0 {
-		for idx, question := range questions {
-			b.WriteString(fmt.Sprintf("%d. [%s] %s\n", idx+1, emptyFallback(question.ID, "pending"), question.Question))
-			if len(question.Options) > 0 {
-				b.WriteString("   Options: ")
-				b.WriteString(strings.Join(question.Options, " | "))
-				b.WriteString("\n")
+		b.WriteString(voiceLine("warning", fmt.Sprintf("Owner decisions required — %d material choice(s)", len(questions))) + "\n")
+		b.WriteString(voiceLine("blocked", "Planning is paused until every card has an exact owner answer.") + "\n\n")
+		for _, question := range questions {
+			b.WriteString(voiceLine("question", fmt.Sprintf("Decision %s: %s", question.StableID, question.Question)) + "\n")
+			b.WriteString(voiceLine("status", "Why now: "+question.WhyNow) + "\n")
+			b.WriteString(voiceLine("evidence", "Evidence: "+renderDiscussEvidenceRefs(question.Evidence)) + "\n")
+			b.WriteString(voiceLine("decision", "Queen recommends: "+question.QueenRecommendation+" (Queen is this project's coordinator)") + "\n")
+			for _, choice := range question.Choices {
+				b.WriteString(voiceLine("alternative", fmt.Sprintf("If %s: %s", choice.Label, choice.Consequence)) + "\n")
 			}
-			if strings.TrimSpace(question.Reasoning) != "" {
-				b.WriteString("   Why: ")
-				b.WriteString(question.Reasoning)
-				b.WriteString("\n")
+			b.WriteString(voiceLine("artifact", "Affected scope: "+strings.Join(question.AffectedSemanticIDs, ", ")) + "\n")
+			if strings.TrimSpace(question.PriorAnswer) == "" {
+				b.WriteString(voiceLine("history", "Prior answer: none") + "\n")
+			} else {
+				b.WriteString(voiceLine("history", "Prior answer: "+question.PriorAnswer) + "\n")
 			}
+			b.WriteString(voiceLine("checkpoint", "Revalidation: "+question.Revalidation) + "\n")
+			b.WriteString(voiceLine("next", "Planning resumes: "+question.PlanningResumes) + "\n")
+			b.WriteString(voiceLine("next", "Answer exactly: "+question.ExactAnswerSyntax) + "\n")
 			if question.HardConstraint {
-				b.WriteString("   This answer becomes a hard constraint.\n")
+				b.WriteString(voiceLine("avoid", "This answer becomes a hard constraint.") + "\n")
 			}
+			b.WriteString("\n")
 		}
-		b.WriteString("\n")
 	} else {
-		b.WriteString("No new clarification questions are outstanding.\n\n")
+		b.WriteString(voiceLine("done", "No unresolved material owner questions remain; evidence answered the rest.") + "\n\n")
+		if closeout, ok := discussSpecificationCloseoutFromResult(result); ok {
+			b.WriteString(renderDiscussSpecificationCloseout(closeout))
+		}
 	}
 
-	b.WriteString(renderNextUp(stringValue(result["next"])))
+	b.WriteString(renderLifecycleClosing(result, "discuss"))
 	return b.String()
+}
+
+func discussSpecificationCloseoutFromResult(result map[string]interface{}) (discussSpecificationCloseout, bool) {
+	for _, key := range []string{"draft_spec", "approved_spec", "specification"} {
+		switch value := result[key].(type) {
+		case discussSpecificationCloseout:
+			return value, true
+		case *discussSpecificationCloseout:
+			if value != nil {
+				return *value, true
+			}
+		}
+	}
+	return discussSpecificationCloseout{}, false
+}
+
+func renderDiscussSpecificationCloseout(closeout discussSpecificationCloseout) string {
+	var builder strings.Builder
+	builder.WriteString("✓ Intent resolved\n")
+	if closeout.Status == colony.SpecStatusDraft {
+		builder.WriteString(renderStageMarker("Draft Specification"))
+	} else {
+		builder.WriteString(renderStageMarker("Existing Specification"))
+	}
+	fmt.Fprintf(&builder, "Draft SPEC: %s revision %d [%s]\n", closeout.SpecificationID, closeout.RevisionNumber, strings.ToUpper(string(closeout.Status)))
+	fmt.Fprintf(&builder, "Revision ID: %s\n", closeout.RevisionID)
+	fmt.Fprintf(&builder, "Content hash: %s\n", closeout.ContentHash)
+	fmt.Fprintf(&builder, "Scope: %s\n", strings.ReplaceAll(string(closeout.Scope.Kind), "_", " "))
+	if closeout.Scope.Kind == colony.SpecScopeFeature {
+		fmt.Fprintf(&builder, "Feature: %s\n", closeout.Scope.FeatureID)
+		fmt.Fprintf(&builder, "Requirement IDs: %s\n", specCommandIDSummary(closeout.Scope.RequirementIDs))
+		fmt.Fprintf(&builder, "Acceptance IDs: %s\n", specCommandIDSummary(closeout.Scope.AcceptanceCheckIDs))
+	}
+	if closeout.Replayed && closeout.Status == colony.SpecStatusDraft {
+		builder.WriteString("Draft already exists; the same revision was retained.\n")
+	}
+	if closeout.ProjectionRepaired {
+		builder.WriteString("The readable projection was restored from canonical state.\n")
+	}
+
+	renderSpecCommandVisualSection(&builder, "goal", "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
+	renderSpecCommandVisualSection(&builder, "done", "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
+	renderSpecCommandVisualSection(&builder, "avoid", "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
+	renderSpecCommandVisualSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
+	renderSpecCommandVisualSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
+	renderSpecCommandVisualSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
+	renderSpecCommandVisualSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
+	renderSpecCommandVisualSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
+	renderSpecCommandVisualSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
+
+	if closeout.WouldCreate {
+		builder.WriteString("Dry run only: this exact draft has not been committed.\n")
+	} else if closeout.ApprovedSpecPreserved {
+		builder.WriteString("The approved specification was left unchanged.\n")
+		builder.WriteString(closeout.RevisionGuidance + "\n")
+	} else {
+		builder.WriteString("This draft does not authorize planning until the owner approves this exact revision.\n")
+		fmt.Fprintf(&builder, "Review: `%s`\n", closeout.ExactNextCommand)
+		if closeout.ApprovalCommand != "" {
+			fmt.Fprintf(&builder, "Approve this exact revision after review: `%s`\n", closeout.ApprovalCommand)
+		}
+	}
+	builder.WriteByte('\n')
+	return builder.String()
+}
+
+func renderDiscussEvidenceRefs(evidence []colony.PlanningEvidenceRef) string {
+	if len(evidence) == 0 {
+		return "none"
+	}
+	values := make([]string, 0, len(evidence))
+	for _, reference := range evidence {
+		values = append(values, fmt.Sprintf("%s [%s] %s", reference.ID, reference.Kind, reference.Origin))
+	}
+	return strings.Join(values, "; ")
 }
 
 func loadPendingDecisionFile() PendingDecisionFile {
@@ -834,6 +1726,9 @@ func filterPendingDecisionFileForScope(file PendingDecisionFile, scope pendingDe
 }
 
 func pendingDecisionMatchesScope(decision PendingDecision, scope pendingDecisionScope) bool {
+	if isCodexNativeDecision(decision) {
+		return decision.NativeBinding != nil && decision.GoalHash == scope.GoalHash && decision.SessionID == scope.SessionID && decision.NativeBinding.GoalHash == scope.GoalHash && decision.NativeBinding.SessionID == scope.SessionID
+	}
 	// Prefer session ID over goal hash: two colonies with the same goal but
 	// different sessions should not share pending decisions. Session ID is the
 	// stronger scope boundary.
@@ -882,7 +1777,7 @@ func pendingDecisionStaleNotice(count int) string {
 func clarificationDecisionIndex(file PendingDecisionFile) map[string]PendingDecision {
 	index := map[string]PendingDecision{}
 	for _, decision := range file.Decisions {
-		if decision.Type != clarificationDecisionType {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType {
 			continue
 		}
 		if strings.TrimSpace(decision.Source) == "" {
@@ -911,7 +1806,7 @@ func clarificationSortKey(decision PendingDecision) time.Time {
 func resolvedClarifiedIntentEntries(file PendingDecisionFile) []clarifiedIntentEntry {
 	entries := []clarifiedIntentEntry{}
 	for _, decision := range file.Decisions {
-		if decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
+		if isCodexNativeDecision(decision) || decision.Type != clarificationDecisionType || !decision.Resolved || strings.TrimSpace(decision.Resolution) == "" {
 			continue
 		}
 		question, _ := parseClarificationDescription(decision.Description)
@@ -931,7 +1826,7 @@ func resolvedClarifiedIntentEntries(file PendingDecisionFile) []clarifiedIntentE
 func countPendingClarifications(file PendingDecisionFile) int {
 	total := 0
 	for _, decision := range file.Decisions {
-		if decision.Type == clarificationDecisionType && !decision.Resolved {
+		if !isCodexNativeDecision(decision) && decision.Type == clarificationDecisionType && !decision.Resolved {
 			total++
 		}
 	}
@@ -967,6 +1862,10 @@ func activeSignalTexts() []string {
 
 func clarificationSuppressedBySignals(category string, activeSignals []string) bool {
 	keywords := map[string][]string{
+		"behavior":               {"behavior", "contract", "must", "should", "never"},
+		"authority":              {"authority", "approve", "permission", "contract", "owner"},
+		"risk_tolerance":         {"risk", "safe", "failure", "rollback", "recovery"},
+		"acceptance_meaning":     {"accept", "test", "coverage", "verify", "validation"},
 		"surface":                {"react", "vue", "svelte", "stack", "surface", "module", "backend", "frontend"},
 		"integration":            {"api", "contract", "integration", "endpoint", "data", "adapter"},
 		"scope":                  {"scope", "slice", "prototype", "polish", "cleanup", "breadth"},
@@ -1125,6 +2024,7 @@ func renderClarifiedIntentPromptEntriesWithIntegrity(entries []clarifiedIntentEn
 			break
 		}
 		result.Lines = append(result.Lines, item.line)
+		result.DecisionIDs = append(result.DecisionIDs, item.entry.ID)
 		sectionChars += lineChars
 	}
 	return result
@@ -1151,38 +2051,6 @@ func buildClarificationRedirect(decision PendingDecision, answer string) string 
 		return answer
 	}
 	return fmt.Sprintf("%s: %s", question, answer)
-}
-
-func nextAfterClarificationResolution(decision PendingDecision) string {
-	if command := orchestratorBoundaryAfterDiscussCommand(decision.Source); command != "" {
-		return fmt.Sprintf("Run `%s` to request a fresh manifest with the clarified boundary.", command)
-	}
-	return "Run `aether plan` to generate phases with the clarified intent."
-}
-
-func orchestratorBoundaryAfterDiscussCommand(source string) string {
-	parts := strings.Split(strings.TrimSpace(source), ":")
-	if len(parts) < 2 || parts[0] != orchestratorBoundarySourcePrefix {
-		return ""
-	}
-	workflow := normalizeOrchestratorBoundarySourcePart(parts[1], "")
-	switch workflow {
-	case "plan":
-		return "aether plan"
-	case "build":
-		if len(parts) >= 4 && parts[2] == "phase" {
-			if phase := strings.TrimSpace(parts[3]); phase != "" && phase != "0" {
-				return "aether build " + phase
-			}
-		}
-		return "aether build"
-	case "continue":
-		return "aether continue"
-	case "seal":
-		return "aether seal"
-	default:
-		return ""
-	}
 }
 
 func discussSource(category string, hard bool) string {
@@ -1254,7 +2122,7 @@ func detectDecisionConflicts(decisions []PendingDecision) []string {
 
 	var resolutions []string
 	for _, d := range decisions {
-		if !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
+		if isCodexNativeDecision(d) || !d.Resolved || strings.TrimSpace(d.Resolution) == "" {
 			continue
 		}
 		resolutions = append(resolutions, strings.ToLower(d.Resolution))

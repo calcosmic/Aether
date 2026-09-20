@@ -1,0 +1,240 @@
+{
+  "schema_version": "codex-native-tracer/v1",
+  "scenario": "ordinary",
+  "outcome": "passed",
+  "source_revision": "56ba471c6cf79a3a79801ed65ae6cc4ba1d5b5ce",
+  "source_status": "",
+  "source_digest": "sha256:1a2af8c8333aeda56c96d7d5dbb5320dbef2891a7d696fc2f234734a5d1fb31f",
+  "candidate_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/bin/aether",
+  "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+  "candidate_sha256": "sha256:e8a3b7aca7d428f4b019fb153a3abdc39960c921417351073f0a480fe992f872",
+  "build_argv": [
+    "go",
+    "build",
+    "-ldflags",
+    "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+    "-o",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/bin/aether",
+    "./cmd/aether"
+  ],
+  "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+  "client_version": "codex-cli 0.154.0",
+  "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+  "model": "gpt-6-astra",
+  "client_args": [
+    "exec",
+    "--ignore-user-config",
+    "--ignore-rules",
+    "-s",
+    "workspace-write",
+    "--json",
+    "--color",
+    "never",
+    "-C",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository",
+    "-c",
+    "cli_auth_credentials_store=\"file\"",
+    "-c",
+    "approval_policy=\"never\"",
+    "--enable",
+    "multi_agent",
+    "-c",
+    "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+    "-c",
+    "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+    "-m",
+    "gpt-6-astra",
+    "-c",
+    "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-2801326317\"",
+    "-c",
+    "model_reasoning_effort=\"xhigh\"",
+    "-"
+  ],
+  "fixture_root": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository",
+  "fixture_provenance": "Fixture-prepared one-task accepted plan through specification, staged planning coordinator and exact acceptPlanCandidate; no live planning claim.",
+  "skill_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/skills/aether/ant-build/SKILL.md",
+  "support_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/skills/aether/support/aether-colony-build-cycle.md",
+  "raw_events": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/parent-events.jsonl",
+  "raw_stderr": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/parent-stderr.txt",
+  "host_session_id": "01a0ae61-95dc-7ea1-aa27-7789d98f3fa6",
+  "child_id": "01a0ae64-8809-7681-8e20-b0b1c94bf5e6",
+  "child_events": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/sessions/2026/09/17/rollout-2026-09-17T10-03-39-01a0ae64-8809-7681-8e20-b0b1c94bf5e6.jsonl",
+  "attempt_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository/.aether/data/build/phase-1/attempts/attempt-20260917T080108.726306000Z-4299.json",
+  "attempt_id": "attempt-20260917T080108.726306000Z-4299",
+  "run_id": "run-59833297c2af00e0df6fbe64967a72f5",
+  "launch_id": "run-59d85d9f10de5fdb68314dad013c4ee3",
+  "worker_name": "Brick-46",
+  "task_id": "1.1",
+  "prompt_sha256": "sha256:29e5e08650b3081a16accdd440e473434cfb295534150856ff51cc66462b2e52",
+  "result_sha256": "e6a8184e275677c50c8842213f27d46452557868c2b95f28986056ea68bea776",
+  "completion_path": ".aether/data/build/phase-1/attempts/attempt-20260917T080108.726306000Z-4299.completion.json",
+  "artifacts": {
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/baseline-source.txt": "sha256:00b16bac20734f85cc3ca4a4c5e0dc5c5c39b0b8369cb037228e4b6121019418",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/candidate-build-info.txt": "sha256:0bbbd5f8001542bde0fb35d73758addd5c71b3969ba297222d6e5a04d0eb1979",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/child-edit.patch": "sha256:41959337365b4cff59259fa4835e59a85444aab016206b62890f8de3e090082a",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/bind-request.json": "sha256:12d7a0c18b5b8ebdeeaa790940537434cb885699571968fe2e7c98d5d6e98700",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/bind.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/bind.stdout.json": "sha256:1b45797346f98c4d35ca3495c733e92127ebfb910b737288ffd6d562789b0e97",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/child-terminal.jsonl": "sha256:1fd1eacfe7460e1218ae317e1cf38254b13bff0b09e6ce473eaf6f0803e5869d",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/finalize-1.stderr.txt": "sha256:b3f868e85446814e317e63a3be7a8ba45dfb3fb7629d93be225363c23b169772",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/finalize-1.stdout.json": "sha256:96ecf1673674e9305d67474373bfdd1c289f143aeb6b19ca65c22a3344960c07",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/inspect-request.json": "sha256:8e498b191e56bd1f48e6bf362acb7343004d58fa98283074c31d6b81ee4f0b56",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/inspect.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/inspect.stdout.json": "sha256:62f587c1656cd3cecef4d1891eec475fdf587d7159a5ac52cb49a7145540b3c3",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/manifest-envelope.json": "sha256:7aa2fb40cb9b683b7120c53302f2ef4ee09442a287e5f1761a9cae710773f10f",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/manifest.json": "sha256:f5682dbc2f8a123d64e5096f239755bd41e3d5828a2578ce9c54c3823d6fccb3",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/manifest.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/manifest.stdout.json": "sha256:bb9f501db3da5557cfe658f00d9afd0fd2de9b06529475651411e794bfe125b8",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/post-finalize-1-state.json": "sha256:903ab398dd7d29fabed3782e2700ba9cc4f7b6918993c2aa3cd2de055cd77eb0",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/record-request.json": "sha256:54678d6b2e1b7f374793148dfce180cdd543b3dcc02ee01e21206327c5dccd66",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/record.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/record.stdout.json": "sha256:7cb10f61e9cd94b3aa6c02e9691b92f32b0f41f44494ecf12e0a2d63da2523ea",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/reservation.json": "sha256:259a20a99589cb4cc8691264610fb3b9e46b14b8de5bf9c17a98ca4c242bdf2b",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/reserve-request.json": "sha256:84739f47a82e9ad38c21b083973eafb0e9e9aea988bf1e1dadafb5d6e8856cff",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/reserve.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/reserve.stdout.json": "sha256:88d6481ef2918dde9b41ea25b635bb317309cf80634f49ef6862973de96c0bfc",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/stage-request.json": "sha256:8e498b191e56bd1f48e6bf362acb7343004d58fa98283074c31d6b81ee4f0b56",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/stage.stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/coordination/stage.stdout.json": "sha256:085c6c63b7d2edfaea650db535fa88a4de897d1f5095524c09b5118af0dbc449",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.aether/system/codex/aether-builder.toml": "sha256:cf341364da96d81a5cd07a316a0b215d824d5217067402f57b2cd7c3f0a199b9",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/agents/aether-builder.toml": "sha256:cf341364da96d81a5cd07a316a0b215d824d5217067402f57b2cd7c3f0a199b9",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/sessions/2026/09/17/rollout-2026-09-17T10-00-26-01a0ae61-95dc-7ea1-aa27-7789d98f3fa6.jsonl": "sha256:a77e86d7e589cee15668ee88bc4f01fdb2e9f7633a15fd09cb079af1f57a9b57",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/sessions/2026/09/17/rollout-2026-09-17T10-03-39-01a0ae64-8809-7681-8e20-b0b1c94bf5e6.jsonl": "sha256:8084c7bb754beb8d68cf819c332d77a1a5bb8fd2b13b7e4f574aaccd0ed9a7d4",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/skills/aether/ant-build/SKILL.md": "sha256:fdc625bfb688215d063da9e87ce7372620aced687c4ac9fa37115f31e5d51bc4",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/home/.codex/skills/aether/support/aether-colony-build-cycle.md": "sha256:9958dc1f37d567a24bbb88c8255de5c3ecafbfbdb274a7173dc83aae1496c25d",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/parent-events.jsonl": "sha256:1376e469893220dd160f2d9669797a50cf9b14d95f165932e9ffd8a95e926fd3",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/parent-stderr.txt": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/prepared-plan-acceptance.json": "sha256:0f8667e4989de1526b6c14503c8759a6a342b506547f6b7aa708fc747c870ac5",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/prepared-plan-candidate.json": "sha256:0d293d9e77a608c2e277378867523295e050501b5c8bb8bbcb7a442a34d85013",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/prompt.txt": "sha256:f273bd6d08a0a3502fcc810109334a2dbc2c84635d6bd45043225d33fb94e271",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/receipt.json": "sha256:5c3c66bc2f113c097df5df43878d78fec7e463b6777c388e3c7a63a2d9330715",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository/.aether/data/COLONY_STATE.json": "sha256:903ab398dd7d29fabed3782e2700ba9cc4f7b6918993c2aa3cd2de055cd77eb0",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository/.aether/data/build/phase-1/attempts/attempt-20260917T080108.726306000Z-4299.json": "sha256:06652f06dd89e90ee016b90ee9e4e9afa85bc4fc876138822dbe8ec7ef72f961",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository/.aether/native-fixture-coordinate.py": "sha256:63e5fcafeaf4a4cef6d87ba1f3c75012761055c00bff071acee4a5fbe97c3212",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/source-files.json": "sha256:1a9f2f81d0edea32bdd943c3c7a50a9bc2ff3e9abb71aa358ce4e88f6f000ff6",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/source.patch": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/terminal-attempt.json": "sha256:06652f06dd89e90ee016b90ee9e4e9afa85bc4fc876138822dbe8ec7ef72f961",
+    "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-validated.json": "sha256:23f23cbf0ff49086eaa859af228b580aac91874a3a307d2f8bb1e25aeb91c37d"
+  },
+  "observed_tools": [
+    "agent_message",
+    "command_execution",
+    "collab_tool_call",
+    "agent_message",
+    "command_execution",
+    "collab_tool_call"
+  ],
+  "exit_status": 0,
+  "elapsed_seconds": 409.305144667,
+  "temporary_auth_removed": true,
+  "child_checks_passed": true,
+  "child_edit_observed": true,
+  "runtime_credit_observed": true,
+  "parent_substitution": false,
+  "installed_skill_read": true,
+  "installed_support_read": true,
+  "runtime_guide_read": true,
+  "native_spawn_count": 1,
+  "child_terminal_corroborated": true,
+  "source_event_corroborated": true,
+  "bound_host_session_id": "01a0ae61-95dc-7ea1-aa27-7789d98f3fa6",
+  "saved_terminal": {
+    "name": "Brick-46",
+    "caste": "builder",
+    "task_id": "1.1",
+    "status": "completed",
+    "summary": "Fixed Clamp to return low below the lower boundary, high above the upper boundary, and value otherwise. Existing TestClamp first failed on both out-of-range cases and then passed after the apply_patch change. Build and vet passed.",
+    "files_modified": [
+      "clamp.go"
+    ],
+    "task_receipts": [
+      {
+        "task_id": "1.1",
+        "status": "completed",
+        "summary": "Implemented boundary checks in clamp.go through apply_patch. Full existing tests passed with TestClamp executed without filters; build and vet also passed.",
+        "files_created": [],
+        "files_modified": [
+          "clamp.go"
+        ],
+        "tests_written": [],
+        "handoff": {
+          "changed_files": [
+            "clamp.go"
+          ],
+          "commands_run": [
+            "go test ./... -json -count=1",
+            "go build ./...",
+            "go vet ./...",
+            "git diff -- clamp.go clamp_test.go go.mod"
+          ],
+          "verification_status": "pass",
+          "assumptions": [
+            "The existing fixture defines the required behavior for ordered low and high bounds."
+          ],
+          "next_worker_instructions": [
+            "Submit the actual native worker evidence for runtime reconciliation."
+          ],
+          "do_not_repeat": [
+            "Do not modify clamp_test.go or go.mod.",
+            "Do not commit, recruit, publish, or run continue."
+          ],
+          "freshness": "2026-09-17T08:05:28Z"
+        }
+      }
+    ],
+    "usage": {},
+    "handoff": {
+      "changed_files": [
+        "clamp.go"
+      ],
+      "commands_run": [
+        "cat AGENTS.md",
+        "cat clamp.go",
+        "cat clamp_test.go",
+        "go test ./... -json -count=1",
+        "git status --short",
+        "go build ./...",
+        "go vet ./...",
+        "git diff -- clamp.go clamp_test.go go.mod",
+        "date -u +%Y-%m-%dT%H:%M:%SZ"
+      ],
+      "verification_status": "pass",
+      "assumptions": [
+        "The existing fixture defines the required behavior for ordered low and high bounds."
+      ],
+      "next_worker_instructions": [
+        "Submit the actual native worker evidence for runtime reconciliation."
+      ],
+      "do_not_repeat": [
+        "Do not modify clamp_test.go or go.mod.",
+        "Do not commit, recruit, publish, or run continue."
+      ],
+      "freshness": "2026-09-17T08:05:28Z"
+    }
+  },
+  "saved_source_event_sha256": "cc96ab72163ccce69c36cc335c4c09f3bec1a9a72be2eac15ca964cd9cbcc733",
+  "saved_source_event_id": "msg_0e10d2b1ed63a8eb016aab9f4e319487d28540b517132826f2",
+  "baseline_source": "package nativefixture\n\nfunc Clamp(value, low, high int) int { return value }\n",
+  "final_source": "package nativefixture\n\nfunc Clamp(value, low, high int) int {\n\tif value < low {\n\t\treturn low\n\t}\n\tif value > high {\n\t\treturn high\n\t}\n\treturn value\n}\n",
+  "coordinator_path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/repository/.aether/native-fixture-coordinate.py",
+  "coordinator_sha256": "sha256:63e5fcafeaf4a4cef6d87ba1f3c75012761055c00bff071acee4a5fbe97c3212",
+  "resume_exit_status": 0,
+  "resume_worker_stable": false,
+  "resume_no_spawn": false,
+  "resume_inspect_observed": false,
+  "finalization_replay_stable": false,
+  "empty_result_refused": true,
+  "baseline_tests_sha256": "sha256:c33e1b179db774c7d36bf6b94363e9135e8a29249cb784bbe5dfb656d026327a",
+  "baseline_module_sha256": "sha256:f892ba4a151fa59969ba131fcb5d2700c4daf3c508e0e0650a011a66ca8b903f",
+  "launch_message_encoding": "host-encrypted",
+  "prompt_delivery_verification": "Exact plaintext unavailable in exported launch event; runtime-issued prompt bytes/digest retained. Full context delivery qualification remains Plan 03/07.",
+  "validation_revision": "ad2411c7243d986cfd86fe96a7f69e06e654bf59",
+  "validation_original_receipt": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-1381229788/receipt.json",
+  "validation_original_sha256": "sha256:5c3c66bc2f113c097df5df43878d78fec7e463b6777c388e3c7a63a2d9330715",
+  "artifact_index": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan01-repair-20260917T075942Z/native-ordinary-validated.json",
+    "sha256": "23f23cbf0ff49086eaa859af228b580aac91874a3a307d2f8bb1e25aeb91c37d",
+    "entries": 1177
+  },
+  "proof_scope": "Prepared accepted one-task fixture; actual installed ant-build host and named Builder execution. Original candidate capture retained; later test-only validator fixes independently replay raw evidence. Not live planning, independent Watcher, general recovery, or Phase205 owner acceptance."
+}

@@ -9,10 +9,12 @@ ownership:
   manifest_authority: "Go runtime (aether build --plan-only returns plan-only JSON without dispatching workers)"
   worker_conductor: "Wrapper (spawns workers via platform Agent tool, manages ceremony)"
   state_mutator: "Go runtime (build-finalize commits results)"
+  coherent_jobs: "Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits."
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
   guide: "aether command-guide build --platform codex"
+  native_context: "New child-fetch/v1 attempts require the actual bound child to read full Go context, separately ACK fetched IDs/hash, and retain source-bound context_fetched observations before successful terminal acceptance. Saved legacy attempts keep their original delivery protocol. See installed build support and the Codex runtime guide."
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
 wrapper_additions:
   pre_build: |
@@ -29,13 +31,34 @@ wrapper_additions:
     4. Save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
     5. If provider dispatch is unavailable, surface only the Go-owned structured availability message.
     6. Each dispatch now routinely carries `brief_path` -- a repo-display path to a file holding the composed brief, byte for byte -- instead of the inline `dispatch.brief` text: the runtime writes the brief to disk and reports the path, avoiding Read-tool long-line truncation on 6-22KB briefs. Read `brief_path` verbatim. Inline `dispatch.brief` appears only in the rare case where the runtime could not write the file for that dispatch -- honor it verbatim when it is the only one present.
+  coherent_jobs: |
+    Several related tasks become one job for one worker:
+    1. A grouping is a proposal, never a decision. `--job-proposal` is repeatable -- one JSON object per group with `name`, `task_ids`, `owner_caste`, `relationship`, `benefit`, and optional `owner_reason`. A reason must name both the relationship and the benefit; "these are related" is not a reason.
+    2. With no proposal the runtime still groups tasks joined by a dependency chain or by meaningful shared implementation files. Incidental overlap through a README, changelog, or dependency manifest never joins unrelated work.
+    3. Read `job_decisions` and relay it plainly. Each entry's `status` is `accepted` or `refused`; a refusal names `offending_task_id`, `dependency_id`, and the `replacement_job_names` the runtime substituted. Only the refused group is repaired -- every other proposal is kept, and the phase never falls back to one worker per task.
+    4. Each dispatch carries `job_name`, `job_reason`, `job_source` (`queen`, `automatic`, `single`, or `retry`) and `covered_task_ids` in order. Render them; never edit them.
+    5. A real dependency cycle blocks dispatch for the whole phase, names the cycle, and names the plan repair. Surface it and stop.
+  task_receipts: |
+    Completion evidence is per task, and credit is the runtime's to grant:
+    1. `covered_task_ids` on a dispatch is that worker's assignment scope, not credit for it.
+    2. A worker that finishes only part of its job submits a `task_receipts` array -- one entry per proved task with `task_id`, `status`, `summary`, `files_created`, `files_modified`, `tests_written`, and its own `handoff`. A task with no receipt is unfinished; never infer completion because a related file changed.
+    3. An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`. Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
+    4. When the finalizer returns `recovery_job`, read `unfinished_task_ids`, `parent_attempt_id`, `retry_attempt_id`, and `recovery_command`. Relay `recovery_command`; the recovery job is appended and parent-linked, so proven work is never redone or overwritten.
+    5. In worktree mode one job takes one worktree, one branch, and one merge-back. The runtime admits receipts, syncs only what it admitted back to the project root, then credits. Uncredited edits stay on a preserved branch -- neither synced nor destroyed.
+  team_checkin: |
+    `checkin_requested` is the runtime's decision and `checkin_reason` says why; never infer either from the flags passed:
+    1. `one_worker_fast_path` -- one worker, nothing left for the owner to decide. Render `checkin_summary` as a short non-blocking note and continue. The note is required; silence is not the fast path.
+    2. `non_interactive` -- autopilot or `--no-checkin`. Skip the stage entirely.
+    3. `explicit_checkin`, `pending_owner_decision`, or `default_pause` -- run the full blocking check-in, including the forced-reviewer waiver flow.
+    Before the blocking approval choices: For a blocking check-in only, before asking the owner to approve the team, run `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>`. Display `result.approval_card` verbatim in a fenced text block in the visible conversation immediately before the approval choices; a collapsed tool result or a generic sentence about the team is not enough. The card names each worker, its assignment and wave, and the required reviewers that run afterward. Keep the runtime roster unchanged. If an older runtime has no `approval_card`, render the visual team-checkin ceremony and relay its roster visibly before asking. Read `result.optional`, `result.waived`, and `result.waive_commands` for the existing trim/decline flow.
+    4. `--checkin` is the owner override that forces the pause on a decision-free one-worker build. `--checkin` with `--no-checkin` is a named conflict refused before any side effect.
   post_build: |
     Close with a short colony-language synthesis:
     1. Stage the accepted temp packet with `aether build-completion-stage <phase> --completion-file <temp completion>` and finalize only the returned Go-owned `completion_path`.
     2. Run the visual closeout command with that durable packet; use its next-step line as the source of truth.
     3. Summarize what moved forward and which workers/castes actually ran.
     4. Note only the most relevant signal or risk.
-    5. End with the user's choice, never an auto-advance: ask via AskUserQuestion — "Verify and advance now" (runs `/ant-continue`, recommended), "Stop here — safe to clear" (only offerable when the closeout's Handoff section confirmed the handoff saved), or "Add steering first" (`/ant-focus` / `/ant-redirect`). Run nothing until the user picks. Autopilot is exempt (runtime-owned auto-advance).
+    5. End with the user's choice, never an auto-advance: ask via AskUserQuestion — "Verify and advance now" (runs `/ant-continue`, recommended), "Stop here — safe to clear" (only offerable when the closeout's Handoff section confirmed the handoff saved), "Add steering first" (`/ant-focus` / `/ant-redirect`), or — only when `aether handoff-decisions` reports unanswered worker questions — "Answer the workers' open questions first", recording answers via `aether decision-answer`. Run nothing until the user picks. Autopilot is exempt (runtime-owned auto-advance).
   stage_skeleton: |
     Every non-exempt stage in build.md follows one order: a colony beat, then
     `**Purpose:**`, then `**Reads:**`, then `**Spawns:**` where the stage

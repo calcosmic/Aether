@@ -1,0 +1,13 @@
+{
+  "schema_version": "aether-native-delivery-source-feasibility/v1",
+  "status": "required_plaintext_source_unavailable_in_owned_capture",
+  "report": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/plaintext-0155-20260918T210835Z-qyvsxpeh/result.json",
+    "sha256": "sha256:3a34e35706b16574aeacf2f10d4965fcf86fac3a965d6ad430ea9206466174f9"
+  },
+  "client": "Codex CLI 0.155.0",
+  "scope": "Only the owned immutable cancellation fixture from plan26-live-retry was inspected; no runtime/model/auth access or historical verdict changes.",
+  "finding": "Actual spawn/send and child inbound ciphertext correlate to the same child; full saved runtime prompt is absent from attributable raw message plaintext. WAL-aware thread history has no child initial userMessage or full collaboration prompt. No scoped-answer context ACK is present in this cancellation fixture.",
+  "qualification_credit": false,
+  "limitation": "Bounded source finding, not a universal impossibility claim; ciphertext correlation proves transport identity only."
+}

@@ -72,8 +72,8 @@ func TestCeremonySpawnPlanExplainsQueenSpawnBudget(t *testing.T) {
 			"reason":              "standard build",
 			"required_castes":     []string{"builder", "watcher"},
 			"skipped_castes":      []string{"architect"},
-			"pruned_reasons":      map[string]string{"architect": "not spawned; outside Queen spawn budget 4 (standard build)"},
-			"selected_reasons":    map[string]string{"builder": "selected within Queen spawn budget 4 (standard build)"},
+			"pruned_reasons":      map[string]string{"architect": "not sent -- this phase's team is capped at 4 workers (standard build), and this pick did not make the cut"},
+			"selected_reasons":    map[string]string{"builder": "there was room for it in this phase's 4-worker team (standard build)"},
 		},
 	}
 	manifestFile := writeCeremonyTestJSON(t, map[string]interface{}{
@@ -90,7 +90,7 @@ func TestCeremonySpawnPlanExplainsQueenSpawnBudget(t *testing.T) {
 		"Required: builder, watcher",
 		"Not spawned:",
 		"architect",
-		"not spawned",
+		"not sent",
 	} {
 		if !strings.Contains(visual, want) {
 			t.Fatalf("spawn budget ceremony missing %q\n%s", want, visual)
@@ -115,7 +115,7 @@ func TestCeremonySpawnPlanRendersQueenFrameAndSkillCards(t *testing.T) {
 			"worker_count":    3,
 			"selected_castes": 2,
 			"selected_reasons": map[string]string{
-				"builder": "selected within Queen spawn budget 4 (implementation risk)",
+				"builder": "there was room for it in this phase's 4-worker team (implementation risk)",
 				"watcher": "required for verification",
 			},
 		},
@@ -162,7 +162,7 @@ func TestCeremonySpawnPlanRendersQueenFrameAndSkillCards(t *testing.T) {
 		"Brick-79: build-discipline, typescript (1 colony, 1 domain)",
 		"Watch-64: test-writer",
 		"aether-builder",
-		"selected within Queen spawn budget",
+		"there was room for it in this phase's 4-worker team",
 		"Skills:2",
 	} {
 		if !strings.Contains(visual, want) {

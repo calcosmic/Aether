@@ -9,17 +9,34 @@ import (
 
 // PendingDecision represents a pending decision that needs resolution.
 type PendingDecision struct {
-	ID          string `json:"id"`
-	Type        string `json:"type,omitempty"`
-	Description string `json:"description"`
-	Phase       *int   `json:"phase,omitempty"`
-	Source      string `json:"source,omitempty"`
-	SessionID   string `json:"session_id,omitempty"`
-	GoalHash    string `json:"goal_hash,omitempty"`
-	Resolution  string `json:"resolution,omitempty"`
-	Resolved    bool   `json:"resolved"`
-	CreatedAt   string `json:"created_at"`
-	ResolvedAt  string `json:"resolved_at,omitempty"`
+	NativeBinding *codexNativeDecisionBinding `json:"native_binding,omitempty"`
+	ID            string                      `json:"id"`
+	Type          string                      `json:"type,omitempty"`
+	Description   string                      `json:"description"`
+	Phase         *int                        `json:"phase,omitempty"`
+	Source        string                      `json:"source,omitempty"`
+	SessionID     string                      `json:"session_id,omitempty"`
+	GoalHash      string                      `json:"goal_hash,omitempty"`
+	Resolution    string                      `json:"resolution,omitempty"`
+	Resolved      bool                        `json:"resolved"`
+	CreatedAt     string                      `json:"created_at"`
+	ResolvedAt    string                      `json:"resolved_at,omitempty"`
+	// Acknowledged, AcknowledgedAt, and RecoveryCommand belong to the
+	// blocker-flag entries (colony.FlagEntry) that share this file. Modeled
+	// so the strict lifecycle decoder accepts flag entries and rewrites
+	// never drop them.
+	Acknowledged    bool   `json:"acknowledged,omitempty"`
+	AcknowledgedAt  string `json:"acknowledged_at,omitempty"`
+	RecoveryCommand string `json:"recovery_command,omitempty"`
+	// AttemptID and WaiverCapabilitySHA256 bind an owner-only forced-reviewer
+	// decline to the exact build attempt whose check-in card created it. The
+	// raw single-use capability is shown only on that card and is never stored.
+	AttemptID              string `json:"attempt_id,omitempty"`
+	WaiverCapabilitySHA256 string `json:"waiver_capability_sha256,omitempty"`
+	// Repeated card representations may issue another raw capability without
+	// invalidating one already shown. Only the additional hashes are persisted;
+	// raw capabilities still exist solely in the rendered owner commands.
+	WaiverCapabilitySHA256s []string `json:"waiver_capability_sha256s,omitempty"`
 	// HardConstraint marks a clarification whose answer must become a
 	// REDIRECT signal (a hard "never do this"). Typed per the
 	// prose-to-control-flow decision — the legacy ":hard" source suffix is
@@ -30,10 +47,48 @@ type PendingDecision struct {
 	// wrapper-composed questions — a question that cannot cite its basis is
 	// the canned-question problem wearing a new coat.
 	Grounding string `json:"grounding,omitempty"`
+	// CheckpointKey and the fields below carry durable owner-only work. They
+	// are optional so older pending-decision records remain wire-compatible.
+	// Type distinguishes queueable visual/runtime checks from blocker flags.
+	CheckpointKey string `json:"checkpoint_key,omitempty"`
+	// CheckpointCompatibilityKey is stable for the same logical owner question
+	// across work generations. It exists only to suppress the legacy seal
+	// projection; authorization always binds CheckpointKey, which includes the
+	// immutable WorkGeneration digest.
+	CheckpointCompatibilityKey string `json:"checkpoint_compatibility_key,omitempty"`
+	// The remaining provenance fields make the exact build/verification
+	// generation auditable without persisting raw capabilities or evidence
+	// bytes. WorkGeneration commits to the other three fields together.
+	CheckpointAttemptID              string `json:"checkpoint_attempt_id,omitempty"`
+	CheckpointExecutionBindingSHA256 string `json:"checkpoint_execution_binding_sha256,omitempty"`
+	CheckpointEvidenceSHA256         string `json:"checkpoint_evidence_sha256,omitempty"`
+	WorkGeneration                   string `json:"work_generation,omitempty"`
+	// CheckpointCapability is returned only to the immediate owner-facing
+	// renderer. Only SHA-256 hashes survive a JSON round trip.
+	CheckpointCapability        string   `json:"-"`
+	CheckpointCapabilitySHA256  string   `json:"checkpoint_capability_sha256,omitempty"`
+	CheckpointCapabilitySHA256s []string `json:"checkpoint_capability_sha256s,omitempty"`
+	Criterion                   string   `json:"criterion,omitempty"`
+	TaskID                      string   `json:"task_id,omitempty"`
+	Evidence                    []string `json:"evidence,omitempty"`
+	SourcePaths                 []string `json:"source_paths,omitempty"`
+	// Replan metadata binds an accumulated overnight planning note to the
+	// exact accepted plan revision that its evidence follows. These fields are
+	// optional so pre-198.3 decision files continue to decode unchanged.
+	PlanRevisionID        string   `json:"plan_revision_id,omitempty"`
+	PlanRevisionAt        string   `json:"plan_revision_at,omitempty"`
+	LessonCount           int      `json:"lesson_count,omitempty"`
+	FirstCheckpointPhase  int      `json:"first_checkpoint_phase,omitempty"`
+	LatestCheckpointPhase int      `json:"latest_checkpoint_phase,omitempty"`
+	LessonReferences      []string `json:"lesson_references,omitempty"`
 }
 
 // PendingDecisionFile is the JSON structure for pending-decisions.json.
 type PendingDecisionFile struct {
+	// Version is written by the blocker-flag lifecycle, which shares this
+	// file (see colony.FlagsFile). Modeled here so the strict lifecycle
+	// decoder accepts the real on-disk shape and rewrites preserve it.
+	Version   string            `json:"version,omitempty"`
 	Decisions []PendingDecision `json:"decisions"`
 }
 
@@ -129,6 +184,23 @@ var pendingDecisionListCmd = &cobra.Command{
 			if filterType != "" && d.Type != filterType {
 				continue
 			}
+			// Forced-reviewer waivers are observable here, but their attempt
+			// and capability bindings are implementation details of the
+			// owner-only authorization path. The generic list must not expose
+			// those values to callers that cannot legitimately use them.
+			if d.Source == "forced-reviewer-waiver" {
+				d.AttemptID = ""
+				d.WaiverCapabilitySHA256 = ""
+				d.WaiverCapabilitySHA256s = nil
+			}
+			// Checkpoint identity and evidence remain observable, but capability
+			// hashes are verifier material, not generic-list output. Raw
+			// capabilities are already transient (json:"-").
+			if isAutopilotCheckpointType(d.Type) {
+				d.CheckpointCapability = ""
+				d.CheckpointCapabilitySHA256 = ""
+				d.CheckpointCapabilitySHA256s = nil
+			}
 			filtered = append(filtered, d)
 		}
 
@@ -180,6 +252,23 @@ var pendingDecisionResolveCmd = &cobra.Command{
 			if file.Decisions[i].ID == id {
 				if !pendingDecisionMatchesScope(file.Decisions[i], scope) {
 					outputError(1, fmt.Sprintf("decision %q is stale for the current goal/session", id), nil)
+					return nil
+				}
+				// This generic command has no owner capability, build-attempt
+				// binding, or dispatch-window check. Letting it resolve a
+				// protected row would preserve that row's authentic metadata and
+				// manufacture a valid waiver. The capability-aware
+				// decision-answer path is the only resolver for this source.
+				if isCodexNativeDecision(file.Decisions[i]) {
+					outputError(1, "native questions require decision-answer --native-request with the exact saved binding", nil)
+					return nil
+				}
+				if file.Decisions[i].Source == "forced-reviewer-waiver" {
+					outputError(1, "forced reviewer decisions must be answered with decision-answer and the displayed capability", nil)
+					return nil
+				}
+				if isAutopilotCheckpointType(file.Decisions[i].Type) {
+					outputError(1, "owner checkpoints must be answered with decision-answer and the displayed checkpoint capability", nil)
 					return nil
 				}
 				file.Decisions[i].Resolved = true

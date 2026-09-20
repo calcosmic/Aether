@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,9 +14,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 type stagedReleaseCandidate struct {
@@ -27,9 +30,13 @@ type stagedReleaseCandidate struct {
 	binary      string
 }
 
+type packedNPMConsumer struct {
+	dir    string
+	script string
+}
+
 func TestPackedNPMReleaseCandidateContract(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		t.Skipf("npm bootstrap does not support %s", runtime.GOOS)
 	}
@@ -51,13 +58,16 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		t.Fatalf("npm version %q does not match source version %q", npmVersion, version)
 	}
 	candidate := stageReleaseCandidate(t, sourceRoot, version)
+	t.Logf("candidate version=%s binary_sha256=%s package_sha256=%s archive_sha256=%s", version, testFileSHA256(t, candidate.binary), testFileSHA256(t, candidate.npmPackage), candidate.archiveHash)
 	oldBinary := buildReleaseCandidateBinary(t, sourceRoot, t.TempDir(), "0.9.0")
+	consumer := installPackedNPMCandidate(t, candidate.npmPackage)
 
 	t.Run("packed npm installs the matching staged archive", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode != 0 {
 			t.Fatalf("packed bootstrap failed: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -71,9 +81,41 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(home, ".codex", "agents", "aether-builder.toml")); err != nil {
 			t.Fatalf("packed bootstrap did not install platform assets: %v", err)
 		}
+
+		installedFiles := map[string]string{"binary": testFileSHA256(t, installed)}
+		if err := filepath.Walk(home, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(home, path)
+			if err != nil {
+				return err
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				target, err := os.Readlink(path)
+				if err != nil {
+					return err
+				}
+				installedFiles[rel] = "symlink:" + target
+			} else {
+				installedFiles[rel] = testFileSHA256(t, path)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		installedJSON, err := json.Marshal(installedFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("disposable installed inventory: %s", installedJSON)
 	})
 
 	t.Run("checksum failure preserves the previous binary", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, strings.Repeat("0", 64))
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
@@ -81,7 +123,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		mustCopyExecutable(t, oldBinary, installed)
 		before := testFileSHA256(t, installed)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode == 0 || !strings.Contains(result.Stderr, "Checksum mismatch") {
 			t.Fatalf("bad checksum was not rejected: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -94,6 +136,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("wrong version archive preserves the previous binary", func(t *testing.T) {
+		t.Parallel()
 		wrong := stageReleaseArchive(t, version, oldBinary)
 		wrong.npmPackage = candidate.npmPackage
 		server := serveStagedRelease(t, wrong, wrong.archiveHash)
@@ -103,7 +146,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		mustCopyExecutable(t, oldBinary, installed)
 		before := testFileSHA256(t, installed)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode == 0 || !strings.Contains(result.Stderr, "Downloaded binary version mismatch") {
 			t.Fatalf("wrong-version archive was not rejected: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -113,6 +156,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("retry recovers the state left by interrupted activation", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
@@ -120,7 +164,7 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 		rollback := installed + ".previous"
 		mustCopyExecutable(t, oldBinary, rollback)
 
-		result := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		result := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if result.ExitCode != 0 {
 			t.Fatalf("retry after interrupted activation failed: exit=%d\nstdout:\n%s\nstderr:\n%s", result.ExitCode, result.Stdout, result.Stderr)
 		}
@@ -133,10 +177,11 @@ func TestPackedNPMReleaseCandidateContract(t *testing.T) {
 	})
 
 	t.Run("packed candidate migrates and rolls back an n-1 colony without local data loss", func(t *testing.T) {
+		t.Parallel()
 		server := serveStagedRelease(t, candidate, candidate.archiveHash)
 		home := filepath.Join(t.TempDir(), "home")
 		dest := filepath.Join(t.TempDir(), "bin")
-		bootstrap := runPackedBootstrap(t, candidate.npmPackage, home, server.URL, "--dest", dest, "--", "version")
+		bootstrap := runPackedBootstrapScript(t, consumer, home, server.URL, "--dest", dest, "--", "version")
 		if bootstrap.ExitCode != 0 {
 			t.Fatalf("prepare packed migration candidate: exit=%d\nstdout:\n%s\nstderr:\n%s", bootstrap.ExitCode, bootstrap.Stdout, bootstrap.Stderr)
 		}
@@ -344,7 +389,10 @@ func buildReleaseCandidateBinary(t *testing.T, sourceRoot, outputRoot, version s
 
 func packNPMCandidate(t *testing.T, sourceRoot, outputRoot string) string {
 	t.Helper()
-	command := exec.Command("npm", "pack", "--silent", "--pack-destination", outputRoot)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "npm", "pack", "--silent", "--pack-destination", outputRoot)
+	command.Env = isolatedPackedNPMEnv(outputRoot)
 	command.Dir = filepath.Join(sourceRoot, "npm")
 	if combined, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("pack npm release candidate: %v\n%s", err, combined)
@@ -402,18 +450,44 @@ func dropEnvKeys(env []string, keys ...string) []string {
 
 func runPackedBootstrap(t *testing.T, packagePath, home, releaseURL string, args ...string) cliBlackBoxResult {
 	t.Helper()
+	return runPackedBootstrapScript(t, installPackedNPMCandidate(t, packagePath), home, releaseURL, args...)
+}
+
+// installPackedNPMCandidate installs the immutable packed candidate once for
+// callers that exercise several independent bootstrap outcomes. The node
+// wrapper only reads this consumer tree; each invocation below still receives
+// its own HOME and destination, where all runtime state is written.
+func installPackedNPMCandidate(t *testing.T, packagePath string) packedNPMConsumer {
+	t.Helper()
 	consumer := filepath.Join(t.TempDir(), "consumer")
+	return installPackedNPMCandidateAt(t, packagePath, consumer)
+}
+
+func installPackedNPMCandidateAt(t *testing.T, packagePath, consumer string) packedNPMConsumer {
+	t.Helper()
 	if err := os.MkdirAll(consumer, 0755); err != nil {
 		t.Fatalf("create npm consumer: %v", err)
 	}
-	install := exec.Command("npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", packagePath)
+	// The empty consumer has no package boundary yet. An explicit prefix keeps
+	// npm from discovering and changing a project above the test's temporary root.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	install := exec.CommandContext(ctx, "npm", "install", "--prefix", consumer, "--ignore-scripts", "--no-audit", "--no-fund", packagePath)
+	install.Env = isolatedPackedNPMEnv(filepath.Dir(consumer))
 	install.Dir = consumer
 	if combined, err := install.CombinedOutput(); err != nil {
 		t.Fatalf("install packed npm candidate: %v\n%s", err, combined)
 	}
-	script := filepath.Join(consumer, "node_modules", "aether-colony", "bin", "aether.js")
-	command := exec.Command("node", append([]string{script}, args...)...)
-	command.Dir = consumer
+	return packedNPMConsumer{
+		dir:    consumer,
+		script: filepath.Join(consumer, "node_modules", "aether-colony", "bin", "aether.js"),
+	}
+}
+
+func runPackedBootstrapScript(t *testing.T, consumer packedNPMConsumer, home, releaseURL string, args ...string) cliBlackBoxResult {
+	t.Helper()
+	command := exec.Command("node", append([]string{consumer.script}, args...)...)
+	command.Dir = consumer.dir
 	command.Env = replaceProcessEnv(dropEnvKeys(os.Environ(), "AETHER_HUB_DIR"), map[string]string{
 		"AETHER_OUTPUT_MODE":      "json",
 		"AETHER_RELEASE_BASE_URL": releaseURL,
@@ -540,4 +614,120 @@ func checksumForReleaseArtifact(t *testing.T, checksums []byte, artifact string)
 	}
 	t.Fatalf("checksum for %s not found", artifact)
 	return ""
+}
+
+// npm must never inherit a real user's cache/config or discover their ancestor
+// project. Each invocation gets a disposable child environment, not Setenv.
+func isolatedPackedNPMEnv(root string) []string {
+	// Ambient npm_config_prefix/global can redirect even the disposable negative
+	// control. Remove every npm override before supplying the controlled map.
+	base := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(strings.ToLower(key), "npm_config_") {
+			continue
+		}
+		base = append(base, entry)
+	}
+	return replaceProcessEnv(base, map[string]string{
+		"HOME":                    filepath.Join(root, "npm-home"),
+		"USERPROFILE":             filepath.Join(root, "npm-home"),
+		"npm_config_global":       "false",
+		"npm_config_cache":        filepath.Join(root, "npm-cache"),
+		"npm_config_userconfig":   filepath.Join(root, "absent-npmrc"),
+		"npm_config_globalconfig": filepath.Join(root, "absent-global-npmrc"),
+		"npm_config_offline":      "true",
+	})
+}
+
+func TestPackedNPMAncestorIsolation(t *testing.T) {
+	if _, err := exec.LookPath("npm"); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	ambient := filepath.Join(root, "ambient-escape")
+	t.Setenv("NPM_CONFIG_PREFIX", ambient)
+	t.Setenv("npm_config_global", "true")
+	t.Cleanup(func() {
+		if _, err := os.Stat(ambient); !os.IsNotExist(err) {
+			t.Errorf("ambient npm prefix was used: %v", err)
+		}
+	})
+	packagePath := packNPMCandidate(t, findTestModuleRoot(t), root)
+	for _, prefixed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("prefix=%t", prefixed), func(t *testing.T) {
+			ancestor := filepath.Join(root, fmt.Sprintf("ancestor-%t", prefixed))
+			consumer := filepath.Join(ancestor, "empty", "consumer")
+			if err := os.MkdirAll(consumer, 0755); err != nil {
+				t.Fatal(err)
+			}
+			modules := filepath.Join(ancestor, "node_modules", "ancestor-sentinel")
+			if err := os.MkdirAll(modules, 0755); err != nil {
+				t.Fatal(err)
+			}
+			files := map[string]string{
+				"package.json":                        `{"name":"disposable-ancestor","version":"1.0.0","private":true}`,
+				"package-lock.json":                   `{"name":"disposable-ancestor","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"disposable-ancestor","version":"1.0.0"}}}`,
+				"node_modules/ancestor-sentinel/keep": "ancestor bytes must survive\n",
+			}
+			for path, data := range files {
+				if err := os.WriteFile(filepath.Join(ancestor, path), []byte(data), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			inventory := func() map[string]string {
+				result := map[string]string{}
+				for _, path := range []string{"package.json", "package-lock.json", "node_modules"} {
+					err := filepath.Walk(filepath.Join(ancestor, path), func(p string, info os.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if info.IsDir() {
+							return nil
+						}
+						rel, _ := filepath.Rel(ancestor, p)
+						if info.Mode()&os.ModeSymlink != 0 {
+							target, err := os.Readlink(p)
+							if err != nil {
+								return err
+							}
+							result[rel] = "link:" + target
+						} else {
+							result[rel] = testFileSHA256(t, p)
+						}
+						return nil
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				return result
+			}
+			before := inventory()
+			if prefixed {
+				installed := installPackedNPMCandidateAt(t, packagePath, consumer)
+				if _, err := os.Stat(installed.script); err != nil {
+					t.Fatal(err)
+				}
+				if after := inventory(); !reflect.DeepEqual(before, after) {
+					t.Fatalf("prefixed npm changed ancestor: before=%v after=%v", before, after)
+				}
+			} else {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				command := exec.CommandContext(ctx, "npm", "install", "--ignore-scripts", "--no-audit", "--no-fund", packagePath)
+				command.Dir, command.Env = consumer, isolatedPackedNPMEnv(root)
+				if out, err := command.CombinedOutput(); err != nil {
+					t.Fatalf("disposable negative control: %v\n%s", err, out)
+				}
+				if reflect.DeepEqual(before, inventory()) {
+					t.Fatal("negative control did not reproduce ancestor mutation")
+				}
+				if _, err := os.Stat(filepath.Join(ancestor, "node_modules", "aether-colony", "bin", "aether.js")); err != nil {
+					t.Fatalf("negative control did not install in disposable ancestor: %v", err)
+				}
+			}
+			t.Logf("explicit prefix=%t ancestor=%s before=%v after=%v", prefixed, ancestor, before, inventory())
+		})
+	}
 }

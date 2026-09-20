@@ -132,7 +132,7 @@ The Queen selects a named pattern at build start based on the phase description.
 {
   "ant_name": "Queen",
   "caste": "queen",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What was accomplished",
   "phases_completed": [],
   "phases_remaining": [],

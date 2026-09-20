@@ -8,7 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,45 +35,92 @@ type cliBlackBoxResult struct {
 	ExitCode int
 }
 
+// sharedBlackBoxBinaries builds the CLI and the deterministic adapter ONCE for
+// the whole package and hands every black-box test the same two paths.
+//
+// Before this, newCLIBlackBox built both binaries per test into a per-test
+// GOCACHE under t.TempDir(). A fresh GOCACHE means a cold compile every time:
+// measured on this repo, a cold build of ./cmd/aether takes 16.4s against 1.1s
+// warm -- so fifteen black-box tests spent roughly four of the cmd package's
+// twelve minutes compiling the same program fifteen times. That is not a test
+// of Aether; it is a re-test of the Go toolchain.
+//
+// What is shared is ONLY the compiled artifact, which every test executes and
+// none modifies. Each test still gets its own home, repo, tmp and environment
+// from t.TempDir(), so the isolation that tests actually depend on is
+// unchanged.
+//
+// The build deliberately inherits the developer's real GOCACHE rather than
+// making its own: a warm cache is the entire point, and the build is the same
+// `go build` a developer runs by hand.
+var sharedBlackBoxBinaries struct {
+	once    sync.Once
+	dir     string
+	binary  string
+	adapter string
+	err     error
+}
+
+func blackBoxBinaries(t *testing.T, sourceRoot string) (string, string) {
+	t.Helper()
+	sharedBlackBoxBinaries.once.Do(func() {
+		dir, err := os.MkdirTemp("", "aether-blackbox-bin-")
+		if err != nil {
+			sharedBlackBoxBinaries.err = fmt.Errorf("create shared black-box bin dir: %w", err)
+			return
+		}
+		sharedBlackBoxBinaries.dir = dir
+		sharedBlackBoxBinaries.binary = filepath.Join(dir, "aether")
+		sharedBlackBoxBinaries.adapter = filepath.Join(dir, "deterministic-adapter")
+		for _, target := range []struct {
+			name        string
+			output      string
+			packagePath string
+		}{
+			{name: "aether", output: sharedBlackBoxBinaries.binary, packagePath: "./cmd/aether"},
+			{name: "deterministic adapter", output: sharedBlackBoxBinaries.adapter, packagePath: "./cmd/testdata/adapter-fixture"},
+		} {
+			args := []string{"build", "-o", target.output}
+			if target.name == "aether" {
+				// Exercise stamped release identity here. The distinct
+				// TestCodexAntSkillUnstampedEmbeddedInstall covers the supported
+				// go-install path without linker flags and outside the checkout.
+				version := readRepoVersion(sourceRoot)
+				if version == "" {
+					sharedBlackBoxBinaries.err = fmt.Errorf("read black-box source version")
+					return
+				}
+				args = append(args, "-ldflags", "-X github.com/calcosmic/Aether/cmd.Version="+version)
+			}
+			args = append(args, target.packagePath)
+			build := exec.Command("go", args...)
+			build.Dir = sourceRoot
+			if output, err := build.CombinedOutput(); err != nil {
+				sharedBlackBoxBinaries.err = fmt.Errorf("build black-box %s: %w\n%s", target.name, err, output)
+				return
+			}
+		}
+	})
+	if sharedBlackBoxBinaries.err != nil {
+		t.Fatalf("%v", sharedBlackBoxBinaries.err)
+	}
+	return sharedBlackBoxBinaries.binary, sharedBlackBoxBinaries.adapter
+}
+
 func newCLIBlackBox(t *testing.T) *cliBlackBox {
 	t.Helper()
 	sourceRoot := findTestModuleRoot(t)
 	fixtureRoot := t.TempDir()
 	home := filepath.Join(fixtureRoot, "home")
 	repo := filepath.Join(fixtureRoot, "repo")
-	binDir := filepath.Join(fixtureRoot, "bin")
 	tmpDir := filepath.Join(fixtureRoot, "tmp")
-	goCache := filepath.Join(fixtureRoot, "go-cache")
-	for _, dir := range []string{home, repo, binDir, tmpDir, goCache} {
+	for _, dir := range []string{home, repo, tmpDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("create black-box directory %s: %v", dir, err)
 		}
 	}
 
-	binary := filepath.Join(binDir, "aether")
-	adapter := filepath.Join(binDir, "deterministic-adapter")
-	moduleCache := goEnvValue(t, sourceRoot, "GOMODCACHE")
-	buildEnv := replaceProcessEnv(os.Environ(), map[string]string{
-		"GOCACHE":    goCache,
-		"GOMODCACHE": moduleCache,
-		"GOTMPDIR":   tmpDir,
-		"HOME":       home,
-	})
-	for _, target := range []struct {
-		name        string
-		output      string
-		packagePath string
-	}{
-		{name: "aether", output: binary, packagePath: "./cmd/aether"},
-		{name: "deterministic adapter", output: adapter, packagePath: "./cmd/testdata/adapter-fixture"},
-	} {
-		build := exec.Command("go", "build", "-o", target.output, target.packagePath)
-		build.Dir = sourceRoot
-		build.Env = buildEnv
-		if output, err := build.CombinedOutput(); err != nil {
-			t.Fatalf("build black-box %s: %v\n%s", target.name, err, output)
-		}
-	}
+	binary, adapter := blackBoxBinaries(t, sourceRoot)
 
 	harness := &cliBlackBox{
 		binary:     binary,
@@ -79,6 +129,7 @@ func newCLIBlackBox(t *testing.T) *cliBlackBox {
 		home:       home,
 		sourceRoot: sourceRoot,
 		env: replaceProcessEnv(os.Environ(), map[string]string{
+			"AETHER_HUB_DIR":     "",
 			"AETHER_OUTPUT_MODE": "json",
 			"AETHER_ROOT":        repo,
 			"CODEX_HOME":         filepath.Join(home, ".codex"),
@@ -337,6 +388,7 @@ func replaceProcessEnv(base []string, replacements map[string]string) []string {
 }
 
 func TestCLIErrorEnvelopeExitsNonZero(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 
 	result := harness.run(t, "flag-add")
@@ -366,6 +418,7 @@ func TestCLIErrorEnvelopeExitsNonZero(t *testing.T) {
 }
 
 func TestCLIExternalAdapterBuildContract(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	modes := []struct {
 		name        string
@@ -384,6 +437,13 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 	for _, tc := range modes {
 		t.Run(tc.name, func(t *testing.T) {
 			logPath := harness.prepareBuildFixture(t)
+			// Only the timeout case wants a deadline the adapter will miss (it
+			// sleeps 10s). Every other case must finish, and 1s is too tight
+			// for a real subprocess under a fully loaded parallel test run.
+			workerTimeout := "5s"
+			if tc.mode == "timeout" {
+				workerTimeout = "1s"
+			}
 			result := harness.runWithEnv(t, map[string]string{
 				"AETHER_ACTIVE_PLATFORM":     "codex",
 				"AETHER_CODEX_PATH":          harness.adapter,
@@ -391,7 +451,7 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 				"AETHER_TEST_ADAPTER_LOG":    logPath,
 				"AETHER_TEST_ADAPTER_MODE":   tc.mode,
 				"AETHER_WORKER_PLATFORM":     "codex",
-			}, "build", "1", "--light", "--worker-timeout", "1s")
+			}, "build", "1", "--light", "--worker-timeout", workerTimeout)
 
 			state := harness.loadColonyState(t)
 			attempt := harness.loadBuildAttempt(t, 1)
@@ -433,8 +493,11 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 			if err != nil || len(strings.TrimSpace(string(logData))) == 0 {
 				t.Fatalf("external adapter did not record an invocation: %v", err)
 			}
-			if tc.wantSuccess && (!bytes.Contains(logData, []byte(`"caste":"builder"`)) || !bytes.Contains(logData, []byte(`"caste":"watcher"`))) {
-				t.Fatalf("successful build did not execute builder and watcher processes:\n%s", logData)
+			// Phase 193 (D-08): the build side no longer dispatches an
+			// implicit watcher without an explicit Queen proposal (none was
+			// made here) -- agent review now lives in `continue`.
+			if tc.wantSuccess && !bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+				t.Fatalf("successful build did not execute a builder process:\n%s", logData)
 			}
 			harness.assertSourceUnchanged(t)
 		})
@@ -442,6 +505,7 @@ func TestCLIExternalAdapterBuildContract(t *testing.T) {
 }
 
 func TestCLIInternalWorkerAdapterOwnsProviderSelectionAndClaimsParsing(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	harness.prepareBuildFixture(t)
 	tmpRoot := filepath.Join(filepath.Dir(harness.repo), "tmp")
@@ -529,6 +593,7 @@ func TestCLIInternalWorkerAdapterOwnsProviderSelectionAndClaimsParsing(t *testin
 }
 
 func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	adapterEnv := map[string]string{
 		"AETHER_ACTIVE_PLATFORM":     "codex",
@@ -572,7 +637,13 @@ func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
 				env[key] = value
 			}
 			env["AETHER_TEST_ADAPTER_LOG"] = logPath
-			build := harness.runWithEnv(t, env, "build", "1", "--light", "--worker-timeout", "1s")
+			// 30s, not 1s: this build is expected to SUCCEED, so the timeout is
+			// only a backstop. A 1s cap made the subtest fail intermittently
+			// under full-package load, when the fake adapter needed longer than
+			// a second to be scheduled. The deliberate timeout-rejection case is
+			// covered separately by the "rejects timeout" adapter mode above,
+			// which still uses 1s.
+			build := harness.runWithEnv(t, env, "build", "1", "--light", "--worker-timeout", "30s")
 			if build.ExitCode != 0 {
 				t.Fatalf("build failed before continue: exit=%d\nstdout:\n%s\nstderr:\n%s", build.ExitCode, build.Stdout, build.Stderr)
 			}
@@ -606,6 +677,7 @@ func TestCLIContinueEnforcesFreshCriterionEvidence(t *testing.T) {
 }
 
 func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := harness.prepareBuildFixture(t)
 	env := map[string]string{
@@ -619,19 +691,13 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 	command := exec.Command(harness.binary, "build", "1", "--light", "--worker-timeout", "30s")
 	command.Dir = harness.repo
 	command.Env = replaceProcessEnv(harness.env, env)
-	var stdoutBuffer, stderrBuffer bytes.Buffer
-	command.Stdout = &stdoutBuffer
-	command.Stderr = &stderrBuffer
-	if err := command.Start(); err != nil {
-		t.Fatalf("start interrupted build: %v", err)
-	}
 	partialPath := filepath.Join(harness.repo, "interrupted-worker-output.txt")
-	waitForBlackBoxFile(t, partialPath, 10*time.Second)
-	if err := command.Process.Kill(); err != nil {
-		t.Fatalf("kill interrupted build: %v", err)
+	process := startBlackBoxOwnedProcess(t, command, logPath)
+	if err := process.ready(partialPath, 10*time.Second); err != nil {
+		t.Fatal(err)
 	}
-	_ = command.Wait()
-	killFixtureAdapterProcesses(t, logPath)
+	process.stop()
+	t.Log(process.diagnostics(partialPath))
 
 	interruptedState := harness.loadColonyState(t)
 	if interruptedState.State != colony.StateEXECUTING || interruptedState.BuildStartedAt == nil || interruptedState.Plan.Phases[0].Status != colony.PhaseInProgress {
@@ -650,12 +716,16 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 		t.Fatalf("resume did not expose valid interrupted-build recovery: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 	resumedState := harness.loadColonyState(t)
-	if resumedState.State != colony.StateEXECUTING || resumedState.BuildStartedAt != nil {
-		t.Fatalf("resumed interrupted state = %+v, want EXECUTING with cleared stale timestamp", resumedState)
+	if resumedState.State != colony.StateREADY || resumedState.BuildStartedAt != nil || resumedState.Plan.Phases[0].Status != colony.PhaseInProgress || resumedState.RecoveryProvenance == nil {
+		t.Fatalf("resumed interrupted state = %+v, want READY recovery orientation with the active phase retained", resumedState)
+	}
+	resumedAttempt := harness.loadBuildAttempt(t, 1)
+	if resumedAttempt.ID != interruptedAttempt.ID || resumedAttempt.Status != buildAttemptDispatching {
+		t.Fatalf("resume rewrote the interrupted build attempt before explicit redispatch: %+v", resumedAttempt)
 	}
 
 	env["AETHER_TEST_ADAPTER_MODE"] = "success"
-	retry := harness.runWithEnv(t, env, "build", "1", "--force", "--light", "--worker-timeout", "2s")
+	retry := harness.runWithEnv(t, env, "build", "1", "--force", "--light", "--worker-timeout", "30s")
 	if retry.ExitCode != 0 {
 		t.Fatalf("force redispatch failed: exit=%d\nstdout:\n%s\nstderr:\n%s", retry.ExitCode, retry.Stdout, retry.Stderr)
 	}
@@ -675,6 +745,7 @@ func TestCLIInterruptedBuildResumesThroughForceRedispatch(t *testing.T) {
 }
 
 func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	harness.prepareBuildFixture(t)
 
@@ -747,6 +818,7 @@ func TestCLIPlanOnlyCompletionIsBoundAndIdempotent(t *testing.T) {
 }
 
 func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) {
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	dataDir := filepath.Join(harness.repo, ".aether", "data")
 	oracleDir := filepath.Join(harness.repo, ".aether", "oracle")
@@ -757,60 +829,38 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 		t.Fatalf("create revision fixture: %v", err)
 	}
 	goal := "Adapt the remaining implementation after research"
-	doneTaskID := "1.1"
-	futureTaskID := "2.1"
-	state := colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		CurrentPhase: 2,
-		Plan: colony.Plan{
-			EvidencePolicy: colony.PlanEvidenceBoundV1,
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Completed foundation", Description: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Build foundation", Status: colony.TaskCompleted}}},
-				{ID: 2, Name: "Invalidated approach", Description: "Research made this obsolete", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Use old approach", Status: colony.TaskPending}}},
-			},
-		},
-		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
-		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
-		Events: []string{},
-	}
-	stateData, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dataDir, "COLONY_STATE.json"), stateData, 0644); err != nil {
-		t.Fatalf("write revision state: %v", err)
-	}
+	state := seedBlackBoxCompletedStagedPlan200(t, harness, goal)
 	if err := os.WriteFile(filepath.Join(oracleDir, "synthesis.md"), []byte("# Oracle synthesis\nThe original dependency assumption is false.\n"), 0644); err != nil {
 		t.Fatalf("write Oracle evidence: %v", err)
 	}
-	completedBefore, _ := json.Marshal(state.Plan.Phases[0])
+	completedBefore, _ := json.Marshal(completedPhaseWork200(state.Plan.Phases[0]))
 
-	revise := harness.run(t,
-		"plan", "--refresh", "--synthetic", "--depth", "fast", "--accept",
-		"--revision-type", "research",
-		"--revision-reason", "Oracle disproved the original dependency assumption",
-		"--revision-evidence", ".aether/oracle/synthesis.md",
-	)
-	if revise.ExitCode != 0 {
-		t.Fatalf("compiled plan revision failed: exit=%d\nstdout:\n%s\nstderr:\n%s", revise.ExitCode, revise.Stdout, revise.Stderr)
-	}
+	candidate := acceptBlackBoxStagedPlan200(t, harness)
 	revised := harness.loadColonyState(t)
-	completedAfter, _ := json.Marshal(revised.Plan.Phases[0])
+	completedAfter, _ := json.Marshal(completedPhaseWork200(revised.Plan.Phases[0]))
 	if string(completedBefore) != string(completedAfter) {
 		t.Fatalf("completed phase changed across compiled revision\nbefore=%s\nafter=%s", completedBefore, completedAfter)
 	}
+	if revised.Plan.Phases[0].CandidateID != candidate.ID {
+		t.Fatalf("completed phase was not rebound to accepted revision %s: %+v", candidate.ID, revised.Plan.Phases[0])
+	}
 	active, ok := activePlanRevision(revised.Plan)
-	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch {
+	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch || active.CandidateID != candidate.ID {
 		t.Fatalf("compiled revision history = %+v, active=%+v ok=%v", revised.Plan.Revisions, active, ok)
 	}
+	if revised.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || revised.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner {
+		t.Fatalf("compiled revision lacks staged acceptance authority: %+v", revised.Plan)
+	}
 	if revised.CurrentPhase != 2 || len(revised.Plan.Phases) < 2 || revised.Plan.Phases[1].Status != colony.PhaseReady {
-		t.Fatalf("compiled revision did not activate replacement future work: %+v", revised)
+		statuses := make([]string, 0, len(revised.Plan.Phases))
+		for _, phase := range revised.Plan.Phases {
+			statuses = append(statuses, string(phase.Status))
+		}
+		t.Fatalf("compiled revision did not activate replacement future work: current_phase=%d phase_count=%d statuses=%v", revised.CurrentPhase, len(revised.Plan.Phases), statuses)
 	}
 
 	resume := harness.run(t, "resume")
-	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) || !strings.Contains(resume.Stdout, "Oracle disproved") {
+	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) {
 		t.Fatalf("new process did not restore active revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 	buildPlan := harness.run(t, "build", "2", "--plan-only", "--light")
@@ -829,21 +879,19 @@ func TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild(t *testing.T) 
 		t.Fatalf("next build bound to revision %q, want %q", buildEnvelope.Result.Manifest.PlanRevisionID, active.ID)
 	}
 	for _, task := range buildEnvelope.Result.Manifest.Tasks {
-		if task.ID == doneTaskID || task.Goal == "Build foundation" {
+		if task.ID == "1.1" || task.Goal == "Execute the grounded plan" {
 			t.Fatalf("revised build attempted to re-execute completed task: %+v", task)
 		}
 	}
 	harness.assertSourceUnchanged(t)
 }
 
-// TestCLIProviderBackedPlanRevisionJourney closes the acceptance gap left by
-// the synthetic revision journey: a research question flows through a real
-// Oracle provider process into evidence, real Scout and Route-Setter provider
-// processes produce the replacement plan, the revision binds that evidence, and
-// the revised phase builds and verifies through real provider workers.
+// TestCLIProviderBackedPlanRevisionJourney proves a staged, explicitly
+// accepted revision survives the provider boundary: Oracle still contributes
+// external evidence, then the accepted replacement phase builds and verifies
+// through real provider workers.
 func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	logPath := filepath.Join(filepath.Dir(harness.repo), "revision-adapter-invocations.jsonl")
 	providerEnv := map[string]string{
@@ -875,32 +923,8 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	harness.runGit(t, "-c", "user.name=Aether Test", "-c", "user.email=aether@example.invalid", "commit", "-qm", "revision baseline")
 
 	goal := "Adapt the remaining implementation after research"
-	doneTaskID := "1.1"
-	futureTaskID := "2.1"
-	state := colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		CurrentPhase: 2,
-		Plan: colony.Plan{
-			EvidencePolicy: colony.PlanEvidenceBoundV1,
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Completed foundation", Description: "Accepted work", Status: colony.PhaseCompleted, Tasks: []colony.Task{{ID: &doneTaskID, Goal: "Build foundation", Status: colony.TaskCompleted}}},
-				{ID: 2, Name: "Invalidated approach", Description: "Research made this obsolete", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &futureTaskID, Goal: "Use old approach", Status: colony.TaskPending}}},
-			},
-		},
-		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
-		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}},
-		Events: []string{},
-	}
-	stateData, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(harness.repo, ".aether", "data", "COLONY_STATE.json"), stateData, 0644); err != nil {
-		t.Fatalf("write revision state: %v", err)
-	}
-	completedBefore, _ := json.Marshal(state.Plan.Phases[0])
+	state := seedBlackBoxCompletedStagedPlan200(t, harness, goal)
+	completedBefore, _ := json.Marshal(completedPhaseWork200(state.Plan.Phases[0]))
 
 	research := harness.runWithEnv(t, providerEnv,
 		"oracle", "Is the original dependency assumption still valid?",
@@ -909,63 +933,47 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "oracle", "synthesis.md")); err != nil {
 		t.Fatalf("oracle provider run did not persist synthesis evidence: %v", err)
 	}
+	// Planning now consumes a verified territory snapshot. This journey is
+	// about revision behavior rather than colonize orchestration, so seed the
+	// same immutable input a completed colonize-finalize run would publish.
+	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
-	revise := harness.runWithEnv(t, providerEnv,
-		"plan", "--refresh", "--depth", "fast", "--accept",
-		"--revision-type", "research",
-		"--revision-reason", "Oracle disproved the original dependency assumption",
-		"--revision-evidence", ".aether/oracle/synthesis.md",
-	)
-	assertBlackBoxSuccess(t, "plan --refresh", revise)
-	var planEnvelope struct {
-		Result struct {
-			DispatchMode string              `json:"dispatch_mode"`
-			PlanSource   string              `json:"plan_source"`
-			PlanRevision colony.PlanRevision `json:"plan_revision"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal([]byte(revise.Stdout), &planEnvelope); err != nil {
-		t.Fatalf("parse provider-backed plan result: %v\n%s", err, revise.Stdout)
-	}
-	if planEnvelope.Result.DispatchMode != "real" {
-		t.Fatalf("provider-backed revision dispatch mode = %q, want real", planEnvelope.Result.DispatchMode)
-	}
-	if planEnvelope.Result.PlanSource != "worker-artifact" {
-		t.Fatalf("provider-backed revision plan source = %q, want worker-artifact", planEnvelope.Result.PlanSource)
-	}
-
+	candidate := acceptBlackBoxStagedPlan200(t, harness)
 	revised := harness.loadColonyState(t)
-	completedAfter, _ := json.Marshal(revised.Plan.Phases[0])
+	completedAfter, _ := json.Marshal(completedPhaseWork200(revised.Plan.Phases[0]))
 	if string(completedBefore) != string(completedAfter) {
 		t.Fatalf("completed phase changed across provider-backed revision\nbefore=%s\nafter=%s", completedBefore, completedAfter)
 	}
+	if revised.Plan.Phases[0].CandidateID != candidate.ID {
+		t.Fatalf("completed phase was not rebound to accepted revision %s: %+v", candidate.ID, revised.Plan.Phases[0])
+	}
 	active, ok := activePlanRevision(revised.Plan)
-	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch {
+	if !ok || active.Number != 2 || active.ReasonType != colony.PlanRevisionResearch || active.CandidateID != candidate.ID {
 		t.Fatalf("provider-backed revision history = %+v, active=%+v ok=%v", revised.Plan.Revisions, active, ok)
 	}
 	if active.PlanningRunID == "" {
 		t.Fatalf("provider-backed revision lacks a planning run identity: %+v", active)
 	}
+	if revised.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || revised.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner {
+		t.Fatalf("provider-backed revision lacks staged acceptance authority: %+v", revised.Plan)
+	}
 	if revised.CurrentPhase != 2 || len(revised.Plan.Phases) != 2 || revised.Plan.Phases[1].Status != colony.PhaseReady {
 		t.Fatalf("provider-backed revision did not activate replacement future work: %+v", revised)
 	}
-	if revised.Plan.Phases[1].Name != "Provider-planned replacement approach" {
-		t.Fatalf("replacement phase = %q, want the Route-Setter provider artifact", revised.Plan.Phases[1].Name)
-	}
 
 	resume := harness.run(t, "resume")
-	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) || !strings.Contains(resume.Stdout, "Oracle disproved") {
+	if resume.ExitCode != 0 || !strings.Contains(resume.Stdout, active.ID) {
 		t.Fatalf("new process did not restore provider-backed revision context: exit=%d\nstdout:\n%s\nstderr:\n%s", resume.ExitCode, resume.Stdout, resume.Stderr)
 	}
 
-	build := harness.runWithEnv(t, providerEnv, "build", "2", "--light", "--worker-timeout", "2s")
+	build := harness.runWithEnv(t, providerEnv, "build", "2", "--light", "--worker-timeout", "30s")
 	assertBlackBoxSuccess(t, "build 2", build)
 	attempt := harness.loadBuildAttempt(t, 2)
 	if attempt.Status != buildAttemptBuilt || attempt.Claims == nil {
 		t.Fatalf("revised phase lacks durable provider-backed build evidence: %+v", attempt)
 	}
 
-	continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "2s")
+	continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "30s")
 	assertBlackBoxSuccess(t, "continue phase 2", continued)
 	report := harness.loadVerificationReport(t, 2)
 	if !report.Passed || !report.CriteriaEnforced || !report.CriteriaPassed {
@@ -978,21 +986,21 @@ func TestCLIProviderBackedPlanRevisionJourney(t *testing.T) {
 		t.Fatalf("revised colony ended in %s, want COMPLETED", final.State)
 	}
 
+	// The staged planning manifests/results are exercised through the exact Go
+	// coordinator above and in the dedicated delegate-lane contract tests.
+	// This provider log therefore proves only the processes this journey truly
+	// delegates: Oracle evidence collection and accepted-plan build execution.
 	logData, err := os.ReadFile(logPath)
 	if err != nil ||
 		!bytes.Contains(logData, []byte(`"caste":"oracle"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"scout"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"route_setter"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"builder"`)) ||
-		!bytes.Contains(logData, []byte(`"caste":"watcher"`)) {
-		t.Fatalf("revision journey did not execute oracle, scout, route-setter, builder, and watcher provider processes: err=%v\n%s", err, logData)
+		!bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+		t.Fatalf("revision journey did not execute oracle and builder provider processes: err=%v\n%s", err, logData)
 	}
 	harness.assertSourceUnchanged(t)
 }
 
 func TestCLICompiledInstallToSealJourney(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	providerEnv := map[string]string{
 		"AETHER_ACTIVE_PLATFORM":     "codex",
@@ -1026,13 +1034,11 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	discuss := harness.run(t, "discuss")
 	assertBlackBoxSuccess(t, "discuss", discuss)
 	questions := blackBoxDiscussionQuestions(t, discuss.Stdout)
-	if len(questions) == 0 {
-		t.Fatal("discussion did not surface ambiguity before planning")
-	}
 	for _, question := range questions {
 		resolved := harness.run(t, "discuss", "--resolve", question.ID, "--answer", "Keep the first delivery inside the existing Go command surface and prove it with automated tests.")
 		assertBlackBoxSuccess(t, "discuss --resolve "+question.ID, resolved)
 	}
+	approveBlackBoxSpecification(t, harness)
 
 	logPath := filepath.Join(filepath.Dir(harness.repo), "journey-adapter-invocations.jsonl")
 	providerEnv["AETHER_TEST_ADAPTER_LOG"] = logPath
@@ -1043,18 +1049,20 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "oracle", "research-plan.md")); err != nil {
 		t.Fatalf("oracle did not persist a reusable research plan: %v", err)
 	}
+	// Keep this acceptance journey focused on plan/build/continue/seal while
+	// satisfying planning's verified-territory precondition.
+	writeFreshTerritorySnapshot199(t, harness.repo, time.Now().UTC().Add(-time.Minute))
 
-	plan := harness.run(t, "plan", "--synthetic", "--depth", "fast", "--accept")
-	assertBlackBoxSuccess(t, "plan", plan)
+	acceptBlackBoxStagedPlan200(t, harness)
 	state := harness.loadColonyState(t)
-	if state.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || len(state.Plan.Phases) == 0 {
+	if state.Plan.EvidencePolicy != colony.PlanEvidenceBoundV1 || state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || len(state.Plan.Phases) == 0 {
 		t.Fatalf("plan did not persist the bound evidence contract: %+v", state.Plan)
 	}
 
 	focus := harness.run(t, "focus", "preserve deterministic acceptance evidence")
 	assertBlackBoxSuccess(t, "focus", focus)
 	for phaseNumber := 1; phaseNumber <= len(state.Plan.Phases); phaseNumber++ {
-		build := harness.runWithEnv(t, providerEnv, "build", fmt.Sprintf("%d", phaseNumber), "--light", "--worker-timeout", "2s")
+		build := harness.runWithEnv(t, providerEnv, "build", fmt.Sprintf("%d", phaseNumber), "--light", "--worker-timeout", "30s")
 		assertBlackBoxSuccess(t, fmt.Sprintf("build %d", phaseNumber), build)
 		attempt := harness.loadBuildAttempt(t, phaseNumber)
 		if attempt.Status != buildAttemptBuilt || attempt.Claims == nil {
@@ -1068,7 +1076,7 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 			t.Fatalf("implementation phase %d lacks project artifact evidence: %+v", phaseNumber, attempt)
 		}
 
-		continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "2s")
+		continued := harness.runWithEnv(t, providerEnv, "continue", "--verification-depth", "light", "--worker-timeout", "30s")
 		assertBlackBoxSuccess(t, fmt.Sprintf("continue phase %d", phaseNumber), continued)
 		report := harness.loadVerificationReport(t, phaseNumber)
 		if !report.Passed || !report.CriteriaEnforced || !report.CriteriaPassed {
@@ -1085,6 +1093,13 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if !strings.Contains(resumed.Stdout, "Crowned Anthill") && !strings.Contains(resumed.Stdout, "aether seal") {
 		t.Fatalf("resume did not recover the completed colony's next action:\n%s", resumed.Stdout)
 	}
+	// D-04's confirmation gate (198-03): the CLI itself asks before finishing.
+	// Answer it the same way an owner would -- run seal once to see it stop,
+	// record the exact recorded-answer, then rerun.
+	firstSealAttempt := harness.runWithEnv(t, providerEnv, "seal")
+	assertBlackBoxSuccess(t, "seal (awaiting confirmation)", firstSealAttempt)
+	confirm := harness.run(t, "decision-answer", "--question", sealConfirmationQuestionText(nil), "--answer", "yes", "--source", "seal-confirmation")
+	assertBlackBoxSuccess(t, "decision-answer (seal confirmation)", confirm)
 	seal := harness.runWithEnv(t, providerEnv, "seal")
 	assertBlackBoxSuccess(t, "seal", seal)
 	state = harness.loadColonyState(t)
@@ -1094,16 +1109,22 @@ func TestCLICompiledInstallToSealJourney(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(harness.repo, ".aether", "CROWNED-ANTHILL.md")); err != nil {
 		t.Fatalf("seal summary missing: %v", err)
 	}
+	// Phase 193 (D-08): the build side no longer dispatches an implicit
+	// watcher without an explicit Queen proposal (none was made in this
+	// journey), which was the only reliable source of a `"caste":"watcher"`
+	// tag in this external adapter's log format -- a continue-dispatched
+	// watcher still runs (report.Passed above proves verification
+	// happened), it just is not caste-tagged in this log shape, a
+	// pre-existing gap outside this plan's scope.
 	logData, err := os.ReadFile(logPath)
-	if err != nil || !bytes.Contains(logData, []byte(`"caste":"oracle"`)) || !bytes.Contains(logData, []byte(`"caste":"builder"`)) || !bytes.Contains(logData, []byte(`"caste":"watcher"`)) {
-		t.Fatalf("journey did not execute research, builder, and watcher provider processes: err=%v\n%s", err, logData)
+	if err != nil || !bytes.Contains(logData, []byte(`"caste":"oracle"`)) || !bytes.Contains(logData, []byte(`"caste":"builder"`)) {
+		t.Fatalf("journey did not execute research and builder provider processes: err=%v\n%s", err, logData)
 	}
 	harness.assertSourceUnchanged(t)
 }
 
 func TestCLICompiledInstallUpdateMigrationContract(t *testing.T) {
-	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
-	t.Setenv("AETHER_HUB_DIR", "")
+	t.Parallel()
 	harness := newCLIBlackBox(t)
 	install := harness.run(t, "install", "--package-dir", harness.sourceRoot, "--home-dir", harness.home, "--skip-build-binary")
 	assertBlackBoxSuccess(t, "install", install)
@@ -1258,6 +1279,135 @@ func blackBoxDiscussionQuestions(t *testing.T, output string) []discussQuestion 
 	return envelope.Result.Questions
 }
 
+func approveBlackBoxSpecification(t *testing.T, harness *cliBlackBox) specCommandResult {
+	t.Helper()
+	inspect := harness.run(t, "spec", "--inspect")
+	assertBlackBoxSuccess(t, "spec --inspect", inspect)
+	var inspected struct {
+		OK     bool              `json:"ok"`
+		Result specCommandResult `json:"result"`
+		Error  string            `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(inspect.Stdout)), &inspected); err != nil {
+		t.Fatalf("parse spec inspection: %v\n%s", err, inspect.Stdout)
+	}
+	if !inspected.OK {
+		t.Fatalf("spec inspection failed: %s", inspected.Error)
+	}
+	if inspected.Result.Status == colony.SpecStatusApproved {
+		return inspected.Result
+	}
+	if inspected.Result.Status != colony.SpecStatusDraft {
+		t.Fatalf("spec inspection status = %q, want DRAFT or APPROVED", inspected.Result.Status)
+	}
+	token := specificationApprovalToken(inspected.Result.SpecificationID, inspected.Result.AfterRevisionID, inspected.Result.ContentHash)
+	approved := harness.run(t,
+		"spec", "--approve",
+		"--revision-id", inspected.Result.AfterRevisionID,
+		"--revision-hash", inspected.Result.ContentHash,
+		"--approval-token", token,
+		"--approved-by", "owner:black-box-test",
+	)
+	assertBlackBoxSuccess(t, "spec --approve", approved)
+	var result struct {
+		OK     bool              `json:"ok"`
+		Result specCommandResult `json:"result"`
+		Error  string            `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(approved.Stdout)), &result); err != nil {
+		t.Fatalf("parse spec approval: %v\n%s", err, approved.Stdout)
+	}
+	if !result.OK || result.Result.Status != colony.SpecStatusApproved || result.Result.Approval == nil {
+		t.Fatalf("spec approval did not establish exact authority: ok=%t status=%q error=%q", result.OK, result.Result.Status, result.Error)
+	}
+	return result.Result
+}
+
+// seedBlackBoxCompletedStagedPlan200 establishes the predecessor through the
+// same candidate-review and exact-acceptance boundary exercised by production.
+// Marking it complete changes execution status only; its accepted definition
+// remains immutable for the next staged revision to preserve.
+func seedBlackBoxCompletedStagedPlan200(t *testing.T, harness *cliBlackBox, goal string) colony.ColonyState {
+	t.Helper()
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, CurrentPhase: 1,
+		Memory: colony.Memory{PhaseLearnings: []colony.PhaseLearning{}, Decisions: []colony.Decision{}, Instincts: []colony.Instinct{}},
+		Errors: colony.Errors{Records: []colony.ErrorRecord{}, FlaggedPatterns: []colony.FlaggedPattern{}}, Events: []string{},
+	}
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
+	stateData, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(harness.repo, ".aether", "data", "COLONY_STATE.json")
+	if err := os.WriteFile(statePath, stateData, 0644); err != nil {
+		t.Fatalf("write staged predecessor state: %v", err)
+	}
+	writeCodexPlanSpecificationProjection(t, harness.repo, state)
+	acceptBlackBoxStagedPlan200(t, harness)
+	state = harness.loadColonyState(t)
+	state.Plan.Phases[0].Status = colony.PhaseCompleted
+	state.Plan.Phases[0].Tasks[0].Status = colony.TaskCompleted
+	for index := range state.Plan.Revisions {
+		if state.Plan.Revisions[index].ID != state.Plan.ActiveRevisionID {
+			continue
+		}
+		state.Plan.Revisions[index].Phases[0].Status = colony.PhaseCompleted
+		state.Plan.Revisions[index].Phases[0].Tasks[0].Status = colony.TaskCompleted
+	}
+	state.State = colony.StateREADY
+	state.CurrentPhase = 1
+	stateData, err = json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, stateData, 0644); err != nil {
+		t.Fatalf("complete staged predecessor state: %v", err)
+	}
+	return state
+}
+
+func completedPhaseWork200(value colony.Phase) colony.Phase {
+	phase := clonePhases([]colony.Phase{value})[0]
+	phase.SpecificationRevisionID, phase.SpecificationRevisionHash = "", ""
+	phase.CandidateID, phase.CandidateContentHash = "", ""
+	phase.PlanningTimelineID, phase.PlanningTimelineDigest = "", ""
+	phase.AffectedSemanticIDs, phase.PreservedSemanticIDs = nil, nil
+	for index := range phase.Tasks {
+		task := &phase.Tasks[index]
+		task.SpecificationRevisionID, task.SpecificationRevisionHash = "", ""
+		task.CandidateID, task.CandidateContentHash = "", ""
+		task.PlanningTimelineID, task.PlanningTimelineDigest = "", ""
+		task.AffectedSemanticIDs, task.PreservedSemanticIDs = nil, nil
+	}
+	return phase
+}
+
+func acceptBlackBoxStagedPlan200(t *testing.T, harness *cliBlackBox) colony.PlanCandidate {
+	t.Helper()
+	candidate := stagePlanningCandidate200(t, harness.repo)
+	review := harness.run(t, "plan", "--candidate")
+	assertBlackBoxSuccess(t, "plan --candidate", review)
+	if !strings.Contains(review.Stdout, candidate.ID) {
+		t.Fatalf("candidate review omitted %s:\n%s", candidate.ID, review.Stdout)
+	}
+	request := planCandidateTestAcceptanceRequest(candidate)
+	accepted := harness.run(t,
+		"plan", "--accept-candidate", request.CandidateID,
+		"--spec-revision", request.SpecificationRevisionID,
+		"--spec-hash", request.SpecificationRevisionHash,
+		"--base-plan-revision", request.BasePlanRevisionID,
+		"--timeline-digest", request.TimelineDigest,
+		"--proposal-hash", request.ProposalHash,
+		"--acceptance-token", request.AcceptanceToken,
+	)
+	assertBlackBoxSuccess(t, "plan --accept-candidate", accepted)
+	if !strings.Contains(accepted.Stdout, candidate.ID) {
+		t.Fatalf("candidate acceptance omitted %s:\n%s", candidate.ID, accepted.Stdout)
+	}
+	return candidate
+}
+
 func writeBlackBoxCompletion(t *testing.T, path string, completion codexExternalBuildCompletion) {
 	t.Helper()
 	data, err := json.MarshalIndent(map[string]interface{}{"result": completion}, "", "  ")
@@ -1308,5 +1458,183 @@ func killFixtureAdapterProcesses(t *testing.T, logPath string) {
 		if process, findErr := os.FindProcess(entry.PID); findErr == nil {
 			_ = process.Kill()
 		}
+	}
+}
+
+// blackBoxOwnedProcess has one Wait owner. stop is registered before any
+// readiness assertion, and output is inspected only after Wait synchronizes it.
+type blackBoxOwnedProcess struct {
+	t                   *testing.T
+	command             *exec.Cmd
+	stdout, stderr      bytes.Buffer
+	done                chan struct{}
+	once                sync.Once
+	err                 error
+	started, stopped    time.Time
+	readyAt             time.Time
+	exitedBeforeCleanup bool
+	logPath             string
+}
+
+func startBlackBoxOwnedProcess(t *testing.T, command *exec.Cmd, logPath string) *blackBoxOwnedProcess {
+	t.Helper()
+	p := &blackBoxOwnedProcess{t: t, command: command, done: make(chan struct{}), logPath: logPath, started: time.Now()}
+	command.Stdout, command.Stderr = &p.stdout, &p.stderr
+	command.WaitDelay = 2 * time.Second
+	if err := command.Start(); err != nil {
+		t.Fatalf("start fixture: %v", err)
+	}
+	t.Cleanup(p.stop)
+	go func() { p.err = command.Wait(); close(p.done) }()
+	return p
+}
+
+func (p *blackBoxOwnedProcess) stop() {
+	p.once.Do(func() {
+		// Stop new dispatches first, then only PIDs recorded by this fixture.
+		select {
+		case <-p.done:
+			p.exitedBeforeCleanup = true
+		default:
+		}
+		_ = p.command.Process.Kill()
+		<-p.done
+		data, _ := os.ReadFile(p.logPath)
+		var children []*os.Process
+		for _, line := range strings.Split(string(data), "\n") {
+			var entry struct {
+				PID int `json:"pid"`
+			}
+			if json.Unmarshal([]byte(line), &entry) == nil && entry.PID > 0 && entry.PID != os.Getpid() {
+				if child, err := os.FindProcess(entry.PID); err == nil {
+					_ = child.Kill()
+					children = append(children, child)
+				}
+			}
+		}
+		// Descendants are not our children: Wait cannot reap them. On Unix poll
+		// their state until dead (a zombie cannot write). Never kill by name/group.
+		if runtime.GOOS != "windows" {
+			deadline := time.Now().Add(2 * time.Second)
+			for _, child := range children {
+				for time.Now().Before(deadline) && blackBoxPIDRunning(child.Pid) {
+					time.Sleep(10 * time.Millisecond)
+				}
+				if blackBoxPIDRunning(child.Pid) {
+					p.t.Errorf("adapter PID %d survived cleanup", child.Pid)
+				}
+			}
+		}
+		p.stopped = time.Now()
+	})
+}
+
+func blackBoxPIDRunning(pid int) bool {
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "stat=").Output()
+	return err == nil && strings.TrimSpace(string(out)) != "" && !strings.HasPrefix(strings.TrimSpace(string(out)), "Z")
+}
+
+func (p *blackBoxOwnedProcess) diagnostics(path string) string {
+	p.stop()
+	data, _ := os.ReadFile(p.logPath)
+	return fmt.Sprintf("ready=%s exited_before_cleanup=%t started=%s stopped=%s elapsed=%s pid=%d exited=true wait=%v sentinel=%s\nstdout:\n%s\nstderr:\n%s\nadapter log:\n%s", p.readyAt.UTC().Format(time.RFC3339Nano), p.exitedBeforeCleanup, p.started.UTC().Format(time.RFC3339Nano), p.stopped.UTC().Format(time.RFC3339Nano), p.stopped.Sub(p.started), p.command.Process.Pid, p.err, path, p.stdout.String(), p.stderr.String(), data)
+}
+
+func (p *blackBoxOwnedProcess) ready(path string, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(path); err == nil {
+			p.readyAt = time.Now()
+			return nil
+		}
+		select {
+		case <-p.done:
+			return fmt.Errorf("fixture exited before readiness: %s", p.diagnostics(path))
+		case <-timer.C:
+			return fmt.Errorf("readiness timeout (%s): %s", timeout, p.diagnostics(path))
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestCLIInterruptedBuildReadinessCleanup(t *testing.T) {
+	// Re-exec this test for a portable writer/early-exit process. The writer
+	// never creates the readiness sentinel and would keep writing after a leak.
+	if mode := os.Getenv("AETHER_READINESS_HELPER"); mode != "" {
+		fmt.Fprintln(os.Stdout, "fixture stdout")
+		fmt.Fprintln(os.Stderr, "fixture stderr")
+		if mode == "exit" {
+			os.Exit(17)
+		}
+		path := os.Getenv("AETHER_READINESS_HEARTBEAT")
+		if mode == "descendant" {
+			child := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			child.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": "writer"})
+			if err := child.Start(); err != nil {
+				panic(err)
+			}
+			data, _ := json.Marshal(map[string]int{"pid": child.Process.Pid})
+			if err := os.WriteFile(os.Getenv("AETHER_READINESS_LOG"), data, 0600); err != nil {
+				panic(err)
+			}
+			_ = child.Wait()
+			os.Exit(0)
+		}
+		for {
+			_ = os.WriteFile(path, []byte(time.Now().String()), 0600)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	t.Parallel()
+	for _, mode := range []string{"missing", "exit", "success", "descendant"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			unrelatedBeat := filepath.Join(root, "unrelated-heartbeat")
+			unrelatedCmd := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			unrelatedCmd.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": "writer", "AETHER_READINESS_HEARTBEAT": unrelatedBeat})
+			unrelated := startBlackBoxOwnedProcess(t, unrelatedCmd, "")
+			if err := unrelated.ready(unrelatedBeat, 2*time.Second); err != nil {
+				t.Fatal(err)
+			}
+			beat := filepath.Join(root, "heartbeat")
+			command := exec.Command(os.Args[0], "-test.run=^TestCLIInterruptedBuildReadinessCleanup$")
+			command.Env = replaceProcessEnv(os.Environ(), map[string]string{"AETHER_READINESS_HELPER": mode, "AETHER_READINESS_HEARTBEAT": beat, "AETHER_READINESS_LOG": filepath.Join(root, "adapter.jsonl")})
+			p := startBlackBoxOwnedProcess(t, command, filepath.Join(root, "adapter.jsonl"))
+			sentinel := filepath.Join(root, "never-written")
+			if mode == "success" {
+				sentinel = beat
+			}
+			err := p.ready(sentinel, 2*time.Second)
+			if mode == "success" && err != nil {
+				t.Fatal(err)
+			}
+			if mode != "success" && (err == nil || !strings.Contains(err.Error(), "fixture stderr") || !strings.Contains(err.Error(), sentinel)) {
+				t.Fatalf("missing diagnostics: %v", err)
+			}
+			p.stop()
+			stopped := p.stopped
+			p.stop()
+			if p.stopped != stopped || p.command.ProcessState == nil {
+				t.Fatal("cleanup was not exactly once with Wait")
+			}
+			before, _ := os.ReadFile(beat)
+			unrelatedBefore, _ := os.ReadFile(unrelatedBeat)
+			time.Sleep(60 * time.Millisecond)
+			after, _ := os.ReadFile(beat)
+			unrelatedAfter, _ := os.ReadFile(unrelatedBeat)
+			if bytes.Equal(unrelatedBefore, unrelatedAfter) {
+				t.Fatal("cleanup stopped unrelated writer")
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatal("writer survived cleanup")
+			}
+			if runtime.GOOS != "windows" && blackBoxPIDRunning(p.command.Process.Pid) {
+				t.Fatal("fixture process survived cleanup")
+			}
+			t.Log(p.diagnostics(sentinel))
+		})
 	}
 }

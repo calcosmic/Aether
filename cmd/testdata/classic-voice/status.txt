@@ -1,0 +1,13 @@
+👑 Goal: <goal (truncated to 60 chars)>
+
+📍 Phase <N>/<M>: <phase name>
+   Tasks: <completed>/<total> complete
+
+🎯 Focus: <focus_count> areas | 🚫 Avoid: <constraints_count> patterns
+🧠 Instincts: <total> learned (<high_confidence> strong)
+🚩 Flags: <blockers> blockers | <issues> issues | <notes> notes
+🏆 Milestone: <milestone> (<version>)
+💭 Dreams: <dream_count> recorded (latest: <latest_dream>)
+
+State: <state>
+Next:  <suggested_command>   <phase_context>

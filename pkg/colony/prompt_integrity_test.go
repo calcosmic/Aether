@@ -50,3 +50,51 @@ func TestPromptIntegrityDetectsRepoFixtureInstruction(t *testing.T) {
 		t.Fatalf("unexpected finding message: %q", assessment.Findings[0].Message)
 	}
 }
+
+// TestPromptIntegritySecretsPathRuleIsPathShaped locks the Phase 205 wave-1
+// post-merge regression: secretsPathRuleSpecs must reject a secrets FILE PATH
+// (the 2026-09-14 field report's `cp ../dashboard/.env.local .` lesson, and a
+// bare `cp .env.local .`) while leaving ordinary guidance that merely mentions
+// .env files untouched. The first version of the rule matched any `.env`
+// token, which refused suggest-analyze's own built-in REDIRECT, "never commit
+// secrets or .env files to version control", and broke
+// TestSuggestAnalyze_ShowsInactivePheromoneSuggestions.
+func TestPromptIntegritySecretsPathRuleIsPathShaped(t *testing.T) {
+	rejected := []string{
+		"cd /private/tmp/claude/cosmic-verify-appsurf/dashboard && cp ../dashboard/.env.local . 2>/dev/null; npm install",
+		"cp .env.local .",
+		"cat ~/.ssh/id_rsa",
+		"source ./config/secrets.json",
+	}
+	for _, content := range rejected {
+		if !hasPromptIntegrityFindingKind(DetectPromptIntegrityFindings(content), "secrets_path") {
+			t.Errorf("expected a secrets_path finding for %q", content)
+		}
+	}
+
+	allowed := []string{
+		"never commit secrets or .env files to version control",
+		"keep credentials out of the repo; use environment variables instead",
+		"head over to the .env section of the README before deploying",
+	}
+	for _, content := range allowed {
+		if hasPromptIntegrityFindingKind(DetectPromptIntegrityFindings(content), "secrets_path") {
+			t.Errorf("did not expect a secrets_path finding for %q", content)
+		}
+	}
+
+	// The built-in suggestion must survive the shared sanitizer end to end,
+	// because that is the exact call suggest-analyze makes.
+	if _, err := SanitizeSignalContent("never commit secrets or .env files to version control"); err != nil {
+		t.Fatalf("built-in suggestion must survive SanitizeSignalContent: %v", err)
+	}
+}
+
+func hasPromptIntegrityFindingKind(findings []PromptIntegrityFinding, kind string) bool {
+	for _, f := range findings {
+		if f.Kind == kind {
+			return true
+		}
+	}
+	return false
+}

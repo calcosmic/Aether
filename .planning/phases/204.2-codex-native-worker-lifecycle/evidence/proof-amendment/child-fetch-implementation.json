@@ -1,0 +1,1343 @@
+{
+  "actual_context_qualified": false,
+  "amendment": {
+    "path": ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-PROOF-AMENDMENT.md",
+    "sha256": "sha256:9db637757528466e0e19bcf5789ccd6c125944e4e6f910d624c9211bbc46ccbd"
+  },
+  "cache_retirement": {
+    "all_directories_preserved": true,
+    "both_cache_roots_empty_before_transfer": true,
+    "owner_summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-retry-20260918T224251Z-ahxj_e4a/summary.json",
+      "sha256": "sha256:9e5462dc1f58eab15696f7326f1025383cb90d8609c52280187872f8d77252c3"
+    },
+    "references": {
+      "after_inventory": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/after-inventory.json",
+        "sha256": "sha256:b84be84b023324be999be091eea379cc544df765eec3bee1e5f4533ef98c74ac"
+      },
+      "before_inventory": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/before-inventory.json",
+        "sha256": "sha256:47aea231d31f89ebc26b69091f19bde577d9e0832df79f8e7b7158fb28b80146"
+      },
+      "intent": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/intent.json",
+        "sha256": "sha256:9be5fcf870524b1ecf4fbb0af2ce1ee3dd6eeed4401e8d9a40bba838891e86a5"
+      },
+      "inventory_verification": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/inventory-verification.json",
+        "sha256": "sha256:aae0a9f44af8b91fc37113b97ffad2b325ff062fb82ae9ce1b6c76bf11f6926d"
+      },
+      "plan": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/plan.json",
+        "sha256": "sha256:38d4fbdd32d76d9d6dc8e7396a55fe090f91d6ee3cf794996e1939571a337abe"
+      },
+      "receipt": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/receipt.json",
+        "sha256": "sha256:46ec211eda6c17e1194610b73e7d46524ebe642326c28b65a55c39855029eb42"
+      },
+      "script": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/retire-cache.py",
+        "sha256": "sha256:5a2a6a9da4f0176b58d9f3a9c0b1ba1891b816a1c6683e44df67c255f22fcb90"
+      }
+    },
+    "removed_allocated_bytes": 4455800832,
+    "removed_files": 20737,
+    "review_inventory": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-cold-retry-20260918T225646Z-z0adtm94/review-inventory.json",
+      "sha256": "sha256:47aea231d31f89ebc26b69091f19bde577d9e0832df79f8e7b7158fb28b80146"
+    },
+    "storage_estimate_not_discounted": true
+  },
+  "commit": "1f9051814a95414bb8519b7e30408227a8117c40",
+  "context_protocol": "child-fetch/v1",
+  "focused_evidence": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/summary.json",
+    "sha256": "sha256:b96df55eb5f491ab6fda76206f69e547131667e1267614a7d550b88c716f308c"
+  },
+  "full_plan23_estimate_unchanged": {
+    "cache_retirement": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/cache-retirement.json",
+      "sha256": "sha256:4f7964b3915f45bfef2b608e4eff2ce6307d1b21405f6b17d8990a447434b7a9"
+    },
+    "compiler_working_set_bytes": 2245660138,
+    "historical_manifest": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/manifest.json",
+      "sha256": "sha256:df9bb0d48c12de4d73d9c9bfb57b5cb005bf42cf7a9ff1ea141d23f4ea84ecde"
+    },
+    "measured_bytes": {
+      "candidate_binary": 51789154,
+      "checkout": 296528403,
+      "git_objects": 264314743,
+      "module_copy": 1737657830,
+      "prior_compiler_cache": 910052787,
+      "prior_exhausted_free_bytes": 6050009088,
+      "standalone_clone": 560843146,
+      "toolchain": 211473905
+    },
+    "measurement_paths": {
+      "git_objects": "/Users/callumcowie/repos/Aether/.git/objects",
+      "module_copy": "/Users/callumcowie/go/pkg/mod",
+      "toolchain": "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64"
+    },
+    "method": "working=max(retained measured compiler cache, current checkout+modules+toolchain); max(module+two standalone clones+four working sets+two binaries, exhausted prior free bytes)+one working set headroom; conservative estimate, not a guarantee or universal threshold",
+    "required_bytes": 14191223120
+  },
+  "historical_failed_attempts": [
+    {
+      "failure_accounting": {
+        "normal-cmd": {
+          "exit_code": 1,
+          "failed_tests": [
+            "TestCodexNativeChildFetchQuestionClosure",
+            "TestCodexNativeChildFetchNativeFinalization",
+            "TestCodexNativeChildFetchAnswerGuidance/protocol=child-fetch/v1",
+            "TestCodexNativeChildFetchAnswerGuidance/protocol=",
+            "TestCodexNativeChildFetchAnswerGuidance"
+          ],
+          "missing_tests": [
+            "TestCodexNativeBuildGuidePlatformIsolation",
+            "TestCodexNativeCancellationRefusalEvidence",
+            "TestCodexNativeCodeModeOutputProjection",
+            "TestCodexNativeFinalizePartial",
+            "TestCodexNativeFinalizeRejectsMutation",
+            "TestCodexNativeFinalizeReplay",
+            "TestCodexNativeFixtureCoordinatorBoundary",
+            "TestCodexNativeGapContext",
+            "TestCodexNativeGapControlCommandCorrelation",
+            "TestCodexNativeGapControls",
+            "TestCodexNativeGapDocsSearch",
+            "TestCodexNativeGapEvidencePaths",
+            "TestCodexNativeGapParentCoordination",
+            "TestCodexNativeInstalledBuildGuidance",
+            "TestCodexNativeProofContractBinding",
+            "TestCodexNativeProofContractDerivedReceiptIdentity",
+            "TestCodexNativeProofContractReplayIdentity",
+            "TestCodexNativeQualificationCoordinator",
+            "TestCodexNativeRecoveryCancelPending",
+            "TestCodexNativeRecoveryContextActivityTimestamp",
+            "TestCodexNativeRecoveryReadOnly",
+            "TestCodexNativeRecoveryUnresolved",
+            "TestCodexNativeWorkerAdmission",
+            "TestCodexNativeWorkerCancellation",
+            "TestCodexNativeWorkerTerminal",
+            "TestCommandGuideYamlCodexMetadataMatches",
+            "TestCompletionPacketSchemaMatchesStructs",
+            "TestCompletionPacketSchemaNativeJournalIsolation"
+          ],
+          "package_terminals": [
+            "fail"
+          ],
+          "stopped_reason": null,
+          "terminals": {
+            "TestCodexNativeCancellationRefusalReplay": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRequirementEscalationRefusal": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRequirementReserveRefusal": [
+              "pass"
+            ],
+            "TestCodexNativeChildContextBootstrap": [
+              "pass"
+            ],
+            "TestCodexNativeChildContextFetchEvidence": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchAckRefusals": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchAnswerGuidance": [
+              "fail"
+            ],
+            "TestCodexNativeChildFetchCompletionLane": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFactoryAndLegacy": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFailureAndDelayedObservation": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchIntegration": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchNativeFinalization": [
+              "fail"
+            ],
+            "TestCodexNativeChildFetchProtocolIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchProviderLane": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchQuestionClosure": [
+              "fail"
+            ],
+            "TestCodexNativeChildFetchReadAckNoMutation": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchReadCurrencyAndBounds": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchSourceRefusals": [
+              "pass"
+            ],
+            "TestCodexNativeContextAdmissionCurrency": [
+              "pass"
+            ],
+            "TestCodexNativeContextAnswerDedup": [
+              "pass"
+            ],
+            "TestCodexNativeContextBounds": [
+              "pass"
+            ],
+            "TestCodexNativeContextBriefIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeContextConcurrentAck": [
+              "pass"
+            ],
+            "TestCodexNativeContextDelivered": [
+              "pass"
+            ],
+            "TestCodexNativeContextDeliveryBinding": [
+              "pass"
+            ],
+            "TestCodexNativeContextDelta": [
+              "pass"
+            ],
+            "TestCodexNativeContextExactBytes": [
+              "pass"
+            ],
+            "TestCodexNativeContextFinalCurrency": [
+              "pass"
+            ],
+            "TestCodexNativeContextHistoricalIntegrity": [
+              "pass"
+            ],
+            "TestCodexNativeContextOptionalAndFallback": [
+              "pass"
+            ],
+            "TestCodexNativeContextPacking": [
+              "pass"
+            ],
+            "TestCodexNativeContextProtocolCaseWireCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeContextProtocolIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeContextReadOnly": [
+              "pass"
+            ],
+            "TestCodexNativeContextStaleInterleaving": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionAnswerRoute": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionConcurrentAnswer": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionDelivered": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFactsOnce": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagConcurrentCommit": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagProtectedRoutes": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagUnknownFields": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionGuideContract": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionIsolation": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionOrdinaryIDCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionProtectedPaths": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionQuestionAdmission": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionReplay": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionScope": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionStaleInterleaving": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionTerminalHandoff": [
+              "pass"
+            ],
+            "TestCodexNativeFinalizeBoundJournal": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryPhaseRoute": [
+              "pass"
+            ]
+          },
+          "timeout_lines": [
+            "panic: test timed out after 2m0s\n"
+          ]
+        },
+        "normal-pkg-codex": {
+          "exit_code": 0,
+          "failed_tests": [],
+          "missing_tests": [],
+          "package_terminals": [
+            "pass"
+          ],
+          "stopped_reason": null,
+          "terminals": {
+            "TestNativeCancellationCapabilityRequiresProof": [
+              "pass"
+            ],
+            "TestNativeWorkerCancellationRequirement": [
+              "pass"
+            ]
+          },
+          "timeout_lines": []
+        }
+      },
+      "passed": false,
+      "summary": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-20260918T220710Z-50v9dgly/summary.json",
+        "sha256": "sha256:de146889cdf108cb19849c4c33fe144aef3c8a7a214b51129661f1fafd98d96f"
+      }
+    },
+    {
+      "failure_accounting": {
+        "normal-cmd": {
+          "exit_code": 1,
+          "failed_tests": [
+            "TestCodexNativeFinalizePartial/failed",
+            "TestCodexNativeFinalizePartial/cancelled",
+            "TestCodexNativeFinalizePartial"
+          ],
+          "missing_tests": [],
+          "package_terminals": [
+            "fail"
+          ],
+          "stopped_reason": null,
+          "terminals": {
+            "TestCodexNativeBuildGuidePlatformIsolation": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRefusalEvidence": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRefusalReplay": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRequirementEscalationRefusal": [
+              "pass"
+            ],
+            "TestCodexNativeCancellationRequirementReserveRefusal": [
+              "pass"
+            ],
+            "TestCodexNativeChildContextBootstrap": [
+              "pass"
+            ],
+            "TestCodexNativeChildContextFetchEvidence": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchAckRefusals": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchAnswerGuidance": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchCompletionLane": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFactoryAndLegacy": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFailureAndDelayedObservation": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchIntegration": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchNativeFinalization": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchProtocolIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchProviderLane": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchQuestionClosure": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchReadAckNoMutation": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchReadCurrencyAndBounds": [
+              "pass"
+            ],
+            "TestCodexNativeChildFetchSourceRefusals": [
+              "pass"
+            ],
+            "TestCodexNativeCodeModeOutputProjection": [
+              "pass"
+            ],
+            "TestCodexNativeContextAdmissionCurrency": [
+              "pass"
+            ],
+            "TestCodexNativeContextAnswerDedup": [
+              "pass"
+            ],
+            "TestCodexNativeContextBounds": [
+              "pass"
+            ],
+            "TestCodexNativeContextBriefIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeContextConcurrentAck": [
+              "pass"
+            ],
+            "TestCodexNativeContextDelivered": [
+              "pass"
+            ],
+            "TestCodexNativeContextDeliveryBinding": [
+              "pass"
+            ],
+            "TestCodexNativeContextDelta": [
+              "pass"
+            ],
+            "TestCodexNativeContextExactBytes": [
+              "pass"
+            ],
+            "TestCodexNativeContextFinalCurrency": [
+              "pass"
+            ],
+            "TestCodexNativeContextHistoricalIntegrity": [
+              "pass"
+            ],
+            "TestCodexNativeContextOptionalAndFallback": [
+              "pass"
+            ],
+            "TestCodexNativeContextPacking": [
+              "pass"
+            ],
+            "TestCodexNativeContextProtocolCaseWireCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeContextProtocolIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeContextReadOnly": [
+              "pass"
+            ],
+            "TestCodexNativeContextStaleInterleaving": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionAnswerRoute": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionConcurrentAnswer": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionDelivered": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFactsOnce": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagConcurrentCommit": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagProtectedRoutes": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionFlagUnknownFields": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionGuideContract": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionIsolation": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionOrdinaryIDCompatibility": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionProtectedPaths": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionQuestionAdmission": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionReplay": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionScope": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionStaleInterleaving": [
+              "pass"
+            ],
+            "TestCodexNativeDecisionTerminalHandoff": [
+              "pass"
+            ],
+            "TestCodexNativeFinalizeBoundJournal": [
+              "pass"
+            ],
+            "TestCodexNativeFinalizePartial": [
+              "fail"
+            ],
+            "TestCodexNativeFinalizeRejectsMutation": [
+              "pass"
+            ],
+            "TestCodexNativeFinalizeReplay": [
+              "pass"
+            ],
+            "TestCodexNativeFixtureCoordinatorBoundary": [
+              "pass"
+            ],
+            "TestCodexNativeGapContext": [
+              "pass"
+            ],
+            "TestCodexNativeGapControlCommandCorrelation": [
+              "pass"
+            ],
+            "TestCodexNativeGapControls": [
+              "pass"
+            ],
+            "TestCodexNativeGapDocsSearch": [
+              "pass"
+            ],
+            "TestCodexNativeGapEvidencePaths": [
+              "pass"
+            ],
+            "TestCodexNativeGapParentCoordination": [
+              "pass"
+            ],
+            "TestCodexNativeInstalledBuildGuidance": [
+              "pass"
+            ],
+            "TestCodexNativeProofContractBinding": [
+              "pass"
+            ],
+            "TestCodexNativeProofContractDerivedReceiptIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeProofContractReplayIdentity": [
+              "pass"
+            ],
+            "TestCodexNativeQualificationCoordinator": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryCancelPending": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryContextActivityTimestamp": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryPhaseRoute": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryReadOnly": [
+              "pass"
+            ],
+            "TestCodexNativeRecoveryUnresolved": [
+              "pass"
+            ],
+            "TestCodexNativeWorkerAdmission": [
+              "pass"
+            ],
+            "TestCodexNativeWorkerCancellation": [
+              "pass"
+            ],
+            "TestCodexNativeWorkerTerminal": [
+              "pass"
+            ],
+            "TestCommandGuideYamlCodexMetadataMatches": [
+              "pass"
+            ],
+            "TestCompletionPacketSchemaMatchesStructs": [
+              "pass"
+            ],
+            "TestCompletionPacketSchemaNativeJournalIsolation": [
+              "pass"
+            ]
+          },
+          "timeout_lines": []
+        },
+        "normal-pkg-codex": {
+          "exit_code": 0,
+          "failed_tests": [],
+          "missing_tests": [],
+          "package_terminals": [
+            "pass"
+          ],
+          "stopped_reason": null,
+          "terminals": {
+            "TestNativeCancellationCapabilityRequiresProof": [
+              "pass"
+            ],
+            "TestNativeWorkerCancellationRequirement": [
+              "pass"
+            ]
+          },
+          "timeout_lines": []
+        }
+      },
+      "passed": false,
+      "summary": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-retry-20260918T224251Z-ahxj_e4a/summary.json",
+        "sha256": "sha256:9e5462dc1f58eab15696f7326f1025383cb90d8609c52280187872f8d77252c3"
+      }
+    }
+  ],
+  "implementation_passed": true,
+  "limitations": [
+    "All 93 selected top-level tests passed normally and with race detection; this is not a full-suite result.",
+    "Actual ordinary, requested independent review and scoped-question cases with full child reads and separate ACK remain mandatory.",
+    "Both failed focused attempts remain immutable failures, including the first timeout and missing tests.",
+    "No installed runtime, shared hub or CalVault state was changed by this implementation check.",
+    "Plan 25 and Phase 204.2 remain incomplete; final eleven cases and four standard regression runs remain required."
+  ],
+  "production_digest": "sha256:29bf3d9ba70ffed3f57978b06bb44941296cf4c050df3a3200e3dee9ab6b0d6b",
+  "qualification_complete": false,
+  "recorded_at": "2026-09-18T23:19:23.478636+00:00",
+  "runs": {
+    "normal-cmd": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeBuildGuidePlatformIsolation|TestCodexNativeCancellationRefusalEvidence|TestCodexNativeCancellationRefusalReplay|TestCodexNativeCancellationRequirementEscalationRefusal|TestCodexNativeCancellationRequirementReserveRefusal|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildFetchAckRefusals|TestCodexNativeChildFetchAnswerGuidance|TestCodexNativeChildFetchCompletionLane|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchFailureAndDelayedObservation|TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission|TestCodexNativeChildFetchIntegration|TestCodexNativeChildFetchNativeFinalization|TestCodexNativeChildFetchProtocolIdentity|TestCodexNativeChildFetchProviderLane|TestCodexNativeChildFetchQuestionClosure|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchReadCurrencyAndBounds|TestCodexNativeChildFetchSourceRefusals|TestCodexNativeCodeModeOutputProjection|TestCodexNativeContextAdmissionCurrency|TestCodexNativeContextAnswerDedup|TestCodexNativeContextBounds|TestCodexNativeContextBriefIdentity|TestCodexNativeContextConcurrentAck|TestCodexNativeContextDelivered|TestCodexNativeContextDeliveryBinding|TestCodexNativeContextDelta|TestCodexNativeContextExactBytes|TestCodexNativeContextFinalCurrency|TestCodexNativeContextHistoricalIntegrity|TestCodexNativeContextOptionalAndFallback|TestCodexNativeContextPacking|TestCodexNativeContextProtocolCaseWireCompatibility|TestCodexNativeContextProtocolIdentity|TestCodexNativeContextReadOnly|TestCodexNativeContextStaleInterleaving|TestCodexNativeDecisionAnswerRoute|TestCodexNativeDecisionConcurrentAnswer|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionFactsOnce|TestCodexNativeDecisionFlagCompatibility|TestCodexNativeDecisionFlagConcurrentCommit|TestCodexNativeDecisionFlagProtectedRoutes|TestCodexNativeDecisionFlagUnknownFields|TestCodexNativeDecisionGuideContract|TestCodexNativeDecisionIsolation|TestCodexNativeDecisionOrdinaryIDCompatibility|TestCodexNativeDecisionProtectedPaths|TestCodexNativeDecisionQuestionAdmission|TestCodexNativeDecisionReplay|TestCodexNativeDecisionScope|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeDecisionTerminalHandoff|TestCodexNativeFinalizeBoundJournal|TestCodexNativeFinalizePartial|TestCodexNativeFinalizeRejectsMutation|TestCodexNativeFinalizeReplay|TestCodexNativeFixtureCoordinatorBoundary|TestCodexNativeGapContext|TestCodexNativeGapControlCommandCorrelation|TestCodexNativeGapControls|TestCodexNativeGapDocsSearch|TestCodexNativeGapEvidencePaths|TestCodexNativeGapParentCoordination|TestCodexNativeInstalledBuildGuidance|TestCodexNativeProofContractBinding|TestCodexNativeProofContractDerivedReceiptIdentity|TestCodexNativeProofContractReplayIdentity|TestCodexNativeQualificationCoordinator|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryContextActivityTimestamp|TestCodexNativeRecoveryPhaseRoute|TestCodexNativeRecoveryReadOnly|TestCodexNativeRecoveryUnresolved|TestCodexNativeWorkerAdmission|TestCodexNativeWorkerCancellation|TestCodexNativeWorkerTerminal|TestCommandGuideYamlCodexMetadataMatches|TestCompletionPacketSchemaMatchesStructs|TestCompletionPacketSchemaNativeJournalIsolation|TestExternalGroupedPartialPersistsExactTaskState|TestWrapperBundledWorkerCreditsAllCoveredTasks|TestWrapperGroupedFailureCreditsFourOfSix|TestGoldenStateMutations|TestBuildFinalizeFilesTheRunsRows|TestForcedRedispatchAfterBuiltIsNotADeadlock|TestFinalizeNeverSendsUserToACommandThatRefuses|TestStagedForcedRedispatchAfterBuiltIsNotADeadlock)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "bound_seconds": 900,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/repo",
+      "elapsed_seconds": 231.20359206199646,
+      "exit_code": 0,
+      "started_epoch": 1789772854.417616,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/normal-cmd.stdout",
+        "sha256": "sha256:17766d561b537001bd4aa409132c2b20d17f194cc35922b25cd66d667e8efafb"
+      },
+      "stopped_reason": null,
+      "top_level_terminals": {
+        "TestBuildFinalizeFilesTheRunsRows": [
+          "pass"
+        ],
+        "TestCodexNativeBuildGuidePlatformIsolation": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRefusalEvidence": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRefusalReplay": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementEscalationRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementReserveRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeChildContextBootstrap": [
+          "pass"
+        ],
+        "TestCodexNativeChildContextFetchEvidence": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchAckRefusals": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchAnswerGuidance": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchCompletionLane": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFactoryAndLegacy": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFailureAndDelayedObservation": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchIntegration": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchNativeFinalization": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchProtocolIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchProviderLane": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchQuestionClosure": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchReadAckNoMutation": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchReadCurrencyAndBounds": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchSourceRefusals": [
+          "pass"
+        ],
+        "TestCodexNativeCodeModeOutputProjection": [
+          "pass"
+        ],
+        "TestCodexNativeContextAdmissionCurrency": [
+          "pass"
+        ],
+        "TestCodexNativeContextAnswerDedup": [
+          "pass"
+        ],
+        "TestCodexNativeContextBounds": [
+          "pass"
+        ],
+        "TestCodexNativeContextBriefIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeContextConcurrentAck": [
+          "pass"
+        ],
+        "TestCodexNativeContextDelivered": [
+          "pass"
+        ],
+        "TestCodexNativeContextDeliveryBinding": [
+          "pass"
+        ],
+        "TestCodexNativeContextDelta": [
+          "pass"
+        ],
+        "TestCodexNativeContextExactBytes": [
+          "pass"
+        ],
+        "TestCodexNativeContextFinalCurrency": [
+          "pass"
+        ],
+        "TestCodexNativeContextHistoricalIntegrity": [
+          "pass"
+        ],
+        "TestCodexNativeContextOptionalAndFallback": [
+          "pass"
+        ],
+        "TestCodexNativeContextPacking": [
+          "pass"
+        ],
+        "TestCodexNativeContextProtocolCaseWireCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeContextProtocolIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeContextReadOnly": [
+          "pass"
+        ],
+        "TestCodexNativeContextStaleInterleaving": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionAnswerRoute": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionConcurrentAnswer": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionDelivered": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFactsOnce": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagConcurrentCommit": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagProtectedRoutes": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagUnknownFields": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionGuideContract": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionIsolation": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionOrdinaryIDCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionProtectedPaths": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionQuestionAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionReplay": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionScope": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionStaleInterleaving": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionTerminalHandoff": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeBoundJournal": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizePartial": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeRejectsMutation": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeReplay": [
+          "pass"
+        ],
+        "TestCodexNativeFixtureCoordinatorBoundary": [
+          "pass"
+        ],
+        "TestCodexNativeGapContext": [
+          "pass"
+        ],
+        "TestCodexNativeGapControlCommandCorrelation": [
+          "pass"
+        ],
+        "TestCodexNativeGapControls": [
+          "pass"
+        ],
+        "TestCodexNativeGapDocsSearch": [
+          "pass"
+        ],
+        "TestCodexNativeGapEvidencePaths": [
+          "pass"
+        ],
+        "TestCodexNativeGapParentCoordination": [
+          "pass"
+        ],
+        "TestCodexNativeInstalledBuildGuidance": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractBinding": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractDerivedReceiptIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeQualificationCoordinator": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryCancelPending": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryContextActivityTimestamp": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryPhaseRoute": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryReadOnly": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryUnresolved": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCancellation": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerTerminal": [
+          "pass"
+        ],
+        "TestCommandGuideYamlCodexMetadataMatches": [
+          "pass"
+        ],
+        "TestCompletionPacketSchemaMatchesStructs": [
+          "pass"
+        ],
+        "TestCompletionPacketSchemaNativeJournalIsolation": [
+          "pass"
+        ],
+        "TestExternalGroupedPartialPersistsExactTaskState": [
+          "pass"
+        ],
+        "TestFinalizeNeverSendsUserToACommandThatRefuses": [
+          "pass"
+        ],
+        "TestForcedRedispatchAfterBuiltIsNotADeadlock": [
+          "pass"
+        ],
+        "TestGoldenStateMutations": [
+          "pass"
+        ],
+        "TestStagedForcedRedispatchAfterBuiltIsNotADeadlock": [
+          "pass"
+        ],
+        "TestWrapperBundledWorkerCreditsAllCoveredTasks": [
+          "pass"
+        ],
+        "TestWrapperGroupedFailureCreditsFourOfSix": [
+          "pass"
+        ]
+      }
+    },
+    "normal-pkg-codex": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./pkg/codex",
+        "-run",
+        "^(TestNativeCancellationCapabilityRequiresProof|TestNativeWorkerCancellationRequirement)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "bound_seconds": 900,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/repo",
+      "elapsed_seconds": 13.897866010665894,
+      "exit_code": 0,
+      "started_epoch": 1789772839.38054,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/normal-pkg-codex.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/normal-pkg-codex.stdout",
+        "sha256": "sha256:72d749b75a07d461f20d2dc7e79526d623e5d777900e343659c7d49b825e0b86"
+      },
+      "stopped_reason": null,
+      "top_level_terminals": {
+        "TestNativeCancellationCapabilityRequiresProof": [
+          "pass"
+        ],
+        "TestNativeWorkerCancellationRequirement": [
+          "pass"
+        ]
+      }
+    },
+    "race-cmd": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeBuildGuidePlatformIsolation|TestCodexNativeCancellationRefusalEvidence|TestCodexNativeCancellationRefusalReplay|TestCodexNativeCancellationRequirementEscalationRefusal|TestCodexNativeCancellationRequirementReserveRefusal|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildFetchAckRefusals|TestCodexNativeChildFetchAnswerGuidance|TestCodexNativeChildFetchCompletionLane|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchFailureAndDelayedObservation|TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission|TestCodexNativeChildFetchIntegration|TestCodexNativeChildFetchNativeFinalization|TestCodexNativeChildFetchProtocolIdentity|TestCodexNativeChildFetchProviderLane|TestCodexNativeChildFetchQuestionClosure|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchReadCurrencyAndBounds|TestCodexNativeChildFetchSourceRefusals|TestCodexNativeCodeModeOutputProjection|TestCodexNativeContextAdmissionCurrency|TestCodexNativeContextAnswerDedup|TestCodexNativeContextBounds|TestCodexNativeContextBriefIdentity|TestCodexNativeContextConcurrentAck|TestCodexNativeContextDelivered|TestCodexNativeContextDeliveryBinding|TestCodexNativeContextDelta|TestCodexNativeContextExactBytes|TestCodexNativeContextFinalCurrency|TestCodexNativeContextHistoricalIntegrity|TestCodexNativeContextOptionalAndFallback|TestCodexNativeContextPacking|TestCodexNativeContextProtocolCaseWireCompatibility|TestCodexNativeContextProtocolIdentity|TestCodexNativeContextReadOnly|TestCodexNativeContextStaleInterleaving|TestCodexNativeDecisionAnswerRoute|TestCodexNativeDecisionConcurrentAnswer|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionFactsOnce|TestCodexNativeDecisionFlagCompatibility|TestCodexNativeDecisionFlagConcurrentCommit|TestCodexNativeDecisionFlagProtectedRoutes|TestCodexNativeDecisionFlagUnknownFields|TestCodexNativeDecisionGuideContract|TestCodexNativeDecisionIsolation|TestCodexNativeDecisionOrdinaryIDCompatibility|TestCodexNativeDecisionProtectedPaths|TestCodexNativeDecisionQuestionAdmission|TestCodexNativeDecisionReplay|TestCodexNativeDecisionScope|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeDecisionTerminalHandoff|TestCodexNativeFinalizeBoundJournal|TestCodexNativeFinalizePartial|TestCodexNativeFinalizeRejectsMutation|TestCodexNativeFinalizeReplay|TestCodexNativeFixtureCoordinatorBoundary|TestCodexNativeGapContext|TestCodexNativeGapControlCommandCorrelation|TestCodexNativeGapControls|TestCodexNativeGapDocsSearch|TestCodexNativeGapEvidencePaths|TestCodexNativeGapParentCoordination|TestCodexNativeInstalledBuildGuidance|TestCodexNativeProofContractBinding|TestCodexNativeProofContractDerivedReceiptIdentity|TestCodexNativeProofContractReplayIdentity|TestCodexNativeQualificationCoordinator|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryContextActivityTimestamp|TestCodexNativeRecoveryPhaseRoute|TestCodexNativeRecoveryReadOnly|TestCodexNativeRecoveryUnresolved|TestCodexNativeWorkerAdmission|TestCodexNativeWorkerCancellation|TestCodexNativeWorkerTerminal|TestCommandGuideYamlCodexMetadataMatches|TestCompletionPacketSchemaMatchesStructs|TestCompletionPacketSchemaNativeJournalIsolation|TestExternalGroupedPartialPersistsExactTaskState|TestWrapperBundledWorkerCreditsAllCoveredTasks|TestWrapperGroupedFailureCreditsFourOfSix|TestGoldenStateMutations|TestBuildFinalizeFilesTheRunsRows|TestForcedRedispatchAfterBuiltIsNotADeadlock|TestFinalizeNeverSendsUserToACommandThatRefuses|TestStagedForcedRedispatchAfterBuiltIsNotADeadlock)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "bound_seconds": 900,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/repo",
+      "elapsed_seconds": 296.3838667869568,
+      "exit_code": 0,
+      "started_epoch": 1789773108.2079701,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/race-cmd.stdout",
+        "sha256": "sha256:9d80ffff508a05826e4b17626a655725dad2dc09c633c88990e468bf95bd4d70"
+      },
+      "stopped_reason": null,
+      "top_level_terminals": {
+        "TestBuildFinalizeFilesTheRunsRows": [
+          "pass"
+        ],
+        "TestCodexNativeBuildGuidePlatformIsolation": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRefusalEvidence": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRefusalReplay": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementEscalationRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementReserveRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeChildContextBootstrap": [
+          "pass"
+        ],
+        "TestCodexNativeChildContextFetchEvidence": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchAckRefusals": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchAnswerGuidance": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchCompletionLane": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFactoryAndLegacy": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFailureAndDelayedObservation": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchFieldsCannotBypassQuestionAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchIntegration": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchNativeFinalization": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchProtocolIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchProviderLane": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchQuestionClosure": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchReadAckNoMutation": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchReadCurrencyAndBounds": [
+          "pass"
+        ],
+        "TestCodexNativeChildFetchSourceRefusals": [
+          "pass"
+        ],
+        "TestCodexNativeCodeModeOutputProjection": [
+          "pass"
+        ],
+        "TestCodexNativeContextAdmissionCurrency": [
+          "pass"
+        ],
+        "TestCodexNativeContextAnswerDedup": [
+          "pass"
+        ],
+        "TestCodexNativeContextBounds": [
+          "pass"
+        ],
+        "TestCodexNativeContextBriefIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeContextConcurrentAck": [
+          "pass"
+        ],
+        "TestCodexNativeContextDelivered": [
+          "pass"
+        ],
+        "TestCodexNativeContextDeliveryBinding": [
+          "pass"
+        ],
+        "TestCodexNativeContextDelta": [
+          "pass"
+        ],
+        "TestCodexNativeContextExactBytes": [
+          "pass"
+        ],
+        "TestCodexNativeContextFinalCurrency": [
+          "pass"
+        ],
+        "TestCodexNativeContextHistoricalIntegrity": [
+          "pass"
+        ],
+        "TestCodexNativeContextOptionalAndFallback": [
+          "pass"
+        ],
+        "TestCodexNativeContextPacking": [
+          "pass"
+        ],
+        "TestCodexNativeContextProtocolCaseWireCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeContextProtocolIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeContextReadOnly": [
+          "pass"
+        ],
+        "TestCodexNativeContextStaleInterleaving": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionAnswerRoute": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionConcurrentAnswer": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionDelivered": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFactsOnce": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagConcurrentCommit": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagProtectedRoutes": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionFlagUnknownFields": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionGuideContract": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionIsolation": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionOrdinaryIDCompatibility": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionProtectedPaths": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionQuestionAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionReplay": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionScope": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionStaleInterleaving": [
+          "pass"
+        ],
+        "TestCodexNativeDecisionTerminalHandoff": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeBoundJournal": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizePartial": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeRejectsMutation": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeReplay": [
+          "pass"
+        ],
+        "TestCodexNativeFixtureCoordinatorBoundary": [
+          "pass"
+        ],
+        "TestCodexNativeGapContext": [
+          "pass"
+        ],
+        "TestCodexNativeGapControlCommandCorrelation": [
+          "pass"
+        ],
+        "TestCodexNativeGapControls": [
+          "pass"
+        ],
+        "TestCodexNativeGapDocsSearch": [
+          "pass"
+        ],
+        "TestCodexNativeGapEvidencePaths": [
+          "pass"
+        ],
+        "TestCodexNativeGapParentCoordination": [
+          "pass"
+        ],
+        "TestCodexNativeInstalledBuildGuidance": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractBinding": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractDerivedReceiptIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeQualificationCoordinator": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryCancelPending": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryContextActivityTimestamp": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryPhaseRoute": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryReadOnly": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryUnresolved": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCancellation": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerTerminal": [
+          "pass"
+        ],
+        "TestCommandGuideYamlCodexMetadataMatches": [
+          "pass"
+        ],
+        "TestCompletionPacketSchemaMatchesStructs": [
+          "pass"
+        ],
+        "TestCompletionPacketSchemaNativeJournalIsolation": [
+          "pass"
+        ],
+        "TestExternalGroupedPartialPersistsExactTaskState": [
+          "pass"
+        ],
+        "TestFinalizeNeverSendsUserToACommandThatRefuses": [
+          "pass"
+        ],
+        "TestForcedRedispatchAfterBuiltIsNotADeadlock": [
+          "pass"
+        ],
+        "TestGoldenStateMutations": [
+          "pass"
+        ],
+        "TestStagedForcedRedispatchAfterBuiltIsNotADeadlock": [
+          "pass"
+        ],
+        "TestWrapperBundledWorkerCreditsAllCoveredTasks": [
+          "pass"
+        ],
+        "TestWrapperGroupedFailureCreditsFourOfSix": [
+          "pass"
+        ]
+      }
+    },
+    "race-pkg-codex": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./pkg/codex",
+        "-race",
+        "-run",
+        "^(TestNativeCancellationCapabilityRequiresProof|TestNativeWorkerCancellationRequirement)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "bound_seconds": 900,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/repo",
+      "elapsed_seconds": 19.180413961410522,
+      "exit_code": 0,
+      "started_epoch": 1789773087.847052,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/race-pkg-codex.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/race-pkg-codex.stdout",
+        "sha256": "sha256:86c3874b48f0e139a0fe49488956d6099cdff0e3e7eb78de8e4f46682f0615e0"
+      },
+      "stopped_reason": null,
+      "top_level_terminals": {
+        "TestNativeCancellationCapabilityRequiresProof": [
+          "pass"
+        ],
+        "TestNativeWorkerCancellationRequirement": [
+          "pass"
+        ]
+      }
+    }
+  },
+  "schema_version": "aether-native-child-fetch-implementation/v1",
+  "source_inputs": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/source-inputs.json",
+    "sha256": "sha256:8def81809dbcf4b85de978273a2f50a07bdff554f0b479ad348d25a6cad68b53"
+  },
+  "source_patch": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-fetch-final-20260918T225614Z-kh4et5ec/candidate.patch",
+    "sha256": "sha256:8de5eff7a3992c9defa08dfeb6fe056957058feeb5430fbdf86cbcb982209d66"
+  },
+  "storage_estimate": {
+    "method": "one snapshot + two additional cache-growth allowances + one active link/scratch allowance + one untouched headroom allowance + 256MiB metadata; existing transferred allocation receives no reclaimed-space credit",
+    "required_bytes": 10470596608,
+    "snapshot_allowance_bytes": 575971328,
+    "working_allowance_bytes": 2406547456
+  },
+  "task": "204.2-25.2 implementation only",
+  "test_corpus_digest": "sha256:2c6264bb274729e7c899101844afb697cdf16765113736c95729b83d3f59e912"
+}

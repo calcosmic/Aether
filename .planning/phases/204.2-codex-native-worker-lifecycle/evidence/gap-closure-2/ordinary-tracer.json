@@ -1,0 +1,18 @@
+{
+  "admission": {
+    "path": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle/evidence/gap-closure-2/admission-preflight.json",
+    "sha256": "sha256:38c836394927ddcf26e1e8ae350ca5a1cd2a9ee7179ef6aa69ef3e60403827ae"
+  },
+  "builder": null,
+  "candidate_binary": null,
+  "capture_revision": null,
+  "credit": null,
+  "historical_proof_reused": false,
+  "passed": false,
+  "plan": "204.2-17",
+  "reason": "Candidate admission rejects ignored consumed .codex/.DS_Store; complete storage estimate unavailable.",
+  "schema_version": "aether-native-gap2-tracer/v1",
+  "source_revision": "ea8d0b51d6b940be20c181a3d1d09a382d4648d3",
+  "status": "not_attempted",
+  "terminal": null
+}

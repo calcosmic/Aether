@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/learn"
 )
 
 // These tests prove the consolidation pipeline's promotion output is
@@ -165,10 +168,10 @@ func seedQueenEligibleInstinct(t *testing.T, sentinel string) {
 				TrustScore: 0.90,
 				TrustTier:  "trusted",
 				Confidence: 0.90,
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": applied, "success": true},
-					map[string]interface{}{"timestamp": applied, "success": true},
-					map[string]interface{}{"timestamp": applied, "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: applied, Outcome: "helpful"},
+					{Timestamp: applied, Outcome: "helpful"},
+					{Timestamp: applied, Outcome: "helpful"},
 				},
 			},
 		},
@@ -261,6 +264,72 @@ func TestPromotedInstinctReachesWorkerPrompt(t *testing.T) {
 	}
 	if !strings.Contains(output.PromptSection, sentinel) {
 		t.Fatalf("expected sentinel %q to reach buildColonyPrimeOutput(true).PromptSection via QUEEN.md, got:\n%s", sentinel, output.PromptSection)
+	}
+}
+
+// TestConsolidationRefusesLinkedLocalQueenBoundary200 proves the injected
+// repository writer revalidates the .aether boundary before touching QUEEN.md.
+// A replaced boundary must fail closed instead of following the link and
+// writing outside the repository.
+func TestConsolidationRefusesLinkedLocalQueenBoundary200(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+
+	realAether := filepath.Join(tmpDir, ".aether-real")
+	if err := os.Rename(filepath.Join(tmpDir, ".aether"), realAether); err != nil {
+		t.Fatalf("move real .aether boundary: %v", err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(tmpDir, ".aether")); err != nil {
+		t.Fatalf("replace .aether with symlink: %v", err)
+	}
+
+	writer := pipelineConfigForStore().QueenInstinctPromoter
+	if writer == nil {
+		t.Fatal("pipelineConfigForStore must inject a Queen instinct writer")
+	}
+	err := writer(context.Background(), colony.InstinctEntry{
+		ID: "inst_linked_boundary", Domain: "testing", Trigger: "linked boundary",
+		Action: "must-not-escape", Confidence: 0.90,
+	}, "test-colony")
+	if err == nil {
+		t.Fatal("linked .aether boundary must be refused")
+	}
+	if _, statErr := os.Lstat(filepath.Join(outside, "QUEEN.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("writer escaped into linked boundary, stat err = %v", statErr)
+	}
+}
+
+// TestConsolidationQueenWriteFailureIsNotPromoted200 proves cmd wiring keeps
+// the package's truthful accounting when the contained target cannot be
+// written. A directory at QUEEN.md is a deterministic write refusal.
+func TestConsolidationQueenWriteFailureIsNotPromoted200(t *testing.T) {
+	saveGlobals(t)
+	s, tmpDir := newTestStore(t)
+	store = s
+	seedQueenEligibleInstinct(t, "sentinel-must-not-be-counted-as-promoted")
+
+	if err := os.Mkdir(filepath.Join(tmpDir, ".aether", "QUEEN.md"), 0755); err != nil {
+		t.Fatalf("create unwritable Queen target: %v", err)
+	}
+	bus := events.NewBus(s, events.DefaultConfig())
+	result, err := learn.NewPipeline(s, bus, pipelineConfigForStore()).RunConsolidation(context.Background())
+	if err != nil {
+		t.Fatalf("RunConsolidation returned top-level error: %v", err)
+	}
+	if len(result.QueenPromoted) != 0 {
+		t.Fatalf("failed Queen write counted as promoted: %v", result.QueenPromoted)
+	}
+	foundWriteFailure := false
+	for _, resultErr := range result.Errors {
+		if strings.Contains(resultErr.Error(), "queen promote") {
+			foundWriteFailure = true
+			break
+		}
+	}
+	if !foundWriteFailure {
+		t.Fatalf("Queen write failure missing from result.Errors: %v", result.Errors)
 	}
 }
 

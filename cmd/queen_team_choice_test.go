@@ -95,7 +95,18 @@ func TestNotCalledCastesRenderAsOneShortClause(t *testing.T) {
 // TestLightBuildOfProductionPhaseShowsSafetyRestorationLine: criterion 2. When
 // the runtime keeps a safety caste the depth flag would have dropped, the
 // output names the caste and the action instead of silently correcting.
-func TestLightBuildOfProductionPhaseShowsSafetyRestorationLine(t *testing.T) {
+// TestLightContinueOfSecurityPhaseShowsSafetyRestorationLine used to run
+// this at "build" with a production/security phase, relying on the old
+// build-side floor (watcher+probe+auditor+gatekeeper all required) to
+// generate genuine budget pressure at light depth. Plan 194-02 (D-05, D-07)
+// removed that floor: build now requires only the builder, which is never at
+// risk of being pruned, so a build-flow fixture can no longer demonstrate a
+// real "kept by safety policy" restoration. The forced-reviewer floor this
+// line exists to announce now lives at the continue step, so the fixture
+// moved there -- a security-signal phase with enough OTHER relevance-scored
+// candidates to genuinely exceed the light continue budget, so gatekeeper
+// (forced) is provably preserved rather than trivially present.
+func TestLightContinueOfSecurityPhaseShowsSafetyRestorationLine(t *testing.T) {
 	goal := "ship the payment flow"
 	state := colony.ColonyState{
 		Goal:              &goal,
@@ -103,18 +114,26 @@ func TestLightBuildOfProductionPhaseShowsSafetyRestorationLine(t *testing.T) {
 	}
 	taskID := "t1"
 	phase := colony.Phase{
-		ID:          1,
-		Name:        "Security release hardening",
-		Description: "Harden the production auth and release path for security",
+		ID:   1,
+		Name: "Password reset by email",
+		// D-06 removed auditor's mode==production relevance boost (it was
+		// the same implicit "production ⇒ auditor" floor restated as a
+		// score), so this fixture's budget pressure can no longer come from
+		// that free 4th candidate. "crash" + "resilience" pulls in Chaos on
+		// its own keyword merit instead, restoring genuine pressure against
+		// light continue's 3-worker cap (watcher, gatekeeper and measurer
+		// already fill it) so a real prune -- not just Chaos's absence --
+		// is what this test now measures.
+		Description: "Let a user reset their password with an emailed token, and store the credential hash. Harden auth token handling, refactor the legacy parser, optimize latency, and add crash resilience handling.",
 		Mode:        colony.PhaseModeProduction,
-		Tasks:       []colony.Task{{ID: &taskID, Goal: "harden auth token handling"}},
+		Tasks:       []colony.Task{{ID: &taskID, Goal: "harden auth token handling, refactor legacy code, benchmark performance"}},
 	}
 
-	// The real contract builder, not a fixture: a light build of a high-risk
-	// production phase must preserve its safety castes.
-	policy := enrichQueenExecutionPolicyWithSpawnBudget(codexQueenExecutionPolicy{}, state, phase, "build", colony.VerificationDepthLight, nil)
+	// The real contract builder, not a fixture: a light continue of a
+	// security-signal phase must preserve its forced reviewer.
+	policy := enrichQueenExecutionPolicyWithSpawnBudget(codexQueenExecutionPolicy{}, state, phase, "continue", colony.VerificationDepthLight, nil)
 	if policy.SpawnBudget == nil || len(policy.SpawnBudget.PreservedCastes) == 0 {
-		t.Fatalf("expected a light build of a high-risk production phase to preserve safety castes, got %+v", policy.SpawnBudget)
+		t.Fatalf("expected a light continue of a security-signal phase to preserve safety castes, got %+v", policy.SpawnBudget)
 	}
 
 	rendered := renderQueenTeamChoice(policy, nil)
@@ -201,7 +220,7 @@ func TestStatusHealthLineReflectsComputedVitals(t *testing.T) {
 	if line == "" {
 		t.Fatal("status renders no colony health line from computed vitals")
 	}
-	if !strings.Contains(line, "Colony health:") {
+	if !strings.Contains(line, "Colony health (this project's health):") {
 		t.Errorf("health line missing its label: %q", line)
 	}
 	wantLabel := stringValue(vitals["health_label"])

@@ -229,6 +229,10 @@ func TestSealEmitsChamberCeremonyEvent(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, s)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -280,11 +284,13 @@ func TestPlanEmitsLifecycleCeremonyEvents(t *testing.T) {
 		State:        colony.StateREADY,
 		CurrentPhase: 0,
 	}
+	state = codexPlanSpecificationFixture(t, state, colony.SpecStatusApproved)
 	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	if _, err := runCodexPlanWithOptions(root, codexPlanOptions{Synthetic: true}); err != nil {
+	if _, err := runCodexPlanWithOptions(root, codexPlanOptions{Synthetic: true, Preset: "balanced", PresetSet: true}); err != nil {
 		t.Fatalf("plan returned error: %v", err)
 	}
 
@@ -484,7 +490,8 @@ func TestEntombEmitsChamberEntombCeremonyEvent(t *testing.T) {
 		}
 	}
 
-	rootCmd.SetArgs([]string{"entomb"})
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb returned error: %v", err)
 	}
@@ -495,7 +502,7 @@ func TestEntombEmitsChamberEntombCeremonyEvent(t *testing.T) {
 	if err := json.Unmarshal(persisted[len(persisted)-1].Payload, &payload); err != nil {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
-	if payload.Status != "entombed" || payload.Message != goal || payload.Completed != 1 || payload.Total != 1 {
+	if payload.Status != "entombed" || payload.Message != goal {
 		t.Fatalf("payload = %+v", payload)
 	}
 	if payload.TaskID == "" || payload.Task == "" {

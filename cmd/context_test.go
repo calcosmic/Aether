@@ -14,31 +14,12 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
-// newTestStoreCmd creates a temp directory with .aether/data/ and returns a Store.
-// It also sets COLONY_DATA_DIR so PersistentPreRunE resolves to the temp dir.
+// newTestStoreCmd binds the package command globals and both repository-root
+// environment variables to one contained temporary repository.
 func newTestStoreCmd(t *testing.T) (*storage.Store, string) {
 	t.Helper()
-	tmpDir, err := os.MkdirTemp("", "aether-context-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dataDir := tmpDir + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Set COLONY_DATA_DIR so PersistentPreRunE initializes store to our temp dir
-	origDataDir := os.Getenv("COLONY_DATA_DIR")
-	os.Setenv("COLONY_DATA_DIR", dataDir)
-	t.Cleanup(func() {
-		os.Setenv("COLONY_DATA_DIR", origDataDir)
-	})
-
-	return s, tmpDir
+	binding := bindCommandTestRepository(t)
+	return binding.Store, binding.Root
 }
 
 // parseEnvelopeCmd parses JSON output into a map.
@@ -57,11 +38,11 @@ func saveGlobalsCmd(t *testing.T) {
 	t.Helper()
 	origStdout := stdout
 	origStderr := stderr
-	origStore := store
 	t.Cleanup(func() {
 		stdout = origStdout
 		stderr = origStderr
-		store = origStore
+		store = nil
+		tracer = nil
 	})
 }
 

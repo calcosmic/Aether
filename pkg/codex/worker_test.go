@@ -453,18 +453,19 @@ func TestNewWorkerInvoker_RealWhenEnvTrue(t *testing.T) {
 	}
 }
 
-func TestNewWorkerInvoker_PrefersClaudeWhenAvailable(t *testing.T) {
+func TestNewWorkerInvoker_PinsCodexWhenClaudeAlsoAvailable(t *testing.T) {
 	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "1")
 	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, "")
 	t.Setenv("AETHER_CODEX_PATH", "go")
 	t.Setenv(envClaudePath, "go")
 
 	invoker := NewWorkerInvoker()
-	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
-		t.Fatalf("PlatformFromInvoker() = %s, want %s", got, PlatformClaude)
+	if got := PlatformFromInvoker(invoker); got != PlatformCodex {
+		t.Fatalf("PlatformFromInvoker() = %s, want %s", got, PlatformCodex)
 	}
 	if !invoker.IsAvailable(context.Background()) {
-		t.Fatalf("expected Claude-first invoker to be available, got %T", invoker)
+		t.Fatalf("expected active Codex invoker to be available, got %T", invoker)
 	}
 }
 
@@ -491,23 +492,24 @@ func TestNewWorkerInvoker_SelectsActiveClaudePlatform(t *testing.T) {
 	}
 }
 
-func TestNewWorkerInvoker_FallsBackToAvailablePlatform(t *testing.T) {
+func TestNewWorkerInvoker_DoesNotFallbackFromUnavailableHost(t *testing.T) {
 	t.Setenv("AETHER_CODEX_REAL_DISPATCH", "1")
 	t.Setenv(envActivePlatform, string(PlatformCodex))
+	t.Setenv(envWorkerPlatform, "")
 	t.Setenv("AETHER_CODEX_PATH", "missing-codex-binary-12345")
 	t.Setenv(envClaudePath, "go")
 	t.Setenv(envOpenCodePath, "missing-opencode-binary-12345")
 
 	invoker := NewWorkerInvoker()
-	if got := PlatformFromInvoker(invoker); got != PlatformClaude {
-		t.Fatalf("PlatformFromInvoker() = %s, want %s", got, PlatformClaude)
+	if got := PlatformFromInvoker(invoker); got != PlatformUnknown {
+		t.Fatalf("PlatformFromInvoker() = %s, want unavailable", got)
 	}
-	if !invoker.IsAvailable(context.Background()) {
-		t.Fatalf("expected claude fallback to be available, got %T", invoker)
+	if invoker.IsAvailable(context.Background()) {
+		t.Fatalf("unavailable host must not select another provider: %T", invoker)
 	}
 	description := DescribeInvokerAvailability(invoker, context.Background())
-	if !strings.Contains(description, "detected host codex") || !strings.Contains(description, "falling back to claude worker dispatcher") {
-		t.Fatalf("DescribeInvokerAvailability() = %q, want fallback message", description)
+	if !strings.Contains(description, "codex") || strings.Contains(description, "falling back") || strings.Contains(description, "claude") {
+		t.Fatalf("DescribeInvokerAvailability() = %q, want only unavailable host", description)
 	}
 }
 

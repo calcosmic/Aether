@@ -1,0 +1,300 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-20T08:58:29.271801+00:00",
+  "attempt": 17,
+  "source_revision": "e69a7ec8688d3e866adaca9ccf5e134b3a43af9a",
+  "snapshot_revision": "8899de2eb05c2e015b5d6e517ce0b3ba9b0e15de",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-fixture-retry-rwuatpap/summary.json",
+    "sha256": "sha256:082eff9fb2daabe91d6183de6c719cefa828460a01b9fdbf5a51c11cc43ead07"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass_events": 1667,
+    "race_pass_events": 1667,
+    "named_test_passes_per_lane": 1666,
+    "package_pass_events_per_lane": 1,
+    "fail": 0,
+    "skip": 0
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/summary.json",
+    "sha256": "sha256:705bc1ae57c7c28d222d742a3748d5a75336a674105c24107c07d07741a8e4e5"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/run-live-inspection-forms-fixture-retry-integrated.PENDING.py",
+    "sha256": "sha256:20d3eb8dda0514a46838a1b6bd831d0de9ce65dae6db09c5b0756f70652ce366"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/config.READY.json",
+    "sha256": "sha256:f153f8e05c655ccee8abdef64e09bc37d91f95ea5815fa24e270c057c2ef5b3c"
+  },
+  "integrated_admission": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/preflight.json",
+    "sha256": "sha256:bcbe3faa1120c7235991c3aa37041620df15bb14d21ec98da156b9894c383f54"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/receipt.json",
+    "sha256": "sha256:84d16f019857f0972d4d1cc8ed4f804ec387f12d8ec378bbc558f7779c1b35a5"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/derived-ordinary.json",
+    "sha256": "sha256:659cc1c96a20eaaab3c135b2af6e0810660c4ccb12c14e9fa93a6a3ed6afcac4"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "reason": "raw native child edit/check evidence incomplete (edit=true checks=false); child log /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/home/.codex/sessions/2026/09/20/rollout-2026-09-20T10-50-51-01a0be02-d1ec-79a2-9bfb-6f327c533beb.jsonl",
+  "observed_flags": {
+    "child_checks_passed": false,
+    "child_edit_observed": true,
+    "parent_substitution": false,
+    "runtime_credit_observed": true,
+    "child_terminal_corroborated": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "child_unclassified_operations": [
+    "unclassified child code-mode: const results = await Promise.all([\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/repository\",max_output_tokens:5000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp_test.go\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/repository\",max_output_tokens:5000})\n]);\ntext(\"clamp.go\\n\" + results[0].output + \"\\nclamp_test.go\\n\" + results[1].output);\n",
+    "date --iso-8601=seconds"
+  ],
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-fixture-retry-rwuatpap/repo",
+      "elapsed_seconds": 436.77829487500276,
+      "exit_code": 1,
+      "bound_seconds": 3700,
+      "stopped_reason": null,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/live.stdout",
+        "sha256": "sha256:cc64889bd8ff0c2c2b1e6b66c5ee2a1136a978f1235037dee666ef916ff0d98d"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_process_count": 136
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-fixture-retry-rwuatpap/repo",
+      "elapsed_seconds": 7.187583790997451,
+      "exit_code": 1,
+      "bound_seconds": 300,
+      "stopped_reason": null,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/replay.stdout",
+        "sha256": "sha256:85429b5c39fa78f2813b7020b168acdc993452d4f2a84de5b9d463f61836bb95"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_process_count": 4
+      }
+    }
+  },
+  "source_mapping": {
+    "child_id": "01a0be02-d1ec-79a2-9bfb-6f327c533beb",
+    "child_turn_id": "01a0be02-d23a-7532-bc85-1bf8233434cb",
+    "child_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/home/.codex/sessions/2026/09/20/rollout-2026-09-20T10-50-51-01a0be02-d1ec-79a2-9bfb-6f327c533beb.jsonl",
+      "sha256": "sha256:8cddae5056eef44ae87818a10913409f42cfd38d803b6b43fd04b5be2f18a058"
+    },
+    "parent_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-inspection-forms-fixture-retry-mntxwc9y/capture/native-ordinary-1771415784/parent-events.jsonl",
+      "sha256": "sha256:739e6bca7d537d51b9a88a9093969e9757dcee12219247653d9bf6372fac0652"
+    },
+    "child_commands": [
+      {
+        "operation": "context fetch",
+        "call_line": 24,
+        "event_line": 26,
+        "output_line": 27,
+        "event_id": "exec-0d6947f7-5f43-478d-9e6d-39573dd0b91d",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "context ACK",
+        "call_line": 31,
+        "event_line": 33,
+        "output_line": 34,
+        "event_id": "exec-31815fdd-bd05-437f-9a35-ee348cf309b1",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "baseline failing uncached test",
+        "call_line": 40,
+        "event_line": 42,
+        "output_line": 43,
+        "event_id": "exec-33a3faae-f708-4290-b342-9d3b5dd8954b",
+        "event_type": "CommandExecution",
+        "status": "failed",
+        "exit_code": 1
+      },
+      {
+        "operation": "first fixture inspection",
+        "call_line": 54,
+        "event_line": 55,
+        "output_line": 58,
+        "event_id": "exec-9284833a-ca0b-43d6-a0d7-c215a437ca1e",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "second fixture inspection",
+        "call_line": 54,
+        "event_line": 56,
+        "output_line": 58,
+        "event_id": "exec-5d25b720-e236-498f-8765-f9c001b81c47",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "source edit",
+        "call_line": 64,
+        "event_line": 66,
+        "output_line": 67,
+        "event_id": "exec-9e247f83-94d8-47a6-bbad-d15be48aa523",
+        "event_type": "FileChange",
+        "status": "completed"
+      },
+      {
+        "operation": "uncached passing JSON test",
+        "call_line": 71,
+        "event_line": 73,
+        "output_line": 74,
+        "event_id": "exec-1da7d1a2-5a96-45df-82ab-e390143c9475",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "build",
+        "call_line": 80,
+        "event_line": 82,
+        "output_line": 83,
+        "event_id": "exec-62e4adcb-f7ec-455d-8ca9-81b99029883b",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "plain test",
+        "call_line": 85,
+        "event_line": 87,
+        "output_line": 88,
+        "event_id": "exec-1aa906bf-b3c3-4579-905a-f5bd338eed27",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "vet",
+        "call_line": 90,
+        "event_line": 92,
+        "output_line": 93,
+        "event_id": "exec-a94d1d61-cb0e-48c3-8999-59e5c25e3234",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "coverage test",
+        "call_line": 95,
+        "event_line": 97,
+        "output_line": 98,
+        "event_id": "exec-1e8184db-1efb-43dc-a658-dc5f5792b830",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      },
+      {
+        "operation": "unsupported GNU ISO date inspection",
+        "call_line": 128,
+        "event_line": 129,
+        "output_line": 131,
+        "event_id": "exec-53b546c0-ffc2-4dde-abd2-e68a3da3379a",
+        "event_type": "CommandExecution",
+        "status": "failed",
+        "exit_code": 1
+      },
+      {
+        "operation": "fallback BSD date inspection",
+        "call_line": 135,
+        "event_line": 136,
+        "output_line": 138,
+        "event_id": "exec-2e18f4df-4438-49cb-87f8-4e3ab4e6ac95",
+        "event_type": "CommandExecution",
+        "status": "completed",
+        "exit_code": 0
+      }
+    ],
+    "interpretation": "A real baseline TestClamp/package failure preceded the edit, followed by a real uncached TestClamp/package pass. The unknown literal two-inspection output presentation preceded the edit and is independently unclassified. The later GNU ISO date-format inspection failed exit1 on macOS and its unclassified operation invalidated prior green check proof; the successful fallback date inspection cannot restore it. A failed date inspection must never grant passing-check credit. No later source edit is observed. Original and replayed outcomes remain incomplete.",
+    "rendered_inspection_output": "Literal labels plus each complete ordered results[index].output; both unique command events completed exit0 with the same child/turn/cwd.",
+    "later_edit_observed": false
+  },
+  "bootstrap_plaintext": {
+    "status": "unverified",
+    "reason": "Initial launch remains host-encrypted; no plaintext equality or difference inferred. Separate context fetch/ACK and existing predicates are unchanged.",
+    "predicate_changed": false
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "next": "Review bounded complete-output concatenation and ISO date-format inspection recognition, preserve failed outcomes and require fresh focused and live qualification."
+}

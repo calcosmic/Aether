@@ -1,8 +1,8 @@
 {
   "audit_dimensions": {
     "command_contracts": {
-      "command_count": 394,
-      "lifecycle_contracts": 18,
+      "command_count": 392,
+      "lifecycle_contracts": 19,
       "output_modes": [
         "json",
         "visual",
@@ -12,7 +12,7 @@
       ]
     },
     "worker_economy": {
-      "documented_castes": 35,
+      "documented_castes": 39,
       "dispatched_castes": 18,
       "chat_only_castes": 0,
       "visual_functions": 9

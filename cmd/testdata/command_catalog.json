@@ -1,32 +1,5 @@
 [
   {
-    "name": "abandon",
-    "short_description": "Discard the current colony and start fresh",
-    "flags": [
-      "confirm"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_lifecycle",
-    "since_version": "v1.0.53",
-    "historical_presence": {
-      "v1.0.53": true,
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v5.4.0": false
-    },
-    "stability_score": 8
-  },
-  {
     "name": "activity-log",
     "short_description": "Append an entry to the activity log",
     "flags": [
@@ -262,182 +235,6 @@
     "stability_score": 91
   },
   {
-    "name": "autopilot-headless-check",
-    "short_description": "Check if running in headless mode",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-init",
-    "short_description": "Initialize autopilot state for N phases",
-    "flags": [
-      "phases"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-resume",
-    "short_description": "Resume autopilot from paused state",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 10
-  },
-  {
-    "name": "autopilot-set-headless",
-    "short_description": "Set headless mode",
-    "flags": [
-      "value"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-status",
-    "short_description": "Return current autopilot state",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-stop",
-    "short_description": "Stop autopilot and save state",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "autopilot-update",
-    "short_description": "Update autopilot phase status",
-    "flags": [
-      "phase",
-      "status"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "backup-prune-global",
     "short_description": "Prune old backups to a cap",
     "flags": [
@@ -549,19 +346,25 @@
     "name": "build",
     "short_description": "Dispatch a real Codex build packet with worker briefs, claims, and spawn tracking",
     "flags": [
+      "boundary-why",
       "caste-reason",
+      "caste-why",
       "castes",
+      "checkin",
       "circuit-breaker-threshold",
       "force",
       "full",
       "heavy",
+      "job-proposal",
       "light",
+      "no-checkin",
       "no-suggest",
       "plan-only",
       "print-brief",
       "synthetic",
       "task",
       "verbose",
+      "verification-boundary",
       "verification-depth",
       "worker",
       "worker-timeout"
@@ -1435,6 +1238,7 @@
     "short_description": "Verify the active build packet, close dispatched workers, and advance honestly",
     "flags": [
       "caste-reason",
+      "caste-why",
       "castes",
       "classic-ceremony",
       "heavy",
@@ -1475,6 +1279,7 @@
     "flags": [
       "completion-file",
       "no-learn",
+      "reconcile-task",
       "verification-timeout"
     ],
     "parent_command": "",
@@ -1943,9 +1748,10 @@
   },
   {
     "name": "data-clean",
-    "short_description": "Remove test artifacts from colony data files",
+    "short_description": "Remove explicitly owned artifacts from an exact cleanup manifest",
     "flags": [
-      "confirm"
+      "confirm",
+      "manifest"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -1990,6 +1796,21 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "decision-answer",
+    "short_description": "Record the owner's answer to a worker's open decision",
+    "flags": [
+      "answer",
+      "native-request",
+      "phase",
+      "question",
+      "source",
+      "waiver-capability"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "discuss",
@@ -2103,8 +1924,10 @@
   },
   {
     "name": "entomb",
-    "short_description": "Archive a sealed colony into chambers and reset the active state",
-    "flags": [],
+    "short_description": "Archive and clear the sealed colony.",
+    "flags": [
+      "confirm"
+    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -2451,32 +2274,6 @@
       "v5.4.0": false
     },
     "stability_score": 91
-  },
-  {
-    "name": "failure-classify",
-    "short_description": "Show failure classification rules and rationale",
-    "flags": [
-      "json"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "json+visual",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
   },
   {
     "name": "feedback",
@@ -3148,11 +2945,22 @@
     "stability_score": 91
   },
   {
+    "name": "handoff-decisions",
+    "short_description": "List workers' open decisions awaiting an owner answer (read-only)",
+    "flags": [
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "history",
-    "short_description": "Show colony event history",
+    "short_description": "Show focused colony activity history",
     "flags": [
       "filter",
       "json",
+      "kind",
       "limit"
     ],
     "parent_command": "",
@@ -3443,6 +3251,23 @@
     "stability_score": 91
   },
   {
+    "name": "improve",
+    "short_description": "Look at how the colony's own suggestions are doing, or try one by hand",
+    "flags": [
+      "compare",
+      "declare",
+      "expected-benefit",
+      "expires",
+      "harms",
+      "id",
+      "rollback-plan",
+      "scope"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "incident-rule-add",
     "short_description": "Add a rule to decree, constraint, or gate file",
     "flags": [
@@ -3566,6 +3391,7 @@
     "name": "instinct-apply",
     "short_description": "Mark an instinct as applied and update stats",
     "flags": [
+      "outcome",
       "success"
     ],
     "parent_command": "",
@@ -4261,8 +4087,16 @@
     "stability_score": 91
   },
   {
+    "name": "maintenance",
+    "short_description": "Inspect or repair Aether internals with preview and rollback.",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "maturity",
-    "short_description": "View colony maturity journey",
+    "short_description": "Show evidence-backed colony health and readiness",
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
@@ -4315,30 +4149,6 @@
     "stability_score": 91
   },
   {
-    "name": "medic-auto-spawn-check",
-    "short_description": "Check whether Medic should auto-spawn",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
     "name": "memory-capture",
     "short_description": "Capture a memory observation (simplified learning-observe)",
     "flags": [
@@ -4366,6 +4176,16 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "memory-details",
+    "short_description": "Show what the colony has learned: wisdom, pending lessons, and recent failures",
+    "flags": [
+      "json"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "json+visual"
   },
   {
     "name": "memory-metrics",
@@ -4875,8 +4695,8 @@
     "stability_score": 91
   },
   {
-    "name": "pause-colony",
-    "short_description": "Save colony state and write a handoff for later resumption",
+    "name": "pause",
+    "short_description": "Stop at a safe boundary and save one resumable handoff.",
     "flags": [],
     "parent_command": "",
     "has_subcommands": false,
@@ -4983,9 +4803,11 @@
   },
   {
     "name": "phase",
-    "short_description": "Display current phase details",
+    "short_description": "Display focused phase details",
     "flags": [
+      "all",
       "json",
+      "list",
       "number"
     ],
     "parent_command": "",
@@ -5021,8 +4843,12 @@
     "short_description": "Insert a corrective phase into the active plan",
     "flags": [
       "after",
+      "base-plan-revision",
+      "constraints",
       "description",
-      "name"
+      "name",
+      "spec-item",
+      "spec-revision"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -5073,7 +4899,20 @@
     "short_description": "Display active pheromone signals in formatted table",
     "flags": [
       "active-only",
-      "type"
+      "actor",
+      "actor-name",
+      "appeal",
+      "defer",
+      "defer-until",
+      "dry-run",
+      "expire",
+      "pin",
+      "reason",
+      "reinforce",
+      "revoke",
+      "type",
+      "unpin",
+      "weaken"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -5340,21 +5179,34 @@
     "short_description": "Generate or review a survey-aware phase plan for the current colony goal",
     "flags": [
       "accept",
+      "accept-candidate",
+      "acceptance-token",
+      "base-plan-revision",
+      "candidate",
+      "candidate-id",
       "depth",
+      "details",
       "force",
       "full",
       "max-iterations",
       "plan-only",
       "planning-depth",
+      "preset",
       "print-brief",
+      "proposal-hash",
       "refresh",
       "repair-artifact",
       "research",
+      "retire-candidate",
       "revision-evidence",
       "revision-reason",
       "revision-type",
+      "show-iteration",
+      "spec-hash",
+      "spec-revision",
       "synthetic",
       "target",
+      "timeline-digest",
       "verification-depth",
       "worker-timeout"
     ],
@@ -5427,35 +5279,6 @@
       "v5.4.0": false
     },
     "stability_score": 91
-  },
-  {
-    "name": "plan-research-approve",
-    "short_description": "Answer the Queen's phase research proposal batch",
-    "flags": [
-      "approve-all",
-      "auto",
-      "flip"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.25",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": false,
-      "v1.17": false,
-      "v1.18": false,
-      "v1.19": false,
-      "v1.20": false,
-      "v1.21": false,
-      "v1.25": true,
-      "v5.4.0": false
-    },
-    "stability_score": 8
   },
   {
     "name": "plan-research-escalate",
@@ -6029,90 +5852,28 @@
     "stability_score": 10
   },
   {
-    "name": "recover",
-    "short_description": "Rescue a stuck colony",
+    "name": "recruit",
+    "short_description": "Ask the program to admit a helper for the current task",
     "flags": [
-      "apply",
-      "force",
-      "json"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "json+visual",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "recovery-log-read",
-    "short_description": "Read the recovery log for a phase",
-    "flags": [
-      "phase"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
-  },
-  {
-    "name": "recovery-log-write",
-    "short_description": "Write a recovery log entry for a phase",
-    "flags": [
-      "action",
       "attempt",
-      "error",
-      "outcome",
-      "phase",
+      "capability",
+      "caste",
+      "child",
+      "cost-seconds",
+      "cost-slots",
+      "declared-path",
+      "evidence",
+      "max-depth",
+      "objective",
+      "parent",
+      "reason",
       "status",
-      "worker"
+      "urgency",
+      "workspace"
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.14",
-    "historical_presence": {
-      "v1.10": false,
-      "v1.11": false,
-      "v1.12": false,
-      "v1.13": false,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 55
+    "output_mode": "unknown"
   },
   {
     "name": "redirect",
@@ -6226,6 +5987,7 @@
       "domain",
       "goal",
       "path",
+      "remove",
       "repo",
       "tags"
     ],
@@ -6334,54 +6096,14 @@
     "output_mode": "unknown"
   },
   {
-    "name": "resume-colony",
-    "short_description": "Restore colony context from handoff and mark the session resumed",
+    "name": "resume",
+    "short_description": "Validate and restore the safest honest recovery point.",
     "flags": [
       "no-handoff"
     ],
     "parent_command": "",
     "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "resume-dashboard",
-    "short_description": "Show session recovery information without restoring handoff state",
-    "flags": [],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
+    "output_mode": "unknown"
   },
   {
     "name": "review-ledger-read",
@@ -6870,6 +6592,31 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "shadow-compare",
+    "short_description": "Run a declared candidate beside the current behaviour and record the verdict",
+    "flags": [
+      "candidate-id"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "shadow-declare",
+    "short_description": "Declare a candidate to try beside the current behaviour",
+    "flags": [
+      "expected-benefit",
+      "expires",
+      "harms",
+      "id",
+      "rollback-plan",
+      "scope"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "shelf-add",
@@ -7519,9 +7266,14 @@
     "name": "spawn-can-spawn",
     "short_description": "Check if spawning is allowed at given depth",
     "flags": [
+      "caste",
+      "cost-slots",
       "depth",
       "enforce",
-      "name"
+      "name",
+      "recruitment",
+      "task",
+      "workspace"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -7655,6 +7407,7 @@
       "id",
       "name",
       "parent",
+      "phase",
       "task"
     ],
     "parent_command": "",
@@ -7787,6 +7540,50 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "spec",
+    "short_description": "Inspect, revise, approve, or repair the owner-readable specification",
+    "flags": [
+      "add",
+      "approval-token",
+      "approve",
+      "approved-by",
+      "evidence",
+      "feature-id",
+      "file",
+      "inspect",
+      "item-id",
+      "lineage",
+      "modify",
+      "path",
+      "predecessor-hash",
+      "predecessor-revision",
+      "remove",
+      "repair-projection",
+      "revision-hash",
+      "revision-id",
+      "scope",
+      "scope-acceptance",
+      "scope-requirement",
+      "section",
+      "session-id",
+      "text",
+      "verification"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "spend",
+    "short_description": "Show what each worker's tools reported this run cost, in tokens",
+    "flags": [
+      "phase"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "state-checkpoint",
@@ -7925,8 +7722,10 @@
   },
   {
     "name": "status",
-    "short_description": "Display colony dashboard",
-    "flags": [],
+    "short_description": "Show the complete authoritative colony snapshot.",
+    "flags": [
+      "compact"
+    ],
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "unknown",
@@ -7977,12 +7776,15 @@
   },
   {
     "name": "suggest-approve",
-    "short_description": "Review and approve pheromone suggestions from suggest-analyze",
+    "short_description": "Review, edit, and approve pheromone suggestions and quarantined imports",
     "flags": [
+      "actor",
+      "actor-name",
       "approve",
       "dismiss",
       "dismiss-all",
-      "dry-run"
+      "dry-run",
+      "edit"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -8084,7 +7886,7 @@
   },
   {
     "name": "swarm-cleanup",
-    "short_description": "Remove swarm data files",
+    "short_description": "Remove disposable swarm data while preserving result history",
     "flags": [
       "id"
     ],
@@ -8537,59 +8339,6 @@
     "short_description": "Summarize trace entries for a run",
     "flags": [
       "run-id"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "trophallaxis-diagnose",
-    "short_description": "Analyze error and suggest retry strategy",
-    "flags": [
-      "error"
-    ],
-    "parent_command": "",
-    "has_subcommands": false,
-    "output_mode": "unknown",
-    "classification": "public_utility",
-    "since_version": "v1.10",
-    "historical_presence": {
-      "v1.10": true,
-      "v1.11": true,
-      "v1.12": true,
-      "v1.13": true,
-      "v1.14": true,
-      "v1.17": true,
-      "v1.18": true,
-      "v1.19": true,
-      "v1.20": true,
-      "v1.21": true,
-      "v5.4.0": false
-    },
-    "stability_score": 91
-  },
-  {
-    "name": "trophallaxis-retry",
-    "short_description": "Record retry attempt with backoff info",
-    "flags": [
-      "attempt",
-      "command"
     ],
     "parent_command": "",
     "has_subcommands": false,
@@ -9221,7 +8970,7 @@
   },
   {
     "name": "watch",
-    "short_description": "Compatibility alias for live worker activity",
+    "short_description": "Show the live colony cockpit, a replay of the most recent episode, or the honest idle fallback",
     "flags": [
       "interval",
       "once"
@@ -9525,6 +9274,17 @@
       "v5.4.0": false
     },
     "stability_score": 45
+  },
+  {
+    "name": "team-checkin",
+    "short_description": "Render the pre-spawn team check-in card from a lifecycle manifest JSON file",
+    "flags": [
+      "manifest-file",
+      "workflow"
+    ],
+    "parent_command": "ceremony",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "wave-start",
@@ -10183,6 +9943,22 @@
     "stability_score": 91
   },
   {
+    "name": "recovery-inspect",
+    "short_description": "Inspect recovery evidence without changing colony state",
+    "flags": [],
+    "parent_command": "maintenance",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "skills",
+    "short_description": "Inspect live skill sources without rebuilding a cache",
+    "flags": [],
+    "parent_command": "maintenance",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "get",
     "short_description": "Get current parallel mode",
     "flags": [],
@@ -10359,5 +10135,29 @@
       "v5.4.0": false
     },
     "stability_score": 91
+  },
+  {
+    "name": "diff",
+    "short_description": "Compare live skill inventory receipts or a supplied manifest",
+    "flags": [
+      "after",
+      "before",
+      "hub",
+      "root"
+    ],
+    "parent_command": "skills",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
+    "name": "inspect",
+    "short_description": "Create a read-only receipt from live skill sources",
+    "flags": [
+      "hub",
+      "root"
+    ],
+    "parent_command": "skills",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   }
 ]

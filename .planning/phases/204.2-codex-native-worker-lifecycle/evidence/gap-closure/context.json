@@ -1,0 +1,692 @@
+{
+  "schema_version": "codex-native-gap-context/v1",
+  "plan": "204.2-11",
+  "generated_at": "2026-09-17T22:43:30.503431+00:00",
+  "execution_complete": true,
+  "qualification_complete": false,
+  "requirements_completed": [],
+  "requirements_addressed": [
+    "ANT-06"
+  ],
+  "expected_base": "e340d73d4aefd14dc444a9ae0942108bfed15294",
+  "capture_commit": "31804c4f63c70c7a4d6047c7e5480a0d398a8af9",
+  "validator_commit": "5510ecfd52b2452281b8acb580d682fa1cf38740",
+  "capture_identity": {
+    "schema_version": "codex-native-tracer/v2",
+    "source_revision": "31804c4f63c70c7a4d6047c7e5480a0d398a8af9",
+    "source_status": "",
+    "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+    "harness_sha256": "sha256:10ecf391943902be18405bc89b7c6c637fc3b743db9bce6abfaa59115982534b",
+    "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/bin/aether",
+    "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+    "candidate_sha256": "sha256:1644af5f44b35b7500f95b3ec99d428317303672abb8966ed2273a8e09b0b470",
+    "build_argv": [
+      "go",
+      "build",
+      "-buildvcs=false",
+      "-ldflags",
+      "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+      "-o",
+      "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/bin/aether",
+      "./cmd/aether"
+    ],
+    "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+    "client_version": "codex-cli 0.154.0",
+    "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+    "model": "gpt-6-astra",
+    "client_args": [
+      "exec",
+      "--ignore-user-config",
+      "--ignore-rules",
+      "-s",
+      "workspace-write",
+      "--json",
+      "--color",
+      "never",
+      "-C",
+      "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/repository",
+      "-c",
+      "cli_auth_credentials_store=\"file\"",
+      "-c",
+      "approval_policy=\"never\"",
+      "--enable",
+      "multi_agent",
+      "-c",
+      "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+      "-c",
+      "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+      "-m",
+      "gpt-6-astra",
+      "-c",
+      "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-2128619787\"",
+      "-c",
+      "model_reasoning_effort=\"medium\"",
+      "-"
+    ],
+    "outcome": "incomplete",
+    "reason": "question missing required saved workers/aggregate/credit: got 1 want 1",
+    "exit_status": 0,
+    "elapsed_seconds": 253.368150292,
+    "host_session_id": "01a0b181-9e86-7813-bc04-d95ffae35e6d",
+    "child_id": "01a0b184-5005-7853-a090-016df7482fc9",
+    "child_task_path": "/root/forge_63",
+    "child_identity_corroborated": true,
+    "prompt_sha256": "sha256:0e8bcafa2440e7dc4021ef56bd2a9e35482d438c0a56ba74ecbf29f6727d2897",
+    "launch_message_encoding": "host-encrypted",
+    "prompt_delivery_verification": "Exact plaintext unavailable in exported launch event; runtime-issued prompt bytes/digest retained. Full context delivery qualification remains Plan 03/07.",
+    "assertions": {
+      "exact_context_causality": false,
+      "scoped_answer_behavior": false
+    },
+    "limitations": null,
+    "child_edit_observed": false,
+    "child_checks_passed": false,
+    "runtime_credit_observed": false,
+    "temporary_auth_removed": true,
+    "parent_unclassified_commands": null
+  },
+  "live_invocation": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/live-invocation.json",
+    "sha256": "4a78df2d1cf3b6a561147ebdd067b495212425488676f65af14f497a7a347ae3"
+  },
+  "live_result": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/live-result.json",
+    "sha256": "6982664948dbab9a5c534e7840c8e22e03cce6b34c3730d4120dedabe3a32b55"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/receipt.json",
+    "sha256": "39c1d58eb0a5131dcfdc63017d235760fc0b329382cd9d54f1f5800888cecc61"
+  },
+  "production_inventory": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/source-files.json",
+    "sha256": "13ac559f208954998d1686124023f17467ee69d4ae8831667f14d46a2a0ef974"
+  },
+  "test_corpus_sha256": "b2c9ab02a19a821ecd45abf02061ca490828bcb5af8762c9ab1453a4e595cbff",
+  "test_corpus_count": 835,
+  "test_corpus_inventory": "live-invocation.json:test_corpus",
+  "harness_files": {
+    "cmd/codex_native_worker_live_test.go": "10ecf391943902be18405bc89b7c6c637fc3b743db9bce6abfaa59115982534b",
+    "cmd/codex_native_gap_context_test.go": "dff07e6338246efe4b6b95aa8d207dc7cfb59462d38cf7ef281996d1c5b290ea"
+  },
+  "go": "go version go1.26.5 darwin/arm64",
+  "go_env": {
+    "GOARCH": "arm64",
+    "GOMOD": "/Users/callumcowie/repos/Aether/.claude/worktrees/agent-p2042-11-1789682846/go.mod",
+    "GOOS": "darwin",
+    "GOPATH": "/Users/callumcowie/go",
+    "GOTOOLCHAIN": "auto",
+    "GOVERSION": "go1.26.5"
+  },
+  "checks": [
+    {
+      "generation": "final-focused",
+      "manifest": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/final-focused/focused-verification.json",
+        "sha256": "db52d76a4538c3757fdc372cc4af69847bd071247671ce8fc4b202c0e22c34bc"
+      },
+      "source_files": {
+        "cmd/codex_native_worker_live_test.go": "62c729bb9947f72e961ab30d93b1931b54721b4baec0a5e451b1c2ee2509abe1",
+        "cmd/codex_native_gap_context_test.go": "38db6cc5c9de293737d645d30683168f134d25d07afb136b78d8fa80f21bc12f"
+      },
+      "files_unchanged_during_checks": true,
+      "checks": [
+        {
+          "argv": [
+            "go",
+            "test",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeContextDelivered|TestCodexNativeContextBriefIdentity|TestCodexNativeContextDeliveryBinding|TestCodexNativeContextReadOnly|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeDecisionScope|TestCodexNativeQualificationCoordinator|TestCodexNativeGapAttribution|TestCodexNativeFixtureCoordinatorBoundary)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:18:58.106903+00:00",
+          "ended": "2026-09-17T22:19:54.627520+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/final-focused/focused-normal.jsonl",
+          "stdout_sha256": "118cc07475d74458a5380fb29ee2e77b903e924faffe08133bdf070a5ad73aa8",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/final-focused/focused-normal.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 133,
+          "top_level_tests": 13,
+          "failed": [],
+          "skips": 0
+        },
+        {
+          "argv": [
+            "go",
+            "test",
+            "-race",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeContextDelivered|TestCodexNativeContextBriefIdentity|TestCodexNativeContextDeliveryBinding|TestCodexNativeContextReadOnly|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeDecisionScope|TestCodexNativeQualificationCoordinator|TestCodexNativeGapAttribution|TestCodexNativeFixtureCoordinatorBoundary)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:19:54.695333+00:00",
+          "ended": "2026-09-17T22:21:39.404360+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/final-focused/focused-race.jsonl",
+          "stdout_sha256": "c6236def938c54e165968074b20e89aefd97d7bb5e9f9ecac2a7ff79b0ff16fe",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/final-focused/focused-race.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 133,
+          "top_level_tests": 13,
+          "failed": [],
+          "skips": 0
+        }
+      ]
+    },
+    {
+      "generation": "committed-focused",
+      "manifest": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/committed-focused/focused-verification.json",
+        "sha256": "132002497a0169e16977c9bcb0f65f7af4c5ca2fa3fac4a83c8c31dea6f8de06"
+      },
+      "source_files": {
+        "cmd/codex_native_worker_live_test.go": "11be20819aa10ff1eb0907a039dff51948f36af46e9841bb043f3cb69afa20b6",
+        "cmd/codex_native_gap_context_test.go": "e026f8a09017411dd80f21f2c60aa33ce5430fa6bc0a91f9b3416c839ba007f7"
+      },
+      "files_unchanged_during_checks": true,
+      "checks": [
+        {
+          "argv": [
+            "go",
+            "test",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:22:15.370778+00:00",
+          "ended": "2026-09-17T22:22:41.915819+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/committed-focused/focused-normal.jsonl",
+          "stdout_sha256": "f5d66a16d8502e1ee8e5905dd0992499ab4060e91f27aa39bc55f3155163431b",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/committed-focused/focused-normal.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 61,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        },
+        {
+          "argv": [
+            "go",
+            "test",
+            "-race",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:22:41.990907+00:00",
+          "ended": "2026-09-17T22:23:33.320554+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/committed-focused/focused-race.jsonl",
+          "stdout_sha256": "f95069bfe3bfe03ed1ace0b44782367d9d1c2e80754e8b4ca0d8894279f52f23",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/committed-focused/focused-race.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 61,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        }
+      ]
+    },
+    {
+      "generation": "task1-final",
+      "manifest": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/task1-final/focused-verification.json",
+        "sha256": "727d88aa84f0bab8d96446e045c1f7130f18774bed81b195661189bbe783c96a"
+      },
+      "source_files": {
+        "cmd/codex_native_worker_live_test.go": "10ecf391943902be18405bc89b7c6c637fc3b743db9bce6abfaa59115982534b",
+        "cmd/codex_native_gap_context_test.go": "dff07e6338246efe4b6b95aa8d207dc7cfb59462d38cf7ef281996d1c5b290ea"
+      },
+      "files_unchanged_during_checks": true,
+      "checks": [
+        {
+          "argv": [
+            "go",
+            "test",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:32:26.200851+00:00",
+          "ended": "2026-09-17T22:32:52.981380+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/task1-final/focused-normal.jsonl",
+          "stdout_sha256": "f0dcba8d30382b8a6f0de345e49ad05e6c8c2fe06b15bb3d86e031e601084413",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/task1-final/focused-normal.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 63,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        },
+        {
+          "argv": [
+            "go",
+            "test",
+            "-race",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:32:53.048697+00:00",
+          "ended": "2026-09-17T22:33:45.596029+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/task1-final/focused-race.jsonl",
+          "stdout_sha256": "62322523609206a477d78d4e67ffa1823276bb0cd89e59dc161716a75fb03225",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/task1-final/focused-race.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 63,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        }
+      ]
+    },
+    {
+      "generation": "parser-final",
+      "manifest": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/parser-final/focused-verification.json",
+        "sha256": "cb3948bb034b49dfff192667afa97d219cee4422cce0b9cab52cbc9e77649e3c"
+      },
+      "source_files": {
+        "cmd/codex_native_worker_live_test.go": "10ecf391943902be18405bc89b7c6c637fc3b743db9bce6abfaa59115982534b",
+        "cmd/codex_native_gap_context_test.go": "f44cd078148ba7b6eb996cfeb309b6b44fc5bf90226b9625709b062d67e52a1f"
+      },
+      "files_unchanged_during_checks": true,
+      "checks": [
+        {
+          "argv": [
+            "go",
+            "test",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:40:29.277829+00:00",
+          "ended": "2026-09-17T22:40:55.553796+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/parser-final/focused-normal.jsonl",
+          "stdout_sha256": "c7eb65578c9621eafb980fb9a819c867f87af380956b00705b1bccb315ddafcf",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/parser-final/focused-normal.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 65,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        },
+        {
+          "argv": [
+            "go",
+            "test",
+            "-race",
+            "./cmd",
+            "-run",
+            "^(TestCodexNativeGapContext|TestCodexNativeContextExactBytes|TestCodexNativeContextBounds|TestCodexNativeDecisionDelivered|TestCodexNativeDecisionStaleInterleaving|TestCodexNativeQualificationCoordinator)$",
+            "-count=1",
+            "-json",
+            "-timeout",
+            "60s"
+          ],
+          "exit": 0,
+          "started": "2026-09-17T22:40:55.618565+00:00",
+          "ended": "2026-09-17T22:41:46.781560+00:00",
+          "stdout": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/parser-final/focused-race.jsonl",
+          "stdout_sha256": "8e0def5834cfb7b0c144512f2ed258025ef1c49182690bfe6a17b0a92d8c3313",
+          "stderr": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/parser-final/focused-race.stderr",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "passed_cases": 65,
+          "top_level_tests": 6,
+          "failed": [],
+          "skips": 0
+        }
+      ]
+    }
+  ],
+  "controller": {
+    "status": "authorized"
+  },
+  "context_causality": {
+    "artifact": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/replay-final/native-question-2984286597-context.json",
+      "sha256": "1946b68cbae85955994c044ae1cc9814bd5e9595f483a5270ebd193d6eb57d4f"
+    },
+    "original_capture_artifact": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/context-causality.json",
+      "sha256": "bdb902284e52cbfe1d16611f0c65b3b2813c730709d84cb554b35803c89f8ccc"
+    },
+    "gaps": [
+      "spawn_agent plaintext unavailable in host export",
+      "send_message plaintext unavailable in host export",
+      "completed-send ACK missing",
+      "child required uncached check not corroborated"
+    ],
+    "context_mode": "none",
+    "launch_message_encoding": "host-encrypted",
+    "send_message_encoding": "host-encrypted"
+  },
+  "context_sources": {
+    "capsule": "repository/.aether/data/COLONY_STATE.json (accepted goal marker GAP_CAPSULE_café_日本語)",
+    "skill": "repository/.aether/skills/colony/gap-context/SKILL.md (matched Builder skill)",
+    "steering": "repository/.aether/data/pheromones.json (active FOCUS marker)",
+    "prior_handoff": "repository/.aether/data/handoffs/worker-handoffs.json (fixture-prepared prior worker record)"
+  },
+  "raw_evidence_root": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11",
+  "raw_artifacts_verified": 1186,
+  "raw_artifacts_failed": [],
+  "protected_historical_files_checked": 92,
+  "protected_historical_files_changed": [],
+  "scope": [
+    "Only two declared test/harness files, context.json and SUMMARY changed.",
+    "No production code, shared tracker, shared install/hub/home/config, new authentication, owner walkthrough, publication or original-checkout changes.",
+    "No broad suite run; Plan16 retains final regression and verdict ownership.",
+    "Fixture authority is not owner testimony; behavior checker is harness-owned and cannot replace the child check."
+  ],
+  "outstanding": [
+    "spawn_agent plaintext unavailable in host export",
+    "send_message plaintext unavailable in host export",
+    "completed-send ACK missing",
+    "child required uncached check not corroborated",
+    "question missing required saved workers/aggregate/credit: got 1 want 1"
+  ],
+  "capture_provenance": "Fresh question-only capture of committed candidate; historical final165 inputs retain original identities; current proof cannot be inferred from earlier captures.",
+  "historical_rejection": {
+    "manifest": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/historical-rejection/result.json",
+      "sha256": "278525479efaa0f685a2ede1edcd8d9fdc0c6aaa5cb09721fd861074ad3787de"
+    },
+    "result": {
+      "argv": [
+        "go",
+        "test",
+        "-overlay",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/historical-rejection/overlay.json",
+        "./cmd",
+        "-run",
+        "^TestPlan11HistoricalQuestionRejection$",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60s"
+      ],
+      "exit": 0,
+      "source": "a2471b071f3535fc3a58ee862f405e8733c482d2",
+      "overlay_sha256": "5cbb7bf8a9c7b17f1aa6379aac8f51304caa7a2f196d32bbe9f8468f2bece4f7",
+      "original_receipt": "/Users/callumcowie/.aether-backups/phase204-2-execution-20260917/plan09/qualification-165db28c/native-question-1975165809/receipt.json",
+      "original_sha256": "2f2ef903450f6f39de3a2b322875919d66ed87e47a51b092b10003885a15d618",
+      "original_unchanged": true,
+      "meaning": "Current validator rejects the actual final165 contaminated question capture; no relabeling or live qualification claimed"
+    }
+  },
+  "earlier_capture": {
+    "receipt": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/receipt.json",
+      "sha256": "5836873266e806af9670f2a7ef5ffc52ef8e6ace50c1cd9bd6e507147aafc3d1"
+    },
+    "invocation": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/live-invocation.json",
+      "sha256": "19eb96b616d343d32a2c3047f10f4a5bb9309003eb792ad84e8e4cea477d81d6"
+    },
+    "result": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/live-result.json",
+      "sha256": "2eef84b2117da452dabecff988cbe4c260ea922611e72151d5d913cb5de4b13d"
+    },
+    "identity": {
+      "schema_version": "codex-native-tracer/v2",
+      "source_revision": "a2471b071f3535fc3a58ee862f405e8733c482d2",
+      "source_status": "",
+      "source_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+      "harness_sha256": "sha256:11be20819aa10ff1eb0907a039dff51948f36af46e9841bb043f3cb69afa20b6",
+      "candidate_path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/bin/aether",
+      "candidate_version": "{\"ok\":true,\"result\":\"1.0.79\"}",
+      "candidate_sha256": "sha256:1644af5f44b35b7500f95b3ec99d428317303672abb8966ed2273a8e09b0b470",
+      "build_argv": [
+        "go",
+        "build",
+        "-buildvcs=false",
+        "-ldflags",
+        "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+        "-o",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/bin/aether",
+        "./cmd/aether"
+      ],
+      "client_path": "/Users/callumcowie/.codex-5x/packages/standalone/releases/0.154.0-aarch64-apple-darwin/bin/codex",
+      "client_version": "codex-cli 0.154.0",
+      "client_sha256": "sha256:4f85982624b3898c8991cb80c0981b2aa71070e3537046c9a95950318a95afcc",
+      "model": "gpt-6-astra",
+      "client_args": [
+        "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "-s",
+        "workspace-write",
+        "--json",
+        "--color",
+        "never",
+        "-C",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/repository",
+        "-c",
+        "cli_auth_credentials_store=\"file\"",
+        "-c",
+        "approval_policy=\"never\"",
+        "--enable",
+        "multi_agent",
+        "-c",
+        "shell_environment_policy.set.PATH=\"/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin\"",
+        "-c",
+        "shell_environment_policy.set.AETHER_OUTPUT_MODE=\"json\"",
+        "-m",
+        "gpt-6-astra",
+        "-c",
+        "shell_environment_policy.set.GOCACHE=\"/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-native-gocache-3083471262\"",
+        "-c",
+        "model_reasoning_effort=\"medium\"",
+        "-"
+      ],
+      "outcome": "incomplete",
+      "reason": "qualification parent evidence incomplete: question, [unclassified code-mode command: head -35 .aether/native-fixture-coordinate.py /bin/zsh -lc head -35 .aether/native-fixture-coordinate.py]",
+      "exit_status": 0,
+      "elapsed_seconds": 245.115199542,
+      "host_session_id": "01a0b178-b329-7d11-b599-626625d97610",
+      "child_id": "01a0b17b-3e15-76d3-9281-5c4fa8577f96",
+      "child_task_path": "/root/forge_63",
+      "child_identity_corroborated": true,
+      "prompt_sha256": "sha256:b1f9dbf1c06534b7c4f50863eb5c82b30a0b089e6e7af8dd9edf2233201b3583",
+      "launch_message_encoding": "host-encrypted",
+      "prompt_delivery_verification": "Exact plaintext unavailable in exported launch event; runtime-issued prompt bytes/digest retained. Full context delivery qualification remains Plan 03/07.",
+      "assertions": {
+        "exact_context_causality": false,
+        "scoped_answer_behavior": false
+      },
+      "limitations": null,
+      "child_edit_observed": false,
+      "child_checks_passed": false,
+      "runtime_credit_observed": false,
+      "temporary_auth_removed": true,
+      "parent_unclassified_commands": [
+        "unclassified code-mode command: head -35 .aether/native-fixture-coordinate.py",
+        "/bin/zsh -lc head -35 .aether/native-fixture-coordinate.py"
+      ]
+    },
+    "original_context_causality": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/context-causality.json",
+      "sha256": "50a96125676e1af21f8ca99c6be3e988a79fba4bd427c58a4545fcc2cfd2d9f5"
+    },
+    "original_gaps": [
+      "required context missing: GAP_SKILL_exact_bytes",
+      "spawn_agent plaintext unavailable in host export",
+      "missing or ambiguous successful send_message call/result/child linkage",
+      "send did not follow answer selection",
+      "completed-send ACK missing",
+      "child-owned answer-dependent check not corroborated"
+    ],
+    "disposition": "Preserved original; fixture skill matching and empty successful host send result handling corrected afterward; no relabeling."
+  },
+  "task1_commits": [
+    "a2471b071f3535fc3a58ee862f405e8733c482d2",
+    "31804c4f63c70c7a4d6047c7e5480a0d398a8af9",
+    "5510ecfd52b2452281b8acb580d682fa1cf38740"
+  ],
+  "replay": {
+    "manifest": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/replay-final/manifest.json",
+      "sha256": "8c4944e1e06a0029f0cb601eb9ce0562a2c07918ab1f7202aca86680421bd9e0"
+    },
+    "result": {
+      "argv": [
+        "go",
+        "test",
+        "-overlay",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/replay-final/overlay.json",
+        "./cmd",
+        "-run",
+        "^TestPlan11ContextCaptureReplay$",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60s"
+      ],
+      "exit": 0,
+      "validator_source": "5510ecfd52b2452281b8acb580d682fa1cf38740",
+      "overlay_sha256": "c44af72b5450a6fc48fb52a7c1f9b99f3583fbdfcdc699b8103b9474567d3648",
+      "original_receipts": {
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/context/native-question-4020214274/receipt.json": "5836873266e806af9670f2a7ef5ffc52ef8e6ace50c1cd9bd6e507147aafc3d1",
+        "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/receipt.json": "39c1d58eb0a5131dcfdc63017d235760fc0b329382cd9d54f1f5800888cecc61"
+      },
+      "meaning": "Inventory-checked raw replay; repeat derivation equality proves integrity, never successful live qualification."
+    }
+  },
+  "host_context_metadata": [
+    {
+      "artifact": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/home/.codex/sessions/2026/09/18/rollout-2026-09-18T00-37-13-01a0b184-5005-7853-a090-016df7482fc9.jsonl",
+        "sha256": "508759d5f2e315e06c8394e22ff90d2e5eab3239c49dd12cde9239d035408a33"
+      },
+      "metadata": {
+        "id": "01a0b184-5005-7853-a090-016df7482fc9",
+        "parent_thread_id": "01a0b181-9e86-7813-bc04-d95ffae35e6d",
+        "history_mode": "paginated",
+        "multi_agent_version": "v2",
+        "thread_source": "subagent",
+        "cli_version": "0.154.0"
+      }
+    },
+    {
+      "artifact": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/home/.codex/sessions/2026/09/18/rollout-2026-09-18T00-34-17-01a0b181-9e86-7813-bc04-d95ffae35e6d.jsonl",
+        "sha256": "18c422b4ef8dd5927ff24448558baabd9d3dccaaae9cee4d037853ad1a1a5d24"
+      },
+      "metadata": {
+        "id": "01a0b181-9e86-7813-bc04-d95ffae35e6d",
+        "parent_thread_id": null,
+        "history_mode": "paginated",
+        "multi_agent_version": null,
+        "thread_source": "user",
+        "cli_version": "0.154.0"
+      }
+    }
+  ],
+  "validator_harness_files": {
+    "cmd/codex_native_worker_live_test.go": "10ecf391943902be18405bc89b7c6c637fc3b743db9bce6abfaa59115982534b",
+    "cmd/codex_native_gap_context_test.go": "f44cd078148ba7b6eb996cfeb309b6b44fc5bf90226b9625709b062d67e52a1f"
+  },
+  "host_tool_schema": {
+    "full_schema_export": "unavailable in retained host export; no invented schema identity",
+    "observed_calls": "Exact spawn/send argument strings, result shapes and activity records retained in context-causality artifact and original sessions",
+    "qualification": "Observed ABI only, not a complete host-tool-schema export"
+  },
+  "observed_links": {
+    "question": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/coordination/w0-question-source.jsonl",
+      "sha256": "d6caec667c32de41ade684a4e815d24052c8c117af36cee63799c4d76f042056"
+    },
+    "fixture_authority": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/controller/challenge.json",
+      "sha256": "9c71a23f9105726591f0cfaefb1f6556e589cd81a60ff8e944315fd310558bec"
+    },
+    "pre_question_snapshot": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/controller/pre-question.json",
+      "sha256": "9e14ed73459c08801d5a4b12ff759b53486ecf29d3087afb368017eb5c7993a3"
+    },
+    "snapshot_file_count": 388,
+    "selected_after_question": true,
+    "selected_answer_absent_from_snapshot_bytes": true,
+    "escaped_json_leak_rejection": "also checked by inventory-verified Go replay",
+    "issued_prompt_markers": {
+      "GAP_CAPSULE_café_日本語": true,
+      "GAP_SKILL_exact_bytes": true,
+      "GAP_STEERING_keep_inclusive": true,
+      "GAP_HANDOFF_prior_ordered_bounds": true
+    },
+    "issued_prompt_sha256": "sha256:0e8bcafa2440e7dc4021ef56bd2a9e35482d438c0a56ba74ecbf29f6727d2897",
+    "issued_envelope": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/coordination/w0-context.stdout.json",
+      "sha256": "3b28342495cfc83509b380db7afbb7aa2e5839f418c6c28a4175ec63faebc27f"
+    },
+    "issued_payload_sha256": "sha256:858e142ff8e03cd9bd767e06694446dff0948eec126f8b193f5145fbb7d9bd75",
+    "issued_child_id": "01a0b184-5005-7853-a090-016df7482fc9",
+    "actual_child_id": "01a0b184-5005-7853-a090-016df7482fc9",
+    "scoped_answer_in_issued_envelope": true,
+    "completed_send_call_id": "call_yqhg3MR9NofXjhhkIaSAKId1",
+    "completed_send_result_present": true,
+    "completed_send_result_shape": "",
+    "delivery_acknowledged": false,
+    "child_authored_answer_behavior_proved": false,
+    "semantics": "Issued bytes, successful host send linkage and no pre-question answer are separate from unavailable delivered plaintext and unproved child behavior."
+  },
+  "answer_refusals": [
+    {
+      "case": "stale-answer",
+      "artifact": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/coordination/stale-answer-refusal.json",
+        "sha256": "2384bc2853669d77aa57bab62f2c81c69c30dcb56d7ba9c8aafa06f626e0544b"
+      },
+      "exit": 1,
+      "journals_unchanged": true,
+      "journal_file_count": 131
+    },
+    {
+      "case": "wrong-child-answer",
+      "artifact": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/followup/context/native-question-2984286597/coordination/wrong-child-answer-refusal.json",
+        "sha256": "818dd15d63358648fb903f047f8cdf1537e72213c9ae4de317c61d067d5f6185"
+      },
+      "exit": 1,
+      "journals_unchanged": true,
+      "journal_file_count": 131
+    }
+  ],
+  "production_binary_equal_across_captures": true,
+  "report_generator": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-11/plan11-report.py",
+    "sha256": "3cc444ad925f62435673cccff46f1a582b8e110c415597929947c60f93d7c0e9"
+  }
+}

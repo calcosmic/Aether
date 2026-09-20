@@ -365,32 +365,31 @@ func checkNoCriticalFlags() gateCheck {
 // /ant-flag did not actually block /ant-continue. Blockers cannot be
 // acknowledged away — only resolved. Locked by TestBlockerFlagBlocksContinue.
 func checkUnresolvedBlockerFlags() gateCheck {
-	var ff colony.FlagsFile
-	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
-		if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-			return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
+	snapshot, descriptions, err := readBlockerSnapshotEvidence(store)
+	return checkUnresolvedBlockerSnapshot(snapshot, descriptions, err)
+}
+
+func checkUnresolvedBlockerSnapshot(snapshot blockerSnapshot, blockerDescriptions []string, err error) gateCheck {
+	if err != nil {
+		return gateCheck{
+			Name:   "no_unresolved_blockers",
+			Passed: false,
+			Detail: "blocker truth unavailable: " + blockerSnapshotErrorDetail(store, err),
 		}
 	}
-	blockerDescriptions := []string{}
-	for _, flag := range ff.Decisions {
-		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
-			continue
-		}
-		desc := strings.TrimSpace(flag.Description)
-		if desc == "" {
-			desc = flag.ID
-		}
-		blockerDescriptions = append(blockerDescriptions, desc)
-	}
-	if len(blockerDescriptions) > 0 {
+	if snapshot.Count > 0 {
 		shown := blockerDescriptions
 		if len(shown) > 3 {
 			shown = shown[:3]
 		}
+		detail := fmt.Sprintf("%d unresolved blocker flag(s)", snapshot.Count)
+		if len(shown) > 0 {
+			detail += ": " + strings.Join(shown, "; ")
+		}
 		return gateCheck{
 			Name:   "no_unresolved_blockers",
 			Passed: false,
-			Detail: fmt.Sprintf("%d unresolved blocker flag(s): %s", len(blockerDescriptions), strings.Join(shown, "; ")),
+			Detail: detail,
 		}
 	}
 	return gateCheck{Name: "no_unresolved_blockers", Passed: true, Detail: "no blocker flags"}
@@ -481,8 +480,8 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 		executedCheck.Detail = "antipattern scan could not execute: no store initialized, colony root unresolvable"
 		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
 		executedCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 		findingsCheck.Passed = true
 		findingsCheck.Detail = "antipattern scan did not run: no store initialized"
@@ -531,8 +530,8 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 		executedCheck.Detail = fmt.Sprintf("antipattern scan could not execute for %d file(s): %s", len(scanErrors), strings.Join(scanErrors, "; "))
 		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
 		executedCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 	} else if claimedFiles == 0 {
 		executedCheck.Passed = true
@@ -547,8 +546,8 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 			claimedFiles, strings.Join(absentFiles, ", "))
 		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
 		executedCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 	} else {
 		executedCheck.Passed = true
@@ -571,8 +570,8 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 		findingsCheck.Detail = fmt.Sprintf("%d critical antipattern finding(s) across %d file(s): %s", len(allCriticals), len(distinctFiles), strings.Join(locations, ", "))
 		findingsCheck.FixHint = gateRecoveryTemplate("anti_pattern")
 		findingsCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 	} else {
 		// A pass detail that does not state the number scanned is
@@ -689,8 +688,8 @@ func checkCharterComplianceGate(steps []codexVerificationStep) (gateCheck, gateC
 		executedCheck.Detail = "charter compliance scan could not execute: no store initialized, colony root unresolvable"
 		executedCheck.FixHint = gateRecoveryTemplate("charter_compliance")
 		executedCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 		findingsCheck.Passed = true
 		findingsCheck.Detail = "charter compliance scan did not run: no store initialized"
@@ -703,8 +702,8 @@ func checkCharterComplianceGate(steps []codexVerificationStep) (gateCheck, gateC
 		executedCheck.Detail = fmt.Sprintf("charter compliance scan could not execute: %v", err)
 		executedCheck.FixHint = gateRecoveryTemplate("charter_compliance")
 		executedCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 		findingsCheck.Passed = true
 		findingsCheck.Detail = "charter compliance scan did not run: could not load colony state"
@@ -777,8 +776,8 @@ func checkCharterComplianceGate(steps []codexVerificationStep) (gateCheck, gateC
 		findingsCheck.Detail = fmt.Sprintf("declared governance tool(s) not exercised by any verification step: %s", strings.Join(violations, ", "))
 		findingsCheck.FixHint = gateRecoveryTemplate("charter_compliance")
 		findingsCheck.RecoveryOptions = []string{
-			"Fix manually and run /ant-continue",
-			"Run /ant-unblock for guided recovery",
+			"Fix manually and run aether continue",
+			"Run aether unblock --dispatch for guided recovery",
 		}
 	} else {
 		findingsCheck.Passed = true
@@ -902,55 +901,55 @@ var gateRecoveryTemplates = map[string]string{
 	"verification_loop": "Verification commands failed.\n" +
 		"1. Check the failed step output above for specific errors\n" +
 		"2. Fix the build, type, lint, or test failures\n" +
-		"3. Re-run `/ant-continue` to re-verify",
+		"3. Re-run `aether continue` to re-verify",
 	"spawn_gate": "Spawn gate failed: Prime Worker completed without specialists.\n" +
-		"1. Run `/ant-build {phase}` again\n" +
+		"1. Run `aether build {phase}` again\n" +
 		"2. Prime Worker must spawn at least 1 specialist (Builder or Watcher)\n" +
-		"3. Re-run `/ant-continue` after spawns complete",
+		"3. Re-run `aether continue` after spawns complete",
 	"anti_pattern": "Anti-pattern gate failed: Critical patterns detected.\n" +
 		"1. Review the critical anti-patterns listed above\n" +
 		"2. Fix each critical finding (exposed secrets, SQL injection, crash patterns)\n" +
-		"3. Re-run `/ant-continue` to re-scan",
+		"3. Re-run `aether continue` to re-scan",
 	"charter_compliance": "Charter compliance gate failed: a declared governance tool was not exercised.\n" +
 		"1. Review the unexercised tool(s) named above\n" +
 		"2. Run the tool, or add it to a verification step's command\n" +
-		"3. Re-run `/ant-continue` to re-scan",
+		"3. Re-run `aether continue` to re-scan",
 	"complexity": "Complexity gate failed: Code exceeds maintainability thresholds.\n" +
 		"1. Review files exceeding 300 lines or 50-line functions\n" +
 		"2. Refactor to reduce complexity\n" +
-		"3. Re-run `/ant-continue` to re-check",
+		"3. Re-run `aether continue` to re-check",
 	"gatekeeper": "Gatekeeper gate failed: Critical CVEs detected.\n" +
 		"1. Run `npm audit` (or equivalent) to see full details\n" +
 		"2. Fix or update vulnerable dependencies\n" +
-		"3. Re-run `/ant-continue` after resolving",
+		"3. Re-run `aether continue` after resolving",
 	"auditor": "Auditor gate failed: Critical quality issues or score below 60.\n" +
 		"1. Review the critical findings listed above\n" +
 		"2. Fix each critical finding first, then address high-severity items\n" +
-		"3. Re-run `/ant-continue` to re-audit",
+		"3. Re-run `aether continue` to re-audit",
 	"tdd_evidence": "TDD gate failed: Claimed tests not found in codebase.\n" +
-		"1. Run `/ant-build {phase}` again\n" +
+		"1. Run `aether build {phase}` again\n" +
 		"2. Actually write test files (not just claim them)\n" +
 		"3. Tests must exist and be runnable",
 	"runtime": "Runtime gate failed: User reported application issues.\n" +
 		"1. Fix the reported runtime issues\n" +
 		"2. Test the application manually\n" +
-		"3. Re-run `/ant-continue` and confirm the app works",
+		"3. Re-run `aether continue` and confirm the app works",
 	"flags": "Flags gate failed: Unresolved blocker flags.\n" +
 		"1. Review each blocker flag listed above\n" +
-		"2. Fix the issues and resolve flags: `/ant-flags --resolve {id} \"resolution\"`\n" +
-		"3. Re-run `/ant-continue` after resolving all blockers",
+		"2. Fix the issues and resolve flags: `aether flag-resolve --id {id} --message \"resolution\"`\n" +
+		"3. Re-run `aether continue` after resolving all blockers",
 	"watcher_veto": "Watcher VETO: Quality score below 7 or critical issues found.\n" +
 		"1. Review the critical issues and quality score\n" +
-		"2. Fix issues, then run `/ant-build {phase}` again\n" +
+		"2. Fix issues, then run `aether build {phase}` again\n" +
 		"3. Watcher must re-verify with score >= 7 and no CRITICAL issues",
 	"medic": "Medic gate failed: Critical colony health issues.\n" +
 		"1. Review the critical health issues listed above\n" +
 		"2. Run `aether medic --fix` to attempt repairs\n" +
-		"3. Re-run `/ant-continue` after repairs",
+		"3. Re-run `aether continue` after repairs",
 	"tests_pass": "Tests failed.\n" +
 		"1. Run `go test ./...` (or project test command) to see failures\n" +
 		"2. Fix the failing tests\n" +
-		"3. Re-run `/ant-continue` to re-verify",
+		"3. Re-run `aether continue` to re-verify",
 }
 
 // gateRecoveryTemplate returns the recovery instructions for a gate name.

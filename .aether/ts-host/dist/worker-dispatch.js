@@ -307,9 +307,9 @@ export function resolvePreflightAdapterBudgetMs() {
     return Math.max(120_000, resolvePreflightTimeoutMs() * PREFLIGHT_GO_ATTEMPTS + PREFLIGHT_ADAPTER_SLACK_MS);
 }
 /** Ask the Go-owned adapter layer to select and preflight the worker provider. */
-export async function preflightGoWorkerProvider(opts, context) {
+export async function preflightGoWorkerProvider(opts, context, phase = 0) {
     try {
-        const response = await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight"], resolvePreflightAdapterBudgetMs());
+        const response = await callGoJSONAsync(opts, ["internal-worker-adapter", "--preflight", "--phase", String(phase)], resolvePreflightAdapterBudgetMs());
         if (response.preflight?.notice && response.preflight.notice.trim()) {
             process.stderr.write(`${response.preflight.notice}\n`);
         }

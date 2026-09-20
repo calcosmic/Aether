@@ -79,7 +79,7 @@ When tasked with security audits, vulnerability scanning, or threat assessment:
 {
   "ant_name": "{your name}",
   "caste": "auditor",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "dimensions_audited": [],
   "findings": {

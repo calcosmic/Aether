@@ -75,7 +75,7 @@ func TestForcedRedispatchAfterBuiltIsNotADeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forced redispatch of an already-built phase: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 
 	// Assert the precondition rather than assume it: this test is only
 	// meaningful while the second attempt genuinely has committed nothing.
@@ -158,7 +158,7 @@ func TestFinalizeNeverSendsUserToACommandThatRefuses(t *testing.T) {
 				if err != nil {
 					t.Fatalf("forced redispatch: %v", err)
 				}
-				manifest := result["dispatch_manifest"].(codexBuildManifest)
+				manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 				return codexExternalBuildCompletion{
 					DispatchManifest: &manifest,
 					Dispatches:       externalResultsForManifest(manifest),
@@ -225,7 +225,7 @@ func TestStagedForcedRedispatchAfterBuiltIsNotADeadlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forced redispatch of an already-built phase: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 
 	// Assert the precondition rather than assume it, exactly like the
 	// existing test: this test is only meaningful while the second attempt

@@ -87,7 +87,9 @@ finalize.
 🐜 Every reviewer is a full agent run — roughly 100,000 tokens and several
 minutes. This is the most expensive thing the colony does.
 
-The Watcher is not yours to decide; the runtime always includes it.
+The phase's own build/test check already ran once, before continue started —
+it is not re-spawned here. Nothing is unconditional in the team you are
+picking except a reviewer forced by a named risk signal (see below).
 
 For each other reviewer, find the part of the phase that concerns its domain
 and classify what the phase actually says:
@@ -119,16 +121,21 @@ Re-fetch with your decision:
 ```
 aether continue --plan-only \
   --castes probe \
-  --caste-reason "correctness fix in the retrigger path; the phase states perf is unchanged"
+  --caste-why probe="correctness fix in the retrigger path; the phase states perf is unchanged" \
+  --caste-reason "confirm the retrigger fix didn't reintroduce a coverage gap"
 ```
 
-An empty optional team — Watcher alone — is a normal, good answer.
+An empty optional team is a normal, good answer — nothing is required unless a
+named risk signal forces it.
 
-The same floors apply as on a build. The Watcher is restored if you leave it
-out, and a phase that requires a security or quality review keeps it whatever
-you propose. Trimming reviewers is a cost decision; skipping a security review
-on credential work is not available at any cost. Relay what the runtime added
-or dropped.
+Reviewers are no longer added by default. The floor is: a reviewer is forced
+only when the phase's own wording, or its changed files, names one of five
+signals — credentials/auth, payments, release sign-off, data deletion,
+database migration — and if it does, that forced reviewer is restored
+whatever you propose, with the signal stated on the card. Trimming an unforced
+reviewer is a cost decision; skipping the review a named signal forces is not
+available at any cost except the owner's own explicit, recorded decline.
+Relay what the runtime added or dropped.
 
 **Reads:** the manifest returned by `aether host continue --dry-run`;
 `continue_manifest.context_capsule` (read once, not per-dispatch — the capsule
@@ -175,7 +182,7 @@ For each heavy-review wave:
 1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each reviewer.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
-4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
+4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.
 5. The reviewer's prompt = `continue_manifest.context_capsule` (read once, prepended verbatim — the sole carrier of pheromone signals) + each dispatch's runtime-provided `brief` verbatim + `dispatch.skill_section` when present. Nothing else, nothing invented.
 6. After each reviewer returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
 7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow continue --worker-file <worker_file>`.
@@ -225,6 +232,13 @@ continue command's own output (fast path).
 1. Mark completion briefly.
 2. Route first to `/ant-seal`.
 
+**Worker questions checkpoint (after the result is reported):** run
+`AETHER_OUTPUT_MODE=json aether handoff-decisions --phase <n>`. If `count` > 0,
+ask each question via AskUserQuestion (at most 4; always offering "Let the
+colony proceed on its current assumption") and record real answers with
+`AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>`.
+An unanswered question never blocks — it resurfaces at the next boundary.
+
 **Steering checkpoint (after the result is reported):** if the runtime output
 contains a "Suggested Steering" section, present those proposals to the user
 as a real multiple-choice question (the AskUserQuestion tool, multi-select) —
@@ -233,6 +247,9 @@ one option per suggestion, each stating its plain-English consequence, plus a
 `AETHER_OUTPUT_MODE=json aether suggest-approve --approve <id>`; for each
 explicit rejection run `--dismiss <id>`. Never write a suggestion the user did
 not pick, and never re-ask about suggestions they dismissed.
+
+**If the user asks what it cost:** tell them they can run `aether spend` to see, worker by worker, how many tokens each worker's own tool reported for this run.
+That is a read-only detail view and the wrapper must never run it unprompted: the run's own figures are already on screen, and repeating them would print the same numbers twice.
 
 **Stop conditions:** the user has one clear next command, and no verification
 result was fabricated by the wrapper.

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // AutoSkillMode controls how auto-skills are created after difficult tasks (AUTO-01).
@@ -34,6 +33,32 @@ type DifficultyAssessment struct {
 // AutoSkillConfig holds the configuration for auto-skill creation.
 type AutoSkillConfig struct {
 	Mode string `json:"mode"` // off, propose, auto
+}
+
+// SkillProposalSink lets AutoCreateSkillIfDifficult hand off a
+// difficulty-triggered skill candidate without pkg/learn importing package
+// cmd (pkg/learn must never import cmd). The real implementation
+// (cmd/suggest_approve.go's colonySkillProposalSink) enqueues the candidate
+// into the SAME owner tick-to-approve queue (colony.PendingSuggestion)
+// every other pending decision already uses -- LEARN-07,
+// 204-CLASSIC-SYNTHESIS.md ruling (d): "propose" mode must actually
+// propose a candidate the owner can act on, not silently do nothing while
+// claiming otherwise.
+type SkillProposalSink interface {
+	ProposeSkill(proposal SkillProposal) error
+}
+
+// SkillProposal is everything a difficulty-triggered skill candidate
+// carries into the owner's approval queue: the derived name, the generated
+// content, how confident the runtime is, which run produced it, and which
+// learning entry it came from -- so its provenance is nameable without
+// opening a file.
+type SkillProposal struct {
+	Name            string
+	Content         string
+	Confidence      float64
+	SourceRunID     string
+	LearningEntryID string
 }
 
 // LoadAutoSkillMode reads the auto_skill_mode from config file or returns default.
@@ -124,12 +149,24 @@ func IsAutoSkillRejected(entry Entry) (bool, string) {
 	return false, ""
 }
 
-// AutoCreateSkillIfDifficult assesses difficulty and creates a skill if warranted (AUTO-01).
-// mode controls behavior: "off" = skip entirely, "propose" = return proposal without creating,
-// "auto" = create immediately. Default is "propose" per REQUIREMENTS.md.
-// Returns nil if no skill was created (easy task, rejected, or mode is off/propose).
-// Returns error only if skill creation itself failed (caller decides how to handle).
-func AutoCreateSkillIfDifficult(entry Entry, store *SQLiteColonyStore, baseDir string, mode string) error {
+// AutoCreateSkillIfDifficult assesses difficulty and, when warranted, hands
+// a skill candidate to sink -- it never creates an active skill directly,
+// in ANY mode (AUTO-01, LEARN-07, 204-CLASSIC-SYNTHESIS.md ruling (d)).
+//
+// mode controls whether a proposal is raised at all, never whether the
+// owner is bypassed: "off" raises nothing; "propose" and "auto" both raise
+// the IDENTICAL proposal through sink, so the difference between them is
+// how eagerly a proposal is raised, not whether the owner approves it.
+// Prior to this, "auto" mode created a skill with zero owner involvement,
+// and "propose" mode's own doc comment claimed a candidate was "logged" --
+// it never wrote or returned anything at all. Both defects are closed
+// here: every mode that raises a candidate routes it into the same
+// tick-to-approve queue every other pending decision already uses.
+//
+// Returns nil if no proposal was raised (easy task, rejected, or mode is
+// off). Returns error only if the proposal itself could not be handed to
+// sink (caller decides how to handle).
+func AutoCreateSkillIfDifficult(entry Entry, mode string, sink SkillProposalSink) error {
 	// Mode check: off = skip entirely
 	if mode == AutoSkillModeOff {
 		return nil
@@ -147,44 +184,27 @@ func AutoCreateSkillIfDifficult(entry Entry, store *SQLiteColonyStore, baseDir s
 		return nil // Easy task -- no skill needed
 	}
 
-	// Mode check: propose = do not create, just return proposal info
-	// (In the future this could return a proposal object, but for now it simply skips creation.)
-	if mode == AutoSkillModePropose {
-		return nil // Propose mode: skill is NOT created, only logged as candidate
-	}
-
-	// Mode is "auto" -- create the skill immediately
-
 	// Generate skill name from entry content
 	skillName := deriveSkillName(entry)
 	if skillName == "" {
 		return nil // Cannot derive a meaningful name
 	}
 
-	// Check if a skill with this name already exists
-	svc := NewSkillService(store.DB(), baseDir)
-	existing, err := svc.GetSkill(skillName)
-	if err == nil && existing != nil {
-		// Skill already exists -- increment use count instead
-		curator := NewCurator(store.DB(), baseDir)
-		curator.RecordSkillUse(skillName)
-		return nil
+	if sink == nil {
+		return fmt.Errorf("auto-skill mode %q raised a candidate with no proposal sink to hand it to", mode)
 	}
 
-	// Build skill content from entry
+	// Build skill content from entry (AUTO-03's evidence-bearing shape,
+	// unchanged from the pre-existing content builder)
 	content := buildSkillContent(entry, assessment)
 
-	// Create skill metadata with evidence (AUTO-03)
-	meta := SkillMetadata{
-		Name:        skillName,
-		Stage:       SkillStageActive,
-		AutoCreated: true,
-		SourceRunID: entry.Evidence.RunID,
-		Confidence:  entry.Confidence,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-	}
-
-	return svc.CreateSkill(meta, content)
+	return sink.ProposeSkill(SkillProposal{
+		Name:            skillName,
+		Content:         content,
+		Confidence:      entry.Confidence,
+		SourceRunID:     entry.Evidence.RunID,
+		LearningEntryID: entry.ID,
+	})
 }
 
 // deriveSkillName generates a kebab-case skill name from entry content.

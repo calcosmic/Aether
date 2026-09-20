@@ -14,32 +14,65 @@ type InstinctApplicationSummary struct {
 	Failures     int
 	SuccessRate  float64
 	LastApplied  string
+
+	// HelpfulApplications, HarmfulApplications and IgnoredApplications
+	// (LEARN-03, 204-06-PLAN.md Task 3) count typed application entries by
+	// their own recorded outcome (colony.InstinctApplicationEntry.Outcome:
+	// helpful/harmful/ignored, from the credit ledger's and the guidance
+	// application ledger's own closed vocabularies) -- distinct from
+	// Successes/Failures above, which also fold in the legacy untyped
+	// LegacySuccess boolean. An instinct whose applications are all in the
+	// old untyped shape counts zero of all three: a legacy entry carries no
+	// outcome to be helpful, harmful, or ignored about.
+	HelpfulApplications int
+	HarmfulApplications int
+	IgnoredApplications int
 }
 
 // SummarizeInstinctApplications folds legacy provenance counters and explicit
 // application history into one consistent summary. Older colonies only tracked
 // application_count, so missing history entries are treated as successful uses.
+//
+// Each ApplicationHistory entry (colony.InstinctApplicationEntry,
+// SYN-204-05/06) is read in whichever of its two shapes it carries: the new
+// shape's Outcome (helpful counts a success, harmful counts a failure,
+// neutral/pending/empty count as neither -- an entry with no verified
+// outcome is not silently treated as a success), or -- only when Outcome is
+// empty -- the old shape's LegacySuccess boolean (true/false count exactly
+// as they did before this change). Applications counts every entry either
+// way; only the success/failure tally differs by shape.
 func SummarizeInstinctApplications(entry colony.InstinctEntry) InstinctApplicationSummary {
 	summary := InstinctApplicationSummary{}
 	if entry.Provenance.LastApplied != nil {
 		summary.LastApplied = *entry.Provenance.LastApplied
 	}
 
-	for _, raw := range entry.ApplicationHistory {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
+	for _, app := range entry.ApplicationHistory {
 		summary.Applications++
-		if success, ok := item["success"].(bool); ok {
-			if success {
+		switch {
+		case app.Outcome != "":
+			switch app.Outcome {
+			case "helpful":
+				summary.Successes++
+				summary.HelpfulApplications++
+			case "harmful":
+				summary.Failures++
+				summary.HarmfulApplications++
+			case "ignored":
+				summary.IgnoredApplications++
+				// neutral, pending: a verified-but-inconclusive or
+				// not-yet-verified outcome counts as neither a success
+				// nor a failure.
+			}
+		case app.LegacySuccess != nil:
+			if *app.LegacySuccess {
 				summary.Successes++
 			} else {
 				summary.Failures++
 			}
 		}
-		if ts, ok := item["timestamp"].(string); ok {
-			summary.LastApplied = newerTimestamp(summary.LastApplied, ts)
+		if app.Timestamp != "" {
+			summary.LastApplied = newerTimestamp(summary.LastApplied, app.Timestamp)
 		}
 	}
 

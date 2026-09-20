@@ -65,21 +65,25 @@ func TestSeal_ArchivesReviews(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
 	}
 
-	// Verify reviews-archive/security/ledger.json exists alongside CROWNED-ANTHILL.md
-	archivePath := filepath.Join(root, ".aether", "reviews-archive", "security", "ledger.json")
-	data, err := os.ReadFile(archivePath)
+	// Seal retains durable state for status-first review; it never performs the
+	// optional entomb archive/clear step itself.
+	data, err := os.ReadFile(filepath.Join(reviewsDir, "ledger.json"))
 	if err != nil {
-		t.Fatalf("reviews-archive not created: %v", err)
+		t.Fatalf("review evidence was not retained for status-first review: %v", err)
 	}
 
 	var archivedLedger colony.ReviewLedgerFile
 	if err := json.Unmarshal(data, &archivedLedger); err != nil {
-		t.Fatalf("archived ledger is not valid JSON: %v", err)
+		t.Fatalf("retained ledger is not valid JSON: %v", err)
 	}
 	if len(archivedLedger.Entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(archivedLedger.Entries))
@@ -92,6 +96,21 @@ func TestSeal_ArchivesReviews(t *testing.T) {
 	crownedPath := filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")
 	if _, err := os.Stat(crownedPath); err != nil {
 		t.Fatalf("CROWNED-ANTHILL.md not created: %v", err)
+	}
+}
+
+func TestPlanCommandCandidateFlagsExposeReviewAndExactAcceptance(t *testing.T) {
+	want := []string{
+		"candidate", "show-iteration", "details", "accept-candidate", "spec-revision",
+		"spec-hash", "base-plan-revision", "timeline-digest", "proposal-hash", "acceptance-token",
+	}
+	for _, name := range want {
+		if flag := planCmd.Flags().Lookup(name); flag == nil {
+			t.Errorf("plan command is missing --%s", name)
+		}
+	}
+	if flag := planCmd.Flags().Lookup("accept"); flag == nil || !strings.Contains(strings.ToLower(flag.Usage), "deprecated") {
+		t.Fatalf("bare --accept must remain an explicit migration-only flag: %+v", flag)
 	}
 }
 
@@ -158,6 +177,10 @@ func TestSeal_HighSeverityWarning(t *testing.T) {
 		t.Fatalf("write ledger: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal returned error: %v", err)
@@ -210,6 +233,10 @@ func TestSeal_NoReviewsNoWarnings(t *testing.T) {
 	}
 
 	// No review data created -- reviews directory does not exist
+
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
 
 	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
@@ -380,6 +407,13 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 		t.Fatalf("write completion: %v", err)
 	}
 
+	// D-04's confirmation gate (198-03) now also guards the host-mediated
+	// seal-finalize path (198-RESEARCH.md Pitfall 5: seal's default flow is
+	// host-mediated, unlike build/continue) -- pre-record the answer, the
+	// same way an owner running seal-finalize twice (ask, then confirm)
+	// would.
+	autoRecordSealConfirmationForTest(t, store)
+
 	stdout.(*bytes.Buffer).Reset()
 	rootCmd.SetArgs([]string{"seal-finalize", "--completion-file", completionPath})
 	if err := rootCmd.Execute(); err != nil {
@@ -409,32 +443,11 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 	if len(report.PostSealBacklog) != 3 {
 		t.Fatalf("post-seal backlog = %d, want 3: %+v", len(report.PostSealBacklog), report.PostSealBacklog)
 	}
-	if report.LedgerWrites["security"] != 1 || report.LedgerWrites["quality"] != 1 || report.LedgerWrites["testing"] != 1 {
-		t.Fatalf("ledger writes = %+v, want security/quality/testing writes", report.LedgerWrites)
+	if len(report.LedgerWrites) != 0 {
+		t.Fatalf("seal-finalize must retain review findings without creating legacy ledger side effects: %+v", report.LedgerWrites)
 	}
-	if report.QueenLearningsWritten != 1 {
-		t.Fatalf("queen learnings written = %d, want 1", report.QueenLearningsWritten)
-	}
-	var securityLedger colony.ReviewLedgerFile
-	if err := store.LoadJSON("reviews/security/ledger.json", &securityLedger); err != nil {
-		t.Fatalf("load security review ledger: %v", err)
-	}
-	if securityLedger.Summary.Open != 1 || !strings.Contains(securityLedger.Entries[0].Description, "Release provenance") {
-		t.Fatalf("unexpected security ledger: %+v", securityLedger)
-	}
-	var testingLedger colony.ReviewLedgerFile
-	if err := store.LoadJSON("reviews/testing/ledger.json", &testingLedger); err != nil {
-		t.Fatalf("load testing review ledger: %v", err)
-	}
-	if testingLedger.Summary.Open != 1 || !strings.Contains(testingLedger.Entries[0].Description, "post-seal delivery chooser") {
-		t.Fatalf("unexpected testing ledger: %+v", testingLedger)
-	}
-	queenData, err := os.ReadFile(filepath.Join(root, ".aether", "QUEEN.md"))
-	if err != nil {
-		t.Fatalf("read local QUEEN.md: %v", err)
-	}
-	if !strings.Contains(string(queenData), "Keep release provenance checks in the final seal review.") {
-		t.Fatalf("local QUEEN.md missing reusable seal lesson:\n%s", string(queenData))
+	if report.QueenLearningsWritten != 0 {
+		t.Fatalf("seal-finalize must retain final-review learnings in transaction evidence rather than mutating Queen memory: %d", report.QueenLearningsWritten)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".aether", "CROWNED-ANTHILL.md")); err != nil {
 		t.Fatalf("CROWNED-ANTHILL.md not written: %v", err)
@@ -443,7 +456,7 @@ func TestSealFinalizeRecordsExternalReviewAndSeals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read CROWNED-ANTHILL.md: %v", err)
 	}
-	for _, want := range []string{"Final Review Evidence", "Structured findings captured: 3", "Post-Seal Review Backlog"} {
+	for _, want := range []string{"Final Review Evidence", "Structured findings captured: 3"} {
 		if !strings.Contains(string(summaryData), want) {
 			t.Fatalf("seal summary missing %q:\n%s", want, string(summaryData))
 		}

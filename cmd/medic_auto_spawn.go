@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/spf13/cobra"
 )
 
 const medicLastScanFile = "medic-last-scan.json"
@@ -143,32 +141,4 @@ func loadMedicLastScan(dataPath string) (*MedicLastScan, error) {
 		return nil, err
 	}
 	return &scan, nil
-}
-
-// renderMedicAutoSpawnVisual produces the visual output when auto-spawn triggers.
-func renderMedicAutoSpawnVisual(reason string, name string) string {
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("medic"), "Auto-Spawn: Colony Health Check"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(fmt.Sprintf("Trigger: %s\n", reason))
-	b.WriteString(fmt.Sprintf("Spawning: %s\n", name))
-	b.WriteString("\n")
-	return b.String()
-}
-
-// medicAutoSpawnCheckCmd is the CLI command for checking auto-spawn conditions.
-var medicAutoSpawnCheckCmd = &cobra.Command{
-	Use:   "medic-auto-spawn-check",
-	Short: "Check whether Medic should auto-spawn",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		dataPath := filepath.Join(resolveAetherRoot(), ".aether", "data")
-		check := shouldAutoSpawnMedic(dataPath)
-		outputOK(check)
-		return nil
-	},
-}
-
-func init() {
-	rootCmd.AddCommand(medicAutoSpawnCheckCmd)
 }

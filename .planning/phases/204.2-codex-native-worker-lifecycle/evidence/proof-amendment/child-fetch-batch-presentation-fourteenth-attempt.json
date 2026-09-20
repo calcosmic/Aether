@@ -1,0 +1,196 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-19T23:43:16.597249+00:00",
+  "attempt": 14,
+  "source_revision": "1238c0d575f5316d3e345e0f4d33d0f4745174c7",
+  "snapshot_revision": "2405383413c44ed781f907ea05ca021da9d24310",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-check-classification-repair-a604n1pr/summary.json",
+    "sha256": "sha256:d9156ac9b2a3ca484a20e3f94165163cfdfdd4071a0b529d4008a5f379fb0f2a"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass": 1340,
+    "race_pass": 1340,
+    "fail": 0,
+    "skip": 0
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/summary.json",
+    "sha256": "sha256:9f4116a586883bd331da5dad32ab20f32583c98a08c6fad65d5323db22fba294"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/run-live-check-classification-repair-integrated.PENDING.py",
+    "sha256": "sha256:53735da3d04fc31f788e0cfd0a92b76b2cff71ba4c9b950b431b99e49e51cc8d"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/config.READY.json",
+    "sha256": "sha256:7fb4f8d0671c414fbfee682d9ea7fcabd58ecbcf71583ab263b8f4fc8f54d966"
+  },
+  "integrated_admission": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/preflight.json",
+    "sha256": "sha256:457a516d5ed4bcc409f07d793ac4f801a1983269f0afe9b9fb083d10adc59549"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/capture/native-ordinary-1848471240/receipt.json",
+    "sha256": "sha256:72227267f7912adc2a49790e9d29de0d98b205a54cdea7f189d428006f785646"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/derived-ordinary.json",
+    "sha256": "sha256:1c4538be4995a1d9214133051004f59f33b2bf82513f6c1c07d8b37da49bd48c"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "reason": "parent writes or unclassified operations prevent child-only attribution: []",
+  "observed_flags": {
+    "child_checks_passed": true,
+    "child_edit_observed": true,
+    "parent_substitution": false,
+    "runtime_credit_observed": true,
+    "child_terminal_corroborated": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "child_unclassified_operations": [
+    "unclassified child code-mode: const results = await Promise.all([\n  tools.exec_command({cmd:\"git status --short\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/capture/native-ordinary-1848471240/repository\",yield_time_ms:10000,max_output_tokens:2000}),\n  tools.exec_command({cmd:\"sed -n '1,200p' clamp.go && sed -n '1,200p' clamp_test.go && sed -n '1,120p' go.mod\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/capture/native-ordinary-1848471240/repository\",yield_time_ms:10000,max_output_tokens:5000})\n]); results.forEach(text);\n"
+  ],
+  "parent_unclassified_commands": null,
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "bound_seconds": 3700,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-check-classification-repair-a604n1pr/repo",
+      "elapsed_seconds": 405.45960424999794,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/live.stdout",
+        "sha256": "sha256:84e068ad088ca43f0633d7795bfc56484b7554938284447f8da01f3a25cb194f"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "bound_seconds": 300,
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-check-classification-repair-a604n1pr/repo",
+      "elapsed_seconds": 6.565729875001125,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/replay.stdout",
+        "sha256": "sha256:4cf387b391959dd10837a9e546ecc8c7ced65048c891e021bd7edb8a4d7dc93c"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": []
+      }
+    }
+  },
+  "source_mapping": {
+    "child_id": "01a0bc08-270f-7232-bc15-c00f49aa9e7b",
+    "child_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/capture/native-ordinary-1848471240/home/.codex/sessions/2026/09/20/rollout-2026-09-20T01-37-26-01a0bc08-270f-7232-bc15-c00f49aa9e7b.jsonl",
+      "sha256": "sha256:989f7adb6fc9a1e577145892667ed97dd83db41487d1e514fc3241254e64be25"
+    },
+    "parent_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-check-classification-repair-4w3kk9kl/capture/native-ordinary-1848471240/parent-events.jsonl",
+      "sha256": "sha256:09135d587ee4b68c359bdc3d3b4cf65cdb1bcc0eab9359e094910ddabe783f0b"
+    },
+    "parallel_inspection": {
+      "turn_id": "01a0bc08-2767-7423-bde3-136f5c557a9c",
+      "call_line": 49,
+      "call_id": "call_n8lnCMj8qDJQxMZ2a6L1kAVC",
+      "command_event_lines": [
+        51,
+        52
+      ],
+      "result_line": 53,
+      "result_order": [
+        52,
+        51
+      ],
+      "exit_codes": [
+        0,
+        0
+      ],
+      "interpretation": "The two untouched result blocks follow Promise input order despite reversed command completion order. Exact results.forEach(text) presentation and the child-specific composed bounded sed inspection are currently unclassified."
+    }
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "next": "Review the narrow batch presentation and child inspection classifier correction, preserve all failed outcomes, then require fresh focused normal/race and live qualification; initial bootstrap claim remains unverified.",
+  "bootstrap_claim": {
+    "status": "unverified",
+    "parent_spawn_line": 114,
+    "child_initial_line": 10,
+    "parent_final_line": 274,
+    "reason": "Encrypted spawn and child-initial payload exports do not establish either byte equality or changed bytes. The parent final-message transcription claim is not authoritative proof.",
+    "separate_fetched_context_evidence": {
+      "child_fetch_lines": [
+        22,
+        24,
+        25
+      ],
+      "child_ack_lines": [
+        29,
+        31,
+        32
+      ],
+      "interpretation": "Existing child-fetch runtime payload and acknowledgement are separately corroborated without an intervening tool; this does not establish initial spawn payload equality."
+    },
+    "predicate_changed": false
+  }
+}

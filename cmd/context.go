@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +16,322 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
+
+const archiveMaintenanceRepairSchemaVersion = "archive-repair/v1"
+
+type archiveMaintenanceRepairTarget struct {
+	RelativePath string      `json:"relative_path"`
+	Content      []byte      `json:"-"`
+	Source       string      `json:"source"`
+	Mode         os.FileMode `json:"mode,omitempty"`
+}
+
+type archiveMaintenanceRepairRequest struct {
+	RepositoryRoot string
+	DataRoot       string
+	ChamberPath    string
+	TransactionID  string
+	Targets        []archiveMaintenanceRepairTarget
+	Rename         func(oldPath, newPath string) error
+	Fault          lifecycleTransactionFaultHook
+}
+
+type archiveMaintenanceRepairPreview struct {
+	maintenanceMutationPreview
+	BaselineDigest  string                      `json:"baseline_digest"`
+	PreviewDigest   string                      `json:"preview_digest"`
+	SealDisposition colony.SealDisposition      `json:"seal_disposition"`
+	StateEffect     colony.LifecycleStateEffect `json:"state_effect"`
+}
+
+type archiveMaintenanceRepairPlan struct {
+	SchemaVersion         string                             `json:"schema_version"`
+	Inspection            archiveMaintenanceInspectionResult `json:"inspection"`
+	Preview               archiveMaintenanceRepairPreview    `json:"preview"`
+	BaselineDigest        string                             `json:"baseline_digest"`
+	PreviewDigest         string                             `json:"preview_digest"`
+	Checkpoint            string                             `json:"checkpoint"`
+	ApprovedPreviewDigest string                             `json:"approved_preview_digest,omitempty"`
+	StateEffect           colony.LifecycleStateEffect        `json:"state_effect"`
+
+	request  archiveMaintenanceRepairRequest
+	mutation maintenanceMutationPlan
+}
+
+type archiveMaintenanceRepairResult struct {
+	SchemaVersion string                             `json:"schema_version"`
+	Operation     string                             `json:"operation"`
+	Inspection    archiveMaintenanceInspectionResult `json:"inspection"`
+	Preview       archiveMaintenanceRepairPreview    `json:"preview"`
+	ChangedFiles  []string                           `json:"changed_files"`
+	StateEffect   colony.LifecycleStateEffect        `json:"state_effect"`
+	Receipt       *colony.LifecycleReceipt           `json:"receipt,omitempty"`
+	Verification  []colony.LifecycleVerification     `json:"verification,omitempty"`
+	RolledBack    bool                               `json:"rolled_back"`
+	Rollback      string                             `json:"rollback"`
+	Recovery      string                             `json:"recovery"`
+	NextAction    string                             `json:"next_action"`
+}
+
+// prepareArchiveMaintenanceRepair is the zero-write half of archive repair.
+// It accepts only manifest-owned archive bytes or the two live context files,
+// validates the desired bytes against the sealed closure, and then delegates
+// exact baseline/commit ordering to the shared maintenance transaction.
+func prepareArchiveMaintenanceRepair(request archiveMaintenanceRepairRequest) (archiveMaintenanceRepairPlan, error) {
+	plan := archiveMaintenanceRepairPlan{SchemaVersion: archiveMaintenanceRepairSchemaVersion, StateEffect: colony.LifecycleStateEffectNone}
+	repositoryRoot, err := entombManifestRoot(request.RepositoryRoot, "repository")
+	if err != nil {
+		return plan, err
+	}
+	dataRoot, err := entombManifestRoot(request.DataRoot, "lifecycle data")
+	if err != nil {
+		return plan, err
+	}
+	request.RepositoryRoot, request.DataRoot = repositoryRoot, dataRoot
+	request.ChamberPath = filepath.Clean(strings.TrimSpace(request.ChamberPath))
+	if strings.TrimSpace(request.TransactionID) == "" {
+		return plan, fmt.Errorf("archive repair: transaction id is required")
+	}
+	if len(request.Targets) == 0 {
+		return plan, fmt.Errorf("archive repair: at least one exact target is required")
+	}
+
+	inspection, err := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
+		RepositoryRoot: repositoryRoot, DataRoot: dataRoot, ChamberPath: request.ChamberPath,
+	})
+	if err != nil {
+		return plan, fmt.Errorf("archive repair inspection: %w", err)
+	}
+	plan.Inspection = inspection
+	if !inspection.ManifestVerified || !inspection.CrossReferencesVerified || !inspection.SealDisposition.Valid() {
+		return plan, fmt.Errorf("archive repair: manifest/cross-reference/seal disposition is not verified")
+	}
+	for _, finding := range inspection.Findings {
+		if finding.Code == "forced_marker_missing" || finding.Code == "forced_marker_conflict" || finding.Code == "seal_disposition" || finding.Code == "seal_outcome" {
+			return plan, fmt.Errorf("archive repair: %s", finding.Summary)
+		}
+	}
+
+	outcome, err := loadArchiveRepairSealOutcome(inspection)
+	if err != nil {
+		return plan, err
+	}
+	mutation := maintenanceMutationPlan{
+		SchemaVersion: maintenanceMutationSchemaVersion, Operation: "archive.repair",
+		TransactionID: strings.TrimSpace(request.TransactionID),
+		SourceRoot:    inspection.ChamberPath, DestinationRoot: repositoryRoot,
+		Checkpoint: "maintenance:archive-repair:validated",
+		Recovery:   fmt.Sprintf("Inspect %s and rerun archive repair only from a fresh preview.", filepath.ToSlash(filepath.Join(dataRoot, "transactions", strings.TrimSpace(request.TransactionID)))),
+		Allowlist:  lifecycleTransactionAllowlist{RepositoryRoot: repositoryRoot, LifecycleDataRoot: dataRoot},
+		Rename:     request.Rename, Fault: request.Fault,
+	}
+	covered := make(map[string]string, len(request.Targets))
+	cleanTargets := make([]archiveMaintenanceRepairTarget, 0, len(request.Targets))
+	for _, target := range request.Targets {
+		clean, mutationTarget, err := prepareArchiveRepairTarget(repositoryRoot, inspection, outcome, target)
+		if err != nil {
+			return plan, err
+		}
+		if _, duplicate := covered[clean.RelativePath]; duplicate {
+			return plan, fmt.Errorf("archive repair: duplicate target %q", clean.RelativePath)
+		}
+		covered[clean.RelativePath] = filepath.Join(repositoryRoot, filepath.FromSlash(clean.RelativePath))
+		cleanTargets = append(cleanTargets, clean)
+		mutation.Targets = append(mutation.Targets, mutationTarget)
+	}
+	for _, finding := range inspection.Findings {
+		if !archiveRepairFindingCovered(finding, covered) {
+			return plan, fmt.Errorf("archive repair: current inspection has an untargeted blocker: %s", finding.Summary)
+		}
+	}
+	request.Targets = cleanTargets
+	preview, err := prepareMaintenanceMutation(mutation)
+	if err != nil {
+		return plan, fmt.Errorf("archive repair preview: %w", err)
+	}
+	changed := false
+	for _, target := range preview.Targets {
+		if target.Change != maintenanceMutationChangeUnchanged {
+			changed = true
+			break
+		}
+	}
+	if !changed {
+		return plan, fmt.Errorf("archive repair: preview contains no byte changes")
+	}
+	digestPayload, err := json.Marshal(struct {
+		ManifestDigest  string                     `json:"manifest_digest"`
+		BaselineDigest  string                     `json:"baseline_digest"`
+		SealDisposition colony.SealDisposition     `json:"seal_disposition"`
+		Preview         maintenanceMutationPreview `json:"preview"`
+	}{inspection.ManifestDigest, inspection.BaselineDigest, inspection.SealDisposition, preview})
+	if err != nil {
+		return plan, err
+	}
+	previewDigest := lifecycleDigest(digestPayload)
+	plan.Preview = archiveMaintenanceRepairPreview{
+		maintenanceMutationPreview: preview,
+		BaselineDigest:             inspection.BaselineDigest, PreviewDigest: previewDigest,
+		SealDisposition: inspection.SealDisposition, StateEffect: colony.LifecycleStateEffectNone,
+	}
+	plan.BaselineDigest, plan.PreviewDigest, plan.Checkpoint = inspection.BaselineDigest, previewDigest, preview.Checkpoint
+	plan.request, plan.mutation = request, mutation
+	return plan, nil
+}
+
+func commitArchiveMaintenanceRepair(plan archiveMaintenanceRepairPlan) (archiveMaintenanceRepairResult, error) {
+	result := archiveMaintenanceRepairResult{
+		SchemaVersion: archiveMaintenanceRepairSchemaVersion, Operation: "archive.repair",
+		Inspection: plan.Inspection, Preview: plan.Preview, ChangedFiles: []string{},
+		StateEffect: colony.LifecycleStateEffectNone, Rollback: plan.mutation.Recovery, Recovery: plan.mutation.Recovery,
+		NextAction: "aether chamber-verify --name " + filepath.Base(plan.request.ChamberPath),
+	}
+	if plan.SchemaVersion != archiveMaintenanceRepairSchemaVersion || plan.PreviewDigest == "" || plan.Checkpoint == "" {
+		return result, fmt.Errorf("archive repair: a validated preview/checkpoint is required")
+	}
+	if plan.ApprovedPreviewDigest == "" || plan.ApprovedPreviewDigest != plan.PreviewDigest {
+		return result, fmt.Errorf("archive repair: approved preview digest does not match the validated checkpoint")
+	}
+	fresh, err := prepareArchiveMaintenanceRepair(plan.request)
+	if err != nil {
+		return result, err
+	}
+	if fresh.PreviewDigest != plan.PreviewDigest || fresh.BaselineDigest != plan.BaselineDigest || fresh.Checkpoint != plan.Checkpoint {
+		return result, fmt.Errorf("archive repair: baseline or preview changed after approval; inspect again")
+	}
+	mutation, commitErr := commitMaintenanceMutation(fresh.mutation)
+	result.Preview, result.StateEffect = fresh.Preview, mutation.StateEffect
+	result.Receipt, result.Verification, result.Recovery = mutation.Receipt, append([]colony.LifecycleVerification(nil), mutation.Verification...), mutation.Recovery
+	result.RolledBack = mutation.StateEffect == colony.LifecycleStateEffectRolledBack
+	if mutation.Receipt != nil && mutation.Receipt.Recovery != nil && strings.TrimSpace(mutation.Receipt.Recovery.SafeNextStep) != "" {
+		result.Rollback = mutation.Receipt.Recovery.SafeNextStep
+	}
+	for _, target := range mutation.Preview.Targets {
+		if target.Change != maintenanceMutationChangeUnchanged {
+			result.ChangedFiles = append(result.ChangedFiles, filepath.ToSlash(target.RelativeTarget))
+		}
+	}
+	post, inspectErr := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
+		RepositoryRoot: fresh.request.RepositoryRoot, DataRoot: fresh.request.DataRoot, ChamberPath: fresh.request.ChamberPath,
+	})
+	if inspectErr == nil {
+		result.Inspection = post
+	}
+	if commitErr != nil {
+		return result, fmt.Errorf("archive repair transaction: %w", commitErr)
+	}
+	if inspectErr != nil {
+		return result, fmt.Errorf("archive repair post-commit inspection: %w", inspectErr)
+	}
+	if !post.Valid {
+		return result, fmt.Errorf("archive repair committed bytes but post-commit archive verification failed")
+	}
+	if result.Receipt == nil || result.StateEffect != colony.LifecycleStateEffectCommitted {
+		return result, fmt.Errorf("archive repair did not produce a committed receipt")
+	}
+	return result, nil
+}
+
+func loadArchiveRepairSealOutcome(inspection archiveMaintenanceInspectionResult) (colony.SealOutcome, error) {
+	for _, entry := range inspection.manifest.Entries {
+		if entry.Kind != "seal_outcome" {
+			continue
+		}
+		path := filepath.Join(inspection.ChamberPath, filepath.FromSlash(entry.Path))
+		content, err := readEntombManifestFile(inspection.ChamberPath, entry.Path, path)
+		if err != nil || lifecycleDigest(content) != entry.ArchiveDigest {
+			return colony.SealOutcome{}, fmt.Errorf("archive repair: seal outcome is not digest verified")
+		}
+		var outcome colony.SealOutcome
+		if err := decodeLifecycleJSON(content, &outcome); err != nil {
+			return outcome, fmt.Errorf("archive repair: decode seal outcome: %w", err)
+		}
+		if err := outcome.Validate(); err != nil || outcome.Disposition != inspection.SealDisposition || outcome.OwnerReason != inspection.OwnerReason {
+			return outcome, fmt.Errorf("archive repair: seal disposition is not verified")
+		}
+		return outcome, nil
+	}
+	return colony.SealOutcome{}, fmt.Errorf("archive repair: seal outcome entry is missing")
+}
+
+func prepareArchiveRepairTarget(repositoryRoot string, inspection archiveMaintenanceInspectionResult, outcome colony.SealOutcome, target archiveMaintenanceRepairTarget) (archiveMaintenanceRepairTarget, maintenanceMutationTarget, error) {
+	raw := strings.TrimSpace(target.RelativePath)
+	clean := filepath.Clean(filepath.FromSlash(raw))
+	if raw == "" || strings.Contains(raw, "\\") || filepath.IsAbs(clean) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.ToSlash(clean) != raw {
+		return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: target %q must be a canonical contained repository-relative path", target.RelativePath)
+	}
+	if strings.TrimSpace(target.Source) == "" {
+		return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: target %q requires named source evidence", raw)
+	}
+	fullPath := filepath.Join(repositoryRoot, clean)
+	if !pathIsWithin(repositoryRoot, fullPath) {
+		return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: target %q escapes the repository", raw)
+	}
+	chamberRelative, _ := filepath.Rel(repositoryRoot, inspection.ChamberPath)
+	var archiveEntry *colony.ArchiveEntry
+	for index := range inspection.manifest.Entries {
+		entryRelative := filepath.ToSlash(filepath.Join(chamberRelative, filepath.FromSlash(inspection.manifest.Entries[index].Path)))
+		if entryRelative == raw {
+			archiveEntry = &inspection.manifest.Entries[index]
+			break
+		}
+	}
+	contextTarget := raw == filepath.ToSlash(filepath.Join(".aether", "CONTEXT.md"))
+	tombstoneTarget := raw == filepath.ToSlash(filepath.Join(".aether", "HANDOFF.md"))
+	if archiveEntry == nil && !contextTarget && !tombstoneTarget {
+		return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: target %q is not owned by the chamber manifest or active context", raw)
+	}
+	if archiveEntry != nil {
+		if int64(len(target.Content)) != archiveEntry.Size || lifecycleDigest(target.Content) != archiveEntry.ArchiveDigest || archiveEntry.SourceDigest != archiveEntry.ArchiveDigest {
+			return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: desired bytes for %q do not match the manifest digest", raw)
+		}
+		if entombClosureArchiveKinds[archiveEntry.Kind] {
+			if err := verifyEntombClosureArtifact(archiveEntry.Path, archiveEntry.Kind, target.Content, outcome); err != nil {
+				return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: desired closure bytes: %w", err)
+			}
+		}
+		if archiveEntry.Kind == "archive_xml" {
+			var archive entombClosureArchiveXML
+			if err := xml.Unmarshal(target.Content, &archive); err != nil || archive.SealOutcomeID != outcome.OutcomeID || archive.SealTransaction != outcome.Transaction.ID || archive.Disposition != outcome.Disposition || archive.OwnerReason != outcome.OwnerReason {
+				return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: desired archive XML conflicts with the seal disposition")
+			}
+		}
+	} else {
+		label := "context"
+		if tombstoneTarget {
+			label = "tombstone"
+		}
+		if err := verifyArchiveContextDocument(label, string(target.Content), &inspection, outcome); err != nil {
+			return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: desired %s: %w", label, err)
+		}
+	}
+	current, err := readLifecycleFileState(fullPath)
+	if err != nil {
+		return target, maintenanceMutationTarget{}, fmt.Errorf("archive repair: read target baseline: %w", err)
+	}
+	target.RelativePath = raw
+	target.Content = append([]byte(nil), target.Content...)
+	return target, maintenanceMutationTarget{
+		Root: lifecycleTransactionRootRepository, RelativeTarget: raw,
+		Label: "Archive/context repair", Source: target.Source, Action: lifecycleTransactionWrite,
+		Content: append([]byte(nil), target.Content...), Mode: target.Mode,
+		ExpectedDigest: current.Digest, Managed: true,
+	}, nil
+}
+
+func archiveRepairFindingCovered(finding maintenanceInspectionFinding, targets map[string]string) bool {
+	for relative, fullPath := range targets {
+		for _, evidencePath := range finding.EvidencePaths {
+			if filepath.Clean(evidencePath) == filepath.Clean(fullPath) {
+				return true
+			}
+		}
+		if strings.Contains(finding.Summary, relative) || strings.Contains(finding.Summary, filepath.Base(relative)) {
+			return true
+		}
+	}
+	return false
+}
 
 // ContextCapsuleOutput is the typed output for context-capsule (DIFF-02).
 // The shell version uses jq string interpolation; this uses typed structs with JSON marshaling.
@@ -98,9 +415,11 @@ func contextCapsuleDecisionFromRanked(item colony.RankedContextCandidate) Contex
 
 // resumeDashboardCmd returns a read-only session recovery dashboard.
 var resumeDashboardCmd = &cobra.Command{
-	Use:   "resume-dashboard",
-	Short: "Show session recovery information without restoring handoff state",
-	Args:  cobra.NoArgs,
+	Use:         "resume-dashboard",
+	Short:       "Show session recovery information without restoring handoff state",
+	Hidden:      true,
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/internal-only": "true", "aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if store == nil {
 			outputErrorMessage("no store initialized")
@@ -114,10 +433,15 @@ var resumeDashboardCmd = &cobra.Command{
 }
 
 func buildResumeDashboardResult() map[string]interface{} {
+	var nativeState colony.ColonyState
+	var nativeRecovery *codexNativeRecovery
+	if store.LoadJSON("COLONY_STATE.json", &nativeState) == nil {
+		nativeRecovery = buildCodexNativeRecovery(normalizeLegacyColonyState(nativeState))
+	}
 	var session colony.SessionFile
 	sessionFound := store.LoadJSON("session.json", &session) == nil
 	restoredLegacySession := false
-	if !sessionFound {
+	if !sessionFound && nativeRecovery == nil {
 		if restored, err := ensureLegacySessionMirror(store); err == nil && restored {
 			restoredLegacySession = true
 			sessionFound = store.LoadJSON("session.json", &session) == nil
@@ -165,6 +489,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 				"available": false,
 				"files":     []string{},
 			},
+			"phase_progress": []resumePhaseProgressEntry{},
 		}
 		if sessionFound {
 			result["session"] = map[string]interface{}{
@@ -182,6 +507,7 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"handoff_exists": handoffExists,
 			"source":         recoverySource,
 		}
+		closeLifecycleRun(result, colony.ColonyState{}, "resume-dashboard")
 		return result
 	}
 	state = normalizeLegacyColonyState(state)
@@ -284,9 +610,10 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"items": signals,
 			"count": len(signals),
 		},
-		"blockers":      blockers,
-		"survey":        survey,
-		"plan_revision": planRevisionSummary(state.Plan),
+		"blockers":       blockers,
+		"survey":         survey,
+		"plan_revision":  planRevisionSummary(state.Plan),
+		"phase_progress": buildResumePhaseProgress(state.Plan.Phases),
 		"recovery": map[string]interface{}{
 			"context_path":   contextDocumentPath(),
 			"handoff_path":   handoffDocumentPath(),
@@ -342,7 +669,15 @@ func buildResumeDashboardResult() map[string]interface{} {
 			"context_cleared": session.ContextCleared,
 		}
 	}
-	if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
+	// The two branches below are facts this dashboard alone knows -- a saved,
+	// durable worker result waiting to be finalized, or a build process that
+	// is genuinely still running -- neither of which the saved project state
+	// alone tells the resolver. Recorded as resume_override_command/_why so
+	// the one decision can absorb them as an input rather than have its
+	// answer overwritten afterward.
+	if nativeRecovery != nil {
+		applyCodexNativeRecovery(result, nativeRecovery)
+	} else if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && strings.TrimSpace(attempt.CompletionPath) != "" && strings.TrimSpace(attempt.CompletionSHA256) != "" {
 		next := buildFinalizeRecoveryCommand(attempt.Phase, attempt.CompletionPath)
 		summary := "External workers finished and their accepted completion packet is durable. Finalize this exact packet; do not redispatch workers."
 		recoveryBlock := result["recovery"].(map[string]interface{})
@@ -353,12 +688,17 @@ func buildResumeDashboardResult() map[string]interface{} {
 			sessionBlock["summary"] = summary
 			sessionBlock["suggested_next"] = next
 		}
+		result["resume_override_command"] = next
+		result["resume_override_why"] = "A helper finished and its result was saved but not yet applied. " +
+			"Finalizing this exact result is safer than starting a new run, which could duplicate work."
 	} else if _, attempt, ok := loadRelevantBuildAttempt(state); ok && buildAttemptStatusActive(attempt.Status) && state.State == colony.StateEXECUTING {
 		next := buildForceRedispatchCommand(attempt.Phase)
 		summary := "The previous build ended before durable lifecycle finalization. Partial output remains inspectable."
+		why := "The previous run of this phase stopped before it finished being recorded. Restarting it replaces the incomplete attempt."
 		if buildAttemptProcessAlive(attempt) {
 			next = "aether watch"
 			summary = "The recorded build process is still running. Do not redispatch the phase while its workers are active."
+			why = "Helpers are still working on this phase. Watching their progress is safer than starting a new run, which would run alongside them."
 		}
 		recoveryBlock := result["recovery"].(map[string]interface{})
 		recoveryBlock["summary"] = summary
@@ -367,7 +707,10 @@ func buildResumeDashboardResult() map[string]interface{} {
 			sessionBlock["summary"] = summary
 			sessionBlock["suggested_next"] = next
 		}
+		result["resume_override_command"] = next
+		result["resume_override_why"] = why
 	}
+	closeLifecycleRun(result, state, "resume-dashboard")
 	return result
 }
 
@@ -1232,6 +1575,32 @@ func trimSection(prompt, sectionHeader string) string {
 	return before + after
 }
 
+// resumePhaseProgressEntry is one phase's status in the resume dashboard's
+// per-phase progress list (SHOW-02): the phase's own recorded status is
+// carried through unchanged, never recomputed from CurrentPhase or anything
+// else.
+type resumePhaseProgressEntry struct {
+	Phase  int    `json:"phase"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+// buildResumePhaseProgress converts the plan's own phases into the resume
+// dashboard's phase-by-phase progress list. Status comes straight from the
+// phase's own recorded status field (colony.PhasePending/PhaseInProgress/
+// PhaseCompleted) -- never recomputed from anything else.
+func buildResumePhaseProgress(phases []colony.Phase) []resumePhaseProgressEntry {
+	entries := make([]resumePhaseProgressEntry, 0, len(phases))
+	for _, phase := range phases {
+		entries = append(entries, resumePhaseProgressEntry{
+			Phase:  phase.ID,
+			Name:   phase.Name,
+			Status: phase.Status,
+		})
+	}
+	return entries
+}
+
 // extractRecentDecisions returns the last N decisions (reversed) from the decisions slice.
 func extractRecentDecisions(decisions []colony.Decision, n int) []interface{} {
 	total := len(decisions)
@@ -1371,60 +1740,21 @@ func extractRiskEntries(maxRisks int) []colony.FlagEntry {
 	return risks
 }
 
-// extractSignalTexts loads pheromones.json, computes effective strengths, sorts, and returns formatted signals.
+// extractSignalTexts loads pheromones.json and returns formatted, top-N
+// in-effect signal texts via the one resolver (resolveEffectivePheromones).
+// This used to filter only on sig.Active and a 0.1 literal, with no expiry
+// check -- the exact NOW-09 gap that let an active, strong, but expired
+// signal keep steering worker briefs; extractSignalTextsFrom now owns this
+// logic and this function is a thin wrapper over it.
 func extractSignalTexts(maxSignals int) []string {
+	if store == nil {
+		return nil
+	}
 	var pf colony.PheromoneFile
 	if err := store.LoadJSON("pheromones.json", &pf); err != nil {
 		return nil
 	}
-
-	now := time.Now()
-
-	// Filter and compute effective strengths
-	type scoredSignal struct {
-		priority          int
-		effectiveStrength float64
-		text              string
-	}
-
-	var scored []scoredSignal
-	for _, sig := range pf.Signals {
-		if !sig.Active {
-			continue
-		}
-		eff := computeEffectiveStrength(sig, now)
-		if eff < 0.1 {
-			continue
-		}
-		text := extractSignalText(sig.Content)
-		if text == "" {
-			continue
-		}
-		scored = append(scored, scoredSignal{
-			priority:          signalPriority(sig.Type),
-			effectiveStrength: eff,
-			text:              fmt.Sprintf("%s: %s", sig.Type, text),
-		})
-	}
-
-	// Sort by priority (ascending), then by effective strength (descending)
-	sort.SliceStable(scored, func(i, j int) bool {
-		if scored[i].priority != scored[j].priority {
-			return scored[i].priority < scored[j].priority
-		}
-		return scored[i].effectiveStrength > scored[j].effectiveStrength
-	})
-
-	// Take top N
-	if len(scored) > maxSignals {
-		scored = scored[:maxSignals]
-	}
-
-	result := make([]string, len(scored))
-	for i, s := range scored {
-		result[i] = s.text
-	}
-	return result
+	return extractSignalTextsFrom(&pf, maxSignals)
 }
 
 // extractRollingSummary reads rolling-summary.log and extracts last N entries.

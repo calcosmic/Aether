@@ -9,6 +9,30 @@ import (
 	"testing"
 )
 
+func bindSeededCommandTestRepository(t *testing.T) commandTestRepository {
+	t.Helper()
+	binding := bindCommandTestRepository(t)
+
+	entries, err := os.ReadDir("testdata")
+	if err != nil {
+		t.Fatalf("read command test fixtures: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join("testdata", entry.Name()))
+		if err != nil {
+			t.Fatalf("read command test fixture %s: %v", entry.Name(), err)
+		}
+		if err := os.WriteFile(filepath.Join(binding.DataDir, entry.Name()), data, 0644); err != nil {
+			t.Fatalf("seed command test fixture %s: %v", entry.Name(), err)
+		}
+	}
+
+	return binding
+}
+
 func TestCurationSentinelDryRun(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -16,13 +40,7 @@ func TestCurationSentinelDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-sentinel", "--dry-run"})
 
@@ -50,13 +68,7 @@ func TestCurationNurseDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-nurse", "--dry-run"})
 
@@ -81,13 +93,7 @@ func TestCurationCriticDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-critic", "--dry-run"})
 
@@ -112,13 +118,7 @@ func TestCurationHeraldDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-herald", "--dry-run"})
 
@@ -143,13 +143,7 @@ func TestCurationJanitorDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-janitor", "--dry-run"})
 
@@ -174,13 +168,7 @@ func TestCurationArchivistDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-archivist", "--dry-run"})
 
@@ -205,13 +193,7 @@ func TestCurationLibrarianDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-librarian", "--dry-run"})
 
@@ -236,13 +218,7 @@ func TestCurationScribeDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-scribe", "--dry-run"})
 
@@ -267,13 +243,7 @@ func TestCurationRunDryRun(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-run", "--dry-run"})
 
@@ -343,6 +313,7 @@ func TestCurationRunNoStore(t *testing.T) {
 	var errBuf bytes.Buffer
 	stderr = &errBuf
 
+	bindCommandTestRepository(t)
 	store = nil
 
 	rootCmd.SetArgs([]string{"curation-run", "--dry-run"})
@@ -387,13 +358,7 @@ func TestCurationDryRunFalse(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"curation-sentinel"})
 
@@ -417,9 +382,8 @@ func TestCurationArchivistThresholdArchivesTypedInstincts(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	writeTestJSON(t, s.BasePath(), "instincts.json", map[string]interface{}{
 		"version": "1.0",

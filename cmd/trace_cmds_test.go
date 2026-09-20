@@ -224,9 +224,9 @@ func TestTraceEndToEndResumeGeneratesNewRunID(t *testing.T) {
 
 	tracer = trace.NewTracer(store)
 
-	rootCmd.SetArgs([]string{"resume-colony"})
+	rootCmd.SetArgs([]string{"resume"})
 	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("resume-colony returned error: %v", err)
+		t.Fatalf("resume returned error: %v", err)
 	}
 
 	// Verify trace.jsonl has a resume intervention entry

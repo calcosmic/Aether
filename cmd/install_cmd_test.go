@@ -169,6 +169,7 @@ func TestInstallDevChannelUsesSeparateHubAndSkipsPlatformHomes(t *testing.T) {
 
 	homeDir := t.TempDir()
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 
 	if err := os.MkdirAll(filepath.Join(packageDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
@@ -406,6 +407,7 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 
 	// Set up temp directories
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
 	destDir := filepath.Join(homeDir, ".claude", "commands")
@@ -465,6 +467,7 @@ func TestInstallCopiesClaudeCommands(t *testing.T) {
 	if !strings.Contains(output, "\"copied\":1") {
 		t.Errorf("expected output to report 1 copied file, got: %s", output)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallCopiesClaudeAgents verifies that install copies .claude/agents/ant/
@@ -476,6 +479,7 @@ func TestInstallCopiesClaudeAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "agents", "ant")
 	destDir := filepath.Join(homeDir, ".claude", "agents", "ant")
@@ -503,6 +507,7 @@ func TestInstallCopiesClaudeAgents(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallCopiesOpenCodeCommands verifies OpenCode commands are copied.
@@ -513,6 +518,7 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".opencode", "commands", "ant")
 	destDir := filepath.Join(homeDir, ".config", "opencode", "commands", "ant")
@@ -547,6 +553,7 @@ func TestInstallCopiesOpenCodeCommands(t *testing.T) {
 	if _, err := os.Stat(runDestFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", runDestFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallCopiesOpenCodeAgents verifies OpenCode agents are copied.
@@ -557,6 +564,7 @@ func TestInstallCopiesOpenCodeAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".opencode", "agents")
 	destDir := filepath.Join(homeDir, ".config", "opencode", "agents")
@@ -584,6 +592,7 @@ func TestInstallCopiesOpenCodeAgents(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallSetsUpHub verifies that install creates ~/.aether/ directory.
@@ -595,6 +604,7 @@ func TestInstallSetsUpHub(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
@@ -622,6 +632,7 @@ func TestInstallSetsUpHub(t *testing.T) {
 	if err == nil && !info.IsDir() {
 		t.Errorf("expected %s to be a directory", hubDir)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallIdempotent verifies that running install twice does not error
@@ -633,6 +644,7 @@ func TestInstallIdempotent(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
 
@@ -666,6 +678,7 @@ func TestInstallIdempotent(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file to still exist after second install")
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallSkipsUnchanged verifies that unchanged files are skipped.
@@ -676,6 +689,7 @@ func TestInstallSkipsUnchanged(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
 
@@ -709,6 +723,7 @@ func TestInstallSkipsUnchanged(t *testing.T) {
 	if !strings.Contains(output, "skipped") && !strings.Contains(output, "unchanged") {
 		t.Errorf("expected output to mention skipped/unchanged files, got: %s", output)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallRemovesStale verifies that files removed from source are also
@@ -720,6 +735,7 @@ func TestInstallRemovesStale(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
 	destDir := filepath.Join(homeDir, ".claude", "commands")
@@ -767,6 +783,7 @@ func TestInstallRemovesStale(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(destDir, "ant-stale.md")); err == nil {
 		t.Errorf("expected stale.md to be removed")
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallOutputJSON verifies the install command produces valid JSON output.
@@ -777,6 +794,7 @@ func TestInstallOutputJSON(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
@@ -805,10 +823,11 @@ func TestInstallOutputJSON(t *testing.T) {
 	if ok, exists := result["ok"]; !exists || ok != true {
 		t.Errorf("expected JSON output with ok:true, got: %v", result)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
-// TestInstallSkipsMissingSource verifies that install does not error when
-// a source directory doesn't exist.
+// TestInstallSkipsMissingSource verifies optional platform asset directories may
+// be absent while required Codex private support is present.
 func TestInstallSkipsMissingSource(t *testing.T) {
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
@@ -816,6 +835,7 @@ func TestInstallSkipsMissingSource(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
 		t.Fatalf("failed to create .aether dir: %v", err)
@@ -823,7 +843,7 @@ func TestInstallSkipsMissingSource(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "workers.md"), []byte("# Workers"), 0644); err != nil {
 		t.Fatalf("failed to create workers.md: %v", err)
 	}
-	// Leave all other source directories absent.
+	// Leave optional platform agent/command source directories absent.
 
 	var buf bytes.Buffer
 	stdout = &buf
@@ -835,6 +855,7 @@ func TestInstallSkipsMissingSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("install command should not fail with missing sources: %v", err)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallWithSubdirs verifies that nested directory structures are preserved.
@@ -845,6 +866,7 @@ func TestInstallWithSubdirs(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant", "subdir")
 
@@ -870,6 +892,7 @@ func TestInstallWithSubdirs(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected nested file %s to exist", destFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallCopiesCodexAgents verifies that install copies .codex/agents/
@@ -881,6 +904,7 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 	destDir := filepath.Join(homeDir, ".codex", "agents")
@@ -908,6 +932,7 @@ func TestInstallCopiesCodexAgents(t *testing.T) {
 	if _, err := os.Stat(destFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", destFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallCopiesCodexAgentsToHub verifies that .codex/ files are synced
@@ -920,6 +945,7 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".codex", "agents")
 
@@ -946,6 +972,7 @@ func TestInstallCopiesCodexAgentsToHub(t *testing.T) {
 	if _, err := os.Stat(hubCodexFile); os.IsNotExist(err) {
 		t.Errorf("expected file %s to exist after install", hubCodexFile)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // TestInstallShellScriptsGetExecutable verifies that .sh files get chmod 0755.
@@ -956,6 +983,7 @@ func TestInstallShellScriptsGetExecutable(t *testing.T) {
 	resetRootCmd(t)
 
 	tmpDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, tmpDir)
 	homeDir := t.TempDir()
 	srcDir := filepath.Join(tmpDir, ".claude", "commands", "ant")
 
@@ -986,6 +1014,7 @@ func TestInstallShellScriptsGetExecutable(t *testing.T) {
 	if perm&0111 == 0 {
 		t.Errorf("expected .sh file to be executable, got permissions %o", perm)
 	}
+	assertCodexSkillFixtureInstalled(t, tmpDir, homeDir)
 }
 
 // writeHubFixture creates path's parent directories and writes a small file.

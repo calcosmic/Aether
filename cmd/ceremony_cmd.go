@@ -26,6 +26,7 @@ type ceremonyDispatch struct {
 	Caste          string
 	Task           string
 	TaskID         string
+	CoveredTaskIDs []string
 	Stage          string
 	Status         string
 	Summary        string
@@ -143,7 +144,11 @@ func init() {
 	ceremonyCloseoutCmd.Flags().StringVar(&ceremonyFlags.CompletionFile, "completion-file", "", "Completion JSON packet used by a lifecycle finalizer")
 	_ = ceremonyCloseoutCmd.MarkFlagRequired("completion-file")
 
-	ceremonyCmd.AddCommand(ceremonySpawnPlanCmd, ceremonyWaveStartCmd, ceremonyWorkerCompleteCmd, ceremonyCloseoutCmd)
+	ceremonyTeamCheckinCmd.Flags().StringVar(&ceremonyFlags.Workflow, "workflow", "build", "Lifecycle workflow name")
+	ceremonyTeamCheckinCmd.Flags().StringVar(&ceremonyFlags.ManifestFile, "manifest-file", "", "JSON file containing the runtime manifest envelope")
+	_ = ceremonyTeamCheckinCmd.MarkFlagRequired("manifest-file")
+
+	ceremonyCmd.AddCommand(ceremonySpawnPlanCmd, ceremonyWaveStartCmd, ceremonyWorkerCompleteCmd, ceremonyCloseoutCmd, ceremonyTeamCheckinCmd)
 	rootCmd.AddCommand(ceremonyCmd)
 }
 
@@ -223,7 +228,8 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 	if workflow == "seal" {
 		result["porter_readiness"] = buildPorterReadinessSummary()
 	}
-	if state, err := loadActiveColonyState(); err == nil {
+	state, stateErr := loadActiveColonyState()
+	if stateErr == nil {
 		result["state_available"] = true
 		result["state"] = string(state.State)
 		result["current_phase"] = state.CurrentPhase
@@ -243,21 +249,118 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 				result["pending_suggestions_block"] = renderPendingSuggestionsBlock(active)
 			}
 		}
+		override := ""
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
+			// The step that just finished may know a command for this exact
+			// run that the saved project cannot work out. Feed it to the one
+			// decision rather than writing it over the answer afterwards.
+			override = lifecycleCommandInProse(next)
 		} else {
 			result["next"] = closeoutNextCommand(workflow, state)
 		}
+		// The card the owner reads and the fields a wrapper reads come from one
+		// resolve (Phase 197 plan 04).
+		applyLifecycleNextAction(result, state, workflow, override, "")
+		// D-03/D-05/D-07/D-08 (201-19): the wrapper's own build closeout gets
+		// the same verdict-carrying treatment the direct lane's ending screen
+		// does. The completion's own phase (the manifest-derived
+		// completion_phase this closeout was actually run for, falling back
+		// to the live colony's current_phase) is what buildWorkCloseoutDetails
+		// resolves against -- never a second, independent phase guess. When
+		// no verdict resolves, or applyLifecycleCloseout errors because this
+		// result carries no lifecycle projection, this falls through to
+		// exactly what renderCeremonyCloseout returned before this existed.
+		if workflow == "build" {
+			phaseID := intValue(result["completion_phase"])
+			if phaseID == 0 {
+				phaseID = intValue(result["current_phase"])
+			}
+			if details, ok := buildWorkCloseoutDetails(phaseID); ok {
+				if err := applyLifecycleCloseout(result, workflow, details); err == nil {
+					body := renderCeremonyCloseoutVisualBody(result)
+					if fileCard := renderBuildResultFileSection(phaseID); fileCard != "" {
+						body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
+					}
+					return result, appendLifecycleCloseoutVisual(body, result, detectPlatform())
+				}
+			}
+		}
 	} else {
 		result["state_available"] = false
-		result["message"] = colonyStateLoadMessage(err)
+		result["message"] = colonyStateLoadMessage(stateErr)
 		if next := strings.TrimSpace(stringValue(result["completion_next"])); next != "" {
 			result["next"] = next
 		} else {
 			result["next"] = "Run `aether status` to inspect the colony."
 		}
+		closeLifecycleCommand(result, workflow, "", "")
+	}
+	if stateErr == nil {
+		// D-12: the chat path and the direct path render one screen from one
+		// renderer. closeoutDirectVisual handles the workflows it has been
+		// wired for (continue in this plan; plan/seal follow in 198-04) and
+		// reports handled=false for everything else, which falls through to
+		// the generic renderer below exactly as before.
+		if visual, handled := closeoutDirectVisual(workflow, result, state); handled {
+			// The one cost line, applied once around whichever body was
+			// produced -- never inside closeoutDirectVisual itself, so a
+			// build/continue closeout still ends with exactly one block
+			// whichever renderer produced the body above it (Phase 196).
+			if workflow == "build" || workflow == "continue" {
+				phaseID := intValue(result["completion_phase"])
+				if phaseID == 0 {
+					phaseID = intValue(result["current_phase"])
+				}
+				// D-05/D-06/D-07 (201-20): the check workflow's own chat-path
+				// closeout gets the same verdict-carrying treatment plan
+				// 201-19 gave the build workflow's above. checkWorkCloseoutDetails
+				// reads the verdict codex_continue.go already stored on the
+				// SAME raw completion map closeoutContinueDirectVisual just
+				// rendered `visual` from -- never a second derivation here --
+				// so the verdict and the rendered body always agree. Falls
+				// through to the plain appendSpendCostLine below when no
+				// verdict resolves (an older completion file, or a lane this
+				// plan did not wire), so exactly one cost block ever renders
+				// either way.
+				if workflow == "continue" {
+					if raw := ceremonyContinueRawResult(result); len(raw) > 0 {
+						if details, ok := checkWorkCloseoutDetails(raw); ok {
+							if err := applyLifecycleCloseout(raw, workflow, details); err == nil {
+								return result, appendLifecycleCloseoutVisual(visual, raw, detectPlatform())
+							}
+						}
+					}
+				}
+				visual = appendSpendCostLine(visual, phaseID)
+			}
+			return result, visual
+		}
 	}
 	return result, renderCeremonyCloseoutVisual(result)
+}
+
+// ceremonyContinueRawResult resolves the same completion map
+// closeoutContinueDirectVisual (cmd/closeout_direct_render.go) renders its
+// visual body from: result["completion_raw"] when present, falling back to
+// result itself, then unwrapping one more {"result": {...}} envelope level
+// when the outer map does not already look like a continue result (mirrors
+// closeoutContinueDirectVisual's own documented double-envelope-unwrap
+// precedent). Kept local to this file (201-20) rather than exported from
+// closeout_direct_render.go, since this is the only other call site that
+// needs the same raw map, resolved read-only for a verdict lookup rather
+// than for rendering.
+func ceremonyContinueRawResult(result map[string]interface{}) map[string]interface{} {
+	raw := mapValue(result["completion_raw"])
+	if len(raw) == 0 {
+		raw = result
+	}
+	if _, hasContinuedPhase := raw["continued_phase"]; !hasContinuedPhase {
+		if nested := mapValue(raw["result"]); len(nested) > 0 {
+			raw = nested
+		}
+	}
+	return raw
 }
 
 func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, dispatches []ceremonyDispatch, plans []ceremonyExecutionPlan) string {
@@ -528,7 +631,13 @@ func renderCeremonyWorkerComplete(workflow string, dispatch ceremonyDispatch) st
 	return b.String()
 }
 
-func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
+// renderCeremonyCloseoutVisualBody renders the ceremony closeout up through
+// the closing block, stopping before the one cost-and-time line. Split out
+// (201-19) so the build workflow's own verdict-carrying closeout
+// (renderCeremonyCloseout) can share this exact body with the generic
+// renderer below it, instead of duplicating it or letting either path
+// produce a second cost block on the same screen.
+func renderCeremonyCloseoutVisualBody(result map[string]interface{}) string {
 	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
 	title := fmt.Sprintf("%s Summary", workflow)
 	emoji := commandEmoji(workflow)
@@ -575,8 +684,8 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 			b.WriteString("\nFinalizer error\n")
 			b.WriteString(renderIndentedList([]string{errText}))
 		}
-		next := emptyFallback(stringValue(result["next"]), "Fix the completion file and rerun the finalizer.")
-		b.WriteString(renderNextUp(next))
+		writeCeremonyCompletionReport(&b, result)
+		b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
 		return b.String()
 	}
 	writeCeremonyCloseoutNotice(&b, result)
@@ -616,15 +725,34 @@ func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
 		b.WriteString("\n")
 		b.WriteString(renderStageMarker("Handoff"))
 		if phaseID > 0 && phaseHandoffRecordsExist(phaseID) {
-			fmt.Fprintf(&b, "📦 Worker handoffs recorded for phase %d — the next phase's workers inherit this build's context.\n", phaseID)
-			b.WriteString(renderContextClearGuidance())
+			fmt.Fprintf(&b, "📦 The notes this build's helpers left were saved for phase %d, so the next phase's helpers start from what was already learned.\n", phaseID)
 		} else {
-			b.WriteString("📦 No worker handoffs recorded for this phase — don't clear your context yet; the next workers would start blind.\n")
+			b.WriteString("📦 This phase's helpers left no notes behind, so the next ones would start blind.\n")
 		}
 	}
-	next := emptyFallback(stringValue(result["next"]), "Run `aether status` to inspect the colony.")
-	b.WriteString(renderNextUp(next))
+	writeCeremonyCompletionReport(&b, result)
+	b.WriteString(renderLifecycleClosing(result, stringValue(result["workflow"])))
 	return b.String()
+}
+
+// renderCeremonyCloseoutVisual is the thin wrapper around the body above: it
+// appends the one cost-and-time line, last on the screen — the same
+// position it takes on the direct lane's own ending screens, so "the cost
+// line is the last thing you read" is one rule rather than two. Only the two
+// workflows that actually spawn workers reach it: nothing was spent planning
+// a phase or archiving a finished project, so a cost block on those screens
+// would be a heading over an empty answer (cmd/spend_cost_line.go).
+func renderCeremonyCloseoutVisual(result map[string]interface{}) string {
+	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
+	body := renderCeremonyCloseoutVisualBody(result)
+	if workflow == "build" || workflow == "continue" {
+		phaseID := intValue(result["completion_phase"])
+		if phaseID == 0 {
+			phaseID = intValue(result["current_phase"])
+		}
+		return appendSpendCostLine(body, phaseID)
+	}
+	return body
 }
 
 // renderPendingSuggestionsBlock renders the once-at-the-end, tick-to-approve
@@ -647,6 +775,23 @@ func renderPendingSuggestionsBlock(suggestions []colony.PendingSuggestion) strin
 		fmt.Fprintf(&b, "  Dismiss: aether suggest-approve --dismiss %s\n", s.ID)
 	}
 	return b.String()
+}
+
+// writeCeremonyCompletionReport shows what the step that just finished said
+// about itself, when it said anything. It is a REPORT, not advice: the step's
+// own sentence can carry a fill-in-the-blank a wrapper substitutes, so it is
+// never allowed to stand in for the card's recommendation -- it sits above it.
+func writeCeremonyCompletionReport(b *strings.Builder, result map[string]interface{}) {
+	next := strings.TrimSpace(stringValue(result["completion_next"]))
+	if next == "" {
+		return
+	}
+	b.WriteString("\n")
+	b.WriteString(renderStageMarker("What the last step reported"))
+	b.WriteString(next)
+	if !strings.HasSuffix(next, "\n") {
+		b.WriteString("\n")
+	}
 }
 
 func writeCeremonyCloseoutNotice(b *strings.Builder, result map[string]interface{}) {
@@ -973,6 +1118,7 @@ func ceremonyDispatchFromMap(raw map[string]interface{}) ceremonyDispatch {
 		Caste:          stringValue(raw["caste"]),
 		Task:           emptyFallback(stringValue(raw["task"]), stringValue(raw["goal"])),
 		TaskID:         stringValue(raw["task_id"]),
+		CoveredTaskIDs: stringSliceValue(raw["covered_task_ids"]),
 		Stage:          stringValue(raw["stage"]),
 		Status:         status,
 		Summary:        summary,

@@ -11,89 +11,63 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// abandonCmd discards a colony that is not worth finishing.
-//
-// This was reachable before only as `aether init "<new goal>" --confirm-reinit`
-// — a flag on a different verb, discoverable by reading source. Deciding a goal
-// is not worth finishing is an ordinary thing to do, and the ordinary thing
-// needed a name. Sealing was the only documented route, which runs the whole
-// completion ceremony over work being discarded and promotes its instincts into
-// the cross-colony hive: abandoned work teaching every other project.
-//
-// Two steps on purpose. Without --confirm it prints what would be lost and
-// stops, so the destructive form is never the first thing anyone types.
+const legacyAbandonMigrationSchemaVersion = "legacy-abandon-migration/v1"
+
+type legacyAbandonMigrationResult struct {
+	SchemaVersion string                      `json:"schema_version"`
+	Command       string                      `json:"command"`
+	OutcomeKind   colony.OutcomeKind          `json:"outcome_kind"`
+	Explanation   string                      `json:"explanation"`
+	OwnerAction   string                      `json:"owner_action"`
+	Invoked       bool                        `json:"invoked"`
+	StateEffect   colony.LifecycleStateEffect `json:"state_effect"`
+	NextAction    string                      `json:"next_action"`
+}
+
+// abandonCmd remains parseable only to explain the direct-owner forced-close
+// route. It never invokes that route and never changes colony state.
 var abandonCmd = &cobra.Command{
 	Use:          "abandon",
-	Short:        "Discard the current colony and start fresh",
-	Long:         `Discard a colony that is not worth finishing. Without --confirm it previews what would be lost. The state is backed up to .aether/data/backups/ and can be restored.`,
+	Short:        "Legacy forced-close migration route",
+	Hidden:       true,
 	Args:         cobra.NoArgs,
+	Annotations:  map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true", "aether.io/internal-only": "true"},
 	SilenceUsage: true,
 	RunE:         runAbandon,
 }
 
 func init() {
 	rootCmd.AddCommand(abandonCmd)
-	abandonCmd.Flags().Bool("confirm", false, "Actually discard the colony (a timestamped backup is written first)")
+	abandonCmd.Flags().Bool("confirm", false, "legacy compatibility flag; no state is discarded")
+	_ = abandonCmd.Flags().MarkHidden("confirm")
 }
 
-func runAbandon(cmd *cobra.Command, args []string) error {
-	if store == nil {
-		outputErrorMessage("no store initialized")
-		return nil
+func runAbandon(_ *cobra.Command, _ []string) error {
+	result := legacyAbandonMigrationResult{
+		SchemaVersion: legacyAbandonMigrationSchemaVersion,
+		Command:       "abandon",
+		OutcomeKind:   colony.OutcomeKindNoChange,
+		Explanation:   "The standalone abandon command is retired. An incomplete colony can be closed only by the direct owner through the explicit forced-seal path.",
+		OwnerAction:   `aether seal --force --reason "why this incomplete colony is being closed"`,
+		Invoked:       false,
+		StateEffect:   colony.LifecycleStateEffectNone,
+		NextAction:    "aether status",
 	}
-
-	state, err := loadActiveColonyState()
-	if err != nil {
-		outputError(1, colonyStateLoadMessage(err), nil)
-		return nil
-	}
-	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" || state.State == colony.StateIDLE {
-		outputWorkflow(
-			map[string]interface{}{"abandoned": false, "reason": "no_active_colony"},
-			renderAbandonNothingToDoVisual(),
-		)
-		return nil
-	}
-
-	dataDirForSummary := store.BasePath()
-	aetherRootForSummary := resolveAetherRoot()
-	summary := abandonColonySummary(state)
-	summary["worker_workspaces_with_work"] = countWorktreesHoldingWork(aetherRootForSummary, dataDirForSummary)
-	confirmed, _ := cmd.Flags().GetBool("confirm")
-	if !confirmed {
-		summary["abandoned"] = false
-		summary["confirm_required"] = true
-		outputWorkflow(summary, renderAbandonPreviewVisual(summary))
-		return nil
-	}
-
-	dataDir := store.BasePath()
-	aetherRoot := resolveAetherRoot()
-
-	// The backup is mandatory, not best-effort. A confirmation that silently
-	// destroyed the only copy of the colony's history would be worse than the
-	// refusal it replaced.
-	backupPath, err := backupColonyStateForAbandon(dataDir)
-	if err != nil {
-		outputError(1, fmt.Sprintf("%v — refusing to discard the colony without a backup", err), nil)
-		return nil
-	}
-
-	reset := resetColonyStateForEntomb(state)
-	if err := store.SaveJSON("COLONY_STATE.json", reset); err != nil {
-		outputError(1, fmt.Sprintf("failed to reset colony state: %v (the previous state is preserved at %s)", err, backupPath), nil)
-		return nil
-	}
-	if err := clearActiveColonyRuntimeFiles(aetherRoot, dataDir); err != nil {
-		// Non-fatal: the colony is already reset, and leftover runtime files are
-		// stale rather than dangerous. Say so instead of failing the command.
-		summary["cleanup_warning"] = err.Error()
-	}
-
-	summary["abandoned"] = true
-	summary["backup_path"] = displayDataPath(filepath.Join("backups", filepath.Base(backupPath)))
-	outputWorkflow(summary, renderAbandonedVisual(summary))
+	outputWorkflow(result, renderLegacyAbandonMigration(result))
 	return nil
+}
+
+func renderLegacyAbandonMigration(result legacyAbandonMigrationResult) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("abandon"), "Abandon Retired"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(result.Explanation)
+	b.WriteString("\nThis compatibility command did not invoke the forced close and did not change state.\n")
+	b.WriteString(renderNextUp(
+		fmt.Sprintf("If you are the direct owner, run `%s` yourself with a specific reason.", result.OwnerAction),
+		"Run `aether status` first to review the durable colony evidence.",
+	))
+	return b.String()
 }
 
 // abandonColonySummary describes what discarding this colony would cost, so the
@@ -203,7 +177,7 @@ func renderAbandonPreviewVisual(summary map[string]interface{}) string {
 	}
 	b.WriteString("\nThe state is backed up first and can be restored, but the colony stops here.\n")
 	if withWork := intValue(summary["worker_workspaces_with_work"]); withWork > 0 {
-		b.WriteString("Worker workspaces that still hold unsaved or unmerged work will be kept, not deleted, even after --confirm -- run `aether recover` afterward to see them.\n")
+		b.WriteString("Worker workspaces that still hold unsaved or unmerged work will be kept, not deleted. Run `aether maintenance recovery-inspect` to inspect preserved work; run `aether resume` only if you choose to restore a runnable lifecycle.\n")
 	}
 	b.WriteString("If this work is actually finished, `aether seal` then `aether entomb` archives it properly instead.\n")
 	b.WriteString(renderNextUp(

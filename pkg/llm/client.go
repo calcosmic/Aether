@@ -84,9 +84,23 @@ type ContentBlock struct {
 }
 
 // Usage holds token usage information from an API response.
+//
+// All four columns Anthropic bills for are carried, not just input and output.
+// The provider reports input, cache_read and cache_creation as DISJOINT
+// counts; a value carrying only two of them under-reports by the whole cached
+// prefix, which on a realistic run is the 186x undercount recorded in
+// pkg/codex/usage.go. Phase 196 (D-05) closed that on this second accounting
+// lane.
+//
+// This type deliberately declares NO method. In particular it must never gain
+// one that sums its columns: the authoritative total is
+// codex.WorkerUsage.BilledTotalTokens(), and a second implementation of that
+// arithmetic in a second package is precisely how the two lanes drifted apart.
 type Usage struct {
-	InputTokens  int64
-	OutputTokens int64
+	InputTokens              int64
+	CacheReadInputTokens     int64
+	CacheCreationInputTokens int64
+	OutputTokens             int64
 }
 
 // SendMessage sends messages to the LLM and returns the response.
@@ -126,8 +140,10 @@ func convertSDKMessage(msg *anthropic.Message) *MessageResponse {
 		StopReason: string(msg.StopReason),
 		Model:      string(msg.Model),
 		Usage: Usage{
-			InputTokens:  msg.Usage.InputTokens,
-			OutputTokens: msg.Usage.OutputTokens,
+			InputTokens:              msg.Usage.InputTokens,
+			CacheReadInputTokens:     msg.Usage.CacheReadInputTokens,
+			CacheCreationInputTokens: msg.Usage.CacheCreationInputTokens,
+			OutputTokens:             msg.Usage.OutputTokens,
 		},
 	}
 }

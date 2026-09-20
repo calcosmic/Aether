@@ -43,18 +43,24 @@ nothing else:
 | Lane | Resume command |
 |---|---|
 | GSD | `/gsd-resume-work` |
-| Aether interactive | `/ant-resume`, then `/ant-recover` |
-| Aether autopilot | `/ant-resume`, then `/ant-recover` |
+| Aether interactive | `/ant-resume` |
+| Aether autopilot | `/ant-resume` |
 
-The two Aether lanes use the same two-command sequence because both are the
+The two Aether lanes use the same one-command sequence because both are the
 same underlying system reached through two different entry points; only the
 GSD lane's command differs, and only in name — every lane gets exactly one
 kill, exactly one scripted resume action, and no other operator input.
 
-The `/ant-resume` and `/ant-recover` commands used above are real, existing
-commands in this repository, confirmed present at `.claude/commands/ant/resume.md`
-and `.claude/commands/ant/recover.md` — not assumed or invented for this
-spec.
+The `/ant-resume` command used above is real and existing, confirmed present
+at `.claude/commands/ant/resume.md` — not assumed or invented for this spec.
+It validates a clean handoff when one exists and reconstructs the safest honest
+point from durable state, worker activity, repository changes, and other
+runtime evidence when the interruption was unclean.
+
+If a resume reports conflicting evidence, log the conflict before using
+`/ant-maintenance recovery-inspect` as an explicit expert diagnostic, then
+issue a fresh `/ant-resume`. That diagnostic is not part of the ordinary
+successful scripted action and never counts as an invisible intervention.
 
 **Any operator input beyond the one documented resume command/sequence for
 that lane counts as an unscripted intervention** and is logged as such; it
@@ -85,8 +91,7 @@ does not disqualify the run, but it must never be silently absorbed into a
   `/gsd-resume-work`; followed, once complete, by `/gsd-verify-work`.
 - **Aether interactive:** `/ant-build <phase>` against a phase describing
   this fix; killed 120 seconds after its first file write; resumed with
-  `/ant-resume` then `/ant-recover`; followed, once complete, by
-  `/ant-continue`.
+  `/ant-resume`; followed, once complete, by `/ant-continue`.
 - **Aether autopilot:** `/ant-run` against a colony initialized with this
   task as its goal; killed 120 seconds after its first file write; resumed
-  with `/ant-resume` then `/ant-recover`.
+  with `/ant-resume`.

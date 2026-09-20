@@ -58,6 +58,12 @@ Before writing a single phase, state explicitly: "For this goal to be complete, 
 <return_format>
 ## Output Format
 
+When your brief names `planning-route-setter-result/v1` (the staged planning lane), return that one JSON payload as your whole result, write nothing into the repository, and follow the brief's field list exactly. Aether checks the plan's proof links when you hand it in and again when the owner accepts it, and one wrong link refuses the whole plan:
+- Every phase and every task carries `requirement_proof_links`, `acceptance_proof_links`, `negative_proof_links` and `recovery_proof_links`.
+- `public_path_proof_links` go on work you declare user-facing (list it in `user_facing_semantic_ids`, or set `user_facing` on its task declaration). Leave them off behind-the-scenes work rather than inventing one.
+- Across the whole plan, at least one phase or task carries each kind.
+- Copy every ID exactly as the approved specification spells it.
+
 When the task brief asks for `.aether/data/planning/phase-plan.json`, write that file in the runtime schema:
 
 ```json

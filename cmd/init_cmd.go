@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/calcosmic/Aether/pkg/trace"
 	"github.com/spf13/cobra"
 )
@@ -26,11 +28,6 @@ var initCmd = &cobra.Command{
 	Short: "Initialize a new colony in the current directory",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if store == nil {
-			outputErrorMessage("no store initialized")
-			return nil
-		}
-
 		scopeRaw, _ := cmd.Flags().GetString("scope")
 		scope, err := colony.ParseColonyScope(scopeRaw)
 		if err != nil {
@@ -53,15 +50,23 @@ var initCmd = &cobra.Command{
 		promoteShelfRaw, _ := cmd.Flags().GetString("promote-shelf")
 		dismissShelfRaw, _ := cmd.Flags().GetString("dismiss-shelf")
 
-		dataDir := store.BasePath()
+		// Init owns its preflight so an active-colony refusal happens before
+		// storage.NewStore can create data/locks or the first-run path can write
+		// a welcome marker. This is the zero-write side of the public contract.
+		dataDir := storage.ResolveDataDir(context.Background())
 		aetherDir := filepath.Dir(dataDir)
+		repoRoot := filepath.Dir(aetherDir)
 
 		// Check idempotency: if COLONY_STATE.json exists, inspect it
 		statePath := filepath.Join(dataDir, "COLONY_STATE.json")
 		if _, err := os.Stat(statePath); err == nil {
 			// Colony already initialized -- load and inspect
-			var existing colony.ColonyState
-			if loadErr := store.LoadJSON("COLONY_STATE.json", &existing); loadErr == nil {
+			existing, _, loadErr := loadColonyStateWithCompatibilityRepairReadOnlyFromPath(statePath)
+			if loadErr != nil {
+				outputError(1, fmt.Sprintf("cannot safely inspect the existing colony state: %v. No files were changed; run /ant-status for evidence and recovery guidance.", loadErr), nil)
+				return nil
+			}
+			{
 				// An entombed/reset colony leaves the state scaffold in place but
 				// clears the goal. Treat that as no active colony.
 				if existing.Goal == nil || strings.TrimSpace(ptrStr(existing.Goal)) == "" || existing.State == colony.StateIDLE {
@@ -73,9 +78,18 @@ var initCmd = &cobra.Command{
 				// refusal that never mentions --confirm-reinit — and silently
 				// ignored the flag when given. A COMPLETED colony carries its whole
 				// history just like a sealed one.
+				publicGuidedInit := detectPlatform() == "claude" || detectPlatform() == "opencode"
+				if publicGuidedInit {
+					name := emptyFallback(strings.TrimSpace(ptrStr(existing.ColonyName)), "Unnamed colony")
+					message := fmt.Sprintf(
+						"this repository already has an active colony %q with goal %q. No files were changed. Inspect it with /ant-status; use /ant-seal only after its accepted work is complete.",
+						name, ptrStr(existing.Goal))
+					outputInitActiveRefusal(existing, message)
+					return nil
+				}
 				if existing.Milestone == "Crowned Anthill" || existing.State == colony.StateCOMPLETED {
 					if sealInProgress(dataDir) {
-						outputError(1, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.", nil)
+						outputInitActiveRefusal(existing, "a seal operation appears to be in progress (COLONY_STATE.json has uncommitted changes with Crowned Anthill milestone). Wait for the seal to complete, commit the seal state, or run `aether entomb` first.")
 						return nil
 					}
 					// A sealed colony's state carries its whole history — phases,
@@ -84,11 +98,12 @@ var initCmd = &cobra.Command{
 					// told how to restore. Destroying a colony's memory requires
 					// saying so out loud.
 					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
-						outputError(1, fmt.Sprintf(
+						message := fmt.Sprintf(
 							"this repository has a sealed colony (goal: %q, %d phases). Re-initializing replaces its state. "+
 								"The preferred path is `aether entomb` to archive it properly. "+
 								"To proceed anyway, rerun with --confirm-reinit; the old state will be backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
-							ptrStr(existing.Goal), len(existing.Plan.Phases)), nil)
+							ptrStr(existing.Goal), len(existing.Plan.Phases))
+						outputInitActiveRefusal(existing, message)
 						return nil
 					}
 					// Confirmed — fall through; the backup below preserves the state.
@@ -104,11 +119,12 @@ var initCmd = &cobra.Command{
 					// path: destroying a colony's memory requires saying so out
 					// loud, but it must be possible to say.
 					if confirmed, _ := cmd.Flags().GetBool("confirm-reinit"); !confirmed {
-						outputError(1, fmt.Sprintf(
+						message := fmt.Sprintf(
 							"this repository has an active colony (goal: %q, state: %s, phase %d). "+
 								"Starting a new one replaces it. If the work is finished, `aether seal` then `aether entomb` archives it properly. "+
 								"To abandon it and start fresh, rerun with --confirm-reinit; the old state is backed up under .aether/data/backups/ and can be restored by copying the .bak file back over COLONY_STATE.json.",
-							ptrStr(existing.Goal), existing.State, existing.CurrentPhase), nil)
+							ptrStr(existing.Goal), existing.State, existing.CurrentPhase)
+						outputInitActiveRefusal(existing, message)
 						return nil
 					}
 					// Confirmed — fall through; the backup below preserves the state.
@@ -117,6 +133,25 @@ var initCmd = &cobra.Command{
 		}
 
 	createFreshColony:
+		setupWasReady := frontDoorScaffoldReady(aetherDir)
+		setupResult := ensureRepoLocalScaffold(aetherDir)
+		if len(setupResult.errors) > 0 {
+			outputError(1, fmt.Sprintf("automatic setup could not finish safely: %s. Fix the reported path and run /ant-init again.", strings.Join(setupResult.errors, "; ")), nil)
+			return nil
+		}
+		setupOutcome := "Bootstrapped"
+		if setupWasReady {
+			setupOutcome = "Ready"
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			outputError(1, fmt.Sprintf("automatic setup could not open colony storage: %v", err), nil)
+			return nil
+		}
+		store = s
+		tracer = trace.NewTracer(s)
+		territory := ensureTerritoryFreshness(repoRoot)
+
 		var charter *colony.Charter
 		if charterJSON, _ := cmd.Flags().GetString("charter-json"); charterJSON != "" {
 			var ch colony.Charter
@@ -157,6 +192,15 @@ var initCmd = &cobra.Command{
 
 		// Generate run ID for trace logging
 		runID := fmt.Sprintf("%s_%d_%s", sanitizedGoal, now.Unix(), randomHex(4))
+		colonyName := frontDoorColonyName(repoRoot)
+		acceptedCharter := &colony.AcceptedCharter{
+			SchemaVersion: colony.AcceptedCharterSchemaVersion,
+			EpisodeID:     sessionID,
+			Goal:          goal,
+			Provenance:    "owner-provided",
+			AcceptedAt:    now.UTC(),
+			Charter:       charter,
+		}
 
 		// Create directory structure
 		if err := os.MkdirAll(filepath.Join(aetherDir, "dreams"), 0755); err != nil {
@@ -200,18 +244,14 @@ var initCmd = &cobra.Command{
 		// Check any leftover worktrees from a previous colony. Nothing here
 		// is destroyed automatically (D-01) — dirty or unmerged work is
 		// kept, not deleted, and every occurrence is reported (D-02).
-		// gcOrphanedWorktrees itself already names the deliberate-removal
-		// command per entry via reportWorktreePreservation; this summary
-		// line intentionally says "aether recover" rather than repeating
-		// the destructive command's own name, since TestWorktreeReapHasNoLifecycleCaller
-		// (cmd/worktree_crash_safety_test.go) fails the build if this file
-		// contains that literal string — a lifecycle path must not even
-		// mention the destruction command by name, let alone call it.
+		// gcOrphanedWorktrees itself reports each preserved workspace. The
+		// summary keeps diagnostics read-only and points lifecycle restoration
+		// through the one raw resume door.
 		var wtPreserved int
 		if cleaned, preserved, err := gcOrphanedWorktrees(); err == nil {
 			wtPreserved = preserved
 			if cleaned > 0 || preserved > 0 {
-				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — run `aether recover` to see them\n", cleaned, preserved)
+				fmt.Fprintf(os.Stderr, "worker workspaces from a previous colony: %d forgotten (already gone), %d kept because they still hold work — inspect them with `aether maintenance recovery-inspect` (State effect: none); restore runnable lifecycle state with `aether resume`\n", cleaned, preserved)
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "warning: could not check previous colony's worker workspaces for leftover work: %v\n", err)
@@ -261,7 +301,7 @@ var initCmd = &cobra.Command{
 		if wtPreserved == 0 {
 			_ = os.RemoveAll(worktreesDir)
 		} else {
-			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — run `aether recover` to see them\n")
+			fmt.Fprintf(os.Stderr, "the previous colony's worker workspaces were left in place because they still hold work — inspect them with `aether maintenance recovery-inspect` (State effect: none); restore runnable lifecycle state with `aether resume`\n")
 		}
 
 		// Clean up reviews from any prior colony
@@ -271,6 +311,7 @@ var initCmd = &cobra.Command{
 		state := colony.ColonyState{
 			Version:       "3.0",
 			Goal:          &goal,
+			ColonyName:    &colonyName,
 			Scope:         scope,
 			ColonyMode:    colonyMode,
 			ColonyVersion: 0,
@@ -295,6 +336,7 @@ var initCmd = &cobra.Command{
 			ParallelMode: colony.ModeInRepo,
 		}
 		state.Charter = charter
+		state.AcceptedCharter = acceptedCharter
 		state.ResearchDocs = researchDocs
 
 		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
@@ -313,16 +355,12 @@ var initCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "warning: could not apply shelf selection(s): %s\n", strings.Join(shelfFailed, ", "))
 		}
 
-		// Ranked next-move proposals, computed from what the repo actually
-		// contains — the runtime proposes, the wrapper asks, the user picks.
-		// The top proposal replaces the old hardcoded "aether plan" as the
-		// recorded suggestion.
-		repoRoot := filepath.Dir(aetherDir)
+		// Ranked exploratory proposals remain useful context about the repo, but
+		// they do not own lifecycle authority. The shared projection owns the
+		// persisted handoff so init cannot skip discussion or SPEC review merely
+		// because planning or surveying ranked highly for this repository.
 		proposals := computeInitProposals(repoRoot, goal, priorStateBackup != "")
-		suggestedNext := "aether plan"
-		if len(proposals) > 0 {
-			suggestedNext = proposals[0].Command
-		}
+		suggestedNext := lifecycleNextActionForState(state, "init", "", "").Command
 
 		// Create session.json
 		session := colony.SessionFile{
@@ -334,7 +372,7 @@ var initCmd = &cobra.Command{
 			CurrentMilestone: "",
 			SuggestedNext:    suggestedNext,
 			ActiveTodos:      promotedShelfTodos(store, goal),
-			Summary:          "Colony initialized",
+			Summary:          "Project initialized",
 		}
 
 		if err := store.SaveJSON("session.json", session); err != nil {
@@ -345,7 +383,7 @@ var initCmd = &cobra.Command{
 		if _, err := syncColonyArtifacts(state, colonyArtifactOptions{
 			CommandName:   "init",
 			SuggestedNext: suggestedNext,
-			Summary:       "Colony initialized",
+			Summary:       "Project initialized",
 			HandoffTitle:  "Initialized Colony",
 			WriteHandoff:  true,
 		}); err != nil {
@@ -390,7 +428,11 @@ var initCmd = &cobra.Command{
 			"version":             "3.0",
 			"phase":               0,
 			"session":             sessionID,
+			"colony":              colonyName,
 			"data_dir":            dataDir,
+			"setup":               setupOutcome,
+			"accepted_charter":    acceptedCharter,
+			"territory_freshness": territory,
 			"shelf_backlog":       shelfEntries,
 			"shelf_backlog_count": len(shelfEntries),
 			"shelf_promoted":      shelfPromoted,
@@ -406,13 +448,137 @@ var initCmd = &cobra.Command{
 		result["hive_seeded"] = hiveSeeded
 		result["proposals"] = proposals
 		result["suggested_next"] = suggestedNext
+		result["outcome_kind"] = colony.OutcomeKindCompleted
+		result["state_effect"] = colony.LifecycleStateEffectCommitted
 		if priorStateBackup != "" {
 			result["prior_state_backup"] = priorStateBackup
 			result["prior_state_restore"] = fmt.Sprintf("cp %q %q", priorStateBackup, statePath)
 		}
-		outputWorkflow(result, renderInitVisual(goal, string(scope), sessionID, dataDir, charter, hiveSeeded, proposals, researchDocs...))
+		// One closing answer: the card the owner reads and the fields a wrapper
+		// reads come from the same resolve, so they cannot name different
+		// commands (Phase 197 plan 04).
+		closeLifecycleCommand(result, "init", "", "")
+		territoryID := emptyFallback(strings.TrimSpace(territory.SnapshotID), "territory-"+strings.ToLower(territory.OutcomeLabel()))
+		if err := applyLifecycleCloseout(result, "init", LifecycleCloseoutDetails{
+			Summary: "The owner-provided charter was accepted and the colony was created.",
+			Evidence: []colony.LifecycleEvidence{
+				{ID: sessionID, Kind: "accepted_charter", Source: statePath, Summary: "Persisted accepted charter"},
+				{ID: territoryID, Kind: "territory", Source: strings.Join(territory.EvidencePaths, ", "), Summary: "Territory result: " + territory.OutcomeLabel()},
+			},
+			Changes: []colony.LifecycleChange{{Target: "colony", Action: "initialized"}},
+		}); err != nil {
+			outputError(1, err.Error(), result)
+			return nil
+		}
+		visual := appendLifecycleCloseoutVisual(renderFrontDoorInitVisual(state, setupOutcome, territory, dataDir, hiveSeeded, proposals, researchDocs...), result, detectPlatform())
+		if answer, ok := nextActionFromResult(result); ok && strings.TrimSpace(answer.Command) != "" {
+			visual += "\nNext Up: " + lifecycleProjectionCommand(answer.Command, detectPlatform())
+		}
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+func outputInitActiveRefusal(state colony.ColonyState, message string) {
+	result, err := lifecycleCloseoutRefusalForState(state, "init", message, "aether status", "Inspect the active colony before deciding whether to replace it.")
+	if err != nil {
+		outputError(1, message, nil)
+		return
+	}
+	outputError(1, message, result)
+}
+
+func frontDoorScaffoldReady(aetherDir string) bool {
+	for _, rel := range []string{"WHAT-IS-THIS.md", ".gitignore", "QUEEN.md", "data", "dreams", "oracle", "checkpoints", "locks"} {
+		if _, err := os.Stat(filepath.Join(aetherDir, rel)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func frontDoorColonyName(repoRoot string) string {
+	name := strings.TrimSpace(filepath.Base(filepath.Clean(repoRoot)))
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		return "Aether colony"
+	}
+	return name
+}
+
+func renderFrontDoorInitVisual(state colony.ColonyState, setupOutcome string, territory SurveyFreshnessResult, dataDir string, hiveSeeded int, proposals []initProposal, researchDocs ...string) string {
+	goal := strings.TrimSpace(ptrStr(state.Goal))
+	accepted := state.AcceptedCharter
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("init"), "Colony Init"))
+	b.WriteString(visualDividerStr())
+
+	b.WriteString(renderStageMarker("1. Queen opening"))
+	b.WriteString("Queen is opening one guided colony for this repository.\n")
+	b.WriteString("Repository: ")
+	b.WriteString(filepath.Dir(filepath.Dir(dataDir)))
+	b.WriteString("\nRequested goal: ")
+	b.WriteString(goal)
+	b.WriteString("\n")
+
+	b.WriteString(renderStageMarker("2. Setup"))
+	b.WriteString("Setup: ")
+	b.WriteString(setupOutcome)
+	b.WriteString("\n")
+	b.WriteString("Colony state, recovery, and local memory paths are ready.\n")
+
+	b.WriteString(renderStageMarker("3. Accepted intent"))
+	b.WriteString("Queen charter accepted.\n")
+	b.WriteString("Goal: ")
+	b.WriteString(goal)
+	b.WriteString("\n")
+	if accepted != nil {
+		b.WriteString("Episode: ")
+		b.WriteString(accepted.EpisodeID)
+		b.WriteString("\nProvenance: ")
+		b.WriteString(accepted.Provenance)
+		b.WriteString("\n")
+	}
+	if state.Charter != nil {
+		// Preserve the established detailed charter ceremony inside the new
+		// accepted-intent stage so material constraints remain fully visible.
+		b.WriteString(renderStageMarker("Charter"))
+		b.WriteString(renderCharterFields(*state.Charter))
+	} else {
+		b.WriteString("Constraints: No additional material constraints were accepted.\n")
+	}
+	if len(researchDocs) > 0 {
+		b.WriteString("Research: ")
+		b.WriteString(strings.Join(researchDocs, ", "))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n👑 Queen has set the colony's intention\n\n")
+	b.WriteString(fmt.Sprintf("   %q\n\n", goal))
+	b.WriteString("   🟢 Colony Status: READY\n")
+	if hiveSeeded > 0 {
+		b.WriteString(fmt.Sprintf("   🧠 Hive wisdom: %d cross-colony pattern(s) seeded into QUEEN.md\n", hiveSeeded))
+	}
+
+	b.WriteString(renderStageMarker("4. Territory"))
+	b.WriteString("Territory: ")
+	b.WriteString(territory.OutcomeLabel())
+	b.WriteString("\n")
+	if !territory.GeneratedAt.IsZero() {
+		b.WriteString("Observed: ")
+		b.WriteString(territory.GeneratedAt.UTC().Format(time.RFC3339))
+		b.WriteString("\n")
+	}
+	if len(territory.EvidencePaths) > 0 {
+		b.WriteString("Evidence: ")
+		b.WriteString(strings.Join(territory.EvidencePaths, ", "))
+		b.WriteString("\n")
+	}
+	if len(proposals) > 0 {
+		b.WriteString(renderInitProposals(proposals))
+	}
+
+	b.WriteString(renderStageMarker("5. Closeout"))
+	b.WriteString("Discuss settles intent before specification review; it does not approve a specification or a plan.\n")
+	return b.String()
 }
 
 // ptrStr safely dereferences a *string, returning "" if nil.

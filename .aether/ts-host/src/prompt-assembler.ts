@@ -312,8 +312,8 @@ ${config.task}
 export function renderResponseContract(config: PromptAssemblyConfig): string {
   const statusValues =
     config.caste.toLowerCase() === "builder"
-      ? "code_written, completed, failed, blocked"
-      : "completed, failed, blocked";
+      ? "code_written, completed, completed_no_change, failed, blocked"
+      : "completed, completed_no_change, failed, blocked";
 
   return `## Final Response Contract
 

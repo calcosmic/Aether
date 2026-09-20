@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/cache"
@@ -57,76 +56,56 @@ func loadPheromones() *colony.PheromoneFile {
 	return &pf
 }
 
+// signalActiveForPrompt is a thin adapter over resolveEffectivePheromones for
+// callers that need a single signal's in-effect decision. It no longer
+// recomputes its own active/expiry/strength predicate -- see
+// TestOneEffectivePheromonePredicate.
 func signalActiveForPrompt(sig colony.PheromoneSignal, now time.Time) bool {
-	if !sig.Active {
-		return false
-	}
-	if signalExpiredByTime(sig, now) {
-		return false
-	}
-	return computeEffectiveStrength(sig, now) >= 0.1
+	resolved := resolveEffectivePheromones(&colony.PheromoneFile{Signals: []colony.PheromoneSignal{sig}}, now)
+	return len(resolved) > 0 && resolved[0].InEffect
 }
 
+// filterSignalsForPrompt is a thin adapter over resolveEffectivePheromones,
+// keeping its existing signature so its many callers need no change. It
+// previously duplicated signalActiveForPrompt's filter inline; both now
+// derive from the one resolver.
 func filterSignalsForPrompt(signals []colony.PheromoneSignal, now time.Time) []colony.PheromoneSignal {
-	filtered := make([]colony.PheromoneSignal, 0, len(signals))
-	for _, sig := range signals {
-		if signalActiveForPrompt(sig, now) {
-			filtered = append(filtered, sig)
+	resolved := resolveEffectivePheromones(&colony.PheromoneFile{Signals: signals}, now)
+	filtered := make([]colony.PheromoneSignal, 0, len(resolved))
+	for _, r := range resolved {
+		if r.InEffect {
+			filtered = append(filtered, r.Signal)
 		}
 	}
 	return filtered
 }
 
-// extractSignalTextsFrom computes effective strengths, sorts, and returns formatted
-// signal texts from a pre-loaded PheromoneFile. This avoids a redundant disk read
-// when pheromones have already been loaded by the caller.
+// extractSignalTextsFrom derives formatted, top-N signal texts from a
+// pre-loaded PheromoneFile via the one resolver. This avoids a redundant
+// disk read when pheromones have already been loaded by the caller, and
+// fixes the missing-expiry gap the old inline filter/sort here shared with
+// cmd/context.go's extractSignalTexts (NOW-09/NOW-10 disagreement).
 func extractSignalTextsFrom(pf *colony.PheromoneFile, maxSignals int) []string {
 	if pf == nil || len(pf.Signals) == 0 {
 		return nil
 	}
 
 	now := time.Now()
-	signals := filterSignalsForPrompt(pf.Signals, now)
-	if len(signals) == 0 {
-		return nil
-	}
+	resolved := resolveEffectivePheromones(pf, now)
 
-	type scoredSignal struct {
-		priority          int
-		effectiveStrength float64
-		text              string
-	}
-
-	var scored []scoredSignal
-	for _, sig := range signals {
-		eff := computeEffectiveStrength(sig, now)
-		text := extractSignalText(sig.Content)
+	var result []string
+	for _, r := range resolved {
+		if !r.InEffect {
+			continue
+		}
+		text := extractSignalText(r.Signal.Content)
 		if text == "" {
 			continue
 		}
-		scored = append(scored, scoredSignal{
-			priority:          signalPriority(sig.Type),
-			effectiveStrength: eff,
-			text:              fmt.Sprintf("%s: %s", sig.Type, text),
-		})
-	}
-
-	// Sort by priority (ascending), then by effective strength (descending)
-	sort.SliceStable(scored, func(i, j int) bool {
-		if scored[i].priority != scored[j].priority {
-			return scored[i].priority < scored[j].priority
+		result = append(result, fmt.Sprintf("%s: %s", r.Signal.Type, text))
+		if len(result) >= maxSignals {
+			break
 		}
-		return scored[i].effectiveStrength > scored[j].effectiveStrength
-	})
-
-	// Take top N
-	if len(scored) > maxSignals {
-		scored = scored[:maxSignals]
-	}
-
-	result := make([]string, len(scored))
-	for i, s := range scored {
-		result[i] = s.text
 	}
 	return result
 }

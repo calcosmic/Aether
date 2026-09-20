@@ -320,24 +320,34 @@ func resolveSmartPlanningDepth(phase colony.Phase, totalPhases int) colony.Plann
 // verification depth values (heavy instead of deep).
 func resolveSmartVerificationDepth(phase colony.Phase, totalPhases int) colony.VerificationDepth {
 	// Mode overrides position/risk for discovery and production.
+	//
+	// D-06 (194-CONTEXT.md, .planning/decisions/2026-08-22-queen-decides-
+	// program-checks.md) removed "final phase -> heavy" from both branches
+	// below. A phase's position in the plan is not a risk signal by itself
+	// -- the last phase of a five-phase maintenance plan and the third are
+	// the same kind of work, and treating the last one as automatically
+	// riskier bought a heavier review panel that nothing about the WORK
+	// asked for. An explicit --heavy request still raises depth
+	// (resolveVerificationDepth's flag ordering, untouched); only the
+	// silent, position-driven escalation is gone.
 	switch phase.Mode {
 	case colony.PhaseModeDiscovery:
 		return colony.VerificationDepthLight
 	case colony.PhaseModeProduction:
-		// Production always gets at least standard, heavy for final/high-risk.
-		risk := phaseRiskLevel(phase)
-		position := phasePositionLevel(phase.ID, totalPhases)
-		if risk == "high" || position == "final" {
+		// Production always gets at least standard, heavy for high-risk.
+		if phaseRiskLevel(phase) == "high" {
 			return colony.VerificationDepthHeavy
 		}
 		return colony.VerificationDepthStandard
 	}
 
-	// Prototype and maintenance use position + risk.
+	// Prototype and maintenance use position + risk. Position still governs
+	// the LIGHT/STANDARD split (early phases stay light, late phases step up
+	// to standard) -- D-06 only removes position from the HEAVY trigger.
 	risk := phaseRiskLevel(phase)
 	position := phasePositionLevel(phase.ID, totalPhases)
 
-	if risk == "high" || position == "final" {
+	if risk == "high" {
 		return colony.VerificationDepthHeavy
 	}
 	if risk == "medium" || position == "late" {

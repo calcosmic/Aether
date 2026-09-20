@@ -12,6 +12,32 @@ ceremony_contract:
   class: "guided_ritual"
   authority: "Go owns Oracle state, confidence calculation, workspace files, iteration manifests, and canonical visual output."
   wrapper_role: "Go owns the entire Oracle loop. The wrapper scopes the brief, starts the run, follows its progress, and reports Go-owned facts. Neither the TypeScript host nor the wrapper may drive Oracle iterations."
+research_shape:
+  one_clarification: >
+    Oracle clarifies the actual question exactly once, before any round
+    runs -- the propose/brief scoping pass below. Once the brief is
+    approved, the run is autonomous: rounds, confidence movement, and
+    contradictions are visible as they happen, but there are no per-round
+    check-ins.
+  four_shared_depth_names: >
+    The picker shows the same four depth names planning already uses --
+    Fast, Balanced, Deep, Exhaustive -- each with its own confidence target
+    and round cap shown beside it: Fast targets 60% confidence in up to 5
+    rounds, Balanced targets 85% in up to 15, Deep targets 95% in up to 30,
+    Exhaustive targets 99% in up to 50. The names are shared across the
+    product; Oracle's own underlying numbers are not rewritten to match
+    planning's.
+  watchable_rounds: >
+    A running Oracle round is visible in the live colony dashboard
+    (`aether watch`) exactly like any other worker -- round number, round
+    cap, current question, confidence against target, and any
+    contradictions or newly targeted gaps appear as they are recorded, not
+    only through `--follow`'s polling.
+  recommendation_first_answer: >
+    The finished synthesis leads with the actionable recommendation in
+    plain language, states confidence and any unresolved questions
+    honestly, and keeps the full source and evidence trail beneath for
+    on-demand reading -- never sources or evidence first.
 intent_refinement:
   - "Run `aether oracle propose --topic \"<raw topic>\"` first. It writes nothing and returns the suggested output shape, evidence sources, depth, accuracy target, and how many clarifying questions the topic needs, plus every option with its round count and rough duration."
   - "Every value from propose is a keyword-derived suggestion. Present them as pre-selected choices the user can change; never apply them silently."
@@ -34,7 +60,7 @@ guardrails:
   - "If docs and runtime disagree, runtime wins."
   - "If the shell/tool call times out, immediately run `aether oracle status` and report the runtime status; do not assume Oracle failed or bypass it with ad hoc agents."
   - "`aether oracle status` only reports; it never repairs. When it flags a stale controller, `aether oracle recover` is the command that clears it."
-  - "If OpenCode subprocess dispatch is unavailable, let Oracle use its automatic Codex/Claude fallback unless the user explicitly set `AETHER_WORKER_PLATFORM=opencode`."
+  - "In a detected Codex, Claude Code, or OpenCode session, use the same host for workers. If its dispatcher is unavailable, stop with the runtime diagnostic; switch providers only through an explicit AETHER_WORKER_PLATFORM override."
   - "Do not fake Oracle worker completion; if no real dispatcher is available, surface the runtime error and preserve the Oracle workspace."
 follow_up:
   persistence: "After oracle completes, suggest persisting high-value findings as pheromone signals (aether pheromone-write) or hive wisdom (aether hive-store). User approves each suggestion."

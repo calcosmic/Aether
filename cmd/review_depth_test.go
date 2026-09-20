@@ -222,7 +222,7 @@ func TestReviewDepthFlags(t *testing.T) {
 
 func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
 	for _, d := range dispatches {
 		if d.Caste == "measurer" {
 			t.Error("light mode should skip measurer dispatch")
@@ -231,6 +231,27 @@ func TestBuildDispatch_LightMode_SkipsMeasurerAndChaos(t *testing.T) {
 			t.Errorf("light mode on phase 3 (chaosShouldRunInLightMode=false) should skip chaos, got chaos dispatch: %s", d.Name)
 		}
 	}
+}
+
+// Phase 201-05 (D-05): queenBuildPostWaveDispatches now dispatches a
+// post-wave reviewer (measurer, chaos, auditor) only when a
+// verification-boundary decision naming build-end was actually recorded for
+// the phase's current build attempt (verificationBoundaryForAttempt) -- the
+// policy/sampling SELECTION logic these three tests guard
+// (applyBuildDispatchPolicyCastes, chaosShouldRunInLightMode) is unchanged,
+// but proving it now requires a recorded build-end decision as the given, or
+// every phase would land the check-step default (no build-end dispatch,
+// D-01) regardless of what the policy selected. buildDispatchWithRecordedBoundary
+// gives each subtest that decision as a fixture, isolating "did policy SELECT
+// this caste" from "does build-end dispatch AT ALL" (queenBuildPostWaveDispatches's
+// own gate, proven separately by TestBuildEndReviewersGateOnTheRecordedBoundary).
+func buildDispatchWithRecordedBoundary(t *testing.T, phase colony.Phase, depth string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+	t.Helper()
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+	attemptWithVerificationBoundaryRecorded(t, phase.ID, fmt.Sprintf("attempt-review-depth-%d", phase.ID), "build_end", "review depth policy fixture")
+	return testPlannedBuildDispatchesForSelection(phase, depth, nil, reviewDepth)
 }
 
 func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
@@ -242,7 +263,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range chaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_includes_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthLight)
 			found := false
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
@@ -258,7 +279,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 	for _, pid := range noChaosPhases {
 		t.Run(fmt.Sprintf("phase_%d_skips_chaos", pid), func(t *testing.T) {
 			phase := colony.Phase{ID: pid, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-			dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthLight)
+			dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthLight)
 			for _, d := range dispatches {
 				if d.Caste == "chaos" {
 					t.Errorf("light mode phase %d should skip chaos", pid)
@@ -270,7 +291,7 @@ func TestBuildDispatch_LightMode_Chaos30Percent(t *testing.T) {
 
 func TestBuildDispatch_HeavyMode_IncludesChaosAndMeasurer(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -294,7 +315,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 	// This test verifies the build dispatch path, not the resolveReviewDepth logic
 	phase := colony.Phase{ID: 5, Name: "Final polish", Tasks: []colony.Task{{Goal: "Polish", Status: "pending"}}}
 	// When resolveReviewDepth returns heavy (final phase), dispatches should include both
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthHeavy)
+	dispatches := buildDispatchWithRecordedBoundary(t, phase, "full", colony.VerificationDepthHeavy)
 	hasMeasurer := false
 	hasChaos := false
 	for _, d := range dispatches {
@@ -316,7 +337,7 @@ func TestBuildDispatch_FinalPhase_HeavyRegardlessOfLight(t *testing.T) {
 func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight, nil, "")
 	if len(dispatches) != 0 {
 		t.Errorf("light mode review should produce 0 dispatches, got %d", len(dispatches))
 	}
@@ -325,7 +346,7 @@ func TestContinueReviewDispatch_LightMode_SkipsAll(t *testing.T) {
 func TestContinueReviewDispatch_HeavyMode_SpawnsAll3(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy, nil, "")
 	if len(dispatches) != 3 {
 		t.Errorf("heavy mode review should produce 3 dispatches (gatekeeper, auditor, probe), got %d", len(dispatches))
 	}
@@ -348,7 +369,7 @@ func TestContinueReviewDispatch_LightMode_HandlesEmptyGracefully(t *testing.T) {
 	// a report with Passed=true when dispatches is empty.
 	phase := colony.Phase{ID: 3, Name: "Feature work"}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthLight, nil, "")
 	if len(dispatches) != 0 {
 		t.Fatalf("expected 0 dispatches in light mode, got %d", len(dispatches))
 	}
@@ -415,11 +436,16 @@ func TestRenderReviewDepthLine_Light(t *testing.T) {
 
 // --- Task 1 tests: VerificationDepth 3-level dispatch ---
 
-func TestResolveVerificationDepth_FinalPhaseDefaultsHeavyButHonorsLight(t *testing.T) {
+// TestResolveVerificationDepth_FinalPhaseNoLongerEscalates pins D-06: a
+// low-risk final phase is treated exactly like any other low-risk phase --
+// position no longer raises verification depth. It was renamed from
+// "...DefaultsHeavyButHonorsLight" because the "DefaultsHeavy" half of that
+// claim is exactly what this ruling removes.
+func TestResolveVerificationDepth_FinalPhaseNoLongerEscalates(t *testing.T) {
 	phase := colony.Phase{ID: 5, Name: "Final polish"}
 	got := resolveVerificationDepth(phase, 5, false, false, "")
-	if got != colony.VerificationDepthHeavy {
-		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthHeavy)
+	if got != colony.VerificationDepthStandard {
+		t.Errorf("final phase no flags: got %q, want %q", got, colony.VerificationDepthStandard)
 	}
 	got = resolveVerificationDepth(phase, 5, true, false, "")
 	if got != colony.VerificationDepthLight {
@@ -517,29 +543,46 @@ func TestResolveVerificationDepthFlag_BoolPriority(t *testing.T) {
 
 // --- Task 2 tests: standard mode dispatch and visual ---
 
-func TestContinueReviewDispatch_StandardMode_SpawnsProbeOnly(t *testing.T) {
+// TestContinueReviewDispatch_StandardMode_SpawnsNothingWithoutASignal used to
+// assert that standard-depth continue unconditionally dispatched a Probe.
+// Plan 194-05 (D-13) removed Probe's unconditional continue membership along
+// with Watcher's: standard depth now requires nothing unless the phase's own
+// wording earns a specialist relevance score or names one of the five risk
+// signals (queenForcedReviewersForPhase) -- neither applies to this fixture's
+// plain "Do something" task.
+func TestContinueReviewDispatch_StandardMode_SpawnsNothingWithoutASignal(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard)
-	if len(dispatches) != 1 {
-		t.Errorf("standard mode review should produce 1 dispatch (probe only), got %d", len(dispatches))
-	}
-	if len(dispatches) > 0 && dispatches[0].Caste != "probe" {
-		t.Errorf("standard mode should spawn probe, got %q", dispatches[0].Caste)
+	dispatches := plannedContinueReviewDispatches("/tmp", phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthStandard, nil, "")
+	if len(dispatches) != 0 {
+		t.Errorf("standard mode review with no proposal and no risk signal should produce no dispatches (D-13), got %d: %+v", len(dispatches), dispatches)
 	}
 }
 
-func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
+// TestBuildDispatch_StandardMode_IncludesWatcherAndProbe guards standard
+// depth's build-side dispatch shape. Phase 193 (D-08) changed what "includes
+// watcher" means here: the build's verification stage dispatches a watcher
+// only when the Queen's proposal explicitly named one (none was made in this
+// call, so the deterministic engine decided) -- the required-castes floor
+// restoring watcher no longer forces a build-time dispatch by itself. Probe
+// still dispatches at standard depth because that dispatch (queenCastes, not
+// queenAskedFor) is untouched by this change.
+// TestBuildDispatch_StandardMode_SkipsWatcherAndProbeWithoutASignal used to
+// assert the opposite of its current name: standard mode unconditionally
+// dispatched both watcher and probe at build. Phase 193 (D-08) removed
+// watcher's build-side dispatch; plan 194-02 (D-07) shrank the required-caste
+// floor to the builder alone, so probe is no longer forced either -- it
+// spawns only where the phase's own wording genuinely scores it above the
+// relevance threshold, which "Do something" does not.
+func TestBuildDispatch_StandardMode_SkipsWatcherAndProbeWithoutASignal(t *testing.T) {
 	phase := colony.Phase{ID: 3, Name: "Feature work", Tasks: []colony.Task{{Goal: "Do something", Status: "pending"}}}
-	dispatches := plannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
-	hasWatcher := false
-	hasProbe := false
+	dispatches := testPlannedBuildDispatchesForSelection(phase, "full", nil, colony.VerificationDepthStandard)
 	for _, d := range dispatches {
 		if d.Caste == "watcher" {
-			hasWatcher = true
+			t.Error("standard mode should not include a build-side watcher dispatch without an explicit Queen proposal")
 		}
 		if d.Caste == "probe" {
-			hasProbe = true
+			t.Error("standard mode should not include a build-side probe dispatch without a genuine relevance signal")
 		}
 		if d.Caste == "measurer" {
 			t.Error("standard mode should skip measurer dispatch")
@@ -547,12 +590,6 @@ func TestBuildDispatch_StandardMode_IncludesWatcherAndProbe(t *testing.T) {
 		if d.Caste == "chaos" {
 			t.Error("standard mode should skip chaos dispatch")
 		}
-	}
-	if !hasWatcher {
-		t.Error("standard mode should include watcher dispatch")
-	}
-	if !hasProbe {
-		t.Error("standard mode should include probe dispatch")
 	}
 }
 
@@ -781,10 +818,14 @@ func TestResolveSmartVerificationDepth(t *testing.T) {
 		total    int
 		expected colony.VerificationDepth
 	}{
-		{"final phase", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.VerificationDepthHeavy},
+		// D-06 (194-CONTEXT.md, plan 194-05): position no longer raises
+		// verification depth. A low-risk final phase is treated like any
+		// other low-risk phase, not automatically escalated to heavy.
+		{"final phase, low risk, no longer escalated (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, colony.VerificationDepthStandard},
 		{"early low risk", colony.Phase{ID: 1, Name: "Setup"}, 6, colony.VerificationDepthLight},
 		{"security risk", colony.Phase{ID: 2, Name: "Secrets management"}, 4, colony.VerificationDepthHeavy},
 		{"blast radius intermediate", colony.Phase{ID: 3, Name: "Dispatch optimization"}, 5, colony.VerificationDepthStandard},
+		{"final phase with high risk still gets heavy", colony.Phase{ID: 5, Name: "Secrets rotation"}, 5, colony.VerificationDepthHeavy},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -995,7 +1036,9 @@ func TestResolveVerificationDepthSmart_EmptyUsesSmartDefault(t *testing.T) {
 		expected string
 	}{
 		{"early phase gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, "light"},
-		{"final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, "heavy"},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone.
+		{"final phase, low risk, gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, "standard"},
 		{"security risk gets heavy", colony.Phase{ID: 2, Name: "Auth system"}, 4, "heavy"},
 	}
 	for _, tt := range tests {
@@ -1141,7 +1184,10 @@ func TestResolveVerificationDepth_Table(t *testing.T) {
 		{"no flags early phase gets light", colony.Phase{ID: 1, Name: "Feature work"}, 6, false, false, "", colony.VerificationDepthLight},
 		{"no flags intermediate phase gets standard", colony.Phase{ID: 3, Name: "More features"}, 6, false, false, "", colony.VerificationDepthStandard},
 		{"no flags late phase gets standard", colony.Phase{ID: 5, Name: "Polish work"}, 6, false, false, "", colony.VerificationDepthStandard},
-		{"no flags final phase gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", colony.VerificationDepthHeavy},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone -- it falls through to the same standard default
+		// an intermediate low-risk phase gets.
+		{"no flags final phase gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", colony.VerificationDepthStandard},
 
 		// Invalid depth values: NormalizeVerificationDepth maps unknown to standard
 		{"invalid depth ultra", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "ultra", colony.VerificationDepthStandard},
@@ -1196,7 +1242,9 @@ func TestResolveEffectiveContinueDepth_Table(t *testing.T) {
 		// No CLI flags, no persisted state: falls through to smart default
 		{"no CLI no persisted uses smart default", colony.Phase{ID: 3, Name: "Feature work"}, 5, false, false, "", "", colony.VerificationDepthStandard},
 		{"no CLI no persisted early gets light", colony.Phase{ID: 1, Name: "Setup"}, 6, false, false, "", "", colony.VerificationDepthLight},
-		{"no CLI no persisted final gets heavy", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", "", colony.VerificationDepthHeavy},
+		// D-06: a low-risk final phase no longer escalates to heavy on
+		// position alone.
+		{"no CLI no persisted final gets standard (D-06)", colony.Phase{ID: 5, Name: "Final polish"}, 5, false, false, "", "", colony.VerificationDepthStandard},
 
 		// Both CLI flags: heavy wins even with persisted state
 		{"both CLI flags heavy wins over persisted", colony.Phase{ID: 3, Name: "Feature work"}, 5, true, true, "", "light", colony.VerificationDepthHeavy},
@@ -1513,7 +1561,9 @@ func TestRecommendQueenExecutionPolicyMatchesContinueDepthSpawnBudget(t *testing
 	if strings.TrimSpace(budget.Reason) == "" {
 		t.Fatalf("budget metadata incomplete: %+v", budget)
 	}
-	if !containsString(budget.RequiredCastes, "builder") || !containsString(budget.RequiredCastes, "watcher") {
+	// Plan 194-02 (D-07): watcher is no longer a required build caste --
+	// builder is the only unconditional member of the build floor.
+	if !containsString(budget.RequiredCastes, "builder") {
 		t.Fatalf("required_castes missing build safety castes: %+v", budget.RequiredCastes)
 	}
 	if budget.RelevanceThreshold == nil || *budget.RelevanceThreshold != spawnThreshold("build", state) {

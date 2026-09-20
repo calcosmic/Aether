@@ -103,7 +103,7 @@ func applySignalHousekeeping(pf *colony.PheromoneFile, state *colony.ColonyState
 			if !dryRun {
 				deactivateSignal(sig, nowRFC3339)
 			}
-		case computeEffectiveStrength(*sig, now) < 0.1:
+		case computeEffectiveStrength(*sig, now) < pheromoneEffectiveFloor:
 			result.DeactivatedByStrength++
 			result.Updated++
 			if !dryRun {

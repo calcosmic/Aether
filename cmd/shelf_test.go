@@ -3,13 +3,11 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestShelfAddAndRead(t *testing.T) {
@@ -18,14 +16,7 @@ func TestShelfAddAndRead(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	bindCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"shelf-add", "--text", "focus on error handling", "--category", "instinct"})
 	err := rootCmd.Execute()
@@ -75,14 +66,8 @@ func TestShelfPromote(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Add an entry
 	rootCmd.SetArgs([]string{"shelf-add", "--text", "test entry", "--category", "user-note"})
@@ -130,14 +115,8 @@ func TestShelfDismiss(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Add an entry
 	rootCmd.SetArgs([]string{"shelf-add", "--text", "dismiss me", "--category", "user-note"})
@@ -178,14 +157,8 @@ func TestShelfListFilter(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Add 3 entries with different statuses
 	sf := colony.NewShelfFile()
@@ -219,14 +192,7 @@ func TestShelfFileNotExist(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	bindCommandTestRepository(t)
 
 	// List without any shelf file should return empty, no error
 	rootCmd.SetArgs([]string{"shelf-list", "--json"})
@@ -254,14 +220,8 @@ func TestShelfDetectFindsCandidates(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Seed an unresolved flag to create a shelf candidate
 	ff := colony.FlagsFile{Decisions: []colony.FlagEntry{
@@ -294,14 +254,8 @@ func TestShelfPromoteBatch(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Seed shelf entries
 	sf := colony.NewShelfFile()
@@ -345,14 +299,8 @@ func TestShelfDismissBatch(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	// Seed shelf entries
 	sf := colony.NewShelfFile()
@@ -400,13 +348,8 @@ func TestShelfPromoteBatchFailsWhenAllIDsFail(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	t.Setenv("AETHER_ROOT", tmpDir)
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -438,13 +381,8 @@ func TestShelfDismissBatchFailsWhenAllIDsFail(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
-
-	t.Setenv("AETHER_ROOT", tmpDir)
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{

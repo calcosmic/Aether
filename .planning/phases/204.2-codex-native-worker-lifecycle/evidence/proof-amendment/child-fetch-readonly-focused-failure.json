@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T16:33:03.268119+00:00",
+  "scope": "Plan25 readonly decoder prospective focused failure; no live run or phase completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/summary.json",
+    "sha256": "sha256:54e930560cbd3d656cb9c82097c2ad2a7730abf4ed28a3955ad66ad23a6cd734"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/run-focused-readonly-repair.PENDING.py",
+    "sha256": "sha256:780a90ead6bba123e2b661bff2ad5367032abe05fbae68a974ef0c100e3c333c"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/config.READY.json",
+    "sha256": "sha256:93ccc653a4fd631d2a66ae9e4276bbf5a3c39a4b04db0ba20ae90e1873c1c037"
+  },
+  "snapshot_revision": "beccd7a3395d47b798f0f035fb802f04e3d8be75",
+  "source_revision": "7ab70e318e25d1431cacd32378095ea3ea7acf13",
+  "normal_run": {
+    "argv": [
+      "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "./cmd",
+      "-run",
+      "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+      "-parallel",
+      "1",
+      "-count=1",
+      "-timeout",
+      "600s",
+      "-json"
+    ],
+    "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/repo",
+    "exit_code": 1,
+    "elapsed_seconds": 47.703457832336426,
+    "stdout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/normal-cmd.stdout",
+      "sha256": "sha256:9c6b769ccef5754c42dbb09d37cd7cc6591d8862745a282dc63772485242ddeb"
+    },
+    "stderr": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/normal-cmd.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cleanup": {
+      "errors": [],
+      "observed_pids": [],
+      "observed_zombie_pids": [],
+      "process_group": 84760,
+      "reaped_pids": [
+        84760
+      ],
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": []
+    }
+  },
+  "counts": {
+    "fail": 7,
+    "pass": 752
+  },
+  "failed_tests": [
+    "TestCodexNativeChildContextFetchEvidence/coordinator-eof-source/object/valid",
+    "TestCodexNativeChildContextFetchEvidence/coordinator-eof-source/output/valid",
+    "TestCodexNativeChildContextFetchEvidence/coordinator-eof-source/direct/valid",
+    "TestCodexNativeChildContextFetchEvidence/coordinator-eof-source",
+    "TestCodexNativeChildContextFetchEvidence",
+    "TestCodexNativeObservedFixtureInspections/rg_--files_/other",
+    "TestCodexNativeObservedFixtureInspections",
+    "package"
+  ],
+  "race_executed": false,
+  "failure_diagnosis": [
+    "Paired Python valid controls lack datetime import required by actual source decoder; actual installed coordinator includes it.",
+    "The new rg --files /other test conflates generic parent batch classification with child admission. Existing parent coordination intentionally permits absolute-root listing; the actual child classifier rejects /other. Preserve that separation, correct the expectation and add full-child rejection coverage."
+  ],
+  "next_actions": [
+    "Repair test harness import and adjudicate batch boundary without changing failure record.",
+    "Use fresh snapshot/admission and repeat24normal/race; do not activate pending ordinary/Q scripts from this failed focused attempt."
+  ],
+  "historical_outcomes_unchanged": true
+}

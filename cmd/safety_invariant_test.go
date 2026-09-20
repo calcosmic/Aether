@@ -613,6 +613,7 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
+	repositoryRoot := filepath.Dir(filepath.Dir(dataDir))
 
 	goal := "plan-only safety test"
 	colName := "test-colony"
@@ -643,13 +644,22 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	t.Run("plan_plan_only", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
+		binding := bindCommandTestRepositoryAt(t, repositoryRoot)
+		if filepath.Clean(binding.DataDir) != filepath.Clean(dataDir) {
+			t.Fatalf("plan repository data root = %q, want %q", binding.DataDir, dataDir)
+		}
+		stdout = &bytes.Buffer{}
+		stderr = &bytes.Buffer{}
 
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
 
-		rootCmd.SetArgs([]string{"plan", "--plan-only"})
+		rootCmd.SetArgs([]string{"plan", "--plan-only", "--preset", "balanced"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("plan --plan-only returned error: %v", err)
+		}
+		if got := stderr.(*bytes.Buffer).String(); got != "" {
+			t.Fatalf("plan --plan-only rendered an error: %s", got)
 		}
 
 		// Verify output
@@ -675,6 +685,20 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 	t.Run("build_plan_only", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
+		buildGoal := "plan-only safety test"
+		buildTaskID := "1.1"
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+			Version: "3.0", Goal: &buildGoal, ColonyDepth: "standard",
+			State: colony.StateREADY, CurrentPhase: 1,
+			Plan: colony.Plan{Phases: []colony.Phase{{
+				ID: 1, Name: "Phase 1", Status: colony.PhaseReady,
+				Tasks: []colony.Task{{ID: &buildTaskID, Goal: "Verify plan-only state remains unchanged", Status: colony.TaskPending}},
+			}}},
+		})
+		dataDir := accepted.DataRoot
+		t.Chdir(accepted.Root)
+		stdout = &bytes.Buffer{}
+		stderr = &bytes.Buffer{}
 
 		// Snapshot before
 		before := snapshotDataDir(t, dataDir)
@@ -686,6 +710,9 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		rootCmd.SetArgs([]string{"build", "--plan-only", "1"})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("build --plan-only 1 returned error: %v", err)
+		}
+		if got := stderr.(*bytes.Buffer).String(); got != "" {
+			t.Fatalf("build --plan-only rendered an error: %s", got)
 		}
 
 		// Verify output
@@ -700,8 +727,9 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 			t.Errorf("expected dispatch_mode plan-only in build output, got: %s", output)
 		}
 
-		// Verify no canonical state mutation. The only new top-level data path is
-		// the Go-owned build journal used to recover external dispatch attempts.
+		// Verify no canonical state mutation. The Go-owned build and lifecycle
+		// transaction journals plus the reviewer-window marker are durable
+		// coordination, not lifecycle-state advancement.
 		// `.cache_*` files are the pkg/cache SessionCache's read-through disk
 		// persistence — a cross-invocation performance cache, not colony state
 		// (gitignored, rebuilt from source JSON on demand, purged by
@@ -709,10 +737,14 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		// plan-only manifest (CONTEXT-02/03) reads COLONY_STATE.json through
 		// that cache, which may write a `.cache_COLONY_STATE.json` sibling.
 		after := snapshotDataDir(t, dataDir)
-		delete(after, "build")
-		for name := range after {
-			if strings.HasPrefix(name, ".cache_") {
-				delete(after, name)
+		for _, snapshots := range []map[string]fileSnapshot{before, after} {
+			for _, name := range []string{"build", ".aether-transactions", "transactions", phaseDispatchWindowFileName} {
+				delete(snapshots, name)
+			}
+			for name := range snapshots {
+				if strings.HasPrefix(name, ".cache_") {
+					delete(snapshots, name)
+				}
 			}
 		}
 		assertDataDirUnchanged(t, before, after)
@@ -723,6 +755,9 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 		if !bytes.Equal(stateBefore, stateAfter) {
 			t.Fatal("build --plan-only mutated COLONY_STATE.json")
 		}
+		if _, started := phaseDispatchStartedAt(1); started {
+			t.Fatal("build --plan-only falsely recorded that worker dispatch began")
+		}
 		phaseBuildDir := filepath.Join(dataDir, "build", "phase-1")
 		for _, rel := range []string{"manifest.json", "latest-attempt.json", "attempts"} {
 			if _, err := os.Stat(filepath.Join(phaseBuildDir, rel)); err != nil {
@@ -730,7 +765,18 @@ func TestPlanOnlyUnchanged(t *testing.T) {
 			}
 		}
 		attempts, err := os.ReadDir(filepath.Join(phaseBuildDir, "attempts"))
-		if err != nil || len(attempts) != 1 || attempts[0].IsDir() || !strings.HasSuffix(attempts[0].Name(), ".json") {
+		var attemptRecord, startReceipt bool
+		for _, entry := range attempts {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+				continue
+			}
+			if strings.HasSuffix(entry.Name(), ".start-receipt.json") {
+				startReceipt = true
+			} else {
+				attemptRecord = true
+			}
+		}
+		if err != nil || len(attempts) != 2 || !attemptRecord || !startReceipt {
 			t.Fatalf("build --plan-only attempt journal = %v, err=%v", attempts, err)
 		}
 	})

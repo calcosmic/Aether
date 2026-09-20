@@ -233,8 +233,14 @@ func ceremonyStepStatus(status string) string {
 }
 
 func ceremonyStepCompleted(status string) bool {
-	switch strings.TrimSpace(status) {
-	case "", "completed", "manually-reconciled", "skipped":
+	status = strings.TrimSpace(status)
+	// completed_no_change is a success (ruling D6) -- a step that verified
+	// the behavior already existed did complete.
+	if isSuccessfulExternalBuildStatus(status) {
+		return true
+	}
+	switch status {
+	case "", "skipped":
 		return true
 	default:
 		return false
@@ -491,7 +497,7 @@ func emitBuildCeremonyWaveEnd(phase colony.Phase, wave int, results []codex.Disp
 	completed := 0
 	blockers := []string{}
 	for _, result := range results {
-		if result.Status == "completed" {
+		if isSuccessfulExternalBuildStatus(result.Status) {
 			completed++
 		}
 		if result.Error != nil {

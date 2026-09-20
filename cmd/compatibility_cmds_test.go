@@ -19,6 +19,48 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+func TestRunCompatibilityFixturesUseAcceptedAuthority200(t *testing.T) {
+	cases := []struct {
+		file      string
+		name      string
+		required  []string
+		forbidden []string
+	}{
+		{
+			file: "compatibility_cmds_test.go", name: "TestRunCompatibilityExecutesSinglePhase",
+			required: []string{"createApprovedAcceptedBuildTestColony("}, forbidden: []string{"createTestColonyState("},
+		},
+		{
+			file: "compatibility_cmds_test.go", name: "TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue",
+			required: []string{"createApprovedAcceptedBuildTestColony("}, forbidden: []string{"createTestColonyState("},
+		},
+		{
+			file: "phase_recovery_test.go", name: "TestBuildForceRedispatchesActiveExecutingPhase",
+			required: []string{"createApprovedAcceptedBuildTestColony(", "commitTestBuildStartAt("}, forbidden: []string{"createTestColonyState("},
+		},
+	}
+	for _, tc := range cases {
+		content, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.file, err)
+		}
+		body := extractGoFunctionBody(t, string(content), "func "+tc.name+"(")
+		for _, required := range tc.required {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s does not establish canonical authority via %s", tc.name, required)
+			}
+		}
+		for _, forbidden := range tc.forbidden {
+			if strings.Contains(body, forbidden) {
+				t.Errorf("%s retains stale lifecycle fixture writer %s", tc.name, forbidden)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Fatal("run and force-redispatch fixtures must use accepted plan authority")
+	}
+}
+
 func TestQueenPromoteLegacyPositionalSanitizesContent(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -410,42 +452,7 @@ func TestSwarmCompatibilityWatchPrefersCurrentRunWorkers(t *testing.T) {
 	}
 }
 
-func TestAutopilotSuccessStatusCountsAsCompleted(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	_, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	var buf bytes.Buffer
-	stdout = &buf
-
-	rootCmd.SetArgs([]string{"autopilot-init", "--phases", "2"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-init returned error: %v", err)
-	}
-
-	buf.Reset()
-	rootCmd.SetArgs([]string{"autopilot-update", "--phase", "1", "--status", "success"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("autopilot-update returned error: %v", err)
-	}
-
-	env := parseEnvelope(t, buf.String())
-	result := env["result"].(map[string]interface{})
-	if result["status"] != "completed" {
-		t.Fatalf("expected success status normalized to completed, got %v", result["status"])
-	}
-
-	var state autopilotState
-	if err := store.LoadJSON(autopilotStatePath, &state); err != nil {
-		t.Fatalf("load autopilot state: %v", err)
-	}
-	if len(state.Phases) != 1 || state.Phases[0].Status != "completed" {
-		t.Fatalf("expected phase 1 recorded as completed, got %+v", state.Phases)
-	}
-}
-
-func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
+func TestWatchCompatibilityUsesReadOnlyFallback(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -468,6 +475,8 @@ func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
 	if err := spawnTree.UpdateStatus("Hammer-9", "active", "Running"); err != nil {
 		t.Fatalf("mark active: %v", err)
 	}
+	root := filepath.Dir(filepath.Dir(dataDir))
+	before := hashDirContents(t, root)
 
 	rootCmd.SetArgs([]string{"watch"})
 	if err := rootCmd.Execute(); err != nil {
@@ -476,20 +485,23 @@ func TestWatchCompatibilityWritesArtifacts(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if result["mode"] != "watch" {
-		t.Fatalf("mode = %v, want watch", result["mode"])
+	if result["mode"] != "idle_watch" {
+		t.Fatalf("mode = %v, want idle_watch", result["mode"])
 	}
-	if result["active_count"] != float64(1) {
-		t.Fatalf("active_count = %v, want 1", result["active_count"])
+	if result["active_count"] != float64(0) || result["live_capability"] != "unsupported" {
+		t.Fatalf("idle watch fabricated liveness: %+v", result)
+	}
+	if result["idle_message"] != "No ants are active right now" || result["authoritative_snapshot"] != "status" {
+		t.Fatalf("idle watch fallback contract = %+v", result)
 	}
 
-	statusPath := filepath.Join(dataDir, "watch-status.txt")
-	progressPath := filepath.Join(dataDir, "watch-progress.txt")
-	if _, err := os.Stat(statusPath); err != nil {
-		t.Fatalf("watch-status.txt missing: %v", err)
+	if after := hashDirContents(t, root); after != before {
+		t.Fatalf("watch mutated its workspace: %s -> %s", before, after)
 	}
-	if _, err := os.Stat(progressPath); err != nil {
-		t.Fatalf("watch-progress.txt missing: %v", err)
+	for _, deprecated := range []string{"watch-status.txt", "watch-progress.txt"} {
+		if _, err := os.Stat(filepath.Join(dataDir, deprecated)); !os.IsNotExist(err) {
+			t.Fatalf("idle watch wrote deprecated artifact %s", deprecated)
+		}
 	}
 }
 
@@ -524,8 +536,8 @@ func TestSwarmCompatibilityWatchShowsRecoveryGuidance(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if result["next"] != "aether build 1 --task 1.1" {
-		t.Fatalf("next = %v, want targeted recovery command", result["next"])
+	if result["next"] != "aether resume" {
+		t.Fatalf("next = %v, want canonical resume recovery command", result["next"])
 	}
 	if result["recovery_summary"] != "Recover the blocked task before rerunning verification" {
 		t.Fatalf("recovery_summary = %v, want blocked recovery summary", result["recovery_summary"])
@@ -1688,8 +1700,21 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Run one autopilot phase"
+	now := time.Now().UTC()
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		CurrentPhase:  1,
+		InitializedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement it", Status: colony.TaskPending}}},
+			},
+		},
+	})
+	root := accepted.Root
 	withWorkingDir(t, root)
 
 	agentsDir := filepath.Join(root, ".codex", "agents")
@@ -1703,21 +1728,6 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 		}
 	}
 
-	goal := "Run one autopilot phase"
-	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:       "3.0",
-		Goal:          &goal,
-		State:         colony.StateREADY,
-		CurrentPhase:  1,
-		InitializedAt: &now,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{ID: 1, Name: "Phase 1", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement it", Status: colony.TaskPending}}},
-			},
-		},
-	})
-
 	rootCmd.SetArgs([]string{"run", "--max-phases", "1"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("run returned error: %v", err)
@@ -1728,11 +1738,11 @@ func TestRunCompatibilityExecutesSinglePhase(t *testing.T) {
 	if result["completed"] != false {
 		t.Fatalf("expected completed:false when run stops on a simulated build, got %v", result)
 	}
-	if result["stopped_reason"] != "blocked" {
-		t.Fatalf("stopped_reason = %v, want blocked", result["stopped_reason"])
+	if result["stopped_reason"] != string(autopilotTriggerDeterministicVerificationFailed) {
+		t.Fatalf("stopped_reason = %v, want %s", result["stopped_reason"], autopilotTriggerDeterministicVerificationFailed)
 	}
-	if result["next"] != "aether build 1 --task 1.1" {
-		t.Fatalf("next = %v, want task-scoped redispatch", result["next"])
+	if result["next"] != "aether continue" {
+		t.Fatalf("next = %v, want same-phase verification recovery", result["next"])
 	}
 	if result["phases_completed"] != float64(0) {
 		t.Fatalf("phases_completed = %v, want 0", result["phases_completed"])
@@ -1755,13 +1765,9 @@ func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
 		t.Fatal("expected run command to expose --worker-timeout")
 	}
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-
 	goal := "Run one autopilot phase with timeout override"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:       "3.0",
 		Goal:          &goal,
 		State:         colony.StateREADY,
@@ -1773,6 +1779,8 @@ func TestRunCompatibilityPassesWorkerTimeoutToBuildAndContinue(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	withWorkingDir(t, root)
 
 	recorder := &timeoutRecordingInvoker{}
 	originalInvoker := newCodexWorkerInvoker

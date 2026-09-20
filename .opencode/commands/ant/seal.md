@@ -8,6 +8,14 @@ You are the **Queen**. Seal the colony through the runtime manifest/finalizer co
 
 Use the Go `aether` CLI as the source of truth. The wrapper only dispatches host-platform agents and reports their terminal results back to the runtime.
 
+## Closure Contract
+
+Close a verified colony, or explicitly record an owner-forced incomplete closure.
+Force flags pass only when directly supplied by the owner. The Go runtime owns final review, preflight, confirmation, transaction, and rendering. A forced-incomplete closure is not verified success.
+
+The wrapper never offers, constructs, or reruns a force command. If an owner directly supplies force flags to the runtime, preserve them verbatim; never invent the
+reason. Do not ask to Force the seal from wrapper guidance.
+
 ## Raw Bypass
 
 If the user explicitly asks for raw, exact, direct, or no-orchestration seal, run:
@@ -15,6 +23,8 @@ If the user explicitly asks for raw, exact, direct, or no-orchestration seal, ru
 ```bash
 AETHER_OUTPUT_MODE=visual aether seal $ARGUMENTS
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself.
 
 Otherwise use the hosted review flow below.
 
@@ -28,17 +38,11 @@ aether host seal $ARGUMENTS
 
 Parse `result.seal_manifest`. If the runtime returns blockers or recovery guidance, surface that output and stop. Do not fabricate review results.
 
-**Force-seal (owner override, asked — never assumed):** when the runtime
-refuses because phases were never verified (work finished outside the colony)
-or blockers are open, and the user wants to move on, present the choice as a
-real question (the AskUserQuestion tool): "Force the seal — files the project
-away now, recording exactly what was skipped and why" versus "Keep working —
-resolve what's blocking first". If they choose force, ask them (in the same
-question or a follow-up) for a one-line reason in their own words, then rerun
-with `--force --reason "<their words>"`. The override is permanent history:
-the colony's record and its summary will name every unverified phase and the
-reason. NEVER add `--force` on your own initiative, and never invent the
-reason.
+**Force-seal (owner override, runtime-only):** the runtime alone validates a
+direct owner force request and records its reason. The wrapper does not create
+force authority, offer an override choice, or construct force flags. NEVER add `--force` on your own initiative, and never invent the
+reason. AskUserQuestion remains available only for the runtime's explicit
+owner-confirmation question.
 
 Save the full JSON envelope to a temporary manifest file outside `.aether/data/`. The ceremony commands read that file so the final-review display uses the same runtime manifest.
 
@@ -46,7 +50,7 @@ Expected manifest:
 
 - `dispatch_mode`: `plan-only` or `agent-delegate`
 - `requires_finalizer`: `true`
-- `dispatches`: Gatekeeper, Auditor, and Probe final-review workers
+- `dispatches`: the program's own choice of reviewers for this project — picked from the project's own progress and how deep the check runs, never a fixed list; a security reviewer joins only once the review reaches its deepest setting, which happens automatically after the project shipped real production work (or when the final stage of work is itself clearly security-related); the exact reviewers for this run are named in the plan the command prints before it starts
 - `finalizer_command`: `AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <file>`
 
 ## Guided Boundary Gate
@@ -66,7 +70,7 @@ Before spawning final-review workers, render the runtime-owned old-style seal ce
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>
 ```
 
-This output is display-only; do not parse it as state.
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. This output is display-only; do not parse it as state.
 
 ## Live Worker Ceremony
 
@@ -85,7 +89,7 @@ Dispatch the runtime-provided workers through the host platform in manifest wave
 
 For each dispatch:
 
-1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave "<execution_wave>"`. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
 3. Spawn the host agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
@@ -104,7 +108,7 @@ For each dispatch:
    - optional `findings` or `issues` objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`
    - optional `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`
 8. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
-9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.
+9. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself.
 
 Terminal statuses are `completed`, `passed`, `blocked`, `failed`, or `timeout`.
 
@@ -154,12 +158,42 @@ Render the user-facing closeout after the JSON finalizer succeeds:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-file <completion_file>
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself.
+
 Branch strictly on `seal-finalize` output:
 
 - If blocked, report the runtime blocker text and stop.
+- If `result.awaiting_owner_confirmation` is `true`, the project is NOT finished yet — see "Before Finishing" below.
 - If sealed, use the visual closeout's next-step line as the source of truth.
 - Summarize the workers and the runtime seal result.
 - Follow the runtime's Porter readiness output in visual mode.
+
+## Before Finishing: The Owner Is Always Asked
+
+Both the raw-bypass `aether seal` command and `aether seal-finalize` stop and ask before
+the project is actually marked finished. "Finishing" a project means writing a summary
+document, filing the project away, and pooling its lessons into the shared store other
+projects read — never assume the user already understands that word.
+
+1. The runtime first prints a short state-of-play card: how many phases are done out of
+   the total, anything still failing, any open warnings, and what finishing will actually
+   do.
+2. It then runs the "what did we learn" review and shows what it found — this runs, and
+   its lessons are kept, even if the user goes on to say no.
+3. It asks one question: `Finish this project?` — or, when something is still failing or
+   unresolved, a second, more specific question naming exactly what: `Finish anyway with
+   N check(s) failing: <problem>, <problem>?`.
+
+If the JSON result carries `"awaiting_owner_confirmation": true`, the project is NOT
+finished. Ask the user the exact question in `result.question` (the AskUserQuestion
+tool). Relay their answer with the exact command in `result.next` — never type that
+command on your own initiative, and never infer a "yes" from anything else the user said.
+Only after that command reports the answer as recorded should you rerun `aether seal` (or
+`aether seal-finalize` with the same completion file) to actually finish.
+
+Autopilot never seals a project. It stops at the explicit seal boundary and
+leaves final review, confirmation, and any owner-supplied force request to the
+Go runtime.
 
 ## Post-Seal Delivery
 
@@ -172,6 +206,11 @@ Do not run delivery commands automatically. If the runtime says the colony is se
 
 Run selected delivery actions sequentially and stop on first failure.
 
+## Post-Seal Review
+
+After sealing, run `AETHER_OUTPUT_MODE=visual aether status` first to review the retained sealed state; `aether entomb` is a separate optional owner-confirmed archive-and-clear action. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself.
+Never invoke entomb automatically; sealing retains active state for owner review.
+
 ## Guardrails
 
 - Do NOT write colony state files, session files, review reports, pheromone files, or archive files by hand.
@@ -180,6 +219,7 @@ Run selected delivery actions sequentially and stop on first failure.
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Do NOT drop structured reviewer findings; `seal-finalize` persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied.
+- Do NOT type the `aether decision-answer` finishing command on your own initiative, and NEVER infer a "yes" from anything other than the user explicitly answering the printed question.
 - Runtime output wins if this wrapper and the runtime disagree.
 
 ## Cross-Platform Drift Guard

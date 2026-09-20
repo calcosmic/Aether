@@ -306,6 +306,12 @@ func TestConsolidate_QueenEligible(t *testing.T) {
 					CreatedAt:        nowStr,
 					ApplicationCount: 5, // >= 3 and confidence >= 0.75
 				},
+				// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely
+				// helpful application, not merely five applications of any
+				// kind.
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+				},
 				Archived: false,
 			},
 			{
@@ -418,6 +424,12 @@ func TestConsolidationResult_Fields(t *testing.T) {
 					CreatedAt:        nowStr,
 					ApplicationCount: 4,
 				},
+				// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely
+				// helpful application, not merely four applications of any
+				// kind.
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+				},
 				Archived: false,
 			},
 		},
@@ -502,8 +514,8 @@ func TestConsolidate_UsesLastAppliedForDecay(t *testing.T) {
 					LastApplied:      &recentApplied,
 					ApplicationCount: 3,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": recentApplied, "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: recentApplied, Outcome: "helpful"},
 				},
 			},
 		},
@@ -594,9 +606,9 @@ func TestConsolidate_ReviewCandidatesTrackFailingInstincts(t *testing.T) {
 					LastApplied:      &now,
 					ApplicationCount: 2,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": now, "success": false},
-					map[string]interface{}{"timestamp": now, "success": false},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: now, Outcome: "harmful"},
+					{Timestamp: now, Outcome: "harmful"},
 				},
 			},
 		},

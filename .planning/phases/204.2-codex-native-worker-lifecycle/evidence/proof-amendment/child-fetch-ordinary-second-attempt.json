@@ -1,0 +1,126 @@
+{
+  "candidate_sha256": "sha256:52e7010299f06150c99fdd993fba1b5da123374868fc50a7848c4138132e48c6",
+  "child_unclassified_operations": [
+    "rg --files -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'go.mod' && git status --short",
+    "/bin/zsh -lc rg --files -g 'AGENTS.md' -g 'clamp.go' -g 'clamp_test.go' -g 'go.mod' && git status --short",
+    "sed -n '1,220p' clamp.go && sed -n '1,260p' clamp_test.go && sed -n '1,120p' go.mod",
+    "/bin/zsh -lc sed -n '1,220p' clamp.go && sed -n '1,260p' clamp_test.go && sed -n '1,120p' go.mod",
+    "unclassified child code-mode: const patch = \"*** Begin Patch\\n*** Update File: /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/capture/native-ordinary-3546605921/repository/clamp.go\\n@@\\n-package nativefixture\\n-\\n-func Clamp(value, low, high int) int { return value }\\n+package nativefixture\\n+\\n+func Clamp(value, low, high int) int {\\n+\\tif value < low {\\n+\\t\\treturn low\\n+\\t}\\n+\\tif value > high {\\n+\\t\\treturn high\\n+\\t}\\n+\\treturn value\\n+}\\n*** End Patch\";\nconst result = await tools.apply_patch(patch);\ntext(result);\n",
+    "git diff --check",
+    "/bin/zsh -lc git diff --check",
+    "go test ./... -cover",
+    "/bin/zsh -lc go test ./... -cover"
+  ],
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/config-fixture.READY.json",
+    "sha256": "sha256:f63efa63c89548d187e495e5bfa36acd40121463b763c90a1f95919d52e415a8"
+  },
+  "context_protocol": "child-fetch/v1",
+  "derived_outcome": "incomplete",
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/derived-ordinary.json",
+    "sha256": "sha256:7100d0d9ca3ee9ec15908299d3e41a5caa4f7570d05a00ba4a624a59cf949051"
+  },
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "full_plan23_required_bytes": 14191223120,
+  "next_step": "Diagnose exact child command/result classification; preserve both incomplete receipts and rerun affected checks and fresh actual capture after any correction.",
+  "observations": {
+    "basis": "validateCodexNativeLiveReceipt invokes nativeValidateLiveContextReceipts before the recorded raw child check failure; both actual live and strict independent replay returned that later failure.",
+    "child_checks_passed": false,
+    "child_edit_observed": true,
+    "child_terminal_corroborated": true,
+    "full_context_validation_reached_and_passed_before_check_failure": true,
+    "parent_substitution": false,
+    "runtime_credit_observed": true
+  },
+  "original_outcome": "incomplete",
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/capture/native-ordinary-3546605921/receipt.json",
+    "sha256": "sha256:baeeffc8a093e03b01c6312e4bee6fa709b9cfa2d5b7e8f6ae7ceabfb78319dd"
+  },
+  "plan25_summary_created": false,
+  "post_focused_race_retirement": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-post-focused-race-20260919T004848Z-0ncuzhsd/receipt.json",
+    "sha256": "sha256:ca24dd581af33de96f81ff004062510632979218e414710feded9cfb305928c7"
+  },
+  "qualification_complete": false,
+  "reason": "raw native child edit/check evidence incomplete (edit=true checks=false); child log /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/capture/native-ordinary-3546605921/home/.codex/sessions/2026/09/19/rollout-2026-09-19T02-59-38-01a0b72d-0f40-7222-aad7-a6bc94dec89f.jsonl",
+  "recorded_at": "2026-09-19T01:07:41.810884+00:00",
+  "requirements_completed": [],
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/run-live-v5-fixture.PENDING.py",
+    "sha256": "sha256:bddcd254ed4a1989df6de7555e36957aef74b480220d568399c44d994f05f0e0"
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/repo",
+      "elapsed_seconds": 445.9413452500012,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/live.stdout",
+        "sha256": "sha256:b4fa3cde9b04007b69d72e447735518db8bac4cc5af1f19ed14b7dde3648debb"
+      },
+      "stopped_reason": null
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-fixture-20260919T004006Z-gcp5ysik/repo",
+      "elapsed_seconds": 6.4020984169328585,
+      "exit_code": 1,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/replay.stdout",
+        "sha256": "sha256:0fcc93a29f7e75a241a4b8f31dd809e8871add2f81280aabcaf97cb957e04978"
+      },
+      "stopped_reason": null
+    }
+  },
+  "schema_version": "aether-child-fetch-ordinary-followup/v1",
+  "scoped_required_bytes": 10471960576,
+  "snapshot_revision": "47a21932ef54d1c963ee73e639bfba2e2d66bc71",
+  "source_revision": "a1d7229db347085479bca7848e02f55ba919394d",
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260918T235749Z-le_1hz4l/summary.json",
+    "sha256": "sha256:c9dcdc6dadcea62c0ec0e175614c8c3cbbdc424f61a8f93d76056070981786d8"
+  }
+}

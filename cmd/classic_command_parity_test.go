@@ -1,293 +1,208 @@
 package cmd
 
 import (
-	"encoding/json"
+	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 )
 
-type classicCommandParityMatrix struct {
-	SchemaVersion    string                       `json:"schema_version"`
-	RuntimeAuthority string                       `json:"runtime_authority"`
-	TSWritePolicy    string                       `json:"ts_write_policy"`
-	Commands         []classicCommandParityRecord `json:"commands"`
+const classicPublicCommandParitySchema = "classic-command-parity/v2"
+
+type classicPublicCommandParity struct {
+	SchemaVersion string                          `json:"schema_version"`
+	Purpose       string                          `json:"purpose"`
+	Commands      []classicPublicCommandParityRow `json:"commands"`
 }
 
-type classicCommandParityRecord struct {
-	Name               string                        `json:"name"`
-	Category           string                        `json:"category"`
-	RuntimeCommand     string                        `json:"runtime_command"`
-	TSHostSurface      string                        `json:"ts_host_surface"`
-	StateMutationOwner string                        `json:"state_mutation_owner"`
-	MutatesAetherData  bool                          `json:"mutates_aether_data"`
-	TSWritePolicy      string                        `json:"ts_write_policy"`
-	FinalizerRequired  bool                          `json:"finalizer_required"`
-	FinalizerCommand   string                        `json:"finalizer_command"`
-	CeremonySteps      []string                      `json:"ceremony_steps"`
-	WrapperCoverage    classicCommandWrapperCoverage `json:"wrapper_coverage"`
-	RawBypass          bool                          `json:"raw_bypass"`
-	ClassicBehavior    string                        `json:"classic_behavior"`
-	RestoreTarget      string                        `json:"restore_target"`
+type classicPublicCommandParityRow struct {
+	Category    string `json:"category"`
+	PublicName  string `json:"public_name"`
+	CobraName   string `json:"cobra_name"`
+	Description string `json:"description"`
 }
 
-type classicCommandWrapperCoverage struct {
-	YAML     bool `json:"yaml"`
-	Claude   bool `json:"claude"`
-	OpenCode bool `json:"opencode"`
+func TestClassicCommandParity(t *testing.T) {
+	manifest := loadClassicPublicCommandParity(t)
+	assertClassicPublicCommandParity(t, manifest)
 }
 
-var requiredClassicParityCommands = []string{
-	"init",
-	"discuss",
-	"colonize",
-	"plan",
-	"build",
-	"continue",
-	"seal",
-	"oracle",
-	"swarm",
-	"watch",
-	"status",
-	"history",
-	"phase",
-	"resume",
-	"focus",
-	"redirect",
-	"feedback",
-	"pheromones",
-}
-
-func TestClassicCommandParityMatrixCoversCoreCommands(t *testing.T) {
-	matrix := loadClassicCommandParityMatrix(t)
-	records := classicCommandParityRecordsByName(t, matrix)
-
-	for _, command := range requiredClassicParityCommands {
-		if _, ok := records[command]; !ok {
-			t.Errorf("classic command parity matrix missing %q", command)
-		}
-	}
-}
-
-func TestClassicCommandParityMatrixMatchesCommandGuideAndWrappers(t *testing.T) {
-	repoRoot, err := repoRootForCommandSourceTest()
+func loadClassicPublicCommandParity(t *testing.T) classicPublicCommandParity {
+	t.Helper()
+	root, err := repoRootForCommandSourceTest()
 	if err != nil {
-		t.Fatalf("failed to find repo root: %v", err)
+		t.Fatalf("find command source root: %v", err)
 	}
-
-	matrix := loadClassicCommandParityMatrix(t)
-	records := classicCommandParityRecordsByName(t, matrix)
-
-	for _, command := range requiredClassicParityCommands {
-		record := records[command]
-		guide, err := buildCommandGuide(command, "codex")
-		if err != nil {
-			t.Fatalf("buildCommandGuide(%q): %v", command, err)
-		}
-		if record.Category != guide.Category {
-			t.Errorf("%s category = %q, want command-guide category %q", command, record.Category, guide.Category)
-		}
-		if record.RawBypass != (guide.RawBypass != "") {
-			t.Errorf("%s raw_bypass = %v, want %v from command-guide", command, record.RawBypass, guide.RawBypass != "")
-		}
-		assertClassicCommandWrapperExists(t, repoRoot, command, "yaml", record.WrapperCoverage.YAML)
-		assertClassicCommandWrapperExists(t, repoRoot, command, "claude", record.WrapperCoverage.Claude)
-		assertClassicCommandWrapperExists(t, repoRoot, command, "opencode", record.WrapperCoverage.OpenCode)
+	data, err := os.ReadFile(filepath.Join(root, ".aether", "commands", "classic-command-parity.json"))
+	if err != nil {
+		t.Fatalf("read command parity manifest: %v", err)
 	}
+	var manifest classicPublicCommandParity
+	if err := decodeClassicStrictJSON(data, &manifest); err != nil {
+		t.Fatalf("decode command parity manifest: %v", err)
+	}
+	return manifest
 }
 
-func TestClassicCommandParityMatrixDocumentsStateBoundary(t *testing.T) {
-	matrix := loadClassicCommandParityMatrix(t)
-	if !strings.Contains(matrix.RuntimeAuthority, "not runtime authority") {
-		t.Fatalf("matrix must explicitly say it is not runtime authority, got %q", matrix.RuntimeAuthority)
+func assertClassicPublicCommandParity(t *testing.T, manifest classicPublicCommandParity) {
+	t.Helper()
+	if manifest.SchemaVersion != classicPublicCommandParitySchema || strings.TrimSpace(manifest.Purpose) == "" {
+		t.Fatalf("invalid public parity manifest metadata: %+v", manifest)
 	}
-	if matrix.TSWritePolicy != "The TypeScript host may orchestrate, render, and pass arguments, but must never write .aether/data directly." {
-		t.Fatalf("unexpected top-level TS write policy: %q", matrix.TSWritePolicy)
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find command source root: %v", err)
 	}
-
-	records := classicCommandParityRecordsByName(t, matrix)
-	for _, command := range requiredClassicParityCommands {
-		record := records[command]
-		if record.RuntimeCommand == "" {
-			t.Errorf("%s missing runtime_command", command)
+	want := classicPublicCommandInventory()
+	if len(manifest.Commands) != len(want) {
+		t.Fatalf("public command count = %d, want %d", len(manifest.Commands), len(want))
+	}
+	seen := map[string]bool{}
+	for index, row := range manifest.Commands {
+		if seen[row.PublicName] {
+			t.Fatalf("duplicate public command %q", row.PublicName)
 		}
-		if record.TSHostSurface == "" {
-			t.Errorf("%s missing ts_host_surface", command)
+		seen[row.PublicName] = true
+		if row != want[index] {
+			t.Fatalf("public command %d = %+v, want %+v", index, row, want[index])
 		}
-		if record.TSWritePolicy != "never-write-aether-data" {
-			t.Errorf("%s ts_write_policy = %q, want never-write-aether-data", command, record.TSWritePolicy)
-		}
-		if record.MutatesAetherData && !strings.HasPrefix(record.StateMutationOwner, "go-") {
-			t.Errorf("%s mutates .aether/data but state_mutation_owner = %q", command, record.StateMutationOwner)
-		}
-		if record.FinalizerRequired && !strings.Contains(record.FinalizerCommand, "--completion-file") {
-			t.Errorf("%s requires finalizer but finalizer_command = %q", command, record.FinalizerCommand)
-		}
-		if len(record.CeremonySteps) == 0 {
-			t.Errorf("%s missing ceremony_steps", command)
-		}
-		if record.ClassicBehavior == "" || record.RestoreTarget == "" {
-			t.Errorf("%s must document classic_behavior and restore_target", command)
+		classicAssertCanonicalAndManagedCommand(t, root, row)
+		classicAssertCobraPublicCommand(t, row)
+	}
+	for _, forbidden := range []string{"setup", "finalizer", "recover", "abandon", "pause-colony", "resume-colony", "skill-list", "skill-cache-rebuild"} {
+		if seen[forbidden] {
+			t.Fatalf("protocol or retired command %q leaked into public manifest", forbidden)
 		}
 	}
 }
 
-func TestClassicCommandParityMatrixDocumentsFinalizerContracts(t *testing.T) {
-	records := classicCommandParityRecordsByName(t, loadClassicCommandParityMatrix(t))
-	expected := map[string]struct {
-		required bool
-		command  string
+func TestDiscussAndSpecRegisteredAcrossPublicSurfaces(t *testing.T) {
+	manifest := loadClassicPublicCommandParity(t)
+	rows := make(map[string]classicPublicCommandParityRow, len(manifest.Commands))
+	for _, row := range manifest.Commands {
+		rows[row.PublicName] = row
+	}
+
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("find command source root: %v", err)
+	}
+	for _, publicName := range []string{"discuss", "spec"} {
+		row, ok := rows[publicName]
+		if !ok {
+			t.Fatalf("normal public inventory is missing %q", publicName)
+		}
+		if row.Category != "normal" || row.CobraName != publicName {
+			t.Fatalf("public %s row = %+v, want normal Cobra command %s", publicName, row, publicName)
+		}
+		classicAssertCobraPublicCommand(t, row)
+		classicAssertCanonicalAndManagedCommand(t, root, row)
+	}
+
+	for _, publicName := range []string{"discuss", "spec", "plan"} {
+		if got, want := platformCommandName(publicName, "claude"), "/ant-"+publicName; got != want {
+			t.Fatalf("Claude spelling for %s = %q, want %q", publicName, got, want)
+		}
+		if got, want := platformCommandName(publicName, "opencode"), "/ant-"+publicName; got != want {
+			t.Fatalf("OpenCode spelling for %s = %q, want %q", publicName, got, want)
+		}
+		want := "$ant-" + publicName
+		if publicName == "spec" {
+			want = "aether spec" // Specification skills remain deferred.
+		}
+		if got := platformCommandName(publicName, "codex"); got != want {
+			t.Fatalf("Codex spelling for %s = %q, want %q", publicName, got, want)
+		}
+	}
+}
+
+func classicPublicCommandInventory() []classicPublicCommandParityRow {
+	return []classicPublicCommandParityRow{
+		{Category: "normal", PublicName: "init", CobraName: "init", Description: "Start a guided colony for one goal."},
+		{Category: "normal", PublicName: "discuss", CobraName: "discuss", Description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"},
+		{Category: "normal", PublicName: "spec", CobraName: "spec", Description: "📜 Review, revise, approve, or repair the owner-readable specification"},
+		{Category: "normal", PublicName: "plan", CobraName: "plan", Description: "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"},
+		{Category: "normal", PublicName: "build", CobraName: "build", Description: "🔨 Build a phase — Queen dispatches workers, colony self-organizes"},
+		{Category: "normal", PublicName: "run", CobraName: "run", Description: "Autopilot the remaining accepted phases within the displayed safety contract."},
+		{Category: "normal", PublicName: "status", CobraName: "status", Description: "Show the complete authoritative colony snapshot."},
+		{Category: "normal", PublicName: "pause", CobraName: "pause", Description: "Stop at a safe boundary and save one resumable handoff."},
+		{Category: "normal", PublicName: "resume", CobraName: "resume", Description: "Validate and restore the safest honest recovery point."},
+		{Category: "normal", PublicName: "seal", CobraName: "seal", Description: "Close a verified colony, or explicitly record an owner-forced incomplete closure."},
+		{Category: "normal", PublicName: "entomb", CobraName: "entomb", Description: "Archive and clear the sealed colony."},
+		{Category: "steer-inspect", PublicName: "focus", CobraName: "focus", Description: "🔦 Emit a FOCUS pheromone through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "feedback", CobraName: "feedback", Description: "💬 Emit FEEDBACK through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "redirect", CobraName: "redirect", Description: "🚫 Emit a REDIRECT pheromone through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "watch", CobraName: "watch", Description: "👁️ View the current colony watch surface through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "phase", CobraName: "phase", Description: "🧱 View phase details through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "history", CobraName: "history", Description: "📜 Show colony event history"},
+		{Category: "steer-inspect", PublicName: "swarm", CobraName: "swarm", Description: "🔥 Real-time colony swarm display + visible bug-destroyer workers"},
+		{Category: "steer-inspect", PublicName: "oracle", CobraName: "oracle", Description: "🔮 Run the autonomous Oracle loop through the Aether CLI runtime"},
+		{Category: "steer-inspect", PublicName: "memory-details", CobraName: "memory-details", Description: "📜 Show what the colony has learned — wisdom, lessons waiting to be promoted, lessons put aside, and recent failures"},
+		{Category: "steer-inspect", PublicName: "flags", CobraName: "flag-list", Description: "🚩 List project flags (blockers, issues, notes)"},
+		{Category: "maintenance", PublicName: "maintenance", CobraName: "maintenance", Description: "Inspect or repair Aether internals with preview and rollback."},
+	}
+}
+
+func classicAssertCanonicalAndManagedCommand(t *testing.T, root string, row classicPublicCommandParityRow) {
+	t.Helper()
+	canonical := filepath.Join(root, ".aether", "commands", row.PublicName+".yaml")
+	canonicalData, err := os.ReadFile(canonical)
+	if err != nil {
+		t.Fatalf("read canonical command %s: %v", row.PublicName, err)
+	}
+	classicAssertCommandMetadata(t, canonical, canonicalData, row, true)
+	managed := []struct {
+		platform string
+		path     string
 	}{
-		"colonize": {required: true, command: "aether colonize-finalize --completion-file <file>"},
-		"plan":     {required: true, command: "aether plan-finalize --completion-file <file>"},
-		"build":    {required: true, command: "aether build-finalize <phase> --completion-file <file>"},
-		"continue": {required: false, command: "aether continue-finalize --completion-file <file>"},
-		"seal":     {required: true, command: "aether seal-finalize --completion-file <file>"},
-		"oracle":   {required: false, command: "aether oracle-iterate-finalize --completion-file <file>"},
-		"swarm":    {required: true, command: "aether swarm-finalize --completion-file <file>"},
+		{platform: "claude-flat", path: filepath.Join(root, ".claude", "commands", "ant-"+row.PublicName+".md")},
+		{platform: "claude", path: filepath.Join(root, ".claude", "commands", "ant", row.PublicName+".md")},
+		{platform: "opencode", path: filepath.Join(root, ".opencode", "commands", "ant", row.PublicName+".md")},
 	}
+	for _, surface := range managed {
+		path := surface.path
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s wrapper for %s: %v", surface.platform, row.PublicName, err)
+		}
+		if !bytes.HasPrefix(data, []byte("<!-- Aether-managed: runtime spec at .aether/commands/"+row.PublicName+".yaml.")) {
+			t.Fatalf("%s wrapper for %s is not canonical-YAML managed", surface.platform, row.PublicName)
+		}
+		classicAssertCommandMetadata(t, path, data, row, false)
+	}
+}
 
-	for command, want := range expected {
-		record := records[command]
-		if record.FinalizerRequired != want.required {
-			t.Errorf("%s finalizer_required = %v, want %v", command, record.FinalizerRequired, want.required)
-		}
-		if record.FinalizerCommand != want.command {
-			t.Errorf("%s finalizer_command = %q, want %q", command, record.FinalizerCommand, want.command)
-		}
-		if want.required && record.StateMutationOwner != "go-finalizer" {
-			t.Errorf("%s required finalizer should use go-finalizer state owner, got %q", command, record.StateMutationOwner)
+var classicCommandDescription = regexp.MustCompile(`(?m)^description: "([^"]+)"$`)
+
+func classicAssertCommandMetadata(t *testing.T, path string, data []byte, row classicPublicCommandParityRow, requireCanonicalDescription bool) {
+	t.Helper()
+	if !bytes.Contains(data, []byte("name: ant-"+row.PublicName)) {
+		t.Fatalf("%s does not expose ant-%s", path, row.PublicName)
+	}
+	if requireCanonicalDescription {
+		match := classicCommandDescription.FindSubmatch(data)
+		if len(match) != 2 || string(match[1]) != row.Description {
+			t.Fatalf("%s description = %q, want %q", path, string(match[1]), row.Description)
 		}
 	}
+}
 
-	for command, record := range records {
-		if _, ok := expected[command]; ok {
+func classicAssertCobraPublicCommand(t *testing.T, row classicPublicCommandParityRow) {
+	t.Helper()
+	for _, command := range rootCmd.Commands() {
+		if command.Name() != row.CobraName {
 			continue
 		}
-		if record.FinalizerRequired {
-			t.Errorf("%s unexpectedly requires a finalizer", command)
+		if command.Hidden {
+			t.Fatalf("Cobra public command %s is hidden", row.CobraName)
 		}
-		if record.FinalizerCommand != "" {
-			t.Errorf("%s unexpectedly documents finalizer command %q", command, record.FinalizerCommand)
+		if row.PublicName != row.CobraName && !slices.Contains(command.Aliases, row.PublicName) {
+			t.Fatalf("Cobra command %s does not preserve public alias %s", row.CobraName, row.PublicName)
 		}
+		return
 	}
-}
-
-func loadClassicCommandParityMatrix(t *testing.T) classicCommandParityMatrix {
-	t.Helper()
-	repoRoot, err := repoRootForCommandSourceTest()
-	if err != nil {
-		t.Fatalf("failed to find repo root: %v", err)
-	}
-	path := filepath.Join(repoRoot, ".aether", "commands", "classic-command-parity.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-
-	var matrix classicCommandParityMatrix
-	if err := json.Unmarshal(data, &matrix); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	if matrix.SchemaVersion == "" {
-		t.Fatal("classic command parity matrix missing schema_version")
-	}
-	if len(matrix.Commands) == 0 {
-		t.Fatal("classic command parity matrix has no commands")
-	}
-	return matrix
-}
-
-func classicCommandParityRecordsByName(t *testing.T, matrix classicCommandParityMatrix) map[string]classicCommandParityRecord {
-	t.Helper()
-	records := make(map[string]classicCommandParityRecord, len(matrix.Commands))
-	for _, record := range matrix.Commands {
-		if record.Name == "" {
-			t.Fatal("classic command parity matrix contains command with empty name")
-		}
-		if _, exists := records[record.Name]; exists {
-			t.Fatalf("classic command parity matrix contains duplicate command %q", record.Name)
-		}
-		records[record.Name] = record
-	}
-
-	var names []string
-	for name := range records {
-		names = append(names, name)
-	}
-	slices.Sort(names)
-	for _, name := range names {
-		if !slices.Contains(requiredClassicParityCommands, name) {
-			t.Fatalf("classic command parity matrix contains unexpected command %q", name)
-		}
-	}
-	return records
-}
-
-func assertClassicCommandWrapperExists(t *testing.T, repoRoot, command, surface string, expected bool) {
-	t.Helper()
-	var path string
-	switch surface {
-	case "yaml":
-		path = filepath.Join(repoRoot, ".aether", "commands", command+".yaml")
-	case "claude":
-		path = filepath.Join(repoRoot, ".claude", "commands", "ant", command+".md")
-	case "opencode":
-		path = filepath.Join(repoRoot, ".opencode", "commands", "ant", command+".md")
-	default:
-		t.Fatalf("unknown command wrapper surface %q", surface)
-	}
-
-	_, err := os.Stat(path)
-	exists := err == nil
-	if expected && !exists {
-		t.Errorf("%s wrapper for %s missing at %s", surface, command, path)
-	}
-	if !expected && exists {
-		t.Errorf("%s wrapper for %s exists but matrix says it is uncovered at %s", surface, command, path)
-	}
-	if err != nil && !os.IsNotExist(err) {
-		t.Fatalf("stat %s: %v", path, err)
-	}
-}
-
-func TestClassicCommandParityMatrixKeepsTSHostAsConductorNotAuthority(t *testing.T) {
-	matrix := loadClassicCommandParityMatrix(t)
-	records := classicCommandParityRecordsByName(t, matrix)
-
-	hostCommands := []string{"colonize", "plan", "build", "continue", "seal", "oracle", "swarm", "watch"}
-	for _, command := range hostCommands {
-		record := records[command]
-		if record.TSHostSurface == "none" {
-			t.Errorf("%s should document its TypeScript host surface", command)
-		}
-		if record.StateMutationOwner == "typescript-host" {
-			t.Errorf("%s must not make TypeScript the state mutation owner", command)
-		}
-	}
-
-	for _, command := range []string{"status", "focus", "redirect", "feedback", "pheromones"} {
-		record := records[command]
-		if record.Category != commandGuideCategoryLiteral {
-			t.Errorf("%s category = %q, want literal", command, record.Category)
-		}
-		if !strings.Contains(record.RestoreTarget, "runtime") && !strings.Contains(record.RestoreTarget, "Go") {
-			t.Errorf("%s restore_target should preserve runtime ownership, got %q", command, record.RestoreTarget)
-		}
-	}
-}
-
-func TestClassicCommandParityMatrixMarksLifecycleHostSpineComplete(t *testing.T) {
-	records := classicCommandParityRecordsByName(t, loadClassicCommandParityMatrix(t))
-	for _, command := range []string{"colonize", "seal"} {
-		record := records[command]
-		if record.TSHostSurface != "orchestration-manifest" {
-			t.Errorf("%s ts_host_surface = %q, want orchestration-manifest", command, record.TSHostSurface)
-		}
-		if strings.Contains(record.RestoreTarget, "later phase") {
-			t.Errorf("%s restore_target should no longer describe a future host gap, got %q", command, record.RestoreTarget)
-		}
-	}
+	t.Fatalf("Cobra public command %s is missing", row.CobraName)
 }

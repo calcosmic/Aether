@@ -1,0 +1,281 @@
+{
+  "amendment": {
+    "path": ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-PROOF-AMENDMENT.md",
+    "sha256": "sha256:9db637757528466e0e19bcf5789ccd6c125944e4e6f910d624c9211bbc46ccbd"
+  },
+  "commit": "88f79590",
+  "failed_setup": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-b6ad50653734/summary.json",
+    "sha256": "sha256:d975b9f731c81c12b4222291b46aaeb8bc0903232b4963d148f6f4025c75d432"
+  },
+  "focused_evidence": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/summary.json",
+    "sha256": "sha256:fb2422d731318233538cef9b3d0d97f9aab529a235308aaf428b6ee4a8b9b1a5"
+  },
+  "implementation_passed": true,
+  "limitations": [
+    "Deterministic implementation checks only; no real native worker/cancellation qualification.",
+    "Final all-eleven-case capture and four standard focused/full normal/race runs remain required.",
+    "The first isolated snapshot setup rejected a legitimate tracked directory symlink before any Go invocation; retained failed setup was corrected only in a new run root."
+  ],
+  "production_digest": "sha256:d70bcd17b24916529b764f5bd7e83c58262d6845ea4c37984acd34a45196fc84",
+  "qualification_complete": false,
+  "recorded_at": "2026-09-18T20:12:40.968444+00:00",
+  "runs": {
+    "normal-cmd": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeGapHostCapture|TestCodexNativeGapEvidencePaths|TestCodexNativeWorkerCapabilities|TestCodexNativeWorkerAdmission|TestCodexNativeWorkerCancellation|TestCodexNativeCancellationRequirementReserveRefusal|TestCodexNativeCancellationRequirementEscalationRefusal|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryUnresolved|TestCodexNativeFinalizeReplay|TestCodexNativeGapContext|TestCodexNativeProofContractReplayIdentity|TestCodexNativeProofContractBinding|TestCodexNativeProofContractDerivedReceiptIdentity|TestCodexNativeClaudeStartupIdentity|TestCodexNativeClaudeStartupReplayIdentity|TestCodexNativeReviewedClaudeProvenance|TestCodexNativeReviewedAdditionalGates)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "120s",
+        "-json"
+      ],
+      "elapsed_seconds": 77.39473414421082,
+      "exit_code": 0,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/normal-cmd.stdout",
+        "sha256": "sha256:b54aeb4989f3abc001df81e2fa3958d7dd5fde4a8319f7edd28e0222f9aa3900"
+      },
+      "top_level_terminals": {
+        "TestCodexNativeCancellationRequirementEscalationRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementReserveRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeClaudeStartupIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeClaudeStartupReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeReplay": [
+          "pass"
+        ],
+        "TestCodexNativeGapContext": [
+          "pass"
+        ],
+        "TestCodexNativeGapEvidencePaths": [
+          "pass"
+        ],
+        "TestCodexNativeGapHostCapture": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractBinding": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractDerivedReceiptIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryCancelPending": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryUnresolved": [
+          "pass"
+        ],
+        "TestCodexNativeReviewedAdditionalGates": [
+          "pass"
+        ],
+        "TestCodexNativeReviewedClaudeProvenance": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCancellation": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCapabilities": [
+          "pass"
+        ]
+      }
+    },
+    "normal-pkg-codex": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./pkg/codex",
+        "-run",
+        "^(TestCodexNativePlatformContract|TestNativeCancellationCapabilityRequiresProof|TestNativeWorkerCancellationRequirement)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "120s",
+        "-json"
+      ],
+      "elapsed_seconds": 4.634032249450684,
+      "exit_code": 0,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/normal-pkg-codex.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/normal-pkg-codex.stdout",
+        "sha256": "sha256:244f51514e30cb91e0dbbe1e602295f50f46e6031228684eb2df415374211d35"
+      },
+      "top_level_terminals": {
+        "TestCodexNativePlatformContract": [
+          "pass"
+        ],
+        "TestNativeCancellationCapabilityRequiresProof": [
+          "pass"
+        ],
+        "TestNativeWorkerCancellationRequirement": [
+          "pass"
+        ]
+      }
+    },
+    "race-cmd": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeGapHostCapture|TestCodexNativeGapEvidencePaths|TestCodexNativeWorkerCapabilities|TestCodexNativeWorkerAdmission|TestCodexNativeWorkerCancellation|TestCodexNativeCancellationRequirementReserveRefusal|TestCodexNativeCancellationRequirementEscalationRefusal|TestCodexNativeRecoveryCancelPending|TestCodexNativeRecoveryUnresolved|TestCodexNativeFinalizeReplay|TestCodexNativeGapContext|TestCodexNativeProofContractReplayIdentity|TestCodexNativeProofContractBinding|TestCodexNativeProofContractDerivedReceiptIdentity|TestCodexNativeClaudeStartupIdentity|TestCodexNativeClaudeStartupReplayIdentity|TestCodexNativeReviewedClaudeProvenance|TestCodexNativeReviewedAdditionalGates)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "120s",
+        "-json"
+      ],
+      "elapsed_seconds": 103.19389629364014,
+      "exit_code": 0,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/race-cmd.stdout",
+        "sha256": "sha256:b858cb1d6cfec6bc9dda3511d8c4969bb39fdbfa1b3e326c1bcdc1554eb2ff34"
+      },
+      "top_level_terminals": {
+        "TestCodexNativeCancellationRequirementEscalationRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeCancellationRequirementReserveRefusal": [
+          "pass"
+        ],
+        "TestCodexNativeClaudeStartupIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeClaudeStartupReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeFinalizeReplay": [
+          "pass"
+        ],
+        "TestCodexNativeGapContext": [
+          "pass"
+        ],
+        "TestCodexNativeGapEvidencePaths": [
+          "pass"
+        ],
+        "TestCodexNativeGapHostCapture": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractBinding": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractDerivedReceiptIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeProofContractReplayIdentity": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryCancelPending": [
+          "pass"
+        ],
+        "TestCodexNativeRecoveryUnresolved": [
+          "pass"
+        ],
+        "TestCodexNativeReviewedAdditionalGates": [
+          "pass"
+        ],
+        "TestCodexNativeReviewedClaudeProvenance": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerAdmission": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCancellation": [
+          "pass"
+        ],
+        "TestCodexNativeWorkerCapabilities": [
+          "pass"
+        ]
+      }
+    },
+    "race-pkg-codex": {
+      "argv": [
+        "go",
+        "test",
+        "-p",
+        "1",
+        "./pkg/codex",
+        "-race",
+        "-run",
+        "^(TestCodexNativePlatformContract|TestNativeCancellationCapabilityRequiresProof|TestNativeWorkerCancellationRequirement)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "120s",
+        "-json"
+      ],
+      "elapsed_seconds": 6.765629768371582,
+      "exit_code": 0,
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/race-pkg-codex.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/race-pkg-codex.stdout",
+        "sha256": "sha256:cdb1fff55a1f42e449784cf0e756eded545f02b07b81c6f951bb324f555343a8"
+      },
+      "top_level_terminals": {
+        "TestCodexNativePlatformContract": [
+          "pass"
+        ],
+        "TestNativeCancellationCapabilityRequiresProof": [
+          "pass"
+        ],
+        "TestNativeWorkerCancellationRequirement": [
+          "pass"
+        ]
+      }
+    }
+  },
+  "schema_version": "aether-native-proof-implementation/v1",
+  "source_inputs": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/source-inputs.json",
+    "sha256": "sha256:a0276d52d83a9279367551960951b20126d771b56042ba3fb28f03a7e217617b"
+  },
+  "source_patch": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-v2-20260918T200530Z-2d9e28/candidate.patch",
+    "sha256": "sha256:140c1199874e911a9dadda9aa8cb114ad343c90c71752487aa47a5a1f557e1ac"
+  },
+  "task": "204.2-25.1",
+  "test_corpus_digest": "sha256:891bdf17ea9ffe4f50ad47cca7dca776fb683fd88a6c69258b9f9c301f7c4596"
+}

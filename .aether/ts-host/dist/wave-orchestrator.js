@@ -8,6 +8,7 @@
  * graceful error handling).
  */
 import { dispatchSingleWorker, } from "./worker-dispatch.js";
+import { isSuccessfulWorkerStatus } from "./worker-status.js";
 // Mutable reference for test injection.
 let _dispatchSingleWorker = dispatchSingleWorker;
 // ---------------------------------------------------------------------------
@@ -121,7 +122,9 @@ async function processWaveSpawns(opts, waveResult) {
     // Collect spawn claims from all completed workers in the wave
     const allClaims = [];
     for (const result of waveResult.results) {
-        if (result.status === "completed" && result.spawns && result.spawns.length > 0) {
+        // A worker that honestly reported completed_no_change succeeded
+        // (ruling D6); its spawn claims must not be discarded.
+        if (isSuccessfulWorkerStatus(result.status) && result.spawns && result.spawns.length > 0) {
             allClaims.push({
                 parent: result.name,
                 depth: 1, // Manifest workers are depth 1

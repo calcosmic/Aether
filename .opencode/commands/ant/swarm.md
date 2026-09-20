@@ -6,6 +6,16 @@ description: "🔥 Real-time colony swarm display + visible bug-destroyer worker
 
 Use the Go `aether` CLI as the source of truth. The runtime owns swarm artifacts, spawn-tree status, worker wave contracts, and final result persistence. The wrapper owns only visible platform worker ceremony.
 
+## Investigation And Repair
+
+The runtime, not this wrapper, drives four genuinely distinct investigators in the first wave — not four copies of the same prompt. One traces the bug through the project's git history, one searches the working code for the same pattern elsewhere, one traces the actual error or stack trace, and one researches external sources (docs, GitHub issues, forums). Each reports its own confidence and its own evidence, and each appears live in the dashboard exactly like any other worker.
+
+After that wave, the runtime renders one comparison card: where the four investigators agree and disagree, a confidence-ranked list of candidate fixes, and the evidence naming why the top fix was chosen over the alternatives.
+
+The top-ranked fix is then applied automatically through the same save-a-checkpoint, verify, and roll-back-if-it-fails safety net every other repair path in the colony uses. The checkpoint save is announced; if the fix does not verify, the rollback is announced too. There is no pause for approval mid-flight — the owner gets the full story after the repair runs, not a prompt during it.
+
+If the same problem survives three repair attempts, the runtime stops trying to patch it automatically and raises a plain-language case instead: what failed three times, why patching is not working, and the bigger structural change it believes is actually needed. It then waits for the owner's decision.
+
 ## Watch Mode
 
 If the user provides no problem description, keep live visibility direct:

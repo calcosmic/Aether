@@ -157,6 +157,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
   let force = false;
   let forceResurvey = false;
   const tasks: string[] = [];
+  let preset: string | undefined = undefined;
   let depth: string | undefined = undefined;
   let planningDepth: string | undefined = undefined;
   let verificationDepth: string | undefined = undefined;
@@ -226,6 +227,8 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     } else if (arg === "--task") {
       const value = readValue(arg);
       if (value !== undefined) tasks.push(value);
+    } else if (arg === "--preset") {
+      preset = readValue(arg);
     } else if (arg === "--depth") {
       depth = readValue(arg);
     } else if (arg === "--planning-depth") {
@@ -290,6 +293,7 @@ export function parseArgs(argv: string[]): ParsedHostArgs {
     force,
     forceResurvey,
     tasks,
+    preset,
     depth,
     planningDepth,
     verificationDepth,
@@ -338,7 +342,8 @@ function printUsage(): void {
       "  --force                Forward Go force aliases for plan/build\n" +
       "  --force-resurvey       Refresh colonize survey artifacts\n" +
       "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
-      "  --depth <level>        fast | balanced | deep | exhaustive\n" +
+      "  --preset <level>       fast | balanced | deep | exhaustive (primary; --depth is a legacy alias)\n" +
+      "  --depth <level>        fast | balanced | deep | exhaustive (legacy alias for --preset)\n" +
       "  --planning-depth <lvl> light | standard | deep\n" +
       "  --verification-depth <lvl> light | standard | heavy\n" +
       "  --target <n>           Planning confidence target 70-99\n" +
@@ -507,6 +512,7 @@ function emitSkillSummary(dispatches: CeremonyDispatchLike[]): void {
 async function preflightHostWorkerDispatch(
   bridge: GoBridgeOptions,
   context: string,
+  phase = 0,
   fallbackDiagnostic?: string
 ): Promise<void> {
   // D-06: a skipped preflight must never be silent, on either the
@@ -550,7 +556,7 @@ async function preflightHostWorkerDispatch(
     }
     return;
   }
-  await preflightGoWorkerProvider(bridge, context);
+  await preflightGoWorkerProvider(bridge, context, phase);
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,6 +1095,7 @@ async function runDispatchedBuildCommand(
     await preflightHostWorkerDispatch(
       bridge,
       `Build phase ${phase}`,
+      buildManifest.phase,
       diagnostic ? `No platform workers available. ${diagnostic}` : undefined
     );
   }
@@ -1097,15 +1104,17 @@ async function runDispatchedBuildCommand(
   const ceremonyEnvelope = { dispatch_manifest: buildManifest };
   renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
 
-  // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
+  // Step 5: spawnBudget still feeds the ConfidenceLoop's own iteration
+  // budget below (an unrelated concept). The spawn orchestrator itself no
+  // longer takes a budget/consumed/depth of its own (SYN-203-02): every
+  // admission decision is asked of the Go binary's spawn-can-spawn command,
+  // against the SAME whole-run ledger the interactive `aether recruit` lane
+  // already consults -- one counter, not two.
   const spawnBudget =
     buildManifest.queen_execution_policy?.spawn_budget?.max_workers ?? 20;
   const spawnOrchestrator = createSpawnOrchestrator({
     goBinaryPath: bridge.goBinaryPath,
     cwd: bridge.cwd,
-    totalBudget: spawnBudget,
-    consumedBudget: dispatches.length,
-    currentDepth: 1,
   });
 
   // Step 6: Initialize ConfidenceLoop and ConfidenceEvaluator
@@ -1266,7 +1275,7 @@ async function runDispatchedPlanCommand(
 
   // Step 2: Ask Go to select and preflight the provider (unless simulating)
   if (!parsed.simulate) {
-    await preflightHostWorkerDispatch(bridge, "Plan");
+    await preflightHostWorkerDispatch(bridge, "Plan", 0);
   }
 
   // Step 3: Render spawn-plan and wave-start ceremony
@@ -1373,7 +1382,7 @@ async function runDispatchedContinueCommand(
 
   // Step 2: Ask Go to select and preflight the provider (unless simulating)
   if (!parsed.simulate) {
-    await preflightHostWorkerDispatch(bridge, "Continue");
+    await preflightHostWorkerDispatch(bridge, "Continue", continueManifest.phase);
   }
 
   // Step 3: Render spawn-plan and wave-start ceremony

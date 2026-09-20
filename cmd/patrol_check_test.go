@@ -14,20 +14,15 @@ import (
 // Helpers
 // ---------------------------------------------------------------------------
 
-// setupPatrolData creates a temp .aether/data/ directory, sets COLONY_DATA_DIR,
-// and returns the data directory path.
+// setupPatrolData binds patrol to one contained temporary repository and
+// returns that repository's data directory.
 func setupPatrolData(t *testing.T) string {
 	t.Helper()
-	orig := os.Getenv("COLONY_DATA_DIR")
-	t.Cleanup(func() { os.Setenv("COLONY_DATA_DIR", orig) })
-
-	tmpDir := t.TempDir()
-	dataDir := filepath.Join(tmpDir, ".aether", "data")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("mkdir data: %v", err)
+	binding := bindCommandTestRepository(t)
+	if got := os.Getenv("AETHER_ROOT"); filepath.Clean(got) != filepath.Clean(binding.Root) {
+		t.Fatalf("patrol fixture repository root = %q, want %q", got, binding.Root)
 	}
-	os.Setenv("COLONY_DATA_DIR", dataDir)
-	return dataDir
+	return binding.DataDir
 }
 
 // runPatrolCheck executes the patrol-check subcommand and returns parsed result.

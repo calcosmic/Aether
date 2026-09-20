@@ -22,7 +22,7 @@ func TestNextUpTranslatesWrapperCommandsPerPlatform(t *testing.T) {
 		{"claude rewrites continue", "claude", "Run `aether continue` again.", "/ant-continue", "aether continue"},
 		{"claude keeps trailing args", "claude", "Run `aether build 3` to start the next phase", "/ant-build 3", "aether build"},
 		{"opencode rewrites too", "opencode", "Colony complete. Run `aether seal` to finalize.", "/ant-seal", "aether seal"},
-		{"codex left alone", "codex", "Run `aether continue` again.", "aether continue", "/ant-continue"},
+		{"codex public skill", "codex", "Run `aether continue` again.", "$ant-continue", "/ant-continue"},
 		{"publish has no wrapper", "claude", "Recover with: aether publish", "aether publish", "/ant-publish"},
 		{"host has no wrapper", "claude", "Run `aether host plan --dry-run`", "aether host plan", "/ant-host"},
 		{"flag-resolve has no wrapper", "claude", "  aether flag-resolve --id flag_123", "aether flag-resolve --id flag_123", "/ant-flag"},
@@ -57,8 +57,8 @@ func TestRenderNextUpAppliesTranslationAtTheFunnel(t *testing.T) {
 
 	t.Setenv("AETHER_PLATFORM", "codex")
 	out = renderNextUp("Run `aether continue` to verify.")
-	if !strings.Contains(out, "aether continue") || strings.Contains(out, "/ant-continue") {
-		t.Fatalf("codex hints must stay raw CLI:\n%s", out)
+	if !strings.Contains(out, "$ant-continue") || strings.Contains(out, "/ant-continue") {
+		t.Fatalf("codex hints must name the available public skill:\n%s", out)
 	}
 }
 
@@ -105,7 +105,11 @@ func TestNextUpIsTheOnlyNextUpFunnel(t *testing.T) {
 		t.Fatalf("glob cmd sources: %v", err)
 	}
 	for _, file := range files {
-		if strings.HasSuffix(file, "_test.go") || filepath.Base(file) == "codex_visuals.go" {
+		if strings.HasSuffix(file, "_test.go") || map[string]bool{
+			"codex_visuals.go":      true,
+			"next_action_card.go":   true,
+			"lifecycle_closeout.go": true,
+		}[filepath.Base(file)] {
 			continue
 		}
 		data, err := os.ReadFile(file)

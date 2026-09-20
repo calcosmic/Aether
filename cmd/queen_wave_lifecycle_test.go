@@ -806,3 +806,42 @@ func TestQueenWaveLifecycle_RecoveryActionTypes(t *testing.T) {
 		t.Errorf("expected at least 2 tracked recovery actions for 2 failed workers, got %d", totalTracked)
 	}
 }
+
+// Observed in a real build (2026-08-21): a watcher failed, the wave summary
+// reported "1 recovered", and the build halted on that same worker still
+// failed. The column counts recovery actions the orchestrator DECIDED on --
+// nothing in this lane re-dispatches -- so calling it "Recovered" claimed a
+// repair that never happened.
+func TestWaveSummaryDoesNotClaimARepairItDidNotMake(t *testing.T) {
+	summary := WaveLifecycleSummary{
+		TotalDispatched: 1,
+		TotalSucceeded:  0,
+		TotalFailed:     1,
+		TotalRecovered:  1,
+		Waves: []WaveResult{{
+			Wave: 12, Dispatched: 1, Succeeded: 0, Failed: 1,
+			Recovered: []RecoveryEntry{{WorkerName: "Keen-6", Method: "retry", Detail: "retrying once"}},
+		}},
+	}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	restore := captureStdoutForWaveSummary(t)
+	renderWaveSummaryTable(summary)
+	rendered := restore()
+
+	if strings.Contains(rendered, "RECOVERED") {
+		t.Fatalf("the wave summary still reports a failed worker as RECOVERED:\n%s", rendered)
+	}
+	if !strings.Contains(strings.ToUpper(rendered), "RECOVERY PLANNED") {
+		t.Fatalf("the column must say what it counts -- recovery actions planned:\n%s", rendered)
+	}
+}
+
+func captureStdoutForWaveSummary(t *testing.T) func() string {
+	t.Helper()
+	previous := stdout
+	buffer := &bytes.Buffer{}
+	stdout = buffer
+	t.Cleanup(func() { stdout = previous })
+	return func() string { return buffer.String() }
+}

@@ -55,7 +55,7 @@ For each dispatch in `colonize_manifest.dispatches`:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Inject the dispatch `brief`, `output_paths`, active signals, `skill_section` when present, and exact task metadata.
+5. Read `colonize_manifest.context_capsule` ONCE from the manifest — it is not per-dispatch data, reuse the same value for every surveyor this run spawns — and prepend it VERBATIM ahead of the dispatch `brief`; it is the SOLE source of the owner's steering notes and the previous helper's relay note, so neither is written a second time. Then inject the dispatch `brief`, `output_paths`, active signals, `skill_section` when present, and exact task metadata.
 6. Require every surveyor to return a terminal structured result with: `name`, `caste`, `stage`, `wave`, `task_id`, `status`, `summary`, `files_created`, `files_modified`, `blockers`, and `duration`.
 7. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`

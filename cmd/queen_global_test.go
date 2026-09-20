@@ -18,8 +18,10 @@ func TestQueenPromoteInstinctWritesGlobal(t *testing.T) {
 	store = s
 
 	hubDir := filepath.Join(tmpDir, "hub")
-	os.Setenv("AETHER_HUB_DIR", hubDir)
-	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", "") })
+	// t.Setenv restores the previous hub (the suite-wide test hub TestMain
+	// sets), where a cleanup that blanked the variable sent every later test
+	// in this process to the real ~/.aether hub.
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 
 	// Create hub QUEEN.md
 	os.MkdirAll(hubDir, 0755)
@@ -73,8 +75,7 @@ func TestQueenPromoteInstinctSucceedsWithoutHub(t *testing.T) {
 	store = s
 
 	// No hub directory -- hubStore() will return nil
-	os.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, "nonexistent_hub"))
-	t.Cleanup(func() { os.Setenv("AETHER_HUB_DIR", "") })
+	t.Setenv("AETHER_HUB_DIR", filepath.Join(tmpDir, "nonexistent_hub"))
 
 	// Create instincts.json
 	instinctData := map[string]interface{}{

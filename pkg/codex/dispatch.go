@@ -34,6 +34,35 @@ type WorkerDispatch struct {
 	ExecutionBinding  *ExecutionBinding // Durable build-run identity
 	ProviderRunID     string            // Unique provider invocation within the build run
 	DeclaredPaths     []string          // Repo-relative paths this dispatch declares ownership of (worktree mode)
+	// CoveredTaskIDs is every task this one dispatch is responsible for, in
+	// execution order. A single-task dispatch carries exactly its own TaskID;
+	// a coherent job (cmd/coherent_jobs.go) carries all of its grouped tasks.
+	// TaskID stays the primary compatibility key. Worktree mode reads this to
+	// give one grouped job exactly one checkout and to name every affected
+	// task in an ownership refusal (JOBS-04).
+	CoveredTaskIDs []string
+	// JobName and JobReason are the grouped job's durable identity: which job
+	// this worker owns and why those tasks belong together (D-04). Both are
+	// empty for a dispatch that was never grouped.
+	JobName   string
+	JobReason string
+	// ParentWorkerID is the identifier of the worker that spawned this one,
+	// when the dispatch itself already knows it. Empty for the overwhelming
+	// majority of dispatches (a top-level worker dispatched directly by the
+	// Queen has no worker parent) -- 202-03's live-event lineage mapping
+	// (cmd/live_events.go's emitColonyLiveWorkerStarted) reads this field
+	// directly rather than deriving lineage from a rendered string, per
+	// 202-CLASSIC-SYNTHESIS.md's "never derive lineage from a rendered
+	// string when the dispatch already knows the parent" prohibition.
+	//
+	// No production dispatch currently assigns this field (WR-03, 202-16
+	// verification): the colony has no worker-spawns-worker producer
+	// today, so every existing dispatch sets it to "". The read/render path
+	// downstream (cmd/live_events.go, cmd/watch_dashboard.go) is
+	// forward-looking plumbing for a lineage scenario that does not yet
+	// exist in this codebase -- a reader must not take rendered lineage
+	// output as evidence that worker lineage is actually being recorded.
+	ParentWorkerID string
 }
 
 // DispatchResult captures the outcome of a single worker dispatch within a batch.
@@ -46,6 +75,7 @@ type DispatchResult struct {
 
 // DispatchLifecycleEvent reports a runtime transition for a worker dispatch.
 type DispatchLifecycleEvent struct {
+	Source       string // Origin of progress; empty for lifecycle transitions
 	Dispatch     WorkerDispatch
 	Status       string
 	Message      string
@@ -191,7 +221,7 @@ func invokeDispatch(ctx context.Context, invoker WorkerInvoker, d WorkerDispatch
 			if status == "" {
 				return
 			}
-			emitDispatchLifecycle(observer, d, status, progress.Message, nil, nil)
+			emitDispatchLifecycle(observer, d, status, progress.Message, nil, nil, progress.Source)
 		})
 		dr := DispatchResult{
 			WorkerName: d.WorkerName,
@@ -307,11 +337,16 @@ func (r DispatchResult) String() string {
 	return fmt.Sprintf("[%s] %s", status, r.WorkerName)
 }
 
-func emitDispatchLifecycle(observer DispatchObserver, dispatch WorkerDispatch, status string, message string, workerResult *WorkerResult, err error) {
+func emitDispatchLifecycle(observer DispatchObserver, dispatch WorkerDispatch, status string, message string, workerResult *WorkerResult, err error, sources ...string) {
 	if observer == nil {
 		return
 	}
+	source := ""
+	if len(sources) > 0 {
+		source = sources[0]
+	}
 	observer(DispatchLifecycleEvent{
+		Source:       source,
 		Dispatch:     dispatch,
 		Status:       status,
 		Message:      strings.TrimSpace(message),

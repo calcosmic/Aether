@@ -33,7 +33,7 @@ Every worker handoff should include:
 - `commands_run`: commands executed and short outcomes.
 - `verification_status`: pass, fail, partial, or not run.
 - `known_failures`: failures that still exist.
-- `open_decisions`: choices the next worker or Queen must make.
+- `open_decisions`: choices the next worker or Queen must make. When you hit a preference or product judgement the project owner could answer, do not research around it or guess silently: record the question here, take the least-committal path, and note the assumption in `assumptions` — the owner is asked at the next boundary and answers come back as CLARIFIED INTENT.
 - `assumptions`: facts believed but not proven.
 - `next_worker_instructions`: bounded next action.
 - `do_not_repeat`: dead ends already tried.

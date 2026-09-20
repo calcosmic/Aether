@@ -9,7 +9,7 @@ import (
 
 // expectedContracts lists the lifecycle commands that must have contract documents.
 var expectedContracts = []string{
-	"init", "discuss", "colonize", "plan", "build", "continue",
+	"init", "spec", "discuss", "colonize", "plan", "build", "continue",
 	"seal", "entomb", "publish", "update", "recover", "status",
 	"history", "phase", "resume", "watch", "patrol", "profile",
 }

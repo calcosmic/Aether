@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-20T16:21:07.449515+00:00",
+  "phase": "204.2",
+  "phase_name": "codex-native-worker-lifecycle",
+  "phase_dir": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle",
+  "plan": 25,
+  "task": 2,
+  "total_tasks": 3,
+  "status": "paused",
+  "reason": "Owner budget/time concern and requested Claude transfer; do not auto-resume paid qualification.",
+  "source_commit": "96ff6f4535d90c9438cbc62d70f0b5b3784f39f3",
+  "completed_tasks": [
+    {
+      "name": "Reviewer bookkeeping attribution fix",
+      "status": "done",
+      "commit": "96ff6f45"
+    },
+    {
+      "name": "F19 focused24families normal/race",
+      "status": "done",
+      "pass_events_each": 1854
+    }
+  ],
+  "remaining_tasks": [
+    "Reassess scope/cost with owner before trials",
+    "Review/question and downstream Codex qualification remain incomplete"
+  ],
+  "blockers": [
+    {
+      "type": "human_action",
+      "description": "Owner wants cheaper scope/daily-driver path reassessed before further paid trials."
+    }
+  ],
+  "background_processes": [],
+  "stopped_runner": {
+    "session": 61470,
+    "pid": 34959,
+    "status": "closed",
+    "runs": {},
+    "error": "KeyboardInterrupt",
+    "summary_sha256": "216807150f93a0693e0d4c60451f00f5ffa96b81efb43250681de637362666d2"
+  },
+  "human_actions_pending": [],
+  "uncommitted_files": [
+    ".planning/phases/204.2-codex-native-worker-lifecycle/.continue-here.md",
+    ".planning/HANDOFF.json"
+  ],
+  "next_action": "Read handoff; propose cheapest practical Aether/Claude daily-use validation, not automatic Codex qualification resumption.",
+  "context_notes": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle/.continue-here.md",
+  "machine_inventory": "/Users/callumcowie/.aether-backups/phase204-2-collector/claude-handoff-current-20260920.json",
+  "temporary_protected_backup_metadata_files": 4,
+  "metadata_restoration_pending": true,
+  "commit_deferred_reason": "Avoid moving frozen source HEAD solely for handoff metadata and triggering more qualification work."
+}

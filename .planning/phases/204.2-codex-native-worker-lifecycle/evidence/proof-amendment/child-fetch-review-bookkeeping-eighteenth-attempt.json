@@ -1,0 +1,85 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-20T15:35:04.803868+00:00",
+  "attempt": 18,
+  "source_revision": "09c6841a6fa71a5428e6d55f667b3eacb71f6ff5",
+  "snapshot_revision": "44bdfe4d32fdd7826088ecfba37103c0e12a5a18",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-module-metadata-retry-eugtu8zb/summary.json",
+    "sha256": "sha256:183e3e1dda59b4f60e52073a6844cd61afa19eefd2bd0377763e2c4a81e60aaa"
+  },
+  "focused_result": {
+    "families": 24,
+    "pass_events_per_lane": 1805,
+    "named_passes_per_lane": 1804,
+    "fail": 0,
+    "skip": 0
+  },
+  "ordinary": {
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-copy-membership-retry-53kcyw8r/summary.json",
+      "sha256": "sha256:e4b95dc39014c545f55fd397984de52ef2f1f804cd0f7a12eb821ff66f199ae5"
+    },
+    "original_receipt": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-copy-membership-retry-53kcyw8r/capture/native-ordinary-2505455440/receipt.json",
+      "sha256": "sha256:85c06d416d412796ad44c870c26fc57ab75173cb88a5f68f5302511213a76472"
+    },
+    "derived_receipt": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-copy-membership-retry-53kcyw8r/derived-ordinary.json",
+      "sha256": "sha256:e1b58caa52d99cab4111250f3a0c69bac3c9f09039c9722686e53e9e92c27ca8"
+    },
+    "passed": true,
+    "live_seconds": 434.1238267500012,
+    "replay_seconds": 7.515946875006193
+  },
+  "review_question": {
+    "summary": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-review-question-v25-vfahoa0y/summary.json",
+      "sha256": "sha256:61c1d208175d60f29cd666b3bd6f4edc1b1f19c96a09c99d22a3aea42f5fc43a"
+    },
+    "original_receipt": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-review-question-v25-vfahoa0y/capture/native-review-2839938820/receipt.json",
+      "sha256": "sha256:28eaacaff0e4ed340dafd6e6ac0a26047f6f7dde0eaf1c5bb55a489ce6abae24"
+    },
+    "passed": false,
+    "review_outcome": "incomplete",
+    "question_executed": false,
+    "replays_executed": false,
+    "live_seconds": 867.189480541987,
+    "error": "actual review/question or strict independent replay incomplete; retain failed evidence and block dependent qualification"
+  },
+  "diagnosis": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/q25-review-diagnosis-p5e1xspa/diagnosis.json",
+    "sha256": "sha256:01f724f1e620cd909a951ca97b272ee477812c7d85a22e779fdd83ad49a30761"
+  },
+  "historical_setup_failures": {
+    "F17": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-output-presentation-repair-1idyd_ee/summary.json",
+      "sha256": "sha256:2cdf250a1483c9d0a8e98b7257139bf61e8a672c0cccf227c509ae9ad775ade2"
+    },
+    "L22": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-module-metadata-retry-wtott1lq/summary.json",
+      "sha256": "sha256:992c5eca706e58536b543b7736250ff1df652354039ddba1905580805850a553"
+    }
+  },
+  "temporary_metadata_protections": {
+    "module": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/module-finder-metadata-recovery-5eotn2r1/isolation-receipt.json",
+      "sha256": "sha256:25b9d41fbbfd797876fc711933032cfcde3227b2809e687a47444200c0e5b30e"
+    },
+    "snapshot": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/snapshot-metadata-recovery-0bexm_6g/recovery-receipt.json",
+      "sha256": "sha256:27d4d7161f1db28bb0e684d0a9babe0d8c73de81ad718624b646a63b01b8e084"
+    },
+    "restoration_required": "After all phase-owned cache and snapshot processes close, restore flags32768 on the three exact admitted files. Preserve module271a8fa4 bytes and restored snapshotbf33feb5 bytes; do not restore changed c53feaea bytes."
+  },
+  "prospective_repair": "Recognize exact prompted watcher ledger bookkeeping separately from source edits/test credit; bind candidate, child, cwd, domain, phase, worker and correlated results. Admit narrow inspection and zero-selection smoke forms without awarding test credit. Preserve original failure and require fresh qualification.",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "qualification_credit_from_diagnosis": false,
+  "latest_status_preservation": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/q25-status-update-preserved-d5ds6yxm/preservation.json",
+    "sha256": "sha256:0c175d1d67eee6a5d69ad21dbe29d9630c08242dd935cf8dd717e6182daeb358",
+    "reason": "Historical immutable refs bind main STATE and checkpoint bytes; updated current status is retained externally until final metadata transition. This uniquely named record records current progress."
+  }
+}

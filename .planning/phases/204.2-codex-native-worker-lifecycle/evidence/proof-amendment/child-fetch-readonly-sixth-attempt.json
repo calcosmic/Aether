@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T16:20:31.537608+00:00",
+  "scope": "Plan25 complete ACK syntax/EOF wrapper repair and sixth actual ordinary attempt; no plan completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "tested_source_commit": "7ab70e318e25d1431cacd32378095ea3ea7acf13",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/summary.json",
+    "sha256": "sha256:1f327e744cb40ee8b10524f55dead0545d6725b66cd0165c00ca65ddda65673a"
+  },
+  "focused_snapshot_revision": "cff17860b65e834f03c538eeb58bb876fb42bded",
+  "focused_runs": {
+    "normal-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 44.84522199630737,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/normal-cmd.stdout",
+        "sha256": "sha256:cbcb272b64962c2b3dd83cceea4abc8741f1239841367d528201639ac38bcd36"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "test_counts": {
+        "pass": 690,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": null
+      }
+    },
+    "race-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 70.04603695869446,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/race-cmd.stdout",
+        "sha256": "sha256:b9e5cd5aa51cc7ab65f697f05dfadbf2046468885a5c59a581c2b99a672fe6ca"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "test_counts": {
+        "pass": 690,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": null
+      }
+    }
+  },
+  "live_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/summary.json",
+    "sha256": "sha256:f953cc7f306614025a41c08c3c938fb9e6c6c2ed1dc418538b9e9a8e8fed6908"
+  },
+  "live_runner_review": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/activation-review.json",
+    "sha256": "sha256:b4025b208389a5f345beaff9f7c3859ed277856e33d30a7f051d5f907f1b68f1"
+  },
+  "live_runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 341.13714875000005,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/live.stdout",
+        "sha256": "sha256:1e086210ca27aafe3f5e8c96b319915de18e378bae7c196443ae0a5c322440fb"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof"
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-ack-command-repair-_6a6zv15/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 6.7319122919998335,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/replay.stdout",
+        "sha256": "sha256:3c47382d47fd08a735529552498ed8d601dd41b9438173da51bf75f15ff8446c"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof"
+      }
+    }
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/capture/native-ordinary-185903633/receipt.json",
+    "sha256": "sha256:52d32e53a37dba07610b5dd47e9fc3060e35c75d6ace412fd7195680b6a076a6"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/derived-ordinary.json",
+    "sha256": "sha256:dd540a801a8540466f82be40008abd37641d3c0c09327edd492f066629ccaa38"
+  },
+  "receipts": {
+    "original": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": true,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": false,
+      "runtime_credit_observed": false,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "rg --files",
+        "/bin/zsh -lc rg --files",
+        "sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short",
+        "/bin/zsh -lc sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short"
+      ],
+      "temporary_auth_removed": true
+    },
+    "derived": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": true,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": false,
+      "runtime_credit_observed": false,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "rg --files",
+        "/bin/zsh -lc rg --files",
+        "sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short",
+        "/bin/zsh -lc sed -n '1,240p' clamp.go; sed -n '1,280p' clamp_test.go; git status --short"
+      ],
+      "temporary_auth_removed": true
+    }
+  },
+  "diagnosis": "The Python runtime context decoder rejects the recorded EOF full-result wrappers without final semicolons before durable observation. Actual separate read and ACK succeeded in order; ack_validated appears in the independent command event, with no intervening tool. This is not an established ACK-order violation, and strict delivery qualification never passed. Secondary post-ACK Go classifier gaps are exact rg --files and one literal semicolon-separated readonly shell invocation. Parent correctly stopped without terminal/finalizer credit.",
+  "prior_outcomes_unchanged": true,
+  "next_actions": [
+    "Review actual recorded command/order and narrowly repair any proved parser gap.",
+    "Freeze source and run affected focused normal/race checks, then fresh ordinary plus strict replay.",
+    "Require all ordinary/review/question passes before current-source cancellation refusal recapture, Plan21 recovery, final eleven-case matrix and four regression runs."
+  ],
+  "child_source": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ack-command-repair-obzphqf3/capture/native-ordinary-185903633/home/.codex/sessions/2026/09/19/rollout-2026-09-19T18-16-11-01a0ba74-301d-77d0-94db-28c3e72206f3.jsonl",
+    "sha256": "sha256:279c140fe12c5967a87a13ffc1a6656f4b712f57ae45f077dc23a4ce2db0c83b"
+  },
+  "source_mapping": {
+    "read": {
+      "call_line": 24,
+      "command_event_line": 26,
+      "output_line": 27
+    },
+    "ack": {
+      "call_line": 31,
+      "command_event_line": 33,
+      "output_line": 34,
+      "runtime_status": "ack_validated"
+    },
+    "first_post_ack_tool_line": 40,
+    "listing_command_event_line": 42,
+    "semicolon_chain_command_event_line": 47,
+    "semicolon_chain_is_one_invocation": true,
+    "wrapper": "const r = await tools.exec_command({...}); text(r) followed by newline/EOF",
+    "strict_delivery_qualified": false
+  }
+}

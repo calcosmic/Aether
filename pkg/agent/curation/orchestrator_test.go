@@ -342,8 +342,8 @@ func TestNurseReconcilesTypedInstinctMetadata(t *testing.T) {
 					CreatedAt:        "2026-04-01T10:00:00Z",
 					ApplicationCount: 0,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": now, "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: now, Outcome: "helpful"},
 				},
 			},
 		},

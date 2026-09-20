@@ -9,11 +9,10 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// TestOneMiddenEntryReachesAllFourConsumers proves, by direct execution (not
+// TestOneMiddenEntryReachesRuntimeConsumers proves, by direct execution (not
 // by reading code), that a single appendMiddenEntry write is visible through
-// every ROADMAP-named consumer: autopilot's pause-condition check,
-// colony-prime's context-capsule path, memory-health's failure count, and
-// immune's auto-scar detector.
+// the retained runtime consumers: colony-prime's context-capsule path,
+// memory-health's failure count, and immune's auto-scar detector.
 //
 // A note on "colony-prime's context capsule": 188-01-PLAN.md's own interface
 // notes cited cmd/context.go's buildContextCapsuleOutput() as this consumer.
@@ -45,7 +44,7 @@ import (
 // REAL path. This test is kept unchanged: pr-context's own midden section is
 // still real, live-adjacent (used by CI's TestIntegrationPRContext), and
 // worth continued regression coverage in its own right.
-func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
+func TestOneMiddenEntryReachesRuntimeConsumers(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	setupHubDir(t)
@@ -57,8 +56,8 @@ func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 	store = s
 
-	// Minimal colony state: good enough for checkAutopilotPauseConditions and
-	// pr-context to run without erroring, not a full build/continue fixture.
+	// Minimal colony state: good enough for pr-context to run without erroring,
+	// not a full build/continue fixture.
 	goal := "midden unification test"
 	state := colony.ColonyState{
 		Version:      "1.0",
@@ -80,13 +79,7 @@ func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
 		t.Fatalf("appendMiddenEntry: %v", err)
 	}
 
-	// 1. autopilot's own pause-condition check.
-	if reason := checkAutopilotPauseConditions(); reason != "critical_chaos_findings" {
-		t.Errorf("[autopilot regressed] checkAutopilotPauseConditions() = %q, want %q -- autopilot did not see the entry written through appendMiddenEntry",
-			reason, "critical_chaos_findings")
-	}
-
-	// 2. colony-prime's context-capsule path (the real `pr-context` command;
+	// 1. colony-prime's context-capsule path (the real `pr-context` command;
 	// see the function-level doc comment above for why this is the correct
 	// target instead of buildContextCapsuleOutput).
 	rootCmd.SetArgs([]string{"pr-context"})
@@ -118,14 +111,14 @@ func TestOneMiddenEntryReachesAllFourConsumers(t *testing.T) {
 		t.Errorf("[context-capsule regressed] midden.items = %v, want an item containing %q", items, wantMessage)
 	}
 
-	// 3. memory-health's failure count.
+	// 2. memory-health's failure count.
 	summary := loadMemoryHealthSummary(s)
 	if summary.RecentFailures < 1 {
 		t.Errorf("[memory-health regressed] loadMemoryHealthSummary(s).RecentFailures = %d, want >= 1 -- memory-health did not see the entry written through appendMiddenEntry",
 			summary.RecentFailures)
 	}
 
-	// 4. immune's auto-scar detector -- also proves the entry.Message field
+	// 3. immune's auto-scar detector -- also proves the entry.Message field
 	// (not the nonexistent entry["description"]) is now readable.
 	buf.Reset()
 	rootCmd.SetArgs([]string{"immune-auto-scar"})

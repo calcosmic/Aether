@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -194,6 +195,20 @@ func renderVisualError(message string, details interface{}) string {
 	return b.String()
 }
 
+// surveyDigestBudgetChars bounds the whole condensed codebase-map digest
+// (resolveSurveyDigestSection). This is its OWN allowance, deliberately kept
+// outside colonyPrimeBudgetChars / colonyPrimeCompactBudgetChars
+// (cmd/colony_prime_context.go) so no lesson, rule or failure the memory pack
+// carries is ever displaced to make room for the map (D-01). Same
+// separate-budget precedent as the 8K skill-injection budget and
+// colonyResearchBuildBudgetChars.
+const surveyDigestBudgetChars = 2000
+
+// surveyDigestPerReportChars caps how much of any single survey report's
+// condensed body enters the digest, so one long report cannot consume the
+// entire digest budget and crowd out the others.
+const surveyDigestPerReportChars = 400
+
 // resolveSurveySection reads available survey artifacts from .aether/data/survey/
 // and returns a markdown section summarizing them. Returns empty string if no
 // survey data exists or if the store is not initialized.
@@ -240,4 +255,141 @@ func resolveSurveySection() string {
 		b.WriteString(fmt.Sprintf("- .aether/data/survey/%s\n", f))
 	}
 	return b.String()
+}
+
+// resolveSurveyDigestSection condenses the survey reports under
+// .aether/data/survey/ into a small, bounded, age-labelled digest a prompt
+// can carry as actual content -- not just the filename list resolveSurveySection
+// already renders (WIRE-03). A helper handed a filename has to go and read
+// it, or guess; a helper handed the content does not.
+//
+// Condensation is a plain read-and-truncate over the files on disk -- never a
+// model call -- following resolveColonyResearchSection's exact
+// bounded-content-with-omission loop shape (cmd/colony_research.go): a
+// running total against surveyDigestBudgetChars, a per-report cap
+// (surveyDigestPerReportChars), a named "not included" list for reports that
+// did not fit, and a truncation notice at a paragraph boundary rather than a
+// silent cut. This makes the digest deterministic (same files, same bytes,
+// every run) and makes deleting a report provably change the digest, because
+// there is no rescan of the repository anywhere in this path -- only these
+// named files.
+//
+// The digest is headed by surveyStalenessNotice() whenever the map is old
+// enough for one (D-02), followed by a plain-English guidance line: file
+// paths in the map can be trusted, claims about behaviour should be checked
+// against the code. A map that is very old is still sent, headed by that
+// notice -- never silently dropped past a cutoff.
+//
+// Every condensed report body is sanitized with colony.SanitizeSignalContent
+// before it enters the digest -- survey reports are helper-authored and are
+// being replayed verbatim into three later worker prompts (T-198.2-18,
+// cmd/memory_feed.go's established rule for worker-authored text). A report
+// whose condensed body the sanitizer rejects is named in the omission list
+// rather than silently dropped, matching the omission handling for reports
+// that did not fit the budget.
+//
+// Returns "" when no survey reports exist, so a colony that has never been
+// surveyed gets a byte-identical brief to before this digest existed
+// (TestNoSurveyMeansNoDigest, TestBriefsAreUnchangedWithoutASurvey).
+func resolveSurveyDigestSection() string {
+	if store == nil {
+		return ""
+	}
+	surveyDir := filepath.Join(store.BasePath(), "survey")
+	entries, err := os.ReadDir(surveyDir)
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".md") {
+			files = append(files, entry.Name())
+		}
+	}
+	if len(files) == 0 {
+		return ""
+	}
+	sort.Strings(files)
+
+	var body strings.Builder
+	used := 0
+	omitted := make([]string, 0, len(files))
+
+	for _, name := range files {
+		data, readErr := os.ReadFile(filepath.Join(surveyDir, name))
+		if readErr != nil {
+			omitted = append(omitted, fmt.Sprintf("%s (unreadable)", name))
+			continue
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" {
+			continue
+		}
+		remaining := surveyDigestBudgetChars - used
+		if remaining <= 0 {
+			omitted = append(omitted, name)
+			continue
+		}
+		budget := surveyDigestPerReportChars
+		if budget > remaining {
+			budget = remaining
+		}
+		// contributed tracks the report's own body length toward `used` --
+		// never the truncation notice suffix below, which is bookkeeping
+		// text, not report content (WR-03: counting it against the digest
+		// budget understated how much budget later reports actually had
+		// left).
+		contributed := len(content)
+		if len(content) > budget {
+			notice := fmt.Sprintf("\n\n_(truncated — full report: .aether/data/survey/%s)_", name)
+			// Reserve the notice's own length from budget before slicing
+			// content, so the truncated body plus its notice never exceeds
+			// `budget` (WR-02: without this, a per-report cut that
+			// correctly fit surveyDigestPerReportChars could still land
+			// over colony.SanitizeSignalContent's unrelated 500-char
+			// ceiling once the notice was appended, and get rejected
+			// outright instead of truncated).
+			cutBudget := budget - len(notice)
+			if cutBudget <= 0 {
+				// Not even the notice fits inside this report's remaining
+				// budget -- name it as an omission rather than emit a
+				// truncated fragment with no notice, or a negative slice.
+				omitted = append(omitted, name)
+				continue
+			}
+			cut := content[:cutBudget]
+			if idx := strings.LastIndex(cut, "\n\n"); idx > cutBudget/2 {
+				cut = cut[:idx]
+			}
+			contributed = len(cut)
+			content = cut + notice
+		}
+		sanitized, sanErr := colony.SanitizeSignalContent(content)
+		if sanErr != nil {
+			omitted = append(omitted, fmt.Sprintf("%s (content rejected: %v)", name, sanErr))
+			continue
+		}
+		fmt.Fprintf(&body, "### %s\n\n%s\n\n", name, sanitized)
+		used += contributed
+	}
+
+	if body.Len() == 0 && len(omitted) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("### Codebase Map Digest\n\n")
+	if notice := surveyStalenessNotice(); notice != "" {
+		b.WriteString(notice)
+	}
+	b.WriteString("File paths in this digest can be trusted; claims about how the code behaves should be checked against the code itself.\n\n")
+	b.WriteString(body.String())
+	if len(omitted) > 0 {
+		fmt.Fprintf(&b, "_Not included here (over budget or rejected) — read the full report directly if relevant: %s_\n", strings.Join(omitted, ", "))
+	}
+	return strings.TrimSpace(b.String())
 }

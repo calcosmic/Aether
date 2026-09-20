@@ -119,7 +119,7 @@ func hasWorkerAuthoredResearch(path string) bool {
 
 // renderPhaseResearchBrief is the v5 Phase Domain Research mission, rebuilt on
 // the modern engine: the Scout investigates one phase's domain and writes a
-// six-section RESEARCH.md the planner and build briefs both consume.
+// five-section RESEARCH.md the planner and build briefs both consume.
 func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidate, survey codexSurveyContext) string {
 	var b strings.Builder
 	b.WriteString("You are a Scout performing Phase Domain Research.\n\n")
@@ -131,11 +131,36 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 	}
 	b.WriteString("\n## Territory Survey\n")
 	b.WriteString(renderPhaseResearchSurveySection(survey))
+	// The condensed map digest (WIRE-03): the same content the build and
+	// planning briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief. No age-line dedup needed here --
+	// renderPhaseResearchSurveySection never renders surveyStalenessNotice(),
+	// so the digest is its only source. Guarded by its own empty-string check
+	// so a colony with no survey reports produces a byte-identical research
+	// brief to before this digest existed (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
+		b.WriteString("\n")
+		b.WriteString(digestSection)
+		b.WriteString("\n")
+	}
 	// Research the operator already had done. Findings it already covers add
 	// no value if rediscovered here — extend it instead.
 	if colonyResearch := resolveColonyResearchSection(root, loadColonyResearchDocs(root)); colonyResearch != "" {
 		b.WriteString("\n")
 		b.WriteString(colonyResearch)
+		b.WriteString("\n")
+	}
+	// Shared cross-project lessons (WIRE-02, D-04): the same top-5 selection
+	// every other worker gets, from the one existing selection rule (see
+	// resolveResearchSharedLessonsSection's own doc comment below for the
+	// exact call it reuses, cmd/colony_prime_context.go:693-719). No second
+	// selection rule, no research-specific limit, no research-specific
+	// domain source. Honours AETHER_HIVE_POLICY exactly as that call does;
+	// omitted entirely when there is nothing to show (D-16) rather than
+	// rendered with a stand-in sentence.
+	if sharedLessons := resolveResearchSharedLessonsSection(root); sharedLessons != "" {
+		b.WriteString("\n")
+		b.WriteString(sharedLessons)
 		b.WriteString("\n")
 	}
 	b.WriteString("\n## Research Areas\n")
@@ -148,18 +173,55 @@ func renderPhaseResearchBrief(root, goal string, candidate phaseResearchCandidat
 	b.WriteString("- Total output under 3000 words; prioritize actionable guidance over exhaustive documentation\n")
 	b.WriteString("- Cite a file path or URL for every pattern and gotcha\n")
 	b.WriteString("\n## Output\n")
-	b.WriteString(fmt.Sprintf("Write your findings to `.aether/data/phase-research/phase-%d-research.md` with exactly these six sections:\n\n", candidate.ID))
+	b.WriteString(fmt.Sprintf("Write your findings to `.aether/data/phase-research/phase-%d-research.md` with exactly these five sections:\n\n", candidate.ID))
 	b.WriteString(fmt.Sprintf("```markdown\n# Phase %d Research: %s\n\n", candidate.ID, firstNonEmpty(candidate.Name, "unnamed phase")))
 	b.WriteString("**Generated:** {ISO-8601 timestamp}\n")
 	b.WriteString(fmt.Sprintf("**Phase:** %d - %s\n", candidate.ID, firstNonEmpty(candidate.Name, "unnamed phase")))
 	b.WriteString("**Research scope:** {one line on what was investigated}\n\n")
-	b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n{relevant prior wisdom, or \"No relevant hive wisdom found\"}\n\n")
 	b.WriteString("## Key Patterns\n{**pattern:** relevance (Source: path or URL)}\n\n")
 	b.WriteString("## External Context\n{**topic:** finding (Source: URL), or \"No external research needed for this phase\"}\n\n")
 	b.WriteString("## Gotchas\n{**issue:** prevention (Source: evidence)}\n\n")
 	b.WriteString("## Recommended Approach\n{one synthesis paragraph}\n\n")
 	b.WriteString("## Files to Study\n{bullet list of file paths}\n```\n")
 	return b.String()
+}
+
+// resolveResearchSharedLessonsSection reads the same top-5 cross-project
+// hive-wisdom entries every other worker gets (WIRE-02, D-04) by calling the
+// one existing selection rule already used by the memory pack (limit 5,
+// plus buildHiveWisdomLines, cmd/colony_prime_context.go:693-719) below --
+// and renders them for the research brief. There is no second selection
+// rule here: same function, same literal limit, same domain source. root is
+// the colony's repository root, resolved into domain tags via the hub
+// registry exactly as the memory pack resolves them from store.BasePath().
+// Honours AETHER_HIVE_POLICY exactly as every other hive read does -- that
+// call checks automaticHiveReadEnabled() internally, so policy=off yields
+// no entries here just as it does for the memory pack. Returns "" when
+// there is nothing to show -- empty hub store, unmatched domain, or the
+// switch off -- so the caller omits the whole section (D-16, no empty
+// sections) instead of rendering a heading with nothing under it.
+func resolveResearchSharedLessonsSection(root string) string {
+	hubDir := resolveHubPath()
+	var fallbacks []string
+	entries := readHiveWisdomEntriesForDomains(hubDir, 5, readRegistryDomainsForRepo(hubDir, root), &fallbacks)
+	// Surface withheld-wisdom reasons on stderr rather than swallowing them,
+	// mirroring how the memory pack surfaces the identical fallbacks via
+	// result.Warnings (cmd/colony_prime_context.go:701) -- this function has
+	// no result struct of its own to append into, so stderr is the
+	// equivalent "don't discard silently" channel available here.
+	for _, fallback := range fallbacks {
+		fmt.Fprintln(os.Stderr, fallback)
+	}
+	lines := buildHiveWisdomLines(entries)
+	if len(lines) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Shared Lessons (Cross-Colony Patterns)\n\n")
+	for _, line := range lines {
+		sb.WriteString(fmt.Sprintf("- %s\n", line))
+	}
+	return sb.String()
 }
 
 // renderPhaseResearchSurveySection mirrors the survey-injection shape

@@ -224,7 +224,7 @@ Display persistence confirmation:
 ---
 All state persisted. Safe to /clear context if needed.
   Report: .aether/data/hygiene-report.md
-  Resume: /ant-resume-colony
+  Resume: /ant-resume
 ```
 
 ### Step 7: Next Up

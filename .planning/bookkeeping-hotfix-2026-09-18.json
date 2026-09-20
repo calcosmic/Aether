@@ -1,0 +1,28 @@
+{
+  "version": "1.0.81",
+  "channel": "stable",
+  "source_revision": "b37b22e39e012215a32423cf61354f2fb8f7ac20",
+  "main_source_revision": "4f11bebfb8b698e1be986422bcb75b4a3ab0759b",
+  "source_path": "/private/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-routing-hotfix-bvhesw_b/source",
+  "binary": "/Users/callumcowie/.local/bin/aether",
+  "binary_sha256": "b37f56f6f5c9800483df8e6ea702b5002c9bee7eaff0300bc02830b8b96479f3",
+  "tests": {
+    "normal": 46,
+    "race": 46,
+    "final_brief_snapshot_controls": "normal and race passed",
+    "saved_calvault_replay": "passed",
+    "installed_integrity": "5/5",
+    "disposable_publish_setup_update": "passed",
+    "installed_disposable_setup_update": "passed"
+  },
+  "qualification": "gaps_found; required host evidence remains unavailable on 0.155.0",
+  "public_release": false,
+  "evidence_root": "/Users/callumcowie/.aether-backups/calvault-bookkeeping-resume-20260918",
+  "rollback": "/Users/callumcowie/.aether-backups/calvault-bookkeeping-resume-20260918/rollback/manifest.json",
+  "calvault": {
+    "reviewer": "passed",
+    "phase": 1,
+    "state": "BUILT",
+    "remaining_blocker": "Accepted plan still requires appearance-preview.png; owner scope clarification exists in restoration notes and FOCUS but the accepted criterion is unchanged."
+  }
+}

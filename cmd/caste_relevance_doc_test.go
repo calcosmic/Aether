@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -30,6 +31,11 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 		want  []string
 	}{
 		{
+			// Plan 194-02 (D-07): the build floor shrank to the builder
+			// alone -- watcher, probe, auditor and gatekeeper are no longer
+			// inferred from mode, position or blast-radius wording at build.
+			// A reviewer is now forced only by a named risk signal
+			// (queen_risk_signals.go), and only at the continue step (D-05).
 			flow: "build",
 			phase: colony.Phase{
 				Name: "Security hardening",
@@ -39,8 +45,14 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				},
 			},
 			state: colony.ColonyState{},
-			want:  []string{"builder", "watcher", "probe", "auditor", "gatekeeper"},
+			want:  []string{"builder"},
 		},
+		// Plan 194-05 (D-13): light and standard continue require NOTHING
+		// unconditionally any more -- Watcher's and Probe's unconditional
+		// membership here is gone, along with the build-side floor 194-02
+		// already removed. Heavy remains the owner's explicit ask for the
+		// full review panel; Watcher is no longer part of that panel
+		// either, so only gatekeeper/auditor/probe are asserted.
 		{
 			flow: "continue",
 			phase: colony.Phase{
@@ -48,7 +60,7 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				Mode: colony.PhaseModePrototype,
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthLight)},
-			want:  []string{"watcher"},
+			want:  []string{},
 		},
 		{
 			flow: "continue",
@@ -57,16 +69,19 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				Mode: colony.PhaseModePrototype,
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)},
-			want:  []string{"watcher", "probe"},
+			want:  []string{},
 		},
 		{
 			flow: "continue",
 			phase: colony.Phase{
 				Name: "Test phase",
 				Mode: colony.PhaseModePrototype,
+				Tasks: []colony.Task{
+					{Goal: "Implement the change"},
+				},
 			},
 			state: colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)},
-			want:  []string{"watcher", "gatekeeper", "auditor", "probe"},
+			want:  []string{"gatekeeper", "auditor", "probe"},
 		},
 		{
 			flow: "plan",
@@ -96,7 +111,7 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 				},
 			},
 			state: colony.ColonyState{},
-			want:  []string{"tracker", "scout", "archaeologist", "builder", "watcher"},
+			want:  []string{"tracker", "builder", "watcher"},
 		},
 		{
 			flow: "seal",
@@ -144,6 +159,114 @@ func TestCasteRelevanceDoc_ReferencesAllAlwaysRequiredCastes(t *testing.T) {
 			if !strings.Contains(content, caste) {
 				t.Errorf("doc missing mention of caste %q (always-required for %s flow)", caste, tc.flow)
 			}
+		}
+	}
+}
+
+// TestCasteRelevanceDoc_ContinueFloorsMatchPolicy prevents the authoritative
+// playbook from drifting back to the retired Watcher/Probe floor. Unlike the
+// broad mention check above, this assertion binds each verification depth to
+// its exact required-caste set and records Probe's heavy-depth condition.
+func TestCasteRelevanceDoc_ContinueFloorsMatchPolicy(t *testing.T) {
+	docPath := "../.aether/docs/command-playbooks/caste-relevance-reference.md"
+	contentBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", docPath, err)
+	}
+
+	sectionStart := strings.Index(string(contentBytes), "### Continue")
+	sectionEnd := strings.Index(string(contentBytes), "### Plan")
+	if sectionStart < 0 || sectionEnd <= sectionStart {
+		t.Fatalf("could not isolate the Continue policy table in %s", docPath)
+	}
+	continueSection := string(contentBytes)[sectionStart:sectionEnd]
+
+	testablePhase := colony.Phase{
+		Name:  "Implementation phase",
+		Mode:  colony.PhaseModePrototype,
+		Tasks: []colony.Task{{Goal: "Implement the change"}},
+	}
+	cases := []struct {
+		depth colony.VerificationDepth
+		phase colony.Phase
+		want  []string
+		row   string
+	}{
+		{colony.VerificationDepthLight, testablePhase, nil, "| light | None |"},
+		{colony.VerificationDepthStandard, testablePhase, nil, "| standard | None |"},
+		{colony.VerificationDepthHeavy, testablePhase, []string{"auditor", "gatekeeper", "probe"}, "| heavy | `gatekeeper`, `auditor`; plus `probe` only when the phase produces testable code |"},
+		{colony.VerificationDepthHeavy, colony.Phase{Name: "Documentation phase", Mode: colony.PhaseModeMaintenance}, []string{"auditor", "gatekeeper"}, "| heavy | `gatekeeper`, `auditor`; plus `probe` only when the phase produces testable code |"},
+	}
+	for _, tc := range cases {
+		got := queenRequiredCastesForBudget(tc.phase, "continue", colony.ColonyState{VerificationDepth: string(tc.depth)})
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("continue %s required castes = %v, want exact set %v", tc.depth, got, tc.want)
+		}
+		if !strings.Contains(continueSection, tc.row) {
+			t.Errorf("documented continue %s row does not match shipped policy; want %q", tc.depth, tc.row)
+		}
+	}
+}
+
+// TestCasteRelevanceDoc_RegistryAndGatedFallbackMatchPolicy binds the prose
+// surrounding the floor table to the live Phase 194 policy. It catches the
+// deleted production/high-risk special rules, registry keyword drift, and the
+// crucial fact that build/continue scores diagnose proposals but do not select
+// the unattended team.
+func TestCasteRelevanceDoc_RegistryAndGatedFallbackMatchPolicy(t *testing.T) {
+	const docPath = "../.aether/docs/command-playbooks/caste-relevance-reference.md"
+	contentBytes, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", docPath, err)
+	}
+	content := string(contentBytes)
+
+	auditor := findProfile("auditor")
+	if auditor == nil || len(auditor.Conditions) != 0 {
+		t.Fatalf("fixture drift: auditor must have no production-only condition, got %+v", auditor)
+	}
+	chronicler := findProfile("chronicler")
+	if chronicler == nil || !hasCasteName(chronicler.Keywords, "document") {
+		t.Fatalf("fixture drift: chronicler must use the live document keyword, got %+v", chronicler)
+	}
+	for _, profile := range []CasteRelevanceProfile{*auditor, *chronicler} {
+		wantRow := fmt.Sprintf("| %s | %d | %s |", profile.Caste, profile.BaseScore, strings.Join(profile.Keywords, ", "))
+		if !strings.Contains(content, wantRow) {
+			t.Errorf("registry row for %s does not match live code; want %q", profile.Caste, wantRow)
+		}
+	}
+
+	if !queenSelectorIsGatedForFlow("build") || !queenSelectorIsGatedForFlow("continue") {
+		t.Fatal("fixture drift: build and continue must use the gated no-proposal selector")
+	}
+	phase := colony.Phase{
+		Name:        "Password reset verification",
+		Description: "Implement and test login session security",
+		Mode:        colony.PhaseModeProduction,
+		Tasks:       []colony.Task{{Goal: "Implement and test the password reset"}},
+	}
+	build := casteNames(queenOrchestrate(phase, "build", colony.ColonyState{}))
+	if strings.Join(build, ",") != "builder" {
+		t.Fatalf("fixture drift: no-proposal build team = %v, want required-only builder fallback", build)
+	}
+
+	for _, claim := range []string{
+		"For build and continue, thresholds are refusal diagnostics and candidate context only; they do not select the no-proposal team.",
+		"Watcher and Probe can appear at build only through an explicit proposal with a per-worker reason that passes the relevance and testability refusal gates.",
+		"The only 100-point special rules left are Builder for implementation tasks, Architect for high-risk design work, and Oracle for discovery mode.",
+	} {
+		if !strings.Contains(content, claim) {
+			t.Errorf("reference is missing gated-policy claim %q", claim)
+		}
+	}
+	for _, retired := range []string{
+		"quality gate (production only)",
+		"gatekeeper (high risk), and auditor (production)",
+		"Lower bar; Queen filters later via budget",
+		"appear at build through genuine relevance scoring",
+	} {
+		if strings.Contains(content, retired) {
+			t.Errorf("reference still contains retired policy %q", retired)
 		}
 	}
 }

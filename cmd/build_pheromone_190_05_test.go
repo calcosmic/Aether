@@ -286,7 +286,7 @@ func runContinueReviewCase190_05(t *testing.T, sentinel string) steeringResult19
 	seedActiveSignal190_05(t, sentinel)
 
 	invoker := &codex.FakeInvoker{}
-	dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy)
+	dispatches := plannedContinueReviewDispatches(root, phase, codexContinueManifest{}, codexContinueVerificationReport{}, codexContinueAssessment{}, invoker, 0, colony.VerificationDepthHeavy, nil, "")
 	if len(dispatches) == 0 {
 		t.Fatal("fixture broken: expected non-empty continue review dispatches at heavy depth")
 	}

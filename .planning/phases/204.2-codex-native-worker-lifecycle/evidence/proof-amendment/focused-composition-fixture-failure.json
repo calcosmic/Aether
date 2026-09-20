@@ -1,0 +1,89 @@
+{
+  "cache_handoff": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/composition-retry-handoff.json",
+    "sha256": "sha256:f30e0df733077e4acb3807c3e30085b205f47eb6ae0953e872d86606aa45704f"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/config.READY.json",
+    "sha256": "sha256:29473d8a8c55173442a5fa900d07e6fc0ca9724b416e5b4a33030c48d2b7454b"
+  },
+  "diagnosis": "The parent-coordination output-exit fixture supplied CommandExecution output under output, but nativeHostEvent decodes aggregated_output. The verifier therefore compared empty decoded stdout to the printed actual output text and correctly rejected it. The quoted-argv correction passed.",
+  "focused_failure_regraded": false,
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/summary.json",
+    "sha256": "sha256:c3054a3636e2d92b2acf3860f9b7ea4236e3192f2b3eb8e784e2a21173d37dc4"
+  },
+  "history_preserved": true,
+  "next_required": "Review and freeze the corrected fixture plus this record, then admit a fresh same-24-family normal/race run before any live trial.",
+  "normal": {
+    "argv": [
+      "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "./cmd",
+      "-run",
+      "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+      "-parallel",
+      "1",
+      "-count=1",
+      "-timeout",
+      "600s",
+      "-json"
+    ],
+    "bound_seconds": 900,
+    "cleanup": {
+      "errors": [],
+      "observed_pids": [],
+      "observed_zombie_pids": [],
+      "process_group": 84742,
+      "reaped_pids": [
+        84742
+      ],
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": []
+    },
+    "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/repo",
+    "elapsed_seconds": 47.00176811218262,
+    "exit_code": 1,
+    "started_epoch": 1789853811.5736508,
+    "stderr": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/normal-cmd.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/normal-cmd.stdout",
+      "sha256": "sha256:05467f245ef3c184c6ffe1e9e5ec4c3ab57a2425c9930d79ba2df193942b5d85"
+    },
+    "stopped_reason": null
+  },
+  "phase_complete": false,
+  "race": "not_run_after_normal_failure",
+  "raw_failed_terminals": [
+    "TestCodexNativeGapParentCoordination/output-exit/valid",
+    "TestCodexNativeGapParentCoordination/output-exit/file_uri",
+    "TestCodexNativeGapParentCoordination/output-exit/actual_command_failure",
+    "TestCodexNativeGapParentCoordination",
+    null
+  ],
+  "recorded_at": "2026-09-19T21:40:23.877412+00:00",
+  "repair_scope": "Correct the fixture field to aggregated_output; retain the wrong field as an explicit negative case. No parser, runtime, context or proof acceptance change.",
+  "requirements_completed": [],
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/run-focused-composition-retry.PENDING.py",
+    "sha256": "sha256:ec58d76701c3de2149ef296a0ad6f8a3ee951b8150e3985ea0e8968fd414bf49"
+  },
+  "schema_version": "aether-native-focused-failure-record/v1",
+  "snapshot_provenance": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-composition-retry-zoriotc6/snapshot-provenance.json",
+    "sha256": "sha256:b9f81354289a35cc9a341ecaeecf6895a99348e7e5548aac184cce367f763947"
+  },
+  "snapshot_revision": "d206fdab910a6c71d9716c18b705d2995926d2c7",
+  "source_revision": "e472d9574cb9fd002843f8d9a211154123741e74",
+  "status": "failed",
+  "terminal_counts": {
+    "fail": 4,
+    "pass": 1214
+  }
+}

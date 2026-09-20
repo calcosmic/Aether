@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
+	"github.com/spf13/cobra"
 )
 
 // --- state-checkpoint tests ---
@@ -551,6 +555,290 @@ func TestPhaseInsertMissingRequiredFlagsFailLoudly(t *testing.T) {
 	}
 }
 
+type scriptedPhaseInsertPrompt struct {
+	interactive bool
+	answers     []string
+	questions   []string
+}
+
+func (p *scriptedPhaseInsertPrompt) Interactive() bool {
+	return p.interactive
+}
+
+func (p *scriptedPhaseInsertPrompt) Ask(question string) (string, error) {
+	p.questions = append(p.questions, question)
+	if len(p.answers) == 0 {
+		return "", nil
+	}
+	answer := p.answers[0]
+	p.answers = p.answers[1:]
+	return answer, nil
+}
+
+func seedGuidedPhaseInsertState(t *testing.T, s interface {
+	SaveJSON(string, interface{}) error
+}, currentPhase int) {
+	t.Helper()
+	goal := "test"
+	state := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: currentPhase,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseCompleted, Tasks: []colony.Task{}},
+				{ID: 2, Name: "Phase 2", Status: colony.PhaseReady, Tasks: []colony.Task{}},
+				{ID: 3, Name: "Phase 3", Status: colony.PhasePending, Tasks: []colony.Task{}},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+}
+
+func executeGuidedPhaseInsert(t *testing.T, args []string, prompt phaseInsertPromptSession) (map[string]interface{}, colony.ColonyState) {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	seedGuidedPhaseInsertState(t, s, 2)
+
+	originalFactory := phaseInsertPromptSessionFactory
+	phaseInsertPromptSessionFactory = func(*cobra.Command) phaseInsertPromptSession { return prompt }
+	t.Cleanup(func() { phaseInsertPromptSessionFactory = originalFactory })
+
+	rootCmd.SetArgs(args)
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute %v: %v\n%s", args, err, buf.String())
+	}
+
+	env := parseEnvelope(t, strings.TrimSpace(buf.String()))
+	if env["ok"] != true {
+		t.Fatalf("execute %v returned ok=%v: %s", args, env["ok"], buf.String())
+	}
+	result, ok := env["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("execute %v result = %T, want object: %s", args, env["result"], buf.String())
+	}
+
+	var updated colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &updated); err != nil {
+		t.Fatalf("load updated state: %v", err)
+	}
+	return result, updated
+}
+
+func TestGuidedInsertPhaseResolvesExplicitAndShorthandInput(t *testing.T) {
+	nonInteractive := &scriptedPhaseInsertPrompt{interactive: false}
+	tests := []struct {
+		name            string
+		args            []string
+		wantAfter       int
+		wantName        string
+		wantDescription string
+	}{
+		{
+			name:            "existing explicit automation remains compatible",
+			args:            []string{"phase-insert", "--after", "1", "--name", "Fix auth", "--description", "Repair token persistence"},
+			wantAfter:       1,
+			wantName:        "Fix auth",
+			wantDescription: "Repair token persistence",
+		},
+		{
+			name:            "one issue sentence defaults after to current phase",
+			args:            []string{"insert-phase", "login retries lose state"},
+			wantAfter:       2,
+			wantName:        "Stabilize login retries lose state",
+			wantDescription: "login retries lose state",
+		},
+		{
+			name:            "explicit flags override issue-derived fields",
+			args:            []string{"insert-phase", "login retries lose state", "--after", "1", "--name", "Repair sessions", "--description", "Keep retries idempotent"},
+			wantAfter:       1,
+			wantName:        "Repair sessions",
+			wantDescription: "Keep retries idempotent",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, updated := executeGuidedPhaseInsert(t, tc.args, nonInteractive)
+			if got := int(result["after"].(float64)); got != tc.wantAfter {
+				t.Fatalf("after = %d, want %d", got, tc.wantAfter)
+			}
+			insertAt := tc.wantAfter
+			if got := updated.Plan.Phases[insertAt].Name; got != tc.wantName {
+				t.Errorf("inserted name = %q, want %q", got, tc.wantName)
+			}
+			if got := updated.Plan.Phases[insertAt].Description; got != tc.wantDescription {
+				t.Errorf("inserted description = %q, want %q", got, tc.wantDescription)
+			}
+		})
+	}
+}
+
+func TestGuidedInsertPhaseBoundsDerivedNameAndRetainsConstraints(t *testing.T) {
+	issue := "the login retry flow repeatedly loses session state during provider outages and reconnects"
+	_, updated := executeGuidedPhaseInsert(t, []string{
+		"insert-phase", issue,
+		"--constraints", "Do not change the authentication provider",
+	}, &scriptedPhaseInsertPrompt{interactive: false})
+
+	inserted := updated.Plan.Phases[2]
+	if !strings.HasPrefix(inserted.Name, "Stabilize ") {
+		t.Fatalf("derived name = %q, want Stabilize prefix", inserted.Name)
+	}
+	if words := len(strings.Fields(inserted.Name)); words > 7 {
+		t.Fatalf("derived name has %d words, want at most 7: %q", words, inserted.Name)
+	}
+	if len(inserted.Name) > 80 {
+		t.Fatalf("derived name has %d bytes, want at most 80: %q", len(inserted.Name), inserted.Name)
+	}
+	for _, want := range []string{issue, "Do not change the authentication provider"} {
+		if !strings.Contains(inserted.Description, want) {
+			t.Errorf("description does not retain %q: %q", want, inserted.Description)
+		}
+	}
+}
+
+func TestGuidedInsertPhaseTTYAsksThreeQuestionsAndUsesSharedResolver(t *testing.T) {
+	prompt := &scriptedPhaseInsertPrompt{
+		interactive: true,
+		answers: []string{
+			"login retries lose state",
+			"Retries preserve the authenticated session",
+			"Do not change the authentication provider",
+		},
+	}
+
+	result, updated := executeGuidedPhaseInsert(t, []string{"insert-phase"}, prompt)
+	if len(prompt.questions) != 3 {
+		t.Fatalf("prompt attempts = %d, want exactly 3: %v", len(prompt.questions), prompt.questions)
+	}
+	if got := int(result["after"].(float64)); got != 2 {
+		t.Fatalf("after = %d, want current phase 2", got)
+	}
+	inserted := updated.Plan.Phases[2]
+	if inserted.Name != "Stabilize login retries lose state" {
+		t.Errorf("interactive name = %q, want same derived name as shorthand", inserted.Name)
+	}
+	for _, want := range []string{
+		"login retries lose state",
+		"Retries preserve the authenticated session",
+		"Do not change the authentication provider",
+	} {
+		if !strings.Contains(inserted.Description, want) {
+			t.Errorf("interactive description does not retain %q: %q", want, inserted.Description)
+		}
+	}
+}
+
+func TestGuidedInsertPhaseEmptyTTYAnswerCancelsWithoutMutation(t *testing.T) {
+	prompt := &scriptedPhaseInsertPrompt{interactive: true, answers: []string{""}}
+
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	seedGuidedPhaseInsertState(t, s, 2)
+	before, err := s.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state before: %v", err)
+	}
+
+	originalFactory := phaseInsertPromptSessionFactory
+	phaseInsertPromptSessionFactory = func(*cobra.Command) phaseInsertPromptSession { return prompt }
+	t.Cleanup(func() { phaseInsertPromptSessionFactory = originalFactory })
+
+	rootCmd.SetArgs([]string{"insert-phase"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	after, err := s.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state after: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("empty interactive answer mutated COLONY_STATE.json")
+	}
+	if len(prompt.questions) != 1 {
+		t.Fatalf("prompt attempts = %d, want 1 before cancellation", len(prompt.questions))
+	}
+	env := parseEnvelope(t, strings.TrimSpace(buf.String()))
+	result, _ := env["result"].(map[string]interface{})
+	if result["status"] != "input_required" {
+		t.Fatalf("status = %v, want input_required: %s", result["status"], buf.String())
+	}
+}
+
+func TestGuidedInsertPhaseMissingNonTTYInputIsNonMutating(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceJSONOutputModeForTest(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+	seedGuidedPhaseInsertState(t, s, 2)
+	before, err := s.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state before: %v", err)
+	}
+
+	originalFactory := phaseInsertPromptSessionFactory
+	phaseInsertPromptSessionFactory = func(*cobra.Command) phaseInsertPromptSession {
+		return &scriptedPhaseInsertPrompt{interactive: false}
+	}
+	t.Cleanup(func() { phaseInsertPromptSessionFactory = originalFactory })
+
+	rootCmd.SetArgs([]string{"insert-phase"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	after, err := s.ReadFile("COLONY_STATE.json")
+	if err != nil {
+		t.Fatalf("read state after: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("missing non-TTY input mutated COLONY_STATE.json")
+	}
+
+	env := parseEnvelope(t, strings.TrimSpace(buf.String()))
+	if env["ok"] != true {
+		t.Fatalf("ok = %v, want structured input_required result: %s", env["ok"], buf.String())
+	}
+	result, ok := env["result"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("result = %T, want object: %s", env["result"], buf.String())
+	}
+	if result["status"] != "input_required" {
+		t.Errorf("status = %v, want input_required", result["status"])
+	}
+	example, _ := result["example"].(string)
+	if example != `aether insert-phase "problem to stabilise"` {
+		t.Errorf("example = %q, want exact quoted command", example)
+	}
+}
+
 // --- validate-oracle-state tests ---
 
 func TestValidateOracleState(t *testing.T) {
@@ -1081,4 +1369,222 @@ func TestStateCheckpointNilStore(t *testing.T) {
 	if env["ok"] != true {
 		t.Fatalf("expected ok:true, got: %v", env["ok"])
 	}
+}
+
+func insertPhaseAcceptedPlanFixture(t *testing.T) (string, colony.ColonyState, string) {
+	t.Helper()
+	root, candidate := planCandidateTestPending(t)
+	if _, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"}); err != nil {
+		t.Fatalf("accept insert-phase base candidate: %v", err)
+	}
+	s, err := storage.NewStore(filepath.Join(root, ".aether", "data"))
+	if err != nil {
+		t.Fatalf("open insert-phase fixture store: %v", err)
+	}
+	store = s
+	t.Setenv("AETHER_ROOT", root)
+	state := mustReadSpecificationTestState(t, root)
+	revision, ok := currentSpecificationRevision(*state.Specification)
+	if !ok {
+		t.Fatal("accepted insert-phase fixture has no current specification")
+	}
+	if len(revision.Requirements) == 0 {
+		t.Fatal("accepted insert-phase fixture has no specification item IDs")
+	}
+	return root, state, revision.Requirements[0].ID
+}
+
+func executeInsertPhaseForCurrentPlan(t *testing.T, args ...string) (map[string]interface{}, error) {
+	t.Helper()
+	resetRootCmd(t)
+	var out bytes.Buffer
+	stdout = &out
+	stderr = &out
+	rootCmd.SetArgs(append([]string{"insert-phase"}, args...))
+	err := rootCmd.Execute()
+	if out.Len() == 0 {
+		return nil, err
+	}
+	return parseEnvelope(t, out.String()), err
+}
+
+func TestInsertPhaseCandidatePreservesActiveRevisionAndAcceptsExactly(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	predecessor, ok := activePlanRevision(before.Plan)
+	if !ok {
+		t.Fatal("fixture has no active plan revision")
+	}
+	predecessorBytes, err := json.Marshal(predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"login retries lose state",
+		"--after", "1",
+		"--spec-item", specItemID,
+		"--base-plan-revision", predecessor.ID,
+	)
+	if err != nil {
+		t.Fatalf("insert phase candidate: envelope=%#v err=%v", envelope, err)
+	}
+	if envelope["ok"] != true {
+		t.Fatalf("insert phase envelope = %#v, want success", envelope)
+	}
+	result := envelope["result"].(map[string]interface{})
+	if result["candidate_created"] != true || result["inserted"] != false {
+		t.Fatalf("insert result = %#v, want non-active candidate", result)
+	}
+	candidateID, _ := result["candidate_id"].(string)
+	if candidateID == "" || result["review_command"] != "aether plan --candidate" || !strings.Contains(result["acceptance_command"].(string), candidateID) {
+		t.Fatalf("insert result omits exact review/accept path: %#v", result)
+	}
+
+	afterCandidate := mustReadSpecificationTestState(t, root)
+	if afterCandidate.Plan.ActiveRevisionID != before.Plan.ActiveRevisionID || !reflect.DeepEqual(afterCandidate.Plan.Phases, before.Plan.Phases) {
+		t.Fatalf("candidate changed active plan: before=%+v after=%+v", before.Plan, afterCandidate.Plan)
+	}
+	retained, ok := activePlanRevision(afterCandidate.Plan)
+	if !ok {
+		t.Fatal("active predecessor disappeared after candidate creation")
+	}
+	retainedBytes, err := json.Marshal(retained)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(retainedBytes, predecessorBytes) {
+		t.Fatal("candidate creation mutated predecessor PlanRevision bytes")
+	}
+
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
+	if err != nil {
+		t.Fatalf("load insert phase candidate: %v", err)
+	}
+	if artifact.Candidate.Status != colony.PlanCandidatePendingReview || artifact.Candidate.BasePlanRevisionID != predecessor.ID {
+		t.Fatalf("candidate binding = %+v, want pending against %s", artifact.Candidate, predecessor.ID)
+	}
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(artifact.Candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+	if err != nil {
+		t.Fatalf("accept insert phase candidate through normal boundary: %v", err)
+	}
+	if accepted.Revision.ParentID != predecessor.ID || len(accepted.Revision.Phases) != len(before.Plan.Phases)+1 {
+		t.Fatalf("accepted insert revision = %+v, want one successor phase", accepted.Revision)
+	}
+}
+
+func TestInsertPhaseImmutableStableIDsAndCompletedStatus(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	if len(before.Plan.Phases) == 0 {
+		t.Fatal("fixture has no phase")
+	}
+	before.Plan.Phases[0].Status = colony.PhaseCompleted
+	for index := range before.Plan.Phases[0].Tasks {
+		before.Plan.Phases[0].Tasks[index].Status = colony.TaskCompleted
+	}
+	for revisionIndex := range before.Plan.Revisions {
+		if before.Plan.Revisions[revisionIndex].ID != before.Plan.ActiveRevisionID {
+			continue
+		}
+		before.Plan.Revisions[revisionIndex].Phases[0].Status = colony.PhaseCompleted
+		for taskIndex := range before.Plan.Revisions[revisionIndex].Phases[0].Tasks {
+			before.Plan.Revisions[revisionIndex].Phases[0].Tasks[taskIndex].Status = colony.TaskCompleted
+		}
+	}
+	if err := store.SaveJSON("COLONY_STATE.json", before); err != nil {
+		t.Fatal(err)
+	}
+	base := before.Plan.ActiveRevisionID
+
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"add covered corrective work",
+		"--after", "1",
+		"--spec-item", specItemID,
+		"--base-plan-revision", base,
+	)
+	if err != nil || envelope["ok"] != true {
+		t.Fatalf("insert candidate failed: envelope=%#v err=%v", envelope, err)
+	}
+	candidateID := envelope["result"].(map[string]interface{})["candidate_id"].(string)
+	artifact, err := loadPlanCandidateArtifact(root, candidateID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	original := before.Plan.Phases[0]
+	var preserved *colony.Phase
+	maxID := 0
+	for index := range artifact.Candidate.Proposal.Phases {
+		phase := &artifact.Candidate.Proposal.Phases[index]
+		if phase.ID > maxID {
+			maxID = phase.ID
+		}
+		if phase.SemanticID == original.SemanticID {
+			preserved = phase
+		}
+	}
+	if preserved == nil || preserved.ID != original.ID || preserved.SemanticID != original.SemanticID {
+		t.Fatalf("proposal did not preserve predecessor stable/display IDs: original=%+v proposal=%+v", original, artifact.Candidate.Proposal.Phases)
+	}
+	if maxID <= original.ID {
+		t.Fatalf("inserted phase reused/renumbered predecessor ordinal: %+v", artifact.Candidate.Proposal.Phases)
+	}
+
+	accepted, err := acceptPlanCandidate(root, planCandidateTestAcceptanceRequest(artifact.Candidate), planCandidateAcceptanceOptions{AcceptedBy: "owner"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var completed *colony.Phase
+	for index := range accepted.Revision.Phases {
+		if accepted.Revision.Phases[index].SemanticID == original.SemanticID {
+			completed = &accepted.Revision.Phases[index]
+		}
+	}
+	if completed == nil || completed.Status != colony.PhaseCompleted {
+		t.Fatalf("accepted insertion lost unaffected completion: %+v", accepted.Revision.Phases)
+	}
+}
+
+func TestInsertPhaseRefusesMissingCoverageWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, _ := insertPhaseAcceptedPlanFixture(t)
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"unapproved new material scope", "--after", "1", "--base-plan-revision", before.Plan.ActiveRevisionID,
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "specification coverage") {
+		t.Fatalf("missing coverage result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
+}
+
+func TestInsertPhaseRefusesActiveAttemptWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	before.State = colony.StateEXECUTING
+	if err := store.SaveJSON("COLONY_STATE.json", before); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"do not race active work", "--after", "1", "--spec-item", specItemID, "--base-plan-revision", before.Plan.ActiveRevisionID,
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "active") {
+		t.Fatalf("active attempt result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
+}
+
+func TestInsertPhaseRefusesStaleBaseWithoutWrites(t *testing.T) {
+	saveGlobals(t)
+	root, before, specItemID := insertPhaseAcceptedPlanFixture(t)
+	snapshot := planCandidateTestSnapshot(t, root)
+	envelope, err := executeInsertPhaseForCurrentPlan(t,
+		"stale corrective request", "--after", "1", "--spec-item", specItemID, "--base-plan-revision", before.Plan.ActiveRevisionID+"-stale",
+	)
+	if err == nil || envelope == nil || envelope["ok"] != false || !strings.Contains(envelope["error"].(string), "base plan revision") {
+		t.Fatalf("stale base result = %#v err=%v", envelope, err)
+	}
+	planCandidateTestAssertSnapshot(t, root, snapshot)
 }

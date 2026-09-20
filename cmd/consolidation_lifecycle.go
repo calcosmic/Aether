@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent/curation"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/learn"
 )
@@ -26,6 +28,79 @@ import (
 // deadline cannot preempt a synchronous callee that never polls ctx.Done(),
 // and storage.FileLocker's flock blocks with no deadline (WR-02).
 var consolidationLifecycleTimeout = 30 * time.Second
+
+const (
+	consolidationQueenStorePath      = "QUEEN.md"
+	consolidationQueenRepositoryPath = ".aether/QUEEN.md"
+)
+
+// writeConsolidationQueenPromotion is the repository-authorized side of the
+// memory pipeline's typed Queen promotion boundary. Eligibility stays in
+// pkg/memory; cmd only turns the already-approved instinct into the existing
+// local Queen entry and commits that one repository-relative target through
+// the Plan 27-28 mutation session.
+func writeConsolidationQueenPromotion(ctx context.Context, dataRoot string, instinct colony.InstinctEntry, colonyName string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("promote local Queen instinct: %w", err)
+	}
+	if strings.TrimSpace(dataRoot) == "" {
+		return fmt.Errorf("promote local Queen instinct: no store initialized")
+	}
+	repositoryRoot, err := planningRepositoryRoot(dataRoot)
+	if err != nil {
+		return fmt.Errorf("promote local Queen instinct: %w", err)
+	}
+
+	return withPlanningMutationSession(repositoryRoot, "consolidation-queen-promotion", func(session *planningMutationSession) error {
+		current, exists, err := session.ReadFile(lifecycleTransactionRootRepository, consolidationQueenRepositoryPath)
+		if err != nil {
+			return fmt.Errorf("read local Queen: %w", err)
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("promote local Queen instinct: %w", err)
+		}
+
+		text := string(current)
+		if !exists {
+			text = queenDefaultContent
+		}
+		text = ensureConsolidationQueenInstinctsSectionText(text)
+		entry := fmt.Sprintf("- [instinct] **%s** (%.2f): When %s, then %s",
+			instinct.Domain, instinct.Confidence, instinct.Trigger, instinct.Action)
+		updated := appendEntryToQueenSection(text, "Instincts", entry)
+		if strings.TrimSpace(updated) == "" {
+			return fmt.Errorf("promote local Queen instinct: refusing empty Queen content")
+		}
+		if exists && updated == string(current) {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("promote local Queen instinct: %w", err)
+		}
+		if err := commitPlanningSessionTargets(session, "consolidation-queen-promotion", "consolidation-queen-promotion", []planningSessionTarget{{
+			Root: lifecycleTransactionRootRepository, Path: consolidationQueenRepositoryPath, Content: []byte(updated),
+		}}); err != nil {
+			return fmt.Errorf("write local Queen: %w", err)
+		}
+		return nil
+	})
+}
+
+// ensureConsolidationQueenInstinctsSectionText is the mutation-free form of
+// ensureQueenInstinctsSection. Keeping the derivation in memory lets the
+// repository transaction own the only filesystem write, including the legacy
+// section self-heal.
+func ensureConsolidationQueenInstinctsSectionText(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) == "## Instincts" {
+			return text
+		}
+	}
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text + "\n## Instincts\n> Instincts promoted by the consolidation pipeline.\n"
+}
 
 // runConsolidationStageBounded runs fn on its own goroutine and waits for
 // either completion or ctx expiry, returning false when ctx expired first.
@@ -65,6 +140,40 @@ type phaseEndConsolidationSummary struct {
 	QueenEligible       int
 	ReviewCandidates    int
 	RereadCandidates    int
+	// QueenPromoted carries the actual instinct IDs pkg/memory's
+	// RunConsolidation promoted into QUEEN.md this phase -- not just a count
+	// (198.1-03/FEED-03). Sourced from the pipeline's own QueenPromoted
+	// (writes that succeeded), never from QueenEligible: an eligible instinct
+	// whose write failed must not be reported as reaching the Queen file.
+	QueenPromoted []string
+	// InstinctApplicationsRecorded is recordInstinctApplicationsForPhase's own
+	// return value for this phase -- how many instincts gained a fresh,
+	// honest use this phase because a worker was genuinely given them.
+	InstinctApplicationsRecorded int
+	// FailuresRecorded is the count of unacknowledged midden.json entries as
+	// of this phase-end call -- the "failures recorded" figure folded into
+	// this phase's completion note (198.1-04/FEED-04), sourced from the
+	// failure log rather than the promotion pipeline. Exposed here so a test
+	// can assert the note's content against the runtime's own reported
+	// number instead of typing a literal.
+	FailuresRecorded int
+	// AutoRedirectsEmitted is emitMiddenThresholdRedirect's own return value
+	// for this call -- how many midden.json failure categories crossed the
+	// auto-REDIRECT threshold and got (or reinforced) a steering signal
+	// (198.1-04/FEED-04).
+	AutoRedirectsEmitted int
+	// ImprovementPass is runAutomaticImprovementPass's own summary for this
+	// same phase-end call (204-12, D-01): a declared candidate or a running
+	// canary driven through comparison, gate admission, canary start, and
+	// completion/rollback -- or, with neither, an honest no-op. Non-
+	// blocking, exactly like every other field on this summary.
+	ImprovementPass improvementPassSummary
+	// LearningValidation is promoteHelpfulHypotheses' own summary for this
+	// same phase-end call (204-16, WINDOWS.md entry 44): every hypothesis
+	// whose own guidance application record has genuinely reached the
+	// helpful state is promoted to validated -- or, with none, an honest
+	// no-op. Non-blocking, exactly like every other field on this summary.
+	LearningValidation learningValidationSummary
 }
 
 // LearningBeatLine renders the single-line, caste-agnostic message body used
@@ -79,7 +188,11 @@ func (s phaseEndConsolidationSummary) LearningBeatLine() string {
 	if s.ZeroState() {
 		return "colony observed nothing new this phase"
 	}
-	return fmt.Sprintf("%d promotion candidate(s) -> %d queen-eligible instinct(s)", s.PromotionCandidates, s.QueenEligible)
+	line := fmt.Sprintf("%d promotion candidate(s) -> %d queen-eligible instinct(s)", s.PromotionCandidates, s.QueenEligible)
+	if len(s.QueenPromoted) > 0 {
+		line += fmt.Sprintf(", %d promoted to the Queen file", len(s.QueenPromoted))
+	}
+	return line
 }
 
 // ZeroState reports whether this consolidation ran but found nothing worth
@@ -109,22 +222,40 @@ func (s phaseEndConsolidationSummary) ZeroState() bool {
 // into an abort -- it warns unmissably to stderr (D-05) and returns a
 // summary with Ran: false. Learning is enrichment, not a gate.
 func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
-	_ = phaseID // reserved for future phase-scoped consolidation reporting
-
 	if store == nil {
 		return phaseEndConsolidationSummary{Ran: false, Reason: "no store initialized"}
 	}
 
+	// LEARN-03 (204-02-PLAN.md Task 1, ruling (a)): the first real
+	// production writer into the evidence-gated credit ledger
+	// (cmd/recruitment_credit.go) -- placed BEFORE
+	// recordInstinctApplicationsForPhase below (204-03-PLAN.md Task 2,
+	// SYN-204-05/06: reordered from the original placement after it).
+	// recordInstinctApplicationsForPhase now derives each entry's outcome
+	// by looking up this SAME phase's own credit record
+	// (recruitmentCreditForContribution) -- if credit were recorded
+	// second, every application entry this phase ever writes would read
+	// "pending" forever, since recordInstinctApplicationsForPhase's own
+	// per-phase idempotency guard (instinctAlreadyAppliedForPhase) means a
+	// phase is recorded exactly once and never revisited. Placing credit
+	// first is what makes the lookup findable on the very same pass.
+	// Never a Go error, never blocks this phase advance -- its own return
+	// value shares phaseEndConsolidationSummary's non-blocking shape (see
+	// cmd/application_evidence.go for the writer's own doc comment). This
+	// function is itself already invoked from cmd/codex_continue.go and
+	// cmd/codex_continue_finalize.go -- the one call site that puts this
+	// on both check lanes.
+	recordPhaseApplicationCredit(phaseID)
+
+	// Record which instincts this phase actually delivered and applied, so
+	// the decay/confidence step below (STEP 1 of
+	// pkg/memory.ConsolidationService.Run) reads the freshly-recorded
+	// application history for this phase, and a repeated phase-end pass for
+	// the same phase adds no further entries (198.1-03/FEED-03).
+	applicationsRecorded := recordInstinctApplicationsForPhase(phaseID)
+
 	bus := events.NewBus(store, events.DefaultConfig())
 	pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
-
-	// Self-heal a legacy local QUEEN.md that predates the Instincts section
-	// before promoting into it. Non-fatal: mirrors consolidationPhaseEndCmd's
-	// real-path branch (cmd/graph_consolidation_cmds.go). A missing section
-	// degrades to pkg/memory's existing silent no-op, not a crash.
-	if healErr := ensureQueenInstinctsSection(); healErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-	}
 
 	// Bounded timeout so a wedged consolidation can never hang a phase
 	// advance (T-162-12); the phase-advance record is already committed by
@@ -149,9 +280,19 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 	// failures (e.g. a corrupt instincts.json) into result.Errors instead of
 	// returning a top-level error -- the pipeline is deliberately
 	// non-blocking internally too. Treat a non-empty result.Errors the same
-	// as a top-level err: both mean "consolidation did not run cleanly."
+	// as a top-level err: both mean "consolidation did not run cleanly" --
+	// EXCEPT a bare "file does not exist" for instincts.json or
+	// learning-observations.json, which is a fresh colony's normal starting
+	// state, not corruption. Every step inside ConsolidationService.Run
+	// already treats a missing file as "start empty"; without this filter
+	// runPhaseEndConsolidation would report "WITHOUT consolidation" on every
+	// colony's very first phase even though nothing is actually wrong
+	// (found while proving 198.1-03's end-to-end test against a colony that
+	// starts with neither file).
 	if err == nil && result != nil && len(result.Errors) > 0 {
-		err = errors.Join(result.Errors...)
+		if real := realConsolidationErrors(result.Errors); len(real) > 0 {
+			err = errors.Join(real...)
+		}
 	}
 
 	if err != nil {
@@ -166,16 +307,78 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 		return phaseEndConsolidationSummary{Ran: false, Reason: reason}
 	}
 
-	return phaseEndConsolidationSummary{
-		Ran:                 true,
-		InstinctsDecayed:    result.InstinctsDecayed,
-		InstinctsArchived:   result.InstinctsArchived,
-		ObservationsDecayed: result.ObservationsDecayed,
-		PromotionCandidates: len(result.PromotionCandidates),
-		QueenEligible:       len(result.QueenEligible),
-		ReviewCandidates:    len(result.ReviewCandidates),
-		RereadCandidates:    len(result.RereadCandidates),
+	summary := phaseEndConsolidationSummary{
+		Ran:                          true,
+		InstinctsDecayed:             result.InstinctsDecayed,
+		InstinctsArchived:            result.InstinctsArchived,
+		ObservationsDecayed:          result.ObservationsDecayed,
+		PromotionCandidates:          len(result.PromotionCandidates),
+		QueenEligible:                len(result.QueenEligible),
+		ReviewCandidates:             len(result.ReviewCandidates),
+		RereadCandidates:             len(result.RereadCandidates),
+		QueenPromoted:                append([]string{}, result.QueenPromoted...),
+		InstinctApplicationsRecorded: applicationsRecorded,
+		FailuresRecorded:             countUnacknowledgedMiddenEntries(store),
 	}
+
+	// Feed the memory (198.1-04, FEED-04): a finished phase leaves a note
+	// naming what it produced, and a run of the same failure leaves an
+	// automatic don't-do-this note -- both AFTER the summary above is fully
+	// assembled, so their counts are the ones this summary reports. Neither
+	// emission can fail this phase advance; both warn to stderr and continue.
+	var cs colony.ColonyState
+	_ = store.LoadJSON("COLONY_STATE.json", &cs)
+	phase, found := colonyPhaseByID(cs, phaseID)
+	if !found {
+		phase = colony.Phase{ID: phaseID}
+	}
+	emitPhaseCompletionFeedback(phase, summary, summary.PromotionCandidates, summary.FailuresRecorded)
+	summary.AutoRedirectsEmitted = emitMiddenThresholdRedirect()
+
+	// 204-12 (D-01, D-04): the automatic improvement pass runs here, at the
+	// very end of phase-end consolidation, so it is reached from both check
+	// lanes through this ONE call site -- runPhaseEndConsolidation is
+	// already invoked from both cmd/codex_continue.go's runCodexContinue
+	// and cmd/codex_continue_finalize.go's runCodexContinueFinalize, and
+	// attachConsolidationSummary below is already called on both lanes too.
+	// Never blocking: runAutomaticImprovementPass never returns an error
+	// type this function could propagate.
+	summary.ImprovementPass = runAutomaticImprovementPass(phaseID)
+
+	// 204-16 (WINDOWS.md entry 44): the automatic hypothesis-to-validated
+	// promoter runs here too, on the SAME call site as the improvement
+	// pass above -- reached from both check lanes for the same reason.
+	// Never blocking: promoteHelpfulHypotheses never returns an error type
+	// this function could propagate.
+	summary.LearningValidation = promoteHelpfulHypotheses(phaseID)
+
+	return summary
+}
+
+// realConsolidationErrors filters out "file does not exist" load failures
+// (e.g. a fresh colony's first phase, before instincts.json or
+// learning-observations.json has ever been written) from a consolidation
+// step's per-step error list. That condition is normal starting state, not
+// corruption -- pkg/memory.ConsolidationService.Run's own steps already
+// treat a missing file as "start empty" for every mutation that follows.
+// Any other error (corrupt JSON, permission failure, a genuine I/O fault)
+// still fails loudly and is returned unfiltered.
+func realConsolidationErrors(errs []error) []error {
+	real := make([]error, 0, len(errs))
+	for _, e := range errs {
+		if errors.Is(e, fs.ErrNotExist) {
+			continue
+		}
+		// Queen callback failures are already reported by the pipeline and are
+		// excluded from QueenPromoted. Preserve consolidation's established
+		// enrichment-not-gate contract: the failed promotion stays failed, but
+		// it does not invalidate unrelated decay/archive work.
+		if strings.HasPrefix(e.Error(), "queen promote ") {
+			continue
+		}
+		real = append(real, e)
+	}
+	return real
 }
 
 // attachConsolidationSummary stores s under result["consolidation"] using the
@@ -183,8 +386,14 @@ func runPhaseEndConsolidation(phaseID int) phaseEndConsolidationSummary {
 // (instincts_decayed, instincts_archived, observations_decayed,
 // promotion_candidates, queen_eligible, review_candidates,
 // reread_candidates), plus ran and reason. Keeping the key names identical
-// to the subcommand's output means the inspection path and the runtime path
-// report the same shape.
+// to the subcommand's own output means the inspection path and the runtime
+// path report the same shape.
+//
+// It also stores s.ImprovementPass under result["improvement_pass"] (204-12,
+// D-01) -- the same map both continue lanes already attach this result
+// under (cmd/codex_continue.go, cmd/codex_continue_finalize.go both call
+// this one function), so the automatic pass's own closing-card data reaches
+// both lanes structurally, the same way the call site above does.
 func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsolidationSummary) {
 	if result == nil {
 		return
@@ -199,6 +408,37 @@ func attachConsolidationSummary(result map[string]interface{}, s phaseEndConsoli
 		"queen_eligible":       s.QueenEligible,
 		"review_candidates":    s.ReviewCandidates,
 		"reread_candidates":    s.RereadCandidates,
+	}
+	result["improvement_pass"] = improvementPassSummaryToMap(s.ImprovementPass)
+}
+
+// improvementPassSummaryToMap converts an improvementPassSummary into the
+// same snake_case-keyed shape result["consolidation"] uses above, so
+// result["improvement_pass"] survives a JSON round-trip
+// (writePhaseOutcomeDocument's SaveJSON/LoadJSON) with identical keys --
+// renderImprovementPassBeat (cmd/codex_visuals.go) reads this same shape
+// back, dual-typed against the in-process improvementPassSummary struct
+// itself (204-12, D-03).
+func improvementPassSummaryToMap(s improvementPassSummary) map[string]interface{} {
+	events := make([]map[string]interface{}, 0, len(s.Events))
+	for _, e := range s.Events {
+		events = append(events, map[string]interface{}{
+			"candidate_id": e.CandidateID,
+			"kind":         string(e.Kind),
+			"detail":       e.Detail,
+		})
+	}
+	return map[string]interface{}{
+		"ran":                   s.Ran,
+		"candidates_considered": s.CandidatesConsidered,
+		"compared":              s.Compared,
+		"admitted":              s.Admitted,
+		"refused":               s.Refused,
+		"canaries_started":      s.CanariesStarted,
+		"canaries_completed":    s.CanariesCompleted,
+		"canaries_rolled_back":  s.CanariesRolledBack,
+		"events":                events,
+		"failures":              append([]string{}, s.Failures...),
 	}
 }
 
@@ -296,12 +536,6 @@ func runSealConsolidation() sealConsolidationSummary {
 		return sealConsolidationSummary{Ran: false, Reason: "no store initialized"}
 	}
 
-	// Self-heal a legacy local QUEEN.md that predates the Instincts section
-	// before promoting into it. Non-fatal, mirrors runPhaseEndConsolidation.
-	if healErr := ensureQueenInstinctsSection(); healErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), consolidationLifecycleTimeout)
 	defer cancel()
 
@@ -388,7 +622,9 @@ func runSealConsolidation() sealConsolidationSummary {
 		return summary
 	}
 	if consErr == nil && consResult != nil && len(consResult.Errors) > 0 {
-		consErr = errors.Join(consResult.Errors...)
+		if real := realConsolidationErrors(consResult.Errors); len(real) > 0 {
+			consErr = errors.Join(real...)
+		}
 	}
 
 	// Publish the seal consolidation event, matching consolidationSealCmd's

@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 )
@@ -15,13 +14,7 @@ func TestPhaseJSON(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	// Phase 2 is the current phase in testdata
 	rootCmd.SetArgs([]string{"phase", "--json"})
 
@@ -64,13 +57,7 @@ func TestPhaseJSONNotFound(t *testing.T) {
 	var buf bytes.Buffer
 	stderr = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase", "--number", "99", "--json"})
 
 	err := rootCmd.Execute()
@@ -95,13 +82,7 @@ func TestPhaseJSONSpecificNumber(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase", "--number", "1", "--json"})
 
 	err := rootCmd.Execute()
@@ -130,13 +111,7 @@ func TestPhaseCurrentPhase(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase"})
 
 	err := rootCmd.Execute()
@@ -171,13 +146,7 @@ func TestPhaseSpecificNumber(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase", "--number", "1"})
 
 	err := rootCmd.Execute()
@@ -203,13 +172,7 @@ func TestPhaseInvalidNumber(t *testing.T) {
 	var buf bytes.Buffer
 	stderr = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase", "--number", "99"})
 
 	err := rootCmd.Execute()
@@ -241,13 +204,7 @@ func TestPhaseTaskCompletion(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"phase", "--number", "2"})
 
 	err := rootCmd.Execute()

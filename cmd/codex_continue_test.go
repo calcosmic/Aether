@@ -19,6 +19,62 @@ import (
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
+func TestContinueLifecycleFixturesUseAcceptedAuthority200(t *testing.T) {
+	content, err := os.ReadFile("codex_continue_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"TestContinueFinalizeRecordsExternalReviewAndAdvances",
+		"TestContinueEndToEndAfterAbandonedRecovery",
+		"TestContinueFinalizeWritesWorkerOutcomeReports",
+	} {
+		body := extractGoFunctionBody(t, string(content), "func "+name+"(")
+		for _, required := range []string{"createApprovedAcceptedBuildTestColony(", "commitTestBuildStartAt("} {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s does not cross canonical continue authority via %s", name, required)
+			}
+		}
+		for _, forbidden := range []string{"createTestColonyState(", "seedContinueBuildPacket("} {
+			if strings.Contains(body, forbidden) {
+				t.Errorf("%s retains stale continue fixture writer %s", name, forbidden)
+			}
+		}
+	}
+	if t.Failed() {
+		t.Fatal("continue lifecycle fixtures must use accepted authority and receipt-backed build start")
+	}
+}
+
+func completeCanonicalContinueAttempt200(t *testing.T, fixture testBuildStartFixture, builtState colony.ColonyState, dispatches []codexBuildDispatch) {
+	t.Helper()
+	summary := &codex.ClaimsSummary{FilesModified: []string{"main.go"}}
+	for _, dispatch := range dispatches {
+		if dispatch.TaskID == "" || dispatch.Caste != "builder" {
+			continue
+		}
+		summary.TaskClaims = append(summary.TaskClaims, codex.TaskClaimsSummary{TaskID: dispatch.TaskID, FilesModified: []string{"main.go"}})
+	}
+	claims, err := recordBuildAttemptTerminal(fixture.Root, fixture.AttemptPath, fixture.Request.Phase, fixture.Request.GeneratedAt, dispatches, summary, fixture.Request.DispatchMode, nil)
+	if err != nil {
+		t.Fatalf("record canonical continue terminal evidence: %v", err)
+	}
+	if err := store.SaveJSON("last-build-claims.json", claims); err != nil {
+		t.Fatalf("persist canonical continue claims: %v", err)
+	}
+	applyAcceptedBuildTestExecutionFacts(t, fixture.Root, builtState)
+	if err := transitionBuildAttempt(fixture.AttemptPath, buildAttemptBuilt, "fixture built lifecycle state committed", dispatches, claims, fixture.Request.DispatchMode, nil); err != nil {
+		t.Fatalf("complete canonical continue attempt: %v", err)
+	}
+
+	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
+	for _, dispatch := range dispatches {
+		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
+			t.Fatalf("record canonical continue spawn evidence: %v", err)
+		}
+	}
+}
+
 func TestContinueConsumesBuildPacketAndAdvancesPhase(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -164,6 +220,12 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 		State:          colony.StateBUILT,
 		CurrentPhase:   1,
 		BuildStartedAt: &now,
+		// Plan 194-05 (D-06) removed the implicit "single-phase plan = final
+		// phase = heavy" default this fixture used to rely on -- a low-risk
+		// phase now resolves to standard, which (D-13) requires nothing
+		// unconditionally at continue. Heavy is set explicitly so this test
+		// still exercises a real, deterministic multi-worker review panel.
+		VerificationDepth: string(colony.VerificationDepthHeavy),
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
 				ID:          1,
@@ -197,11 +259,22 @@ func TestContinuePlanOnlyPrintsReviewManifestWithoutMutatingState(t *testing.T) 
 	if result["colony_mode"].(string) != "colony" {
 		t.Fatalf("colony_mode = %q, want colony", result["colony_mode"])
 	}
+	// Plan 194-05 (D-13): heavy's caste panel is gatekeeper, auditor, and
+	// probe (probe gated on testable code) -- watcher is no longer part of
+	// the REQUIRED caste set, and the no-proposal fallback (queenFallbackTeam)
+	// answers with the required-caste floor only, without consulting
+	// relevance scoring at all. Watcher still appears as a dispatch, though:
+	// it is the external lane's relay of the ALREADY-COMPUTED deterministic
+	// verification report (build/type/lint/test), gated solely on
+	// !skipWatchers -- a structural requirement, not a caste-selection
+	// outcome (see plannedExternalContinueDispatches's own comment).
 	if got := int(result["dispatch_count"].(float64)); got != 4 {
 		t.Fatalf("dispatch_count = %d, want 4", got)
 	}
 	dispatchResults := result["dispatches"].([]interface{})
-	wantCastes := []string{"watcher", "gatekeeper", "auditor", "probe"}
+	// The watcher relay is appended first (wave 1); the review specs
+	// (queenRequiredCastesForBudget's alphabetically sorted set) follow.
+	wantCastes := []string{"watcher", "auditor", "gatekeeper", "probe"}
 	for i, want := range wantCastes {
 		dispatch := dispatchResults[i].(map[string]interface{})
 		if dispatch["caste"].(string) != want {
@@ -350,9 +423,18 @@ func TestContinuePlanOnlyStandardSecurityUsesQueenSelectedGatekeeper(t *testing.
 
 	root, _, _, _ := setupIntermediateContinueState(t, "Auth token rotation")
 
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// continue: standard depth requires nothing unconditionally (D-13), so
+	// gatekeeper and probe need an explicit proposal to reach the dispatch
+	// list now -- consistent with this test's own name, "QueenSelected".
 	result, _, _, dispatches, err := runCodexContinuePlanOnly(root, codexContinueOptions{
 		VerificationDepth: string(colony.VerificationDepthStandard),
 		SkipWatchers:      true,
+		QueenCastes:       []string{"gatekeeper", "probe"},
+		QueenCasteWhy: []string{
+			"gatekeeper=this phase touches token rotation, a security surface",
+			"probe=cover the new token rotation code",
+		},
 	})
 	if err != nil {
 		t.Fatalf("runCodexContinuePlanOnly returned error: %v", err)
@@ -372,6 +454,54 @@ func TestContinuePlanOnlyStandardSecurityUsesQueenSelectedGatekeeper(t *testing.
 	}
 }
 
+func TestContinueCLINormalPathForwardsQueenTeamFlags(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	setupIntermediateContinueState(t, "Performance benchmark")
+	originalInvoker := newCodexWorkerInvoker
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return &codex.FakeInvoker{} }
+	t.Cleanup(func() { newCodexWorkerInvoker = originalInvoker })
+
+	rootCmd.SetArgs([]string{
+		"continue",
+		"--castes", "measurer",
+		"--caste-why", "measurer=compare latency before and after this change",
+		"--caste-reason", "the Queen wants measured performance evidence",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("normal continue returned error: %v", err)
+	}
+
+	var review codexContinueReviewReport
+	if err := store.LoadJSON("build/phase-1/review.json", &review); err != nil {
+		t.Fatalf("load continue review report: %v", err)
+	}
+	found := false
+	for _, worker := range review.Workers {
+		if worker.Caste == "measurer" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("normal continue discarded --castes/--caste-why; review workers=%+v", review.Workers)
+	}
+
+	var report codexContinueReport
+	if err := store.LoadJSON("build/phase-1/continue.json", &report); err != nil {
+		t.Fatalf("load continue report: %v", err)
+	}
+	encoded, err := json.Marshal(report.LastContinueOptions)
+	if err != nil {
+		t.Fatalf("marshal option snapshot: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"queen_castes":["measurer"]`) ||
+		!strings.Contains(string(encoded), `"queen_caste_why":["measurer=compare latency before and after this change"]`) {
+		t.Fatalf("continue option snapshot lost Queen team flags: %s", encoded)
+	}
+}
+
 func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 	saveGlobals(t)
 	setupRuntimeSkillAssignmentHub(t)
@@ -384,6 +514,10 @@ func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 		Mode:        colony.PhaseModePrototype,
 	}
 
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// continue: standard depth requires nothing unconditionally (D-13), so
+	// measurer and probe need an explicit proposal to reach the dispatch
+	// list now -- consistent with this test's own name, "QueenSelected".
 	dispatches := plannedContinueReviewDispatches(
 		root,
 		phase,
@@ -393,6 +527,12 @@ func TestPlannedContinueReviewDispatchesUseQueenSelectedMeasurer(t *testing.T) {
 		&codex.FakeInvoker{},
 		0,
 		colony.VerificationDepthStandard,
+		[]string{"measurer", "probe"},
+		"",
+		map[string]string{
+			"measurer": "this phase is about optimizing latency and memory usage",
+			"probe":    "cover the new optimization code",
+		},
 	)
 
 	if !continueWorkerDispatchHasCaste(dispatches, "measurer") {
@@ -463,29 +603,23 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Finalize wrapper continue review"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &now,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:          1,
 					Name:        "Wrapper continue finalize",
 					Description: "Record wrapper review workers",
-					Status:      colony.PhaseInProgress,
-					Tasks:       []colony.Task{{ID: &taskID, Goal: "Verify wrapper review", Status: colony.TaskInProgress}},
+					Status:      colony.PhaseReady,
+					Tasks:       []colony.Task{{ID: &taskID, Goal: "Verify wrapper review", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -495,13 +629,39 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	dataDir, root := accepted.DataRoot, accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
 	buildDispatches := []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Verify wrapper review", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification before advancement", Status: "completed"},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Verify wrapper review", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification before advancement", Status: "completed", Outputs: []string{"main.go"}},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Wrapper continue finalize", goal, buildDispatches)
+	manifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Wrapper continue finalize", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: now.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Verify wrapper review", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              buildDispatches,
+	}
+	fixture := commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: now, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: buildDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &manifest,
+	})
+	builtState := acceptedState
+	builtState.State = colony.StateBUILT
+	builtState.BuildStartedAt = &now
+	builtState.Plan.Phases[0].Status = colony.PhaseInProgress
+	builtState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, fixture, builtState, buildDispatches)
 
 	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{HeavyFlag: true})
 	if err != nil {
@@ -511,14 +671,15 @@ func TestContinueFinalizeRecordsExternalReviewAndAdvances(t *testing.T) {
 	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
 	for _, dispatch := range plan.Dispatches {
 		results = append(results, codexContinueExternalDispatch{
-			Stage:   dispatch.Stage,
-			Wave:    dispatch.Wave,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			TaskID:  dispatch.TaskID,
-			Status:  "completed",
-			Summary: dispatch.Name + " cleared wrapper continue review",
+			Stage:     dispatch.Stage,
+			Wave:      dispatch.Wave,
+			Caste:     dispatch.Caste,
+			Name:      dispatch.Name,
+			Task:      dispatch.Task,
+			TaskID:    dispatch.TaskID,
+			Status:    "completed",
+			Summary:   dispatch.Name + " cleared wrapper continue review",
+			Artifacts: validCompletedReviewerArtifacts(t, dispatch.Caste),
 			// A completed result must relay a non-empty handoff (189-REVIEW.md
 			// CR-01): the finalizer now enforces the same promise every
 			// wrapper brief states.
@@ -651,6 +812,8 @@ func TestContinueRecordsWorkerFlowInStateReportAndSpawnSummary(t *testing.T) {
 		{Stage: "verification", Caste: "watcher", Name: "Keen-15", Task: "Independent verification before advancement", Status: "spawned"},
 	}
 	seedContinueBuildPacket(t, dataDir, 1, "Continue bookkeeping", goal, dispatches)
+	validReviewInvoker := &reviewerArtifactFlowInvoker{artifacts: validCompletedReviewerArtifacts(t, "auditor")}
+	newCodexWorkerInvoker = func() codex.WorkerInvoker { return validReviewInvoker }
 
 	rootCmd.SetArgs([]string{"continue", "--heavy"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1893,6 +2056,18 @@ func TestClassifyTaskStillMissingWhenNoStatuses(t *testing.T) {
 	}
 }
 
+// TestContinueBlocksWhenReconciledTaskLacksClaimEvidence: renamed in spirit,
+// not in name, by 193-04 (FLOOR-03, closes the 2026-08-01 folded todo). Its
+// premise used to be "a reconciled task with empty builder claims blocks";
+// that premise is exactly what continueTasksSupportAdvancement's H-04 branch
+// now refuses to require, because an operator reconciling work done outside
+// the pipeline structurally has no claims file to satisfy. This phase has no
+// bound success criteria (criterion evidence policy: not_required), so the
+// deterministic floor is the shell checks alone -- once those pass, the
+// reconciled task with empty claims now ADVANCES. See
+// TestContinue_ReconcileDoesNotBypassClaims immediately below for the
+// still-true half of "not a bypass": a reconciled task whose deterministic
+// floor genuinely fails still blocks.
 func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
@@ -1903,7 +2078,7 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Block when reconciled task lacks builder claim evidence"
+	goal := "Reconciled task with empty builder claims and no bound criteria"
 	now := time.Now().UTC()
 	taskID := "1.1"
 	createTestColonyState(t, dataDir, colony.ColonyState{
@@ -1942,11 +2117,11 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when reconciled task lacks claim evidence, got %v", result)
+	if blocked, _ := result["blocked"].(bool); blocked {
+		t.Fatalf("expected blocked:false -- reconciled task with a passing deterministic floor and no bound criteria advances even with empty builder claims (FLOOR-03), got %v", result)
 	}
-	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when reconciled task lacks claim evidence, got %v", result)
+	if advanced, _ := result["advanced"].(bool); !advanced {
+		t.Fatalf("expected advanced:true, got %v", result)
 	}
 
 	reconciled := stringSliceValue(result["reconciled_tasks"])
@@ -1954,29 +2129,20 @@ func TestContinueBlocksWhenReconciledTaskLacksClaimEvidence(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	// H-04: the reconcile note is visible as an operational issue, while the
-	// claim-evidence failure is what actually blocks.
+	// The reconcile stays visible as a non-blocking operational note.
 	operational := stringSliceValue(result["operational_issues"])
-	hasWarning := false
+	hasNote := false
 	for _, issue := range operational {
 		if strings.Contains(issue, "manually reconciled") {
-			hasWarning = true
+			hasNote = true
 			break
 		}
 	}
-	if !hasWarning {
+	if !hasNote {
 		t.Fatalf("expected operational issues to contain reconcile note, got %v", operational)
 	}
-	blockingIssues := stringSliceValue(result["blocking_issues"])
-	hasClaimBlock := false
-	for _, issue := range blockingIssues {
-		if strings.Contains(issue, "claim") {
-			hasClaimBlock = true
-			break
-		}
-	}
-	if !hasClaimBlock {
-		t.Fatalf("expected a claim-evidence blocking issue, got %v", blockingIssues)
+	if blockingIssues := stringSliceValue(result["blocking_issues"]); len(blockingIssues) != 0 {
+		t.Fatalf("expected no blocking issues, got %v", blockingIssues)
 	}
 }
 
@@ -3497,7 +3663,11 @@ func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
 		if !step.Required {
 			t.Fatalf("Required = false, want true: %+v", step)
 		}
-		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+		// .aether/data/codebase.md is deliberately absent: the write guard
+		// refuses that path, so offering it left a blocked halt whose only
+		// suggested exit was itself blocked. The halt must still point
+		// somewhere actionable -- that requirement is what these markers test.
+		for _, marker := range []string{"no verification command resolved", "AGENTS.md", "## Verification Commands"} {
 			if !strings.Contains(step.Summary, marker) {
 				t.Fatalf("summary missing %q: %q", marker, step.Summary)
 			}
@@ -3521,10 +3691,17 @@ func TestRunVerificationStepRequiredSkipHalts(t *testing.T) {
 		if !strings.Contains(step.Summary, "definitely-not-a-real-command-xyz-12345") {
 			t.Fatalf("summary missing the command that failed: %q", step.Summary)
 		}
-		for _, marker := range []string{"AGENTS.md", "## Verification Commands", ".aether/data/codebase.md"} {
+		for _, marker := range []string{"AGENTS.md", "## Verification Commands"} {
 			if !strings.Contains(step.Summary, marker) {
 				t.Fatalf("summary missing %q: %q", marker, step.Summary)
 			}
+		}
+	})
+
+	t.Run("guidance never names a path the write guard refuses", func(t *testing.T) {
+		step := runVerificationStep(context.Background(), t.TempDir(), "tests", true, "", time.Second)
+		if strings.Contains(step.Summary, ".aether/data") {
+			t.Fatalf("halt guidance offers a protected path as the way out: %q", step.Summary)
 		}
 	})
 
@@ -3928,25 +4105,39 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 	withTestWorkspace(t, root)
 	withWorkingDir(t, root)
 
-	goal := "Reconcile does not bypass claims verification"
+	// 193-04 (FLOOR-03): "reconcile is not a bypass" is now proven by binding
+	// this task's own criterion explicitly to the "claims" check -- the one
+	// way claims can still gate a reconciled task under the new contract
+	// (continueTasksSupportAdvancement no longer requires claimsSatisfied
+	// generically; a bound criterion's own evaluation is what can still
+	// block). With empty claims and no persisted builder handoff for the
+	// program's own re-run fallback (Task 2, D-04) to draw on, the "claims"
+	// check genuinely fails, so criterion evidence fails, so the
+	// deterministic floor fails, so the reconciled task still blocks.
+	goal := "Reconcile does not bypass a bound claims criterion"
 	now := time.Now().UTC()
 	taskID := "1.1"
+	criterion := "Builder claims recorded for the manual fix"
+	phase := colony.Phase{
+		ID:              1,
+		Name:            "Reconcile bypass test",
+		Status:          colony.PhaseInProgress,
+		SuccessCriteria: []string{criterion},
+		Tasks: []colony.Task{{
+			ID:                   &taskID,
+			Goal:                 "Needs git evidence",
+			Status:               colony.TaskInProgress,
+			SuccessCriteria:      []string{criterion},
+			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{Criterion: criterion, TaskID: taskID, Checks: []string{"claims"}}},
+		}},
+	}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:        "3.0",
 		Goal:           &goal,
 		State:          colony.StateBUILT,
 		CurrentPhase:   1,
 		BuildStartedAt: &now,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{
-				{
-					ID:     1,
-					Name:   "Reconcile bypass test",
-					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Needs git evidence", Status: colony.TaskInProgress}},
-				},
-			},
-		},
+		Plan:           colony.Plan{Phases: []colony.Phase{phase}},
 	})
 
 	dispatches := []codexBuildDispatch{
@@ -3962,6 +4153,20 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("failed to write empty claims: %v", err)
 	}
 
+	// seedContinueBuildPacket doesn't set the bound-v1 criterion evidence
+	// contract on the manifest; add it here (same pattern as
+	// setupContinueCriterionEvidenceFinalizeFixture).
+	manifestRel := filepath.ToSlash(filepath.Join("build", "phase-1", "manifest.json"))
+	var buildManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &buildManifest); err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	buildManifest.CriterionEvidencePolicy = criterionEvidencePolicyBoundV1
+	buildManifest.EvidenceRequirements = flattenPhaseCriterionEvidenceRequirements(phase)
+	if err := store.SaveJSON(manifestRel, buildManifest); err != nil {
+		t.Fatalf("save manifest: %v", err)
+	}
+
 	rootCmd.SetArgs([]string{"continue", "--reconcile-task", taskID})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("continue returned error: %v", err)
@@ -3970,10 +4175,10 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 	env := parseLifecycleEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	if blocked, _ := result["blocked"].(bool); !blocked {
-		t.Fatalf("expected blocked:true when reconciled task lacks evidence, got %v", result)
+		t.Fatalf("expected blocked:true when a criterion bound to \"claims\" has no evidence, got %v", result)
 	}
 	if advanced, _ := result["advanced"].(bool); advanced {
-		t.Fatalf("expected advanced:false when reconciled task lacks evidence, got %v", result)
+		t.Fatalf("expected advanced:false when reconciled task lacks bound evidence, got %v", result)
 	}
 
 	reconciled := stringSliceValue(result["reconciled_tasks"])
@@ -3981,8 +4186,8 @@ func TestContinue_ReconcileDoesNotBypassClaims(t *testing.T) {
 		t.Fatalf("expected reconciled task %s, got %v", taskID, reconciled)
 	}
 
-	// H-04: the reconcile note lives in operational issues; the claim-evidence
-	// failure is the blocking issue.
+	// The reconcile note lives in operational issues; the bound criterion's
+	// claim-evidence failure is the blocking issue.
 	operational := stringSliceValue(result["operational_issues"])
 	hasReconcileNote := false
 	for _, issue := range operational {
@@ -4789,28 +4994,22 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "End-to-end abandoned recovery"
-	staleTime := time.Now().UTC().Add(-2 * time.Hour)
+	staleTime := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &staleTime,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:     1,
 					Name:   "Abandoned recovery",
-					Status: colony.PhaseInProgress,
-					Tasks:  []colony.Task{{ID: &taskID, Goal: "Recover from abandoned", Status: colony.TaskInProgress}},
+					Status: colony.PhaseReady,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Recover from abandoned", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -4820,34 +5019,38 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	root := accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
-	// Manually write a manifest with all dispatches stuck at "spawned"
-	buildDir := filepath.Join(dataDir, "build", "phase-1")
-	if err := os.MkdirAll(filepath.Join(buildDir, "worker-briefs"), 0755); err != nil {
-		t.Fatalf("failed to create build dir: %v", err)
+	stalledDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "spawned", TaskID: taskID},
 	}
-	manifest := codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Abandoned recovery",
-		Goal:         goal,
-		Root:         root,
-		ColonyDepth:  "standard",
-		DispatchMode: "real",
-		GeneratedAt:  staleTime.Format(time.RFC3339),
-		State:        string(colony.StateBUILT),
-		ClaimsPath:   displayDataPath("last-build-claims.json"),
-		Dispatches: []codexBuildDispatch{
-			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "spawned", TaskID: taskID},
-		},
+	stalledManifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Abandoned recovery", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: staleTime.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Recover from abandoned", Status: colony.TaskInProgress}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              stalledDispatches,
 	}
-	manifestJSON, err := json.Marshal(manifest)
-	if err != nil {
-		t.Fatalf("marshal manifest: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(buildDir, "manifest.json"), manifestJSON, 0644); err != nil {
-		t.Fatalf("write manifest: %v", err)
-	}
+	commitTestBuildStartAt(t, root, 1, staleTime, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: staleTime, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: stalledDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &stalledManifest,
+	})
+	stalledState := acceptedState
+	stalledState.State = colony.StateBUILT
+	stalledState.BuildStartedAt = &staleTime
+	stalledState.Plan.Phases[0].Status = colony.PhaseInProgress
+	stalledState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	applyAcceptedBuildTestExecutionFacts(t, root, stalledState)
 
 	var outBuf bytes.Buffer
 	stdout = &outBuf
@@ -4872,23 +5075,38 @@ func TestContinueEndToEndAfterAbandonedRecovery(t *testing.T) {
 		t.Fatal("expected advanced=false for abandoned build")
 	}
 
-	// Now simulate re-dispatch: re-seed manifest with completed dispatches
-	// and proper claims, then reset state to BUILT
-	seedContinueBuildPacket(t, dataDir, 1, "Abandoned recovery", goal, []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-e2e2", Task: "Independent verification before advancement", Status: "completed"},
+	// Simulate the recommended redispatch through a second canonical start,
+	// then record its terminal worker evidence through the ordinary journal.
+	redispatchReady := acceptedState
+	applyAcceptedBuildTestExecutionFacts(t, root, redispatchReady)
+	redispatchAt := time.Now().UTC().Truncate(time.Second)
+	completedDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-e2e1", Task: "Recover from abandoned", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-e2e2", Task: "Independent verification before advancement", Status: "completed", Outputs: []string{"main.go"}},
+	}
+	completedManifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Abandoned recovery", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: redispatchAt.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Recover from abandoned", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              completedDispatches,
+	}
+	redispatch := commitTestBuildStartAt(t, root, 1, redispatchAt, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: redispatchAt, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: completedDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &completedManifest,
+		StalePaths: buildStartStaleArtifactPaths(1, true),
 	})
-
-	// Reset state back to BUILT so continue can run again
-	var state colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-		t.Fatalf("load state: %v", err)
-	}
-	state.State = colony.StateBUILT
-	state.BuildStartedAt = &staleTime
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		t.Fatalf("save state: %v", err)
-	}
+	redispatchBuilt := acceptedState
+	redispatchBuilt.State = colony.StateBUILT
+	redispatchBuilt.BuildStartedAt = &redispatchAt
+	redispatchBuilt.Plan.Phases[0].Status = colony.PhaseInProgress
+	redispatchBuilt.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, redispatch, redispatchBuilt, completedDispatches)
 
 	// Second continue: should advance now that dispatches are completed
 	outBuf.Reset()
@@ -5177,29 +5395,23 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Write worker outcome reports"
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 	taskID := "1.1"
 	nextTaskID := "2.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:        "3.0",
-		Goal:           &goal,
-		State:          colony.StateBUILT,
-		CurrentPhase:   1,
-		BuildStartedAt: &now,
+	acceptedState := colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 1,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:          1,
 					Name:        "Outcome report phase",
 					Description: "Test outcome report writing",
-					Status:      colony.PhaseInProgress,
-					Tasks:       []colony.Task{{ID: &taskID, Goal: "Build task", Status: colony.TaskInProgress}},
+					Status:      colony.PhaseReady,
+					Tasks:       []colony.Task{{ID: &taskID, Goal: "Build task", Status: colony.TaskPending}},
 				},
 				{
 					ID:     2,
@@ -5209,13 +5421,39 @@ func TestContinueFinalizeWritesWorkerOutcomeReports(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	dataDir, root := accepted.DataRoot, accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	acceptedPhase := accepted.State.Plan.Phases[0]
 
 	buildDispatches := []codexBuildDispatch{
-		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Build task", Status: "completed", TaskID: taskID},
-		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification", Status: "completed"},
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-31", Task: "Build task", Status: "completed", TaskID: taskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-32", Task: "Independent verification", Status: "completed", Outputs: []string{"main.go"}},
 	}
-	seedContinueBuildPacket(t, dataDir, 1, "Outcome report phase", goal, buildDispatches)
+	manifest := codexBuildManifest{
+		Phase: 1, PhaseName: "Outcome report phase", Goal: goal, Root: root,
+		ColonyDepth: "standard", DispatchMode: "direct", ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt: now.Format(time.RFC3339), State: string(colony.StateBUILT),
+		ClaimsPath: displayDataPath("last-build-claims.json"), SelectedTasks: []string{taskID},
+		Tasks:                   []codexBuildTaskPlan{{ID: taskID, Goal: "Build task", Status: colony.TaskCompleted}},
+		SuccessCriteria:         append([]string(nil), acceptedPhase.SuccessCriteria...),
+		CriterionEvidencePolicy: phaseCriterionEvidencePolicy(acceptedPhase),
+		EvidenceRequirements:    flattenPhaseCriterionEvidenceRequirements(acceptedPhase),
+		Dispatches:              buildDispatches,
+	}
+	fixture := commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: now, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: buildDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct", Manifest: &manifest,
+	})
+	builtState := acceptedState
+	builtState.State = colony.StateBUILT
+	builtState.BuildStartedAt = &now
+	builtState.Plan.Phases[0].Status = colony.PhaseInProgress
+	builtState.Plan.Phases[0].Tasks[0].Status = colony.TaskInProgress
+	completeCanonicalContinueAttempt200(t, fixture, builtState, buildDispatches)
 
 	planResult, _, _, _, err := runCodexContinuePlanOnly(root, codexContinueOptions{})
 	if err != nil {
@@ -5611,10 +5849,11 @@ func TestRunCodexContinueVerificationSkipsWatcherForRawBindEPERM(t *testing.T) {
 func TestRunCodexContinueVerificationWarnsWhenAllCommandsAreSkipped(t *testing.T) {
 	// Zero resolvable verification commands used to hard-block advancement,
 	// which stranded every repo outside the five detected ecosystems at its
-	// first continue with no visible remedy. The contract now: verification
-	// responsibility passes to the watcher, and the situation surfaces as an
-	// explicit warning. With --skip-watchers the user has knowingly chosen to
-	// advance on claims alone.
+	// first continue with no visible remedy. The contract now (D-01, Phase
+	// 193): the floor is claimed files plus criterion evidence, no fallback
+	// hands verification responsibility to a reviewer, and the situation
+	// surfaces as a plain-English warning. With --skip-watchers the user has
+	// knowingly chosen to advance on claims alone.
 	saveGlobals(t)
 
 	s, tmpDir := newTestStore(t)
@@ -5640,8 +5879,11 @@ func TestRunCodexContinueVerificationWarnsWhenAllCommandsAreSkipped(t *testing.T
 	if !report.ChecksPassed {
 		t.Fatalf("all-skipped verification must not hard-block: %+v", report.BlockingIssues)
 	}
-	if !strings.Contains(strings.Join(report.Warnings, "\n"), "no deterministic verification command") {
-		t.Fatalf("all-skipped state must surface as an explicit warning: %+v", report.Warnings)
+	if !strings.Contains(strings.Join(report.Warnings, "\n"), "no tests to run in this project") {
+		t.Fatalf("all-skipped state must surface as a plain-English warning: %+v", report.Warnings)
+	}
+	if strings.Contains(strings.ToLower(strings.Join(report.Warnings, "\n")), "watcher") {
+		t.Fatalf("all-skipped warning must not hand verification responsibility to a reviewer: %+v", report.Warnings)
 	}
 	for _, step := range report.Steps {
 		if !step.Skipped {
@@ -6801,6 +7043,9 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		SkipWatchers:        false,
 		LightFlag:           false,
 		HeavyFlag:           false,
+		QueenCastes:         []string{"measurer"},
+		QueenCasteReason:    "measure this change",
+		QueenCasteWhy:       []string{"measurer=compare latency"},
 	}
 
 	// nil last -> false (no previous run)
@@ -6816,6 +7061,9 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		SkipWatchers:           false,
 		LightFlag:              false,
 		HeavyFlag:              false,
+		QueenCastes:            []string{"MEASURER"},
+		QueenCasteReason:       " measure this change ",
+		QueenCasteWhy:          []string{"MEASURER=COMPARE LATENCY"},
 	}
 	if !continueOptionsMatchCurrent(opts, sameLast) {
 		t.Fatal("expected true when options match")
@@ -6856,9 +7104,24 @@ func TestContinueOptionsMatchCurrent(t *testing.T) {
 		VerificationTimeoutSec: 600,
 		WorkerTimeoutSec:       300,
 		ReconcileTaskIDs:       []string{"2.1", "1.1"},
+		QueenCastes:            []string{"measurer"},
+		QueenCasteReason:       "measure this change",
+		QueenCasteWhy:          []string{"measurer=compare latency"},
 	}
 	if !continueOptionsMatchCurrent(opts, diffOrder) {
 		t.Fatal("expected true when ReconcileTaskIDs match but order differs")
+	}
+
+	diffQueenTeam := *sameLast
+	diffQueenTeam.QueenCastes = []string{"auditor"}
+	if continueOptionsMatchCurrent(opts, &diffQueenTeam) {
+		t.Fatal("expected false when the Queen's proposed team differs")
+	}
+
+	diffQueenReason := *sameLast
+	diffQueenReason.QueenCasteWhy = []string{"measurer=compare memory"}
+	if continueOptionsMatchCurrent(opts, &diffQueenReason) {
+		t.Fatal("expected false when a per-caste Queen reason differs")
 	}
 }
 

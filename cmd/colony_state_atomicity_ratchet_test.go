@@ -5,7 +5,7 @@ package cmd
 //
 // ROADMAP criterion 4 asked for "a grep-ratchet against non-atomic
 // COLONY_STATE writes." This file is deliberately NOT a grep: it parses
-// cmd/*.go with go/ast, the same structural discipline
+// every .go file directly under cmd/ with go/ast, the same structural discipline
 // worktree_destruction_reachability_test.go and
 // subcommand_reachability_ratchet_test.go already established in this
 // codebase, following the model the planning brief named explicitly.
@@ -116,8 +116,9 @@ var colonyStateWriteSelectors = map[string]bool{
 }
 
 // colonyStateWriteSite is one non-atomic write call against
-// "COLONY_STATE.json", found structurally by parsing cmd/*.go with go/ast
-// -- never by grepping source text for the primitive name.
+// "COLONY_STATE.json", found structurally by parsing every .go file directly
+// under cmd/ with go/ast -- never by grepping source text for the primitive
+// name.
 type colonyStateWriteSite struct {
 	File      string // repo-relative, e.g. "cmd/init_cmd.go"
 	Function  string // enclosing function name; see scanColonyStateSource's doc comment for the two syntactic shapes this covers
@@ -158,11 +159,12 @@ type colonyStateWriteAllowlistEntry struct {
 }
 
 // colonyStateScanResult is the combined output of one AST parse pass over
-// cmd/*.go: every non-atomic COLONY_STATE.json write site
+// the cmd package's .go files: every non-atomic COLONY_STATE.json write site
 // (TestColonyStateWriteAllowlistOnlyShrinks's subject) and the same-package
 // call graph those sites' enclosing functions participate in
 // (TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically's subject).
-// Both checks share this one scan so cmd/*.go is parsed once, not twice.
+// Both checks share this one scan so the cmd package's .go files are parsed
+// once, not twice.
 type colonyStateScanResult struct {
 	sites []colonyStateWriteSite
 	// calls maps an enclosing-function node name to the set of names its
@@ -596,7 +598,7 @@ func TestColonyStateWriteAllowlistOnlyShrinks(t *testing.T) {
 	// codebase atomic overnight. A guard that finds nothing must fail, not
 	// pass.
 	if len(sites) == 0 {
-		t.Fatal("findColonyStateWriteSites found zero non-atomic COLONY_STATE.json write sites across cmd/*.go -- the AST walker likely broke (wrong selector names, wrong string literal match, wrong directory), not that every write site became atomic.")
+		t.Fatal("findColonyStateWriteSites found zero non-atomic COLONY_STATE.json write sites across the cmd package -- the AST walker likely broke (wrong selector names, wrong string literal match, wrong directory), not that every write site became atomic.")
 	}
 
 	if *updateColonyStateWriteAllowlist {
@@ -691,7 +693,7 @@ func TestNoFunctionReachableFromAdvancePhaseWritesNonAtomically(t *testing.T) {
 	// T-188-12, shared with TestColonyStateWriteAllowlistOnlyShrinks: a
 	// scanner that finds zero sites has broken.
 	if len(res.sites) == 0 {
-		t.Fatal("scanColonyStateSource found zero non-atomic COLONY_STATE.json write sites across cmd/*.go -- the AST walker likely broke, not that the codebase became fully atomic overnight.")
+		t.Fatal("scanColonyStateSource found zero non-atomic COLONY_STATE.json write sites across the cmd package -- the AST walker likely broke, not that the codebase became fully atomic overnight.")
 	}
 
 	if _, ok := res.calls["advancePhase"]; !ok {
@@ -800,7 +802,7 @@ func TestNoUpdateJSONAtomicallyDiscardsFreshRead(t *testing.T) {
 	// if the scanner finds none of them at all, it broke, not that
 	// UpdateJSONAtomically stopped being used against COLONY_STATE.json.
 	if res.updateJSONAtomicallyCalls == 0 {
-		t.Fatal(`scanColonyStateSource found zero store.UpdateJSONAtomically("COLONY_STATE.json", ...) call sites across cmd/*.go -- the AST walker likely broke (wrong selector name, wrong string literal match, wrong &target shape), not that the codebase stopped using the safe primitive.`)
+		t.Fatal(`scanColonyStateSource found zero store.UpdateJSONAtomically("COLONY_STATE.json", ...) call sites across the cmd package -- the AST walker likely broke (wrong selector name, wrong string literal match, wrong &target shape), not that the codebase stopped using the safe primitive.`)
 	}
 
 	allowed := map[string]bool{}

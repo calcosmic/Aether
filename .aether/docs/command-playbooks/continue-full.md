@@ -1422,49 +1422,31 @@ fi
 # === END Batch Wisdom Auto-Promotion ===
 ```
 
-### Step 2.2: Update Handoff Document
+### Step 2.2: Preserve the Runtime-Owned Pause/Resume Contract
 
-After advancing the phase, update the handoff document with the new current state:
+Do not create or rewrite `.aether/HANDOFF.md` from this playbook. A deliberate
+pause is a separate canonical lifecycle operation owned by the Go runtime:
 
-```bash
-# Determine if there's a next phase
-next_phase_id=$((current_phase + 1))
-has_next_phase=$(jq --arg next "$next_phase_id" '.plan.phases | map(select(.id == ($next | tonumber))) | length' .aether/data/COLONY_STATE.json)
+- `/ant-pause` invokes `AETHER_OUTPUT_MODE=visual aether pause` and stops only
+  at the safe boundary reported by the runtime.
+- Go writes one structured, validated handoff and returns its handoff ID,
+  receipt ID, and provenance. The wrapper relays those facts without deriving
+  or mutating state itself.
+- `/ant-resume` is the only return and recovery command. Go validates the
+  handoff or reconstructs the safest honest recovery point from durable
+  evidence, reports confirmed, reconstructed, conflicting, or unknown
+  provenance, and makes no runnable-state write when evidence conflicts.
+- Retry and replay are keyed by handoff ID and return the existing validated
+  receipt; the wrapper never fabricates a second handoff or recovery effect.
 
-# Write updated handoff
-cat > .aether/HANDOFF.md << 'HANDOFF_EOF'
-# Colony Session — Phase Advanced
+Post-advance guidance may offer only these commands:
 
-## Quick Resume
-Run `/ant-build {next_phase_id}` to start working on the current phase.
+- `/ant-build {next_phase_id}`
+- `/ant-phase {next_phase_id}`
+- `/ant-pause`
+- `/ant-resume`
 
-## State at Advancement
-- Goal: "$(jq -r '.goal' .aether/data/COLONY_STATE.json)"
-- Completed Phase: {completed_phase_id} — {completed_phase_name}
-- Current Phase: {next_phase_id} — {next_phase_name}
-- State: READY
-- Updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-## What Was Completed
-- Phase {completed_phase_id} marked as completed
-- Learnings extracted: {learning_count}
-- Instincts updated: {instinct_count}
-- Wisdom promoted to QUEEN.md: {promoted_count}
-
-## Current Phase Tasks
-$(jq -r '.plan.phases[] | select(.id == next_phase_id) | .tasks[] | "- [ ] \(.id): \(.description)"' .aether/data/COLONY_STATE.json)
-
-## Next Steps
-- Build current phase: `/ant-build {next_phase_id}`
-- Review phase details: `/ant-phase {next_phase_id}`
-- Pause colony: `/ant-pause-colony`
-
-## Session Note
-Phase advanced successfully. Colony is READY to build Phase {next_phase_id}.
-HANDOFF_EOF
-```
-
-This handoff reflects the post-advancement state, allowing seamless resumption even if the session is lost.
+Phase advancement by itself does not manufacture a pause handoff.
 
 ### Step 2.3: Update Changelog
 

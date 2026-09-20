@@ -103,6 +103,24 @@ func emitCodexBuildWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	emitCodexDispatchWorkerStarted(dispatch, wave)
 }
 
+// Snapshot rendering shares the existing inline activity surface, but never
+// emits started/finished events or writes the spawn tree. Those transitions
+// already come from the native bridge after its durable bind/observe/record.
+func renderCodexNativeWorkerActivity(worker codexNativeRecoveryWorker) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s (%s): %s", casteIdentity(worker.Caste), worker.WorkerName, worker.TaskID, strings.ReplaceAll(worker.Status, "_", " "))
+	if worker.ChildID != "" {
+		fmt.Fprintf(&b, " — child %s", worker.ChildID)
+	}
+	if worker.ObservedAt != "" {
+		fmt.Fprintf(&b, " — observed %s", worker.ObservedAt)
+	}
+	if worker.LastHostStatus == "unavailable" {
+		b.WriteString(" — host capability unavailable")
+	}
+	return b.String()
+}
+
 func emitCodexDispatchWorkerStarted(dispatch codex.WorkerDispatch, wave int) {
 	var b strings.Builder
 	b.WriteString("… ")
@@ -167,8 +185,19 @@ func emitCodexDispatchWorkerFinished(dispatch codex.WorkerDispatch, result codex
 	b.WriteString("  ")
 	b.WriteString(status)
 
-	if result.WorkerResult != nil && result.WorkerResult.Duration > 0 {
-		b.WriteString(fmt.Sprintf(" %.1fs", result.WorkerResult.Duration.Seconds()))
+	// D-03: the finish line names both the measured time and the tool-call
+	// count, from the same workerMeasurementFigures formatter the continue
+	// worker-flow summary below uses, so the two surfaces can never disagree.
+	var durationSeconds float64
+	var toolCount int
+	durationReported := result.WorkerResult != nil && result.WorkerResult.Duration > 0
+	toolCountReported := result.WorkerResult != nil && result.WorkerResult.ToolCountReported
+	if result.WorkerResult != nil {
+		durationSeconds = result.WorkerResult.Duration.Seconds()
+		toolCount = result.WorkerResult.ToolCount
+	}
+	if durationReported || toolCountReported {
+		b.WriteString(fmt.Sprintf(" (%s)", workerMeasurementFigures(durationSeconds, durationReported, toolCount, toolCountReported)))
 	}
 
 	if summary := strings.TrimSpace(dispatchResultSummary(dispatch, result)); summary != "" {

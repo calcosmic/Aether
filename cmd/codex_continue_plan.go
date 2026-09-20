@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -31,13 +32,17 @@ type codexContinueExternalDispatch struct {
 	WeakSpots       []string             `json:"weak_spots,omitempty"`
 	EdgeCases       []string             `json:"edge_cases_discovered,omitempty"`
 	ReusableLessons []string             `json:"reusable_lessons,omitempty"`
-	Brief           string               `json:"brief,omitempty"`
-	SkillSection    string               `json:"skill_section,omitempty"`
-	SkillCount      int                  `json:"skill_count,omitempty"`
-	ColonySkills    int                  `json:"colony_skill_count,omitempty"`
-	DomainSkills    int                  `json:"domain_skill_count,omitempty"`
-	MatchedSkills   []string             `json:"matched_skills,omitempty"`
-	Handoff         codex.WorkerHandoff  `json:"handoff,omitempty"`
+	// Artifacts carries the reviewer's structured evidence across wrapper
+	// dispatches. In-process dispatches already expose the same map on
+	// codex.WorkerResult, so artifacts.review is one contract on both lanes.
+	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
+	Brief         string                     `json:"brief,omitempty"`
+	SkillSection  string                     `json:"skill_section,omitempty"`
+	SkillCount    int                        `json:"skill_count,omitempty"`
+	ColonySkills  int                        `json:"colony_skill_count,omitempty"`
+	DomainSkills  int                        `json:"domain_skill_count,omitempty"`
+	MatchedSkills []string                   `json:"matched_skills,omitempty"`
+	Handoff       codex.WorkerHandoff        `json:"handoff,omitempty"`
 }
 
 type codexContinuePlanManifest struct {
@@ -144,13 +149,22 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		priorGateResults = []GateCheckResult{}
 	}
 	planGates := runCodexContinueGates(phase, manifest, verification, assessment, now, priorGateResults)
+	// SYN-201-04: the snapshot/plan-only lane reaches for its own (advisory,
+	// pre-dispatch) verdict through the same shared decision body every
+	// other lane uses -- review is nil here because no reviewer has been
+	// dispatched yet at plan-only time; the real advancement decision is
+	// made later by the finalize lane once wrapper-dispatched review
+	// results exist. planPreviewDecision.Gates is exactly planGates, so
+	// this call is a structural fold, not a second, divergent evaluation.
+	planPreviewDecision := runContinueAcceptVerifyAdvance(phase, assessment, planGates, nil, state)
 	budget := budgetFromRecoveryLog(phase.ID, 1)
 	if budget == nil {
 		budget = newRecoveryBudget(1)
 	}
-	queenDecisions := queenDecide(planGates, budget, circuitBreaker, phase.ID, string(reviewDepth))
+	queenDecisions := queenDecide(planPreviewDecision.Gates, budget, circuitBreaker, phase.ID, string(reviewDepth))
 
-	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers, options.QueenCastes, options.QueenCasteReason)
+	mergedExternalQueenCastes, externalQueenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	dispatches := plannedExternalContinueDispatches(root, phase, manifest, verification, assessment, options.WorkerTimeout, reviewDepth, effectiveSkipWatchers, mergedExternalQueenCastes, options.QueenCasteReason, externalQueenCasteWhyReasons)
 	plan := codexContinuePlanManifest{
 		Phase:               phase.ID,
 		PhaseName:           phase.Name,
@@ -226,6 +240,7 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 		plan.OrchestratorGuidance = &guidance
 		result["continue_manifest"] = plan
 	}
+	closeLifecycleRun(result, state, "continue")
 	return result, state, phase, dispatches, nil
 }
 
@@ -244,31 +259,39 @@ func continuePlanOnlySourceCommand(reviewDepth colony.VerificationDepth, skipWat
 	return strings.Join(parts, " ")
 }
 
+// runCodexContinueVerificationSnapshot serves BOTH runCodexContinuePlanOnly
+// (codex_continue_plan.go:110) and runCodexContinueFinalize
+// (codex_continue_finalize.go:175) -- the two paths an external wrapper
+// actually drives. It shares runDeterministicFloor with the in-process lane
+// (codex_continue.go's runCodexContinueVerification), so the shell steps,
+// claims verification, and criterion evidence evaluation -- including the
+// executed-check counting, the environment-issue warning downgrade, and the
+// zero-executed-checks plain-English warning -- are structurally identical on
+// both lanes rather than a discipline to keep in sync by hand
+// (TestBothContinueLanesApplyTheSameFloor). Criterion evidence evaluation
+// used to be entirely absent here, which made the criterion gate -- and
+// therefore the --read-only-artifact escape hatch (readonly_evidence.go) --
+// dead on the external-review path: only the direct `aether continue` path
+// ever called evaluatePhaseCriterionEvidence. That gap is now closed by
+// sharing the floor.
 func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manifest codexContinueManifest, now time.Time, verificationTimeout time.Duration, skipWatchers bool) codexContinueVerificationReport {
-	commands := resolveCodexVerificationCommands(root)
-	requiredChecks := requiredVerificationChecks(phase)
-	steps := []codexVerificationStep{
-		runVerificationStep(context.Background(), root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
-		runVerificationStep(context.Background(), root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
-		runVerificationStep(context.Background(), root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
-		runVerificationStep(context.Background(), root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
-	}
-	steps = applyExpectedTestFailure(steps, phase)
-	claims := verifyCodexBuildClaims(root, manifest)
 	watcher := evaluateContinueWatcherVerification(manifest)
 	if skipWatchers {
 		watcher = codexWatcherVerification{Present: true, Passed: true, Status: "skipped", Worker: "skip-watchers", Summary: "watcher skipped; relying on runtime-owned verification commands"}
 	}
 
-	checksPassed := true
-	blockers := []string{}
-	for _, step := range steps {
-		if !step.Passed && !step.Skipped {
-			checksPassed = false
-			blockers = append(blockers, fmt.Sprintf("%s failed: %s", step.Name, step.Summary))
-		}
-	}
-	if watcher.Present && !watcher.Passed {
+	floor := runDeterministicFloor(context.Background(), root, phase, manifest, watcher, verificationTimeout)
+
+	checksPassed := floor.ChecksPassed
+	blockers := append([]string{}, floor.BlockingIssues...)
+	// A watcher that was never dispatched (Present:false) or whose status is
+	// "skipped" must not contribute a block here -- only a dispatched
+	// watcher that did not pass does. This corrects the asymmetry the
+	// in-process lane never had: `watcher.Present && !watcher.Passed` alone
+	// treated a skipped-status watcher the same as a genuinely failed one,
+	// because isSuccessfulExternalBuildStatus("skipped") is false, so
+	// Passed is false for a skip too.
+	if watcher.Present && !watcher.Passed && !strings.EqualFold(strings.TrimSpace(watcher.Status), "skipped") {
 		checksPassed = false
 		summary := strings.TrimSpace(watcher.Summary)
 		if summary == "" {
@@ -277,33 +300,21 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 		blockers = append(blockers, summary)
 	}
 
-	// This snapshot serves BOTH runCodexContinuePlanOnly (codex_continue_plan.go:110)
-	// and runCodexContinueFinalize (codex_continue_finalize.go:175) -- the two
-	// paths an external wrapper actually drives. Its previous omission of
-	// criterion evidence evaluation is what made the criterion gate -- and
-	// therefore the --read-only-artifact escape hatch (readonly_evidence.go)
-	// -- dead on the external-review path: only the direct `aether continue`
-	// path (codex_continue.go:1596) ever called evaluatePhaseCriterionEvidence.
-	criteria := evaluatePhaseCriterionEvidence(root, phase, manifest, steps, claims, watcher)
-	if criteria.Enforced && !criteria.Passed {
-		checksPassed = false
-		blockers = append(blockers, criteria.BlockingIssues...)
-	}
-
 	return codexContinueVerificationReport{
 		Phase:                      phase.ID,
 		GeneratedAt:                now.Format(time.RFC3339),
-		VerificationTimeoutSeconds: int(verificationTimeout / time.Second),
-		Steps:                      steps,
-		Claims:                     claims,
+		VerificationTimeoutSeconds: int(effectiveContinueVerificationTimeout(verificationTimeout) / time.Second),
+		Steps:                      floor.Steps,
+		Claims:                     floor.Claims,
 		Watcher:                    watcher,
-		CriteriaPolicy:             criteria.Policy,
-		CriteriaEnforced:           criteria.Enforced,
-		CriteriaPassed:             criteria.Passed,
-		Criteria:                   criteria.Criteria,
+		CriteriaPolicy:             floor.Criteria.Policy,
+		CriteriaEnforced:           floor.Criteria.Enforced,
+		CriteriaPassed:             floor.Criteria.Passed,
+		Criteria:                   floor.Criteria.Criteria,
 		ChecksPassed:               checksPassed,
 		Passed:                     checksPassed,
 		BlockingIssues:             blockers,
+		Warnings:                   floor.Warnings,
 	}
 }
 
@@ -318,14 +329,25 @@ func runCodexContinueVerificationSnapshot(root string, phase colony.Phase, manif
 // themselves (shared by both paths), is what keeps a native-Codex continue
 // worker from seeing it twice (D-06).
 func continueExternalBriefWithHandoffSchema(rendered string) string {
-	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary)
+	return rendered + fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected. %s\n", codex.HandoffFieldsSummary, codex.HandoffOpenDecisionsGuidance)
 }
 
-func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string) []codexContinueExternalDispatch {
+func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest codexContinueManifest, verification codexContinueVerificationReport, assessment codexContinueAssessment, workerTimeout time.Duration, reviewDepth colony.VerificationDepth, skipWatchers bool, queenCastes []string, queenCasteReason string, reasons ...map[string]string) []codexContinueExternalDispatch {
 	timeoutSeconds := int(effectiveContinueReviewTimeout(workerTimeout) / time.Second)
 	dispatches := []codexContinueExternalDispatch{}
-	queenDispatches := queenContinueDispatches(phase, reviewDepth)
-	if !skipWatchers && queenContinueHasCaste(queenDispatches, "watcher") {
+	// The external/wrapper continue lane relays the ALREADY-COMPUTED
+	// deterministic verification report (build/type/lint/test) to a worker,
+	// because the wrapper itself cannot run those checks. This relay used to
+	// be gated on queenContinueHasCaste(queenDispatches, "watcher") in
+	// addition to !skipWatchers -- a redundant check while watcher was
+	// unconditionally in queenContinueDispatches, but plan 194-05 (D-13)
+	// removed that unconditional membership, which would have silently
+	// dropped the relay at light/standard depth despite the deterministic
+	// floor itself still running. A depth flag must never be able to remove
+	// a program check (CLAUDE.md); skipWatchers alone is the correct, sole
+	// gate here -- an explicit owner choice, not a caste-selection side
+	// effect.
+	if !skipWatchers {
 		watcherSkillAssignment := resolveWorkerSkillAssignmentForWorkflow("continue", "watcher", "Independent verification before advancement")
 		dispatches = append(dispatches, codexContinueExternalDispatch{
 			Stage:         "verification",
@@ -345,7 +367,14 @@ func plannedExternalContinueDispatches(root string, phase colony.Phase, manifest
 			MatchedSkills: append([]string{}, watcherSkillAssignment.MatchedNames...),
 		})
 	}
-	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason)
+	// changedFiles feeds the D-02 file-detected forced-reviewer union — the
+	// same call, the same input source (phaseChangedFilesForRiskSignals,
+	// WR-01 — unions the builder's own self-report with an independent
+	// `git diff`), as the in-process lane's plannedContinueReviewDispatches
+	// (cmd/codex_continue.go) uses, so the two lanes can never disagree for
+	// the same phase.
+	changedFiles := phaseChangedFilesForRiskSignals(phase.ID)
+	reviewSpecs := queenContinueReviewSpecsWithJudgement(phase, reviewDepth, queenCastes, queenCasteReason, manifest.Data.ForcedReviewers, changedFiles, reasons...)
 	reviewWave := 2
 	if skipWatchers {
 		reviewWave = 1

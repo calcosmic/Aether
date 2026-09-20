@@ -109,7 +109,7 @@ func seedHandoffColonyForBriefTests(t *testing.T, sentinel string) (string, colo
 
 func planOnlyDispatchesForBriefTests(t *testing.T, root string, phase colony.Phase, state colony.ColonyState) []codexBuildDispatch {
 	t.Helper()
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, nil, colony.VerificationDepthStandard)
+	dispatches := testPlannedBuildDispatchesForSelectionWithState(phase, state, nil, colony.VerificationDepthStandard)
 	if len(dispatches) < 2 {
 		t.Fatalf("expected 2+ planned dispatches from a 2-task phase, got %d", len(dispatches))
 	}

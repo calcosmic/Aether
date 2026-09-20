@@ -983,125 +983,28 @@ If `skip_check` is `"true"`, skip this entire step and continue to Step 1.14.
    Continue to Step 1.14.
 
 
-### Step 1.14: Medic Health Gate (Conditional Auto-Spawn)
+### Step 1.14: Medic Recovery Advice (No Auto-Dispatch)
 
-**Skip check:** Run using the Bash tool with description "Checking if medic gate already passed...":
+This step is an advisory handoff, not a health scan or worker gate. Continue
+must not infer colony health or generate, spawn, or complete a Medic worker.
+
+1. If the current genuine-stop report already recommends the supported operator
+   command, surface this advice without running it:
+
+   ```text
+   🩹 Medic recovery advice: run `aether medic --deep` for an explicit health scan.
+   ```
+
+2. Otherwise, make no health claim and continue without Medic advice.
+
+`aether medic --deep` is an explicit operator diagnostic. Any later
+`aether medic --fix` repair is also an explicit operator choice; neither command
+runs automatically from continue.
+
+Record the non-blocking result honestly:
+
 ```bash
-skip_check=$(aether should-skip-gate --name "medic" 2>/dev/null || echo "false")
-if [[ "$skip_check" == "true" ]]; then
-  echo "⏭️ Medic Gate: Previously passed -- skipping"
-fi
-```
-If `skip_check` is `"true"`, skip this entire step and continue to Step 2.
-
-**Colony health check — auto-spawns Medic when critical issues detected.**
-
-1. Run auto-spawn check:
-Run using the Bash tool with description "Checking colony health for Medic auto-spawn...": `aether medic-auto-spawn-check 2>/dev/null || echo "{\"should_spawn\":false}"`
-
-2. Parse result. If `should_spawn` is `false`:
-```
-🩹🐜 Medic: Colony healthy — no auto-spawn needed
-```
-Write gate result:
-```bash
-aether gate-results-write --name "medic" --passed=true --detail "Colony healthy -- no auto-spawn needed"
-```
-Continue to Step 2.
-
-3. If `should_spawn` is `true`:
-
-Generate Medic name and log spawn:
-Run using the Bash tool with description "Generating Medic name...": `medic_name=$(aether generate-ant-name "medic" | jq -r '.result') && aether spawn-log --parent "Queen" --caste "medic" --name "$medic_name" --task "Colony health diagnosis: {reason}" --depth 0 && echo "{\"name\":\"$medic_name\"}"`
-
-Display:
-```
-━━━ 🩹🐜 M E D I C ━━━
-──── 🩹🐜 Spawning {medic_name} — Colony health diagnosis ────
+aether gate-results-write --name "medic" --passed=true --detail "Advisory only: no automatic Medic scan or worker dispatch"
 ```
 
-Spawn Medic agent:
-
-Use the Agent tool with subagent_type="aether-medic":
-
-```xml
-<mission>
-Colony health has been flagged for automatic diagnosis.
-Reason: {reason from auto-spawn check}
-
-Perform a deep health scan and report findings.
-</mission>
-
-<work>
-1. Run `aether medic --deep` to scan all colony data
-2. Identify critical issues and root causes
-3. If fixable issues found, recommend running `aether medic --fix`
-4. Return structured health report
-</work>
-
-<output>
-Provide JSON output matching this schema:
-{
-  "ant_name": "your medic name",
-  "caste": "medic",
-  "status": "completed" | "failed" | "blocked",
-  "summary": "Brief health summary",
-  "critical_count": 0,
-  "warning_count": 0,
-  "fixable_count": 0,
-  "recommendations": [],
-  "blockers": []
-}
-</output>
-```
-
-Log completion:
-Run using the Bash tool with description "Logging Medic completion...": `aether spawn-complete --name "$medic_name" --status "completed" --summary "{\"critical_count\":$critical_count,\"warning_count\":$warning_count}"`
-
-**Gate Decision Logic:**
-
-- **If `critical_count > 0`:**
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🩹🐜 M E D I C   G A T E   F A I L E D
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Critical health issues detected: {critical_count}
-Colony may not be in a healthy state for advancement.
-
-Issues:
-  {list critical issues}
-
-Recommended Actions:
-  1. Review the critical issues above
-  2. Run `aether medic --fix` to attempt repairs
-  3. Re-run /ant-continue after repairs
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-**Action Required:** Resolve the current issues before continuing. Run `/ant-unblock` for guided recovery.
-Log the block:
-```bash
-aether activity-log --command "BLOCKED" --details "medic: {critical_count} critical health issues detected"
-aether gate-results-write --name "medic" --passed=false --detail "{critical_count} critical health issues detected"
-```
-
-- **If `critical_count == 0` but `warning_count > 0`:**
-```
-🩹🐜 Medic Gate: Warnings detected ({warning_count}) — phase advancement allowed with caution
-```
-Write gate result:
-```bash
-aether gate-results-write --name "medic" --passed=true --detail "Warnings detected: {warning_count}"
-```
-Continue to Step 2.
-
-- **If no issues found:**
-```
-✅🩹🐜 MEDIC GATE PASSED — Colony is healthy
-```
-Write gate result:
-```bash
-aether gate-results-write --name "medic" --passed=true --detail "Colony is healthy"
-```
 Continue to Step 2.

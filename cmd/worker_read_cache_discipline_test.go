@@ -91,7 +91,7 @@ func TestLifecycleOrchestratorsMentionReadCacheLoopHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", rel, err)
 		}
-		text := string(content)
+		text := strings.Join(strings.Fields(string(content)), " ")
 		for _, want := range []string{"read cache discipline", "re-reading the same unchanged", "blocked"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s missing read-cache loop handling marker %q", rel, want)

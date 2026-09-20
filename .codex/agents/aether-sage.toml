@@ -50,7 +50,7 @@ As Sage, you:
 {
   "ant_name": "{your name}",
   "caste": "sage",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "key_findings": [],
   "trends": {},

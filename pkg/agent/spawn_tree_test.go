@@ -1,8 +1,10 @@
 package agent
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,172 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/storage"
 )
+
+func newRepositorySpawnTree200(t *testing.T) (*SpawnTree, *storage.Store, string) {
+	t.Helper()
+
+	repositoryRoot := t.TempDir()
+	dataPath := filepath.Join(repositoryRoot, ".aether", "data")
+	authority, err := storage.OpenRepositoryRoot(repositoryRoot, dataPath)
+	if err != nil {
+		t.Fatalf("OpenRepositoryRoot() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := authority.Close(); err != nil {
+			t.Errorf("close repository authority: %v", err)
+		}
+	})
+	store, err := storage.NewRepositoryStore(authority)
+	if err != nil {
+		t.Fatalf("NewRepositoryStore() error = %v", err)
+	}
+	return NewSpawnTree(store, "spawn-tree.txt"), store, dataPath
+}
+
+func TestSpawnTreeRepositoryStoreFresh200(t *testing.T) {
+	tree, store, _ := newRepositorySpawnTree200(t)
+
+	entries, err := tree.Parse()
+	if err != nil {
+		t.Fatalf("Parse() on absent repository ledger error = %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Parse() on absent repository ledger returned %d entries, want 0", len(entries))
+	}
+
+	if err := tree.RecordSpawn("Queen", "builder", "Mason-45", "first repository spawn", 1); err != nil {
+		t.Fatalf("RecordSpawn() first repository append error = %v", err)
+	}
+	replayed := NewSpawnTree(store, "spawn-tree.txt")
+	entries, err = replayed.Parse()
+	if err != nil {
+		t.Fatalf("Parse() replay error = %v", err)
+	}
+	if len(entries) != 1 || entries[0].AgentName != "Mason-45" {
+		t.Fatalf("Parse() replay = %#v, want the first repository spawn", entries)
+	}
+}
+
+func TestSpawnTreeRepositoryStoreCorrupt200(t *testing.T) {
+	t.Run("corrupt spawn ledger is fingerprinted and never overwritten", func(t *testing.T) {
+		tree, store, dataPath := newRepositorySpawnTree200(t)
+		corrupt := []byte("CORRUPT-SPAWN-LEDGER-200\n")
+		if err := store.AtomicWrite("spawn-tree.txt", corrupt); err != nil {
+			t.Fatalf("write corrupt spawn ledger: %v", err)
+		}
+		before := sha256.Sum256(corrupt)
+
+		if _, err := tree.Parse(); !errors.Is(err, ErrSpawnTreeCorrupt) {
+			t.Fatalf("Parse() error = %v, want ErrSpawnTreeCorrupt", err)
+		}
+		if err := tree.RecordSpawn("Queen", "builder", "Mason-45", "must not overwrite", 1); !errors.Is(err, ErrSpawnTreeCorrupt) {
+			t.Fatalf("RecordSpawn() error = %v, want ErrSpawnTreeCorrupt", err)
+		}
+		afterBytes, err := os.ReadFile(filepath.Join(dataPath, "spawn-tree.txt"))
+		if err != nil {
+			t.Fatalf("read corrupt spawn ledger after refusal: %v", err)
+		}
+		if after := sha256.Sum256(afterBytes); after != before {
+			t.Fatalf("corrupt spawn ledger fingerprint changed: before=%x after=%x", before, after)
+		}
+	})
+
+	t.Run("linked spawn ledger remains linked and is never followed", func(t *testing.T) {
+		tree, _, dataPath := newRepositorySpawnTree200(t)
+		targetPath := filepath.Join(filepath.Dir(dataPath), "linked-target.txt")
+		targetBytes := []byte("LINK-TARGET-CANARY-200\n")
+		if err := os.WriteFile(targetPath, targetBytes, 0644); err != nil {
+			t.Fatalf("write linked target: %v", err)
+		}
+		if err := os.Symlink(targetPath, filepath.Join(dataPath, "spawn-tree.txt")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		before := sha256.Sum256(targetBytes)
+
+		if _, err := tree.Parse(); err == nil || errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("Parse() linked-ledger error = %v, want non-absence refusal", err)
+		}
+		if err := tree.RecordSpawn("Queen", "builder", "Mason-45", "must not follow", 1); err == nil || errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("RecordSpawn() linked-ledger error = %v, want non-absence refusal", err)
+		}
+		info, err := os.Lstat(filepath.Join(dataPath, "spawn-tree.txt"))
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("linked ledger was replaced: info=%v err=%v", info, err)
+		}
+		afterBytes, err := os.ReadFile(targetPath)
+		if err != nil {
+			t.Fatalf("read linked target after refusal: %v", err)
+		}
+		if after := sha256.Sum256(afterBytes); after != before {
+			t.Fatalf("linked target fingerprint changed: before=%x after=%x", before, after)
+		}
+	})
+
+	t.Run("unreadable spawn ledger is not absence", func(t *testing.T) {
+		tree, _, dataPath := newRepositorySpawnTree200(t)
+		ledgerPath := filepath.Join(dataPath, "spawn-tree.txt")
+		if err := os.WriteFile(ledgerPath, []byte("2026-09-09T00:00:00Z|Queen|builder|Mason-45|task|1|spawned\n"), 0600); err != nil {
+			t.Fatalf("write unreadable spawn ledger: %v", err)
+		}
+		if err := os.Chmod(ledgerPath, 0000); err != nil {
+			t.Fatalf("chmod unreadable spawn ledger: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(ledgerPath, 0600) })
+
+		_, err := tree.Parse()
+		if err == nil {
+			t.Skip("permission denial could not be induced for this process")
+		}
+		if errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("unreadable spawn ledger misclassified as absence: %v", err)
+		}
+	})
+
+	t.Run("corrupt run ledger is fingerprinted and never overwritten", func(t *testing.T) {
+		tree, _, dataPath := newRepositorySpawnTree200(t)
+		runPath := filepath.Join(dataPath, defaultSpawnRunFile)
+		corrupt := []byte("CORRUPT-RUN-LEDGER-200\n")
+		if err := os.WriteFile(runPath, corrupt, 0644); err != nil {
+			t.Fatalf("write corrupt run ledger: %v", err)
+		}
+		before := sha256.Sum256(corrupt)
+
+		if _, _, err := tree.CurrentRun(); err == nil || errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("CurrentRun() corrupt-ledger error = %v, want non-absence refusal", err)
+		}
+		if _, err := tree.BeginRun("build", time.Now()); err == nil || errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("BeginRun() corrupt-ledger error = %v, want non-absence refusal", err)
+		}
+		afterBytes, err := os.ReadFile(runPath)
+		if err != nil {
+			t.Fatalf("read corrupt run ledger after refusal: %v", err)
+		}
+		if after := sha256.Sum256(afterBytes); after != before {
+			t.Fatalf("corrupt run ledger fingerprint changed: before=%x after=%x", before, after)
+		}
+	})
+}
+
+func TestSpawnTreeRepositoryRunLedgerFresh200(t *testing.T) {
+	tree, store, _ := newRepositorySpawnTree200(t)
+	if _, ok, err := tree.CurrentRun(); err != nil || ok {
+		t.Fatalf("CurrentRun() on absent repository ledger = (_, %v, %v), want (_, false, nil)", ok, err)
+	}
+
+	startedAt := time.Date(2026, time.September, 9, 10, 0, 0, 0, time.UTC)
+	run, err := tree.BeginRun("build", startedAt)
+	if err != nil {
+		t.Fatalf("BeginRun() first repository run error = %v", err)
+	}
+	replayed := NewSpawnTree(store, "spawn-tree.txt")
+	got, ok, err := replayed.CurrentRun()
+	if err != nil {
+		t.Fatalf("CurrentRun() replay error = %v", err)
+	}
+	if !ok || got.ID != run.ID || got.Command != "build" || got.Status != spawnRunStatusActive {
+		t.Fatalf("CurrentRun() replay = (%#v, %v), want active run %#v", got, ok, run)
+	}
+}
 
 func TestSpawnTreeRecordSpawn(t *testing.T) {
 	dir := t.TempDir()

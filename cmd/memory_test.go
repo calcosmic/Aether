@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 func TestMemoryMetrics(t *testing.T) {
@@ -18,13 +17,7 @@ func TestMemoryMetrics(t *testing.T) {
 
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"memory-metrics"})
 
 	err := rootCmd.Execute()
@@ -62,16 +55,7 @@ func TestMemoryMetricsEmpty(t *testing.T) {
 
 	stdout = &buf
 
-	// Create empty store
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	bindCommandTestRepository(t)
 
 	rootCmd.SetArgs([]string{"memory-metrics"})
 
@@ -93,13 +77,7 @@ func TestColonyVitalSigns(t *testing.T) {
 
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	store = s
+	bindSeededCommandTestRepository(t)
 	rootCmd.SetArgs([]string{"colony-vital-signs"})
 
 	err := rootCmd.Execute()
@@ -141,11 +119,8 @@ func TestColonyVitalSignsUsesStandaloneInstincts(t *testing.T) {
 
 	stdout = &buf
 
-	s, tmpDir := setupTestStore(t)
-	defer os.RemoveAll(tmpDir)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	binding := bindSeededCommandTestRepository(t)
+	s := binding.Store
 
 	var state colony.ColonyState
 	if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
@@ -174,7 +149,6 @@ func TestColonyVitalSignsUsesStandaloneInstincts(t *testing.T) {
 		t.Fatalf("save instincts: %v", err)
 	}
 
-	store = s
 	rootCmd.SetArgs([]string{"colony-vital-signs"})
 
 	err := rootCmd.Execute()
@@ -202,9 +176,8 @@ func TestMemoryMetricsReportsApplicationAwareHealth(t *testing.T) {
 
 	stdout = &buf
 
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	binding := bindCommandTestRepository(t)
+	s := binding.Store
 
 	writeTestJSON(t, s.BasePath(), "learning-observations.json", map[string]interface{}{
 		"observations": []interface{}{
@@ -266,5 +239,52 @@ func TestMemoryMetricsReportsApplicationAwareHealth(t *testing.T) {
 	curation := result["curation"].(map[string]interface{})
 	if curation["review_candidates"] != float64(1) {
 		t.Fatalf("review_candidates = %v, want 1", curation["review_candidates"])
+	}
+}
+
+func TestMemoryPhaseRestoreRepositoryAuthority200(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{name: "memory", run: TestMemoryMetrics},
+		{name: "phase", run: TestPhaseJSON},
+	}
+
+	orders := []struct {
+		name  string
+		tests []int
+	}{
+		{name: "memory then phase", tests: []int{0, 1}},
+		{name: "phase then memory", tests: []int{1, 0}},
+	}
+
+	for _, order := range orders {
+		t.Run(order.name, func(t *testing.T) {
+			originalRoot := t.TempDir()
+			originalDataDir := originalRoot + "/.aether/data"
+			if err := os.MkdirAll(originalDataDir, 0755); err != nil {
+				t.Fatalf("create original data directory: %v", err)
+			}
+			t.Setenv("AETHER_ROOT", originalRoot)
+			t.Setenv("COLONY_DATA_DIR", originalDataDir)
+			store = nil
+			tracer = nil
+
+			for _, testIndex := range order.tests {
+				tt := tests[testIndex]
+				t.Run(tt.name, tt.run)
+
+				if got := os.Getenv("AETHER_ROOT"); got != originalRoot {
+					t.Errorf("AETHER_ROOT = %q after %s cleanup, want %q", got, tt.name, originalRoot)
+				}
+				if got := os.Getenv("COLONY_DATA_DIR"); got != originalDataDir {
+					t.Errorf("COLONY_DATA_DIR = %q after %s cleanup, want %q", got, tt.name, originalDataDir)
+				}
+				if store != nil || tracer != nil {
+					t.Errorf("repository authority leaked after %s cleanup: store=%p tracer=%p", tt.name, store, tracer)
+				}
+			}
+		})
 	}
 }

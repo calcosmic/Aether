@@ -1,0 +1,806 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T15:58:24.319875+00:00",
+  "scope": "Plan25 immediate-ACK/named-batch repair focused checks and fifth actual ordinary attempt; no plan completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "tested_source_commit": "3a69a55f53ded32c70bb4079bd827ede1b95b4e3",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/summary.json",
+    "sha256": "sha256:b68c24f136bf4937d18373b59dcd1f851b462ec94a2c4d71135bc732fc2348a6"
+  },
+  "focused_snapshot_revision": "cf71f3f738fe1f4e5d46829e963c97f2c1cbbb36",
+  "focused_runs": {
+    "normal-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 44.489630937576294,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/normal-cmd.stdout",
+        "sha256": "sha256:34bb0ff51e2a75e4a3c2cd323e5631d9386dd010492e5cbffa6e87f17ef39067"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "test_counts": {
+        "pass": 678,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    },
+    "race-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 70.18917608261108,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/race-cmd.stdout",
+        "sha256": "sha256:821ebff6dcb40a8294c97c1943dcbeea53ecb828c17d604b2403ec279df88540"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "test_counts": {
+        "pass": 678,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    }
+  },
+  "live_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/summary.json",
+    "sha256": "sha256:9ad4642e5cd31954db505c0a9c4bd22176fbd7a29a1751697712f819cd0ff6d5"
+  },
+  "live_runner_review": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/activation-review.json",
+    "sha256": "sha256:528e6fc2a3b8ff47d112ded556bfa2f6687d1fb66b0dd2813910389198be4cf6"
+  },
+  "live_runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 309.48068387499916,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/live.stdout",
+        "sha256": "sha256:75f1ec09b741e8c77de85b0469eccce4089c46374551edba7b92a8c02612e265"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_processes": [
+          {
+            "pgid": 57412,
+            "pid": 57412,
+            "ppid": 57244,
+            "started": "Sat Sep 19 17:49:25 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57422,
+            "ppid": 57412,
+            "started": "Sat Sep 19 17:49:26 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57427,
+            "ppid": 57412,
+            "started": "Sat Sep 19 17:49:27 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57445,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:28 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57455,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:28 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57459,
+            "ppid": 57455,
+            "started": "Sat Sep 19 17:49:29 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57514,
+            "ppid": 57455,
+            "started": "Sat Sep 19 17:49:39 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57520,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:40 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57524,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:41 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57525,
+            "ppid": 57524,
+            "started": "Sat Sep 19 17:49:41 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57526,
+            "ppid": 57525,
+            "started": "Sat Sep 19 17:49:41 2026",
+            "state": "U"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57556,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57582,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57583,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57598,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57601,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57605,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57606,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57607,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:46 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57671,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:47 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57678,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57688,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57704,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57706,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57707,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57708,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57709,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57714,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57736,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57747,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "?E"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57748,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57751,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "?E"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57752,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57753,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57755,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57756,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57782,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57786,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57808,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57810,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57811,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57812,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57813,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57815,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57816,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57826,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57828,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57829,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57835,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57837,
+            "ppid": 57556,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57412,
+            "pid": 57840,
+            "ppid": 57427,
+            "started": "Sat Sep 19 17:49:49 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57846,
+            "pid": 57846,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:49:50 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 57966,
+            "pid": 57966,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:49:59 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58097,
+            "pid": 58097,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:50:14 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58119,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:50:18 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58120,
+            "ppid": 58119,
+            "started": "Sat Sep 19 17:50:18 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58121,
+            "ppid": 58120,
+            "started": "Sat Sep 19 17:50:18 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58123,
+            "ppid": 58120,
+            "started": "Sat Sep 19 17:50:18 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58130,
+            "ppid": 58120,
+            "started": "Sat Sep 19 17:50:20 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58119,
+            "pid": 58131,
+            "ppid": 58130,
+            "started": "Sat Sep 19 17:50:20 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58170,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:50:28 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58171,
+            "ppid": 58170,
+            "started": "Sat Sep 19 17:50:28 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58172,
+            "ppid": 58171,
+            "started": "Sat Sep 19 17:50:28 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58182,
+            "ppid": 58170,
+            "started": "Sat Sep 19 17:50:29 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58184,
+            "ppid": 58182,
+            "started": "Sat Sep 19 17:50:29 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 58170,
+            "pid": 58189,
+            "ppid": 58182,
+            "started": "Sat Sep 19 17:50:29 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 58332,
+            "pid": 58332,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:50:56 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 58358,
+            "pid": 58358,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:51:00 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 58386,
+            "pid": 58386,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:51:05 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 62675,
+            "pid": 62675,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:52:48 2026",
+            "state": "Ss"
+          },
+          {
+            "pgid": 62675,
+            "pid": 62677,
+            "ppid": 62675,
+            "started": "Sat Sep 19 17:52:49 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 63190,
+            "pid": 63190,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:53:02 2026",
+            "state": "?s"
+          },
+          {
+            "pgid": 63279,
+            "pid": 63279,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:53:18 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 66231,
+            "pid": 66231,
+            "ppid": 57840,
+            "started": "Sat Sep 19 17:54:27 2026",
+            "state": "Rs"
+          }
+        ]
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-acknowledgement-repair-e3clr7_k/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 4.299446666998847,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/replay.stdout",
+        "sha256": "sha256:13b48f1a8b67a5d32906e447d691da7c1852ae1aff6c47a778995694e4f76390"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "before_wait_processes": [],
+        "errors": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_processes": [
+          {
+            "pgid": 66369,
+            "pid": 66369,
+            "ppid": 57244,
+            "started": "Sat Sep 19 17:54:47 2026",
+            "state": "Rs"
+          },
+          {
+            "pgid": 66369,
+            "pid": 66377,
+            "ppid": 66369,
+            "started": "Sat Sep 19 17:54:48 2026",
+            "state": "R"
+          },
+          {
+            "pgid": 66369,
+            "pid": 66383,
+            "ppid": 66369,
+            "started": "Sat Sep 19 17:54:49 2026",
+            "state": "S"
+          },
+          {
+            "pgid": 66369,
+            "pid": 66389,
+            "ppid": 66383,
+            "started": "Sat Sep 19 17:54:50 2026",
+            "state": "?"
+          }
+        ]
+      }
+    }
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/receipt.json",
+    "sha256": "sha256:9ec426bdae7447d81e5c6d1bef7718782ffa5b5fbba57f7617ed8991bb3073e4"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/derived-ordinary.json",
+    "sha256": "sha256:c408dfa84d2a7451ec1528bbd80e7601e63090981fbddf8ef6eff6c9e7986eaa"
+  },
+  "actual_outcomes": {
+    "original": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": false,
+      "child_terminal_corroborated": false,
+      "runtime_credit_observed": false,
+      "parent_substitution": true,
+      "parent_unclassified_commands": [
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether command-guide build --platform codex\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/home/.codex/skills/aether/ant-build/SKILL.md\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/home/.codex/skills/aether/support/aether-colony-build-cycle.md\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:40000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:40000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_OUTPUT_MODE=visual aether status\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py manifest\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/manifest-envelope.json\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/manifest-envelope.json --execution-wave 11\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether spawn-log --help\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether spawn-log --name Brick-46 --caste builder --parent Queen --phase 1 --task \\\"Fix integer Clamp boundaries in the dependency-free tiny Go library; a native Builder edits clamp.go and runs go test ./...\\\"\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py reserve\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"jq -r .worker.native.prompt /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/reservation.json\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py bind /root/brick_46\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py context-initial\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py context-observe\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(JSON.stringify(r))\n"
+      ],
+      "child_unclassified_operations": [
+        "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/bin/aether codex-native-worker context-ack --delivery-id ccdcb9fb91216eca5bd60a3c81abd7ff294e264fe62ee30457200c728bcb6f98 --payload-sha256 sha256:48e63718424f68aae0b262ef40fa08780880121171366a77a9313447bcd3cb60 --release-token run-0d16de53dc6fabd17a14fdf112dd4049",
+        "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/bin/aether codex-native-worker context-ack --delivery-id ccdcb9fb91216eca5bd60a3c81abd7ff294e264fe62ee30457200c728bcb6f98 --payload-sha256 sha256:48e63718424f68aae0b262ef40fa08780880121171366a77a9313447bcd3cb60"
+      ],
+      "temporary_auth_removed": true
+    },
+    "derived": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": false,
+      "child_terminal_corroborated": false,
+      "runtime_credit_observed": false,
+      "parent_substitution": true,
+      "parent_unclassified_commands": [
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether command-guide build --platform codex\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/home/.codex/skills/aether/ant-build/SKILL.md\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/home/.codex/skills/aether/support/aether-colony-build-cycle.md\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:40000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"cat /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:40000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_OUTPUT_MODE=visual aether status\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py manifest\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/manifest-envelope.json\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/manifest-envelope.json --execution-wave 11\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether spawn-log --help\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"aether spawn-log --name Brick-46 --caste builder --parent Queen --phase 1 --task \\\"Fix integer Clamp boundaries in the dependency-free tiny Go library; a native Builder edits clamp.go and runs go test ./...\\\"\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:12000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py reserve\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"jq -r .worker.native.prompt /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/normal/tmp/aether-worker-request-native-live-891523908/reservation.json\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:30000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py bind /root/brick_46\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py context-initial\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(r.output)\n",
+        "unclassified code-mode: const r = await tools.exec_command({cmd:\"python3 /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository/.aether/native-fixture-coordinate.py context-observe\",workdir:\"/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/repository\",yield_time_ms:30000,max_output_tokens:20000});text(JSON.stringify(r))\n"
+      ],
+      "child_unclassified_operations": [
+        "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/bin/aether codex-native-worker context-ack --delivery-id ccdcb9fb91216eca5bd60a3c81abd7ff294e264fe62ee30457200c728bcb6f98 --payload-sha256 sha256:48e63718424f68aae0b262ef40fa08780880121171366a77a9313447bcd3cb60 --release-token run-0d16de53dc6fabd17a14fdf112dd4049",
+        "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-acknowledgement-repair-76fb39ii/capture/native-ordinary-1071981271/bin/aether codex-native-worker context-ack --delivery-id ccdcb9fb91216eca5bd60a3c81abd7ff294e264fe62ee30457200c728bcb6f98 --payload-sha256 sha256:48e63718424f68aae0b262ef40fa08780880121171366a77a9313447bcd3cb60"
+      ],
+      "temporary_auth_removed": true
+    }
+  },
+  "diagnosis": {
+    "actual_ack_attempts": "First ACK follows read directly but omits --request and adds unsupported --release-token; host exit1 unknown flag. Retry omits --request again; exit1 native request requires an absolute --request file.",
+    "source_mapping_available": true,
+    "runtime_refusal_correct": true,
+    "parent_classification": "Parent used otherwise literal exec wrappers ending text(r.output) with no final semicolon, and context-observe printed text(JSON.stringify(r)) without final semicolon. Those presentation forms remain unclassified; original parent_substitution flag remains true.",
+    "prospective_repair": "Spell complete ACK command retaining read executable and --request, prohibit invented release-token option. Add only exact optional terminal semicolon and bound JSON.stringify presentation forms with rejection controls. Do not change strict context ordering/ACK validation or infer a passing historical outcome."
+  },
+  "focused_required_bytes": 10471960576,
+  "full_plan23_required_bytes": 14191223120,
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  }
+}

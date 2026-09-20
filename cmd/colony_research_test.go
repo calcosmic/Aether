@@ -73,7 +73,7 @@ func TestColonyResearchReachesRouteSetterOnFirstPlan(t *testing.T) {
 		t.Fatal("no route_setter spec found")
 	}
 
-	brief := renderPlanningWorkerBrief(root, survey, routeSetter)
+	brief := renderPlanningWorkerBrief(root, survey, routeSetter, nil)
 	if !strings.Contains(brief, sentinel) {
 		t.Fatalf("the Route-Setter's brief does not contain the research the operator pointed at.\nThe handoff is wired at the flag but not delivered.\nBrief:\n%s", truncateString(brief, 1200))
 	}
@@ -100,7 +100,7 @@ func TestColonyResearchReachesScoutAndPhaseResearchBriefs(t *testing.T) {
 			scout = spec
 		}
 	}
-	if brief := renderPlanningWorkerBrief(root, survey, scout); !strings.Contains(brief, sentinel) {
+	if brief := renderPlanningWorkerBrief(root, survey, scout, nil); !strings.Contains(brief, sentinel) {
 		t.Error("the planning Scout does not receive the colony's research, so it may rediscover what is already known")
 	}
 

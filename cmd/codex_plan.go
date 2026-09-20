@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,6 +20,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 type codexPlanningDispatch struct {
@@ -43,6 +46,7 @@ type codexPlanningDispatch struct {
 	ColonySkills      int                      `json:"colony_skill_count,omitempty"`
 	DomainSkills      int                      `json:"domain_skill_count,omitempty"`
 	MatchedSkills     []string                 `json:"matched_skills,omitempty"`
+	StageManifest     *planningStageManifest   `json:"stage_manifest,omitempty"`
 	Claimed           []string                 `json:"-"`
 	PermissionProfile codex.PermissionProfile  `json:"permission_profile"`
 }
@@ -84,12 +88,9 @@ type codexPlanConfidence struct {
 }
 
 // planScore is a 0-100 confidence value that also accepts the 0-1 fractional
-// scale models naturally produce. The 27 July 2026 M4L run lost a complete
-// 45KB phase-plan.json because the Route-Setter wrote "knowledge": 0.85 and
-// the plain int field hard-failed the whole decode — the same one-loose-field
-// failure class as the scout payload that morning. A value written with a
-// fractional form (a decimal point in the JSON literal) is treated as 0-1 and
-// rescaled; a bare integer is taken literally. Non-numeric input still errors.
+// scale emitted by the legacy whole-plan worker contract. The staged planning
+// contract has a separate strict whole-number decoder because changing this
+// compatibility type would reject already-supported phase-plan artifacts.
 type planScore int
 
 func (s *planScore) UnmarshalJSON(data []byte) error {
@@ -170,21 +171,177 @@ type phaseTaskTemplate struct {
 }
 
 type codexPlanOptions struct {
-	Refresh           bool
-	Synthetic         bool
-	PlanOnly          bool
-	Depth             string
-	PlanningDepth     string
-	VerificationDepth string
-	WorkerTimeout     time.Duration
-	TargetConfidence  int
-	MaxIterations     int
-	Accept            bool
-	RepairArtifact    bool
-	RevisionType      string
-	RevisionReason    string
-	RevisionEvidence  []string
-	ResearchDocs      []string
+	Refresh             bool
+	Synthetic           bool
+	PlanOnly            bool
+	Preset              string
+	PresetSet           bool
+	Depth               string
+	DepthSet            bool
+	PlanningDepth       string
+	VerificationDepth   string
+	WorkerTimeout       time.Duration
+	TargetConfidence    int
+	TargetConfidenceSet bool
+	MaxIterations       int
+	MaxIterationsSet    bool
+	Accept              bool
+	RepairArtifact      bool
+	RevisionType        string
+	RevisionReason      string
+	RevisionEvidence    []string
+	ResearchDocs        []string
+	Territory           *SurveyFreshnessResult
+	RequireTerritory    bool
+}
+
+const (
+	planningPresetSourceRequired     = "owner_required"
+	planningPresetSourceNamed        = "named_preset"
+	planningPresetSourceExplicitPair = "explicit_pair"
+)
+
+type planningPresetPolicy struct {
+	ID               planningStagePreset `json:"id"`
+	Label            string              `json:"label"`
+	TargetConfidence int                 `json:"target"`
+	PassCap          int                 `json:"max_iterations"`
+}
+
+type planningPresetSelection struct {
+	PresetRequired  bool                   `json:"preset_required"`
+	Options         []planningPresetPolicy `json:"preset_options"`
+	Policy          planningPresetPolicy   `json:"policy,omitempty"`
+	SelectionSource string                 `json:"selection_source"`
+}
+
+var planningPresetPolicies = []planningPresetPolicy{
+	{ID: planningStagePresetFast, Label: "Fast", TargetConfidence: 80, PassCap: 4},
+	{ID: planningStagePresetBalanced, Label: "Balanced", TargetConfidence: 90, PassCap: 6},
+	{ID: planningStagePresetDeep, Label: "Deep", TargetConfidence: 95, PassCap: 8},
+	{ID: planningStagePresetExhaustive, Label: "Exhaustive", TargetConfidence: 99, PassCap: 12},
+}
+
+func resolvePlanningPreset(opts codexPlanOptions) (planningPresetSelection, error) {
+	options := append([]planningPresetPolicy(nil), planningPresetPolicies...)
+	namedValue := strings.TrimSpace(opts.Preset)
+	namedSet := opts.PresetSet || namedValue != ""
+	depthValue := strings.TrimSpace(opts.Depth)
+	depthSet := opts.DepthSet || depthValue != ""
+
+	var named planningPresetPolicy
+	if namedSet {
+		var ok bool
+		named, ok = planningPresetPolicyByName(namedValue, false)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("invalid planning preset %q: choose fast, balanced, deep, or exhaustive", namedValue)
+		}
+	}
+	if depthSet {
+		legacy, ok := planningPresetPolicyByName(depthValue, true)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("invalid planning depth %q: choose fast, balanced, deep, or exhaustive", depthValue)
+		}
+		if namedSet && legacy.ID != named.ID {
+			return planningPresetSelection{}, fmt.Errorf("conflicting planning preset flags: --preset %s does not match --depth %s", named.ID, legacy.ID)
+		}
+		if !namedSet {
+			named = legacy
+			namedSet = true
+		}
+	}
+
+	targetSet := opts.TargetConfidenceSet || opts.TargetConfidence != 0
+	capSet := opts.MaxIterationsSet || opts.MaxIterations != 0
+	if targetSet != capSet {
+		return planningPresetSelection{}, fmt.Errorf("explicit planning bounds require both --target and --max-iterations")
+	}
+
+	var explicit planningPresetPolicy
+	if targetSet {
+		if opts.TargetConfidence < planningLoopMinTarget || opts.TargetConfidence > planningLoopMaxTarget {
+			return planningPresetSelection{}, fmt.Errorf("--target must be between %d and %d", planningLoopMinTarget, planningLoopMaxTarget)
+		}
+		if opts.MaxIterations < planningLoopMinIterations || opts.MaxIterations > planningLoopMaxIterations {
+			return planningPresetSelection{}, fmt.Errorf("--max-iterations must be between %d and %d", planningLoopMinIterations, planningLoopMaxIterations)
+		}
+		var ok bool
+		explicit, ok = planningPresetPolicyByBounds(opts.TargetConfidence, opts.MaxIterations)
+		if !ok {
+			return planningPresetSelection{}, fmt.Errorf("explicit planning bounds %d/%d do not match an exact preset: use 80/4, 90/6, 95/8, or 99/12", opts.TargetConfidence, opts.MaxIterations)
+		}
+	}
+
+	if namedSet && targetSet && (named.TargetConfidence != explicit.TargetConfidence || named.PassCap != explicit.PassCap) {
+		return planningPresetSelection{}, fmt.Errorf("conflicting planning preset and explicit bounds: %s is %d/%d, not %d/%d", named.ID, named.TargetConfidence, named.PassCap, explicit.TargetConfidence, explicit.PassCap)
+	}
+	if namedSet {
+		return planningPresetSelection{Options: options, Policy: named, SelectionSource: planningPresetSourceNamed}, nil
+	}
+	if targetSet {
+		return planningPresetSelection{Options: options, Policy: explicit, SelectionSource: planningPresetSourceExplicitPair}, nil
+	}
+	return planningPresetSelection{PresetRequired: true, Options: options, SelectionSource: planningPresetSourceRequired}, nil
+}
+
+func planningPresetPolicyByName(value string, aliases bool) (planningPresetPolicy, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if aliases {
+		switch normalized {
+		case "quick", "light", string(colony.GranularitySprint):
+			normalized = string(planningStagePresetFast)
+		case "standard", "default", string(colony.GranularityMilestone):
+			normalized = string(planningStagePresetBalanced)
+		case string(colony.GranularityQuarter):
+			normalized = string(planningStagePresetDeep)
+		case "full", string(colony.GranularityMajor):
+			normalized = string(planningStagePresetExhaustive)
+		}
+	}
+	for _, policy := range planningPresetPolicies {
+		if string(policy.ID) == normalized {
+			return policy, true
+		}
+	}
+	return planningPresetPolicy{}, false
+}
+
+func planningPresetPolicyByBounds(target, passCap int) (planningPresetPolicy, bool) {
+	for _, policy := range planningPresetPolicies {
+		if policy.TargetConfidence == target && policy.PassCap == passCap {
+			return policy, true
+		}
+	}
+	return planningPresetPolicy{}, false
+}
+
+func planningPresetRequiredResult(state colony.ColonyState, selection planningPresetSelection) map[string]interface{} {
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	answer := nextActionForCandidateOverride(
+		state,
+		"plan",
+		candidatePlanPreset,
+		"Choose Fast, Balanced, Deep, or Exhaustive before planning starts.",
+		"<name>",
+	)
+	result := map[string]interface{}{
+		"planned":          false,
+		"status":           string(planningStagePresetRequired),
+		"goal":             goal,
+		"preset_required":  true,
+		"preset_options":   append([]planningPresetPolicy(nil), selection.Options...),
+		"selected_preset":  "",
+		"selection_source": selection.SelectionSource,
+		"dispatches":       []codexPlanningDispatch{},
+		"dispatch_count":   0,
+		"state_effect":     "unchanged",
+		"next":             nextActionPrimarySuggestion(answer),
+	}
+	applyNextActionToResult(result, answer)
+	return result
 }
 
 type codexPlanningLoop struct {
@@ -214,52 +371,113 @@ type codexPlanningLoopSample struct {
 }
 
 type codexPlanManifest struct {
-	Goal                      string                           `json:"goal"`
-	Root                      string                           `json:"root"`
-	GeneratedAt               string                           `json:"generated_at"`
-	BaseRevisionID            string                           `json:"base_revision_id,omitempty"`
-	BasePlanStateHash         string                           `json:"base_plan_state_hash"`
-	ColonyMode                string                           `json:"colony_mode,omitempty"`
-	Synthetic                 bool                             `json:"synthetic,omitempty"`
-	SyntheticWarning          string                           `json:"synthetic_warning,omitempty"`
-	PlanningRunID             string                           `json:"planning_run_id,omitempty"`
-	Iteration                 int                              `json:"iteration,omitempty"`
-	TargetConfidence          int                              `json:"target_confidence,omitempty"`
-	MaxIterations             int                              `json:"max_iterations,omitempty"`
-	PreviousConfidence        int                              `json:"previous_confidence,omitempty"`
-	PreviousEvidenceHash      string                           `json:"previous_evidence_hash,omitempty"`
-	SelectedGaps              []string                         `json:"selected_gaps,omitempty"`
-	PreviousPlanDraft         *codexWorkerPlanArtifact         `json:"previous_plan_draft,omitempty"`
-	ExpectedWorkers           []codexPlanningDispatch          `json:"expected_workers,omitempty"`
-	Refresh                   bool                             `json:"refresh"`
-	Revision                  *codexPlanRevisionContext        `json:"revision,omitempty"`
-	ExistingPlan              bool                             `json:"existing_plan"`
-	ExistingPhaseCount        int                              `json:"existing_phase_count,omitempty"`
-	Depth                     string                           `json:"depth"`
-	Granularity               string                           `json:"granularity"`
-	GranularityMin            int                              `json:"granularity_min"`
-	GranularityMax            int                              `json:"granularity_max"`
-	PlanningDepth             string                           `json:"planning_depth"`
-	VerificationDepth         string                           `json:"verification_depth,omitempty"`
-	PlanningLoop              codexPlanningLoop                `json:"planning_loop,omitempty"`
-	Survey                    codexSurveyContext               `json:"survey"`
-	Dispatches                []codexPlanningDispatch          `json:"dispatches"`
-	Snapshots                 map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
-	DispatchMode              string                           `json:"dispatch_mode"`
-	DispatchContract          map[string]interface{}           `json:"dispatch_contract"`
-	FinalizeSurface           string                           `json:"finalize_surface"`
-	RequiresFinalizer         bool                             `json:"requires_finalizer"`
-	BoundaryQuestions         []discussQuestion                `json:"boundary_questions,omitempty"`
-	BoundaryQuestionCount     int                              `json:"boundary_question_count,omitempty"`
-	BoundaryQuestionsCreated  int                              `json:"boundary_questions_created,omitempty"`
-	BoundaryQuestionsExisting int                              `json:"boundary_questions_existing,omitempty"`
-	OrchestratorGuidance      *orchestratorBoundaryGuidance    `json:"orchestrator_boundary_guidance,omitempty"`
-	ResearchProposal          []phaseResearchRecommendation    `json:"research_proposal,omitempty"`
-	ResearchProposalCard      string                           `json:"research_proposal_card,omitempty"`
-	ResearchAwaitingApproval  bool                             `json:"research_awaiting_approval,omitempty"`
-	ResearchWarning           string                           `json:"research_warning,omitempty"`
-	DepthProposal             depthProposal                    `json:"depth_proposal,omitempty"`
-	DepthProposalCard         string                           `json:"depth_proposal_card,omitempty"`
+	Goal                      string                             `json:"goal"`
+	Root                      string                             `json:"root"`
+	GeneratedAt               string                             `json:"generated_at"`
+	BaseRevisionID            string                             `json:"base_revision_id,omitempty"`
+	BasePlanStateHash         string                             `json:"base_plan_state_hash"`
+	ColonyMode                string                             `json:"colony_mode,omitempty"`
+	Synthetic                 bool                               `json:"synthetic,omitempty"`
+	SyntheticWarning          string                             `json:"synthetic_warning,omitempty"`
+	PlanningRunID             string                             `json:"planning_run_id,omitempty"`
+	Iteration                 int                                `json:"iteration,omitempty"`
+	TargetConfidence          int                                `json:"target_confidence,omitempty"`
+	MaxIterations             int                                `json:"max_iterations,omitempty"`
+	SelectedPreset            planningStagePreset                `json:"selected_preset,omitempty"`
+	PresetSelectionSource     string                             `json:"selection_source,omitempty"`
+	PreviousConfidence        int                                `json:"previous_confidence,omitempty"`
+	PreviousEvidenceHash      string                             `json:"previous_evidence_hash,omitempty"`
+	SelectedGaps              []string                           `json:"selected_gaps,omitempty"`
+	PreviousPlanDraft         *codexWorkerPlanArtifact           `json:"previous_plan_draft,omitempty"`
+	ExpectedWorkers           []codexPlanningDispatch            `json:"expected_workers,omitempty"`
+	Refresh                   bool                               `json:"refresh"`
+	Revision                  *codexPlanRevisionContext          `json:"revision,omitempty"`
+	ExistingPlan              bool                               `json:"existing_plan"`
+	ExistingPhaseCount        int                                `json:"existing_phase_count,omitempty"`
+	Depth                     string                             `json:"depth"`
+	Granularity               string                             `json:"granularity"`
+	GranularityMin            int                                `json:"granularity_min"`
+	GranularityMax            int                                `json:"granularity_max"`
+	PlanningDepth             string                             `json:"planning_depth"`
+	VerificationDepth         string                             `json:"verification_depth,omitempty"`
+	PlanningLoop              codexPlanningLoop                  `json:"planning_loop,omitempty"`
+	Survey                    codexSurveyContext                 `json:"survey"`
+	Territory                 *SurveyFreshnessResult             `json:"territory,omitempty"`
+	TerritoryRequired         bool                               `json:"territory_required,omitempty"`
+	Dispatches                []codexPlanningDispatch            `json:"dispatches"`
+	Snapshots                 map[string]codexArtifactSnapshot   `json:"snapshots,omitempty"`
+	DispatchMode              string                             `json:"dispatch_mode"`
+	DispatchContract          map[string]interface{}             `json:"dispatch_contract"`
+	FinalizeSurface           string                             `json:"finalize_surface"`
+	RequiresFinalizer         bool                               `json:"requires_finalizer"`
+	BoundaryQuestions         []discussQuestion                  `json:"boundary_questions,omitempty"`
+	BoundaryQuestionCount     int                                `json:"boundary_question_count,omitempty"`
+	BoundaryQuestionsCreated  int                                `json:"boundary_questions_created,omitempty"`
+	BoundaryQuestionsExisting int                                `json:"boundary_questions_existing,omitempty"`
+	OrchestratorGuidance      *orchestratorBoundaryGuidance      `json:"orchestrator_boundary_guidance,omitempty"`
+	ResearchPolicy            *phaseResearchAutomaticPolicy      `json:"research_policy,omitempty"`
+	PhaseResearchEvidence     []phaseResearchEvidenceAttribution `json:"phase_research_evidence,omitempty"`
+	StageManifest             *planningStageManifest             `json:"stage_manifest,omitempty"`
+	PlanningRunHeader         *planningRunHeader                 `json:"planning_run_header,omitempty"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned planning workers (the Route-Setter and
+	// planning Scout). It is computed once per plan-only manifest, carried
+	// here at the top level rather than copied into every dispatch brief, and
+	// the wrapper reads it once and prepends it, verbatim, to each spawned
+	// worker's prompt. Only populated on this plan-only manifest path — the
+	// in-process/native lane (dispatchRealPlanningWorkersWithIterationContext)
+	// already computes and shares its own capsule via
+	// codex.WorkerDispatch.ContextCapsule, and that lane never builds this
+	// struct.
+	ContextCapsule string `json:"context_capsule,omitempty"`
+}
+
+const planningRunHeaderSchemaVersion = "planning-run/v1"
+
+// planningRunHeader is the durable, authority-neutral identity of one staged
+// planning run. It snapshots only safe evidence catalogue projections; raw
+// source bodies stay with their owning stores and paths.
+type planningRunHeader struct {
+	SchemaVersion         string                             `json:"schema_version"`
+	ID                    string                             `json:"id"`
+	ContentHash           string                             `json:"content_hash"`
+	RunID                 string                             `json:"run_id"`
+	Goal                  string                             `json:"goal"`
+	GoalID                string                             `json:"goal_id"`
+	SessionID             string                             `json:"session_id"`
+	Specification         planningStageSpecificationBinding  `json:"specification"`
+	BasePlanRevisionID    string                             `json:"base_plan_revision_id"`
+	BasePlanRevisionHash  string                             `json:"base_plan_revision_hash"`
+	Preset                planningStagePreset                `json:"preset"`
+	TargetConfidence      int                                `json:"target_confidence"`
+	PassCap               int                                `json:"pass_cap"`
+	EvidenceCatalogue     []planningEvidenceRecord           `json:"evidence_catalogue"`
+	EvidenceFrontier      []planningStageEvidenceBinding     `json:"evidence_frontier"`
+	InputFrontierHash     string                             `json:"input_frontier_hash"`
+	MissingEvidenceKinds  []colony.PlanningEvidenceKind      `json:"missing_evidence_kinds,omitempty"`
+	ResearchPolicy        phaseResearchAutomaticPolicy       `json:"research_policy"`
+	PhaseResearchEvidence []phaseResearchEvidenceAttribution `json:"phase_research_evidence,omitempty"`
+	WeakestGap            colony.PlanningGap                 `json:"weakest_gap"`
+	StageManifestID       string                             `json:"stage_manifest_id"`
+	StageManifestHash     string                             `json:"stage_manifest_hash"`
+	CreatedAt             time.Time                          `json:"created_at"`
+}
+
+type approvedPlanningSpecification struct {
+	Specification colony.Specification
+	Revision      colony.SpecRevision
+	Binding       planningStageSpecificationBinding
+	GoalID        string
+	SessionID     string
+}
+
+type planningEvidencePrimingResult struct {
+	Records               []planningEvidenceRecord
+	Bindings              []planningStageEvidenceBinding
+	MissingKinds          []colony.PlanningEvidenceKind
+	PhaseResearchEvidence []phaseResearchEvidenceAttribution
+	FrontierHash          string
 }
 
 type codexPlanIterationState struct {
@@ -301,36 +519,814 @@ func planningWorkersFailedError(err error) error {
 	return fmt.Errorf("real planning workers did not finish cleanly: %s. Normal planning requires completed provider-backed Scout and Route-Setter work; rerun `aether plan` after fixing worker dispatch, or use `aether plan --synthetic` only for an explicitly marked preview/test plan", err.Error())
 }
 
+func planningSpecificationRecoveryError(detail, command string) error {
+	detail = strings.TrimSpace(detail)
+	if detail == "" {
+		detail = "an exact approved specification is required"
+	}
+	command = strings.TrimSpace(command)
+	if command == "" {
+		command = "aether spec"
+	}
+	return fmt.Errorf("planning did not start: %s. State is unchanged. Run `%s`", detail, command)
+}
+
+func requireApprovedPlanningSpecification(root string, state colony.ColonyState) (approvedPlanningSpecification, error) {
+	empty := approvedPlanningSpecification{}
+	if state.Specification == nil {
+		return empty, planningSpecificationRecoveryError("an approved specification is missing", "aether spec")
+	}
+	if err := validateSpecificationState(*state.Specification); err != nil {
+		return empty, planningSpecificationRecoveryError("the current specification is invalid: "+err.Error(), "aether spec")
+	}
+	revision, ok := currentSpecificationRevision(*state.Specification)
+	if !ok {
+		return empty, planningSpecificationRecoveryError("the current specification revision is missing", "aether spec")
+	}
+	if revision.Status != colony.SpecStatusApproved || revision.Approval == nil {
+		return empty, planningSpecificationRecoveryError(fmt.Sprintf("specification revision %s is %s, not approved", revision.ID, revision.Status), "aether spec")
+	}
+	if revision.Approval.RevisionID != revision.ID || revision.Approval.RevisionContentHash != revision.ContentHash {
+		return empty, planningSpecificationRecoveryError("the current specification approval hash does not match its revision", "aether spec")
+	}
+	if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" && strings.TrimSpace(revision.Scope.SessionID) != strings.TrimSpace(*state.SessionID) {
+		return empty, planningSpecificationRecoveryError("the approved specification belongs to a different colony session", "aether spec")
+	}
+	inspection, err := inspectSpecificationProjection(root)
+	if err != nil {
+		return empty, planningSpecificationRecoveryError("the readable specification projection cannot be verified: "+err.Error(), "aether spec --repair-projection")
+	}
+	if inspection.RevisionID != revision.ID || inspection.Drifted {
+		return empty, planningSpecificationRecoveryError("the readable specification projection is missing or does not match the approved revision", "aether spec --repair-projection")
+	}
+	approvalHash, err := jsonSHA256(*revision.Approval)
+	if err != nil {
+		return empty, fmt.Errorf("hash specification approval receipt: %w", err)
+	}
+	return approvedPlanningSpecification{
+		Specification: *state.Specification,
+		Revision:      revision,
+		Binding: planningStageSpecificationBinding{
+			RevisionID:            revision.ID,
+			ContentHash:           revision.ContentHash,
+			PredecessorRevisionID: revision.PredecessorID,
+			Status:                revision.Status,
+			ApprovalReceiptID:     revision.Approval.ID,
+			ApprovalReceiptHash:   approvalHash,
+		},
+		GoalID:    strings.TrimSpace(state.Specification.GoalID),
+		SessionID: strings.TrimSpace(revision.Scope.SessionID),
+	}, nil
+}
+
+func planningBaseRevisionIdentity(plan colony.Plan, planHash string) (string, string) {
+	revisionID := strings.TrimSpace(activePlanRevisionID(plan))
+	if revisionID == "" {
+		revisionID = "plan-unbound"
+	}
+	return revisionID, strings.TrimSpace(planHash)
+}
+
+func planningEvidenceDimensions(kind colony.PlanningEvidenceKind) []colony.PlanningDimension {
+	switch kind {
+	case colony.PlanningEvidenceCharter:
+		return []colony.PlanningDimension{colony.PlanningDimensionKnowledge, colony.PlanningDimensionRequirements, colony.PlanningDimensionRisks}
+	case colony.PlanningEvidenceSurvey, colony.PlanningEvidenceContext, colony.PlanningEvidenceHive:
+		return []colony.PlanningDimension{colony.PlanningDimensionKnowledge, colony.PlanningDimensionRisks, colony.PlanningDimensionDependencies, colony.PlanningDimensionEffort}
+	default:
+		return colony.PlanningDimensions()
+	}
+}
+
+func planningEvidenceSourceRevision(prefix string, content []byte) string {
+	return strings.TrimSpace(prefix) + "-" + planningEvidenceSHA256(content)[:16]
+}
+
+func planningSurveyHasEvidence(survey codexSurveyContext) bool {
+	return len(survey.SurveyDocs)+len(survey.Languages)+len(survey.Frameworks)+len(survey.Directories)+len(survey.EntryPoints)+len(survey.Dependencies)+len(survey.TestFiles)+len(survey.Issues)+len(survey.SecurityPatterns)+len(survey.SourceAnchors) > 0
+}
+
+func planningOutcomeEvidence(state colony.ColonyState) []string {
+	values := make([]string, 0)
+	for _, event := range state.Events {
+		lower := strings.ToLower(event)
+		if strings.Contains(lower, "phase_completed") || strings.Contains(lower, "verification") || strings.Contains(lower, "seal_") {
+			values = append(values, strings.TrimSpace(event))
+		}
+	}
+	for _, phase := range state.Plan.Phases {
+		if phase.Status == colony.PhaseCompleted {
+			values = append(values, fmt.Sprintf("phase %d %s completed", phase.ID, strings.TrimSpace(phase.Name)))
+		}
+	}
+	return uniqueSortedStrings(values)
+}
+
+func primePlanningStartEvidence(root string, state colony.ColonyState, approved approvedPlanningSpecification, survey codexSurveyContext, contextCapsule, baseRevisionID, runID string, observedAt time.Time) (planningEvidencePrimingResult, error) {
+	result := planningEvidencePrimingResult{}
+	scope := planningEvidenceScope{
+		GoalID:                  approved.GoalID,
+		SessionID:               approved.SessionID,
+		SpecificationRevisionID: approved.Revision.ID,
+		PlanRevisionID:          baseRevisionID,
+	}
+	sources := make([]planningEvidenceSource, 0, 10)
+	present := make(map[colony.PlanningEvidenceKind]bool)
+	addJSON := func(kind colony.PlanningEvidenceKind, origin, revision string, value interface{}) error {
+		content, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("encode %s planning evidence: %w", kind, err)
+		}
+		if len(strings.TrimSpace(string(content))) == 0 || string(content) == "null" || string(content) == "[]" {
+			return nil
+		}
+		if strings.TrimSpace(revision) == "" {
+			revision = planningEvidenceSourceRevision(string(kind), content)
+		}
+		sources = append(sources, planningEvidenceSource{
+			Kind: kind, Origin: origin, Content: content, Scope: scope, SourceRevision: revision,
+			ObservedAt: observedAt, ApplicableDimensions: planningEvidenceDimensions(kind), State: planningEvidenceSourceCurrent,
+		})
+		present[kind] = true
+		return nil
+	}
+
+	if err := addJSON(colony.PlanningEvidenceSpecification, "state:approved-specification", approved.Revision.ID, approved.Revision); err != nil {
+		return result, err
+	}
+	if planningSurveyHasEvidence(survey) {
+		if err := addJSON(colony.PlanningEvidenceSurvey, "survey:current", planningEvidenceSourceRevision("survey", []byte(strings.Join(survey.SurveyDocs, "\x00"))), survey); err != nil {
+			return result, err
+		}
+	}
+	if state.AcceptedCharter != nil {
+		if err := addJSON(colony.PlanningEvidenceCharter, "state:accepted-charter", state.AcceptedCharter.EpisodeID, state.AcceptedCharter); err != nil {
+			return result, err
+		}
+	}
+	activeDecisions, _ := filterPendingDecisionFileForScope(loadPendingDecisionFile(), pendingDecisionScopeFromState(state))
+	resolvedDecisions := make([]PendingDecision, 0, len(activeDecisions.Decisions))
+	for _, decision := range activeDecisions.Decisions {
+		if decision.Resolved {
+			resolvedDecisions = append(resolvedDecisions, decision)
+		}
+	}
+	if len(resolvedDecisions) > 0 {
+		if err := addJSON(colony.PlanningEvidenceDecision, "state:resolved-decisions", "decision-frontier-"+runID, resolvedDecisions); err != nil {
+			return result, err
+		}
+	}
+	if strings.TrimSpace(contextCapsule) != "" {
+		content := []byte(contextCapsule)
+		sources = append(sources, planningEvidenceSource{
+			Kind: colony.PlanningEvidenceContext, Origin: "context:colony-prime", Content: content, Scope: scope,
+			SourceRevision: planningEvidenceSourceRevision("context", content), ObservedAt: observedAt,
+			ApplicableDimensions: planningEvidenceDimensions(colony.PlanningEvidenceContext), State: planningEvidenceSourceCurrent,
+		})
+		present[colony.PlanningEvidenceContext] = true
+	}
+	researchDocs, err := validateColonyResearchDocs(root, state.ResearchDocs)
+	if err != nil {
+		return result, err
+	}
+	approvedRoots := make([]string, 0, len(researchDocs))
+	for _, document := range researchDocs {
+		content, readErr := os.ReadFile(filepath.Join(root, filepath.FromSlash(document)))
+		if readErr != nil {
+			return result, fmt.Errorf("read planning research evidence %s: %w", document, readErr)
+		}
+		if scan := privacyScan(string(content)); scan.Blocked {
+			return result, fmt.Errorf("planning research evidence %s refused: source contains secret-bearing material", document)
+		}
+		approvedRoot := filepath.ToSlash(filepath.Dir(filepath.FromSlash(document)))
+		if approvedRoot == "" {
+			approvedRoot = "."
+		}
+		approvedRoots = append(approvedRoots, approvedRoot)
+		sources = append(sources, planningEvidenceSource{
+			Kind: colony.PlanningEvidenceResearch, Origin: document, RepositoryPath: document, Scope: scope,
+			SourceRevision: planningEvidenceSourceRevision("research", content), ObservedAt: observedAt,
+			ApplicableDimensions: planningEvidenceDimensions(colony.PlanningEvidenceResearch), State: planningEvidenceSourceCurrent,
+		})
+		present[colony.PlanningEvidenceResearch] = true
+	}
+	hiveEntries := readHiveWisdomEntries(resolveHubPath(), 5, nil)
+	if len(hiveEntries) > 0 {
+		if err := addJSON(colony.PlanningEvidenceHive, "hive:active-wisdom", planningEvidenceSourceRevision("hive", []byte(runID)), hiveEntries); err != nil {
+			return result, err
+		}
+	}
+	if outcomes := planningOutcomeEvidence(state); len(outcomes) > 0 {
+		if err := addJSON(colony.PlanningEvidenceOutcome, "state:verified-outcomes", planningEvidenceSourceRevision("outcomes", []byte(strings.Join(outcomes, "\x00"))), outcomes); err != nil {
+			return result, err
+		}
+	}
+
+	records, err := collectPlanningEvidence(planningEvidenceCollectionRequest{
+		RepositoryRoot: root,
+		ApprovedRoots:  uniqueSortedStrings(approvedRoots),
+		Sources:        sources,
+	})
+	if err != nil {
+		return result, err
+	}
+	phaseResearchDocs, err := discoverScoutPhaseResearchDocs(root)
+	if err != nil {
+		return result, err
+	}
+	phaseResearch, err := collectScoutPhaseResearchEvidence(root, phaseResearchDocs, scope, observedAt)
+	if err != nil {
+		return result, err
+	}
+	if len(phaseResearch.Records) > 0 {
+		present[colony.PlanningEvidenceResearch] = true
+		records = mergePlanningEvidenceRecords(records, phaseResearch.Records)
+		result.PhaseResearchEvidence = append([]phaseResearchEvidenceAttribution(nil), phaseResearch.Attributions...)
+	}
+	result.Records = records
+	result.Bindings = make([]planningStageEvidenceBinding, 0, len(records))
+	for _, record := range records {
+		result.Bindings = append(result.Bindings, planningStageEvidenceBinding{ID: record.Reference.ID, ContentHash: record.Reference.ContentHash})
+	}
+	for _, kind := range []colony.PlanningEvidenceKind{
+		colony.PlanningEvidenceSpecification,
+		colony.PlanningEvidenceSurvey,
+		colony.PlanningEvidenceCharter,
+		colony.PlanningEvidenceDecision,
+		colony.PlanningEvidenceResearch,
+		colony.PlanningEvidenceHive,
+		colony.PlanningEvidenceOutcome,
+	} {
+		if !present[kind] {
+			result.MissingKinds = append(result.MissingKinds, kind)
+		}
+	}
+	result.FrontierHash, err = jsonSHA256(struct {
+		RunID        string                         `json:"run_id"`
+		Scope        planningEvidenceScope          `json:"scope"`
+		Evidence     []planningStageEvidenceBinding `json:"evidence"`
+		MissingKinds []colony.PlanningEvidenceKind  `json:"missing_kinds,omitempty"`
+	}{RunID: runID, Scope: scope, Evidence: result.Bindings, MissingKinds: result.MissingKinds})
+	if err != nil {
+		return planningEvidencePrimingResult{}, fmt.Errorf("hash planning evidence frontier: %w", err)
+	}
+	return result, nil
+}
+
+func planningStartWeakestGap(seed codexPlanIterationState, evidence planningEvidencePrimingResult) (colony.PlanningGap, error) {
+	description := "Scout must verify the weakest implementation, dependency, and effort assumptions before Route-Setter may propose a plan."
+	evidenceNeeded := "Fresh repository or authoritative evidence that resolves the weakest current planning assumption."
+	severity := 25
+	if seed.LastIteration > 0 && len(seed.SelectedGaps) > 0 {
+		description = strings.TrimSpace(seed.SelectedGaps[0])
+		evidenceNeeded = "Fresh applicable evidence that resolves this prior pass's weakest remaining gap."
+		severity = 60
+	} else if len(evidence.MissingKinds) > 0 {
+		missing := make([]string, 0, len(evidence.MissingKinds))
+		for _, kind := range evidence.MissingKinds {
+			missing = append(missing, string(kind))
+		}
+		description = "Missing or stale " + strings.Join(missing, ", ") + " evidence limits initial planning readiness."
+		evidenceNeeded = "Current attributable evidence for " + strings.Join(missing, ", ") + "."
+		severity = 75
+	}
+	evidenceIDs := make([]string, 0, len(evidence.Bindings))
+	for _, binding := range evidence.Bindings {
+		evidenceIDs = append(evidenceIDs, binding.ID)
+	}
+	gap := colony.PlanningGap{
+		SchemaVersion:           colony.PlanningSchemaVersion,
+		Dimension:               colony.PlanningDimensionKnowledge,
+		Materiality:             colony.PlanningGapNonMaterial,
+		Severity:                severity,
+		Description:             description,
+		EvidenceIDs:             evidenceIDs,
+		EvidenceThatWouldChange: evidenceNeeded,
+	}
+	payload := gap
+	payload.ID = ""
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return colony.PlanningGap{}, fmt.Errorf("hash initial planning gap: %w", err)
+	}
+	gap.ContentHash = hash
+	gap.ID = "planning-gap-" + hash[:16]
+	if err := gap.Validate(); err != nil {
+		return colony.PlanningGap{}, fmt.Errorf("validate initial planning gap: %w", err)
+	}
+	return gap, nil
+}
+
+func buildPlanningRunHeader(goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash string, evidence planningEvidencePrimingResult, gap colony.PlanningGap, researchPolicy phaseResearchAutomaticPolicy, manifest planningStageManifest, createdAt time.Time) (planningRunHeader, error) {
+	header := planningRunHeader{
+		SchemaVersion:         planningRunHeaderSchemaVersion,
+		RunID:                 manifest.RunID,
+		Goal:                  strings.TrimSpace(goal),
+		GoalID:                approved.GoalID,
+		SessionID:             approved.SessionID,
+		Specification:         approved.Binding,
+		BasePlanRevisionID:    baseRevisionID,
+		BasePlanRevisionHash:  baseRevisionHash,
+		Preset:                policy.ID,
+		TargetConfidence:      policy.TargetConfidence,
+		PassCap:               policy.PassCap,
+		EvidenceCatalogue:     append([]planningEvidenceRecord(nil), evidence.Records...),
+		EvidenceFrontier:      append([]planningStageEvidenceBinding(nil), evidence.Bindings...),
+		InputFrontierHash:     evidence.FrontierHash,
+		MissingEvidenceKinds:  append([]colony.PlanningEvidenceKind(nil), evidence.MissingKinds...),
+		ResearchPolicy:        researchPolicy,
+		PhaseResearchEvidence: append([]phaseResearchEvidenceAttribution(nil), evidence.PhaseResearchEvidence...),
+		WeakestGap:            gap,
+		StageManifestID:       manifest.ID,
+		StageManifestHash:     manifest.ContentHash,
+		CreatedAt:             createdAt.UTC(),
+	}
+	payload := header
+	payload.ID = ""
+	payload.ContentHash = ""
+	hash, err := jsonSHA256(payload)
+	if err != nil {
+		return planningRunHeader{}, fmt.Errorf("hash planning run header: %w", err)
+	}
+	header.ContentHash = hash
+	header.ID = "planning-run-header-" + hash[:16]
+	return header, nil
+}
+
+func preparePlanningScoutStage(root string, state colony.ColonyState, goal string, policy planningPresetPolicy, approved approvedPlanningSpecification, baseRevisionID, baseRevisionHash, contextCapsule string, survey codexSurveyContext, seed codexPlanIterationState, refresh bool, generatedAt time.Time) (planningRunHeader, planningStageState, planningStageManifest, error) {
+	emptyHeader := planningRunHeader{}
+	emptyState := planningStageState{}
+	emptyManifest := planningStageManifest{}
+	runID := strings.TrimSpace(seed.PlanningRunID)
+	if runID == "" {
+		runID = planningRunID(goal, root, generatedAt)
+	}
+	pass := seed.LastIteration + 1
+	if pass < 1 {
+		pass = 1
+	}
+	evidence, err := primePlanningStartEvidence(root, state, approved, survey, contextCapsule, baseRevisionID, runID, generatedAt)
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, err
+	}
+	if len(evidence.Bindings) == 0 {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("approved planning start produced no evidence frontier")
+	}
+	gap, err := planningStartWeakestGap(seed, evidence)
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, err
+	}
+	researchPolicy := computeAutomaticPhaseResearchPolicy(
+		policy.ID,
+		&gap,
+		survey,
+		phaseResearchCandidates(state, seed),
+		state.Plan.Phases,
+		evidence.Records,
+		refresh,
+	)
+	priorCardHash := planningEvidenceSHA256([]byte("planning-card-origin"))
+	initial := planningStageState{
+		Stage:                planningStagePresetRequired,
+		RunID:                runID,
+		Pass:                 pass,
+		Specification:        approved.Binding,
+		BasePlanRevisionID:   baseRevisionID,
+		BasePlanRevisionHash: baseRevisionHash,
+		PriorCardHash:        priorCardHash,
+		InputFrontierHash:    evidence.FrontierHash,
+		WeakestGap:           &gap,
+	}
+	ready, manifest, err := reducePlanningStage(initial, planningStageTransition{To: planningStageScoutReady, Preset: policy.ID})
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("select planning preset: %w", err)
+	}
+	if manifest != nil {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("preset selection unexpectedly authorized a worker")
+	}
+	authorizationSeed, err := jsonSHA256(struct {
+		RunID        string                         `json:"run_id"`
+		Pass         int                            `json:"pass"`
+		Caste        planningStageWorkerCaste       `json:"caste"`
+		FrontierHash string                         `json:"frontier_hash"`
+		Evidence     []planningStageEvidenceBinding `json:"evidence"`
+		GapHash      string                         `json:"gap_hash"`
+	}{RunID: runID, Pass: pass, Caste: planningStageCasteScout, FrontierHash: evidence.FrontierHash, Evidence: evidence.Bindings, GapHash: gap.ContentHash})
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("hash Scout authorization: %w", err)
+	}
+	authorization := planningStageAuthorization{
+		ID:                "planning-authorization-" + authorizationSeed[:16],
+		ExpectedCaste:     planningStageCasteScout,
+		InputFrontierHash: evidence.FrontierHash,
+		EvidenceFrontier:  evidence.Bindings,
+		WeakestGap:        &gap,
+	}
+	running, stageManifest, err := reducePlanningStage(ready, planningStageTransition{To: planningStageScoutRunning, Authorization: &authorization})
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("authorize Scout planning stage: %w", err)
+	}
+	if stageManifest == nil {
+		return emptyHeader, emptyState, emptyManifest, fmt.Errorf("Scout planning stage did not emit a manifest")
+	}
+	header, err := buildPlanningRunHeader(goal, policy, approved, baseRevisionID, baseRevisionHash, evidence, gap, researchPolicy, *stageManifest, generatedAt)
+	if err != nil {
+		return emptyHeader, emptyState, emptyManifest, err
+	}
+	return header, running, *stageManifest, nil
+}
+
+func persistPlanningScoutStage(root string, header planningRunHeader, running planningStageState, manifest planningStageManifest) error {
+	return withPlanningMutationSession(root, "planning-scout-stage", func(session *planningMutationSession) error {
+		return persistPlanningScoutStageInSession(session, header, running, manifest)
+	})
+}
+
+func persistPlanningScoutStageInSession(session *planningMutationSession, header planningRunHeader, running planningStageState, manifest planningStageManifest) error {
+	return persistPlanningScoutStageAndStateInSession(session, header, running, manifest, nil)
+}
+
+func persistPlanningScoutStageAndStateInSession(session *planningMutationSession, header planningRunHeader, running planningStageState, manifest planningStageManifest, state *colony.ColonyState) error {
+	if err := validatePlanningStageManifest(manifest); err != nil {
+		return err
+	}
+	if err := validatePlanningStageRunningState(running, manifest); err != nil {
+		return err
+	}
+	headerBytes, err := marshalPlanningStageJSON(header)
+	if err != nil {
+		return fmt.Errorf("marshal planning run header: %w", err)
+	}
+	manifestBytes, err := marshalPlanningStageJSON(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal planning stage manifest: %w", err)
+	}
+	stateBytes, err := marshalPlanningStageJSON(running)
+	if err != nil {
+		return fmt.Errorf("marshal planning stage state: %w", err)
+	}
+	headerPath := filepath.ToSlash(filepath.Join("planning", manifest.RunID, "run-header.json"))
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: headerPath, Content: headerBytes},
+		{Root: lifecycleTransactionRootData, Path: planningStageDataRelativePath(planningStageManifestRepositoryPath(manifest.RunID, manifest.ID)), Content: manifestBytes},
+		{Root: lifecycleTransactionRootData, Path: planningStageDataRelativePath(planningStageStateRepositoryPath(manifest.RunID)), Content: stateBytes},
+	}
+	if state != nil {
+		colonyStateBytes, err := marshalSpecificationState(*state)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: colonyStateBytes})
+	}
+	if err := commitPlanningSessionTargets(session, "planning-scout-stage-"+manifest.ContentHash[:24], "planning-scout-stage", targets); err != nil {
+		return fmt.Errorf("persist Scout run header and stage dispatch: %w", err)
+	}
+	return nil
+}
+
+type planningSessionTarget struct {
+	Root    lifecycleTransactionRootKind
+	Path    string
+	Content []byte
+	Remove  bool
+}
+
+// commitPlanningSessionTargets is the small common boundary used by the
+// remaining planning writers in this file. It captures every target baseline
+// while the repository session is held, derives a baseline-and-output-bound
+// transaction identity, and publishes the complete target set together.
+func commitPlanningSessionTargets(session *planningMutationSession, transactionPrefix, command string, targets []planningSessionTarget) error {
+	if session == nil {
+		return fmt.Errorf("%s requires a planning mutation session", command)
+	}
+	if len(targets) == 0 {
+		return nil
+	}
+	sortedTargets := append([]planningSessionTarget(nil), targets...)
+	sort.Slice(sortedTargets, func(left, right int) bool {
+		if sortedTargets[left].Root != sortedTargets[right].Root {
+			return sortedTargets[left].Root < sortedTargets[right].Root
+		}
+		return sortedTargets[left].Path < sortedTargets[right].Path
+	})
+	digest := sha256.New()
+	allApplied := true
+	for _, target := range sortedTargets {
+		current, exists, err := session.ReadFile(target.Root, target.Path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(digest, "%s\x00%s\x00%t\x00", target.Root, target.Path, exists)
+		digest.Write(current)
+		digest.Write([]byte{0})
+		fmt.Fprintf(digest, "%t\x00", target.Remove)
+		digest.Write(target.Content)
+		digest.Write([]byte{0})
+		if target.Remove {
+			allApplied = allApplied && !exists
+		} else {
+			allApplied = allApplied && exists && bytes.Equal(current, target.Content)
+		}
+	}
+	if allApplied {
+		return nil
+	}
+	prefix := strings.Trim(strings.TrimSpace(transactionPrefix), "-")
+	if prefix == "" {
+		prefix = "planning-session"
+	}
+	transactionID := prefix + "-" + hex.EncodeToString(digest.Sum(nil))[:20]
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: transactionID,
+		Command:       command,
+		Allowlist: lifecycleTransactionAllowlist{
+			RepositoryRoot: session.RepositoryRoot(), LifecycleDataRoot: session.DataRoot(),
+		},
+		Session: session,
+	})
+	if err != nil {
+		return err
+	}
+	for _, target := range sortedTargets {
+		if target.Remove {
+			err = tx.DeclareRemoval(target.Root, target.Path)
+		} else {
+			err = tx.DeclareWrite(target.Root, target.Path, target.Content)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if err := tx.Validate(); err != nil {
+		return err
+	}
+	if _, err = tx.Commit(); err != nil {
+		return err
+	}
+	for _, target := range sortedTargets {
+		if err := refreshPlanningSessionBaseline(session, target.Root, target.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func refreshPlanningSessionBaseline(session *planningMutationSession, root lifecycleTransactionRootKind, relativePath string) error {
+	state, err := session.currentFileState(root, relativePath)
+	if err != nil {
+		return err
+	}
+	return session.updateBaseline(root, relativePath, state)
+}
+
+func persistPlanningColonyStateInSession(session *planningMutationSession, operation string, state colony.ColonyState) error {
+	content, err := marshalSpecificationState(state)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, operation, operation, []planningSessionTarget{{
+		Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: content,
+	}})
+}
+
+func planningSessionSummaryTargets(session *planningMutationSession, state colony.ColonyState, commandName, suggestedNext, summary string, now time.Time) ([]planningSessionTarget, error) {
+	var sessionFile colony.SessionFile
+	exists, err := session.LoadJSON(lifecycleTransactionRootData, "session.json", &sessionFile)
+	if err != nil {
+		return nil, fmt.Errorf("load session summary: %w", err)
+	}
+	now = now.UTC()
+	nowText := now.Format(time.RFC3339)
+	goal := ""
+	if state.Goal != nil {
+		goal = strings.TrimSpace(*state.Goal)
+	}
+	if !exists {
+		sessionID := fmt.Sprintf("%d_%s", now.Unix(), randomHex(4))
+		if state.SessionID != nil && strings.TrimSpace(*state.SessionID) != "" {
+			sessionID = strings.TrimSpace(*state.SessionID)
+		}
+		startedAt := nowText
+		if state.InitializedAt != nil {
+			startedAt = state.InitializedAt.UTC().Format(time.RFC3339)
+		}
+		sessionFile = colony.SessionFile{
+			SessionID: sessionID, StartedAt: startedAt, ColonyGoal: goal,
+			ColonyMode: state.EffectiveColonyMode(), CurrentPhase: state.CurrentPhase,
+			CurrentMilestone: state.Milestone, SuggestedNext: "aether status",
+			ActiveTodos: []string{}, Summary: "Session initialized",
+		}
+	}
+	if strings.TrimSpace(sessionFile.SessionID) == "" {
+		sessionFile.SessionID = fmt.Sprintf("%d_%s", now.Unix(), randomHex(4))
+	}
+	if strings.TrimSpace(sessionFile.StartedAt) == "" {
+		sessionFile.StartedAt = nowText
+	}
+	sessionFile.ColonyGoal = goal
+	sessionFile.ColonyMode = state.EffectiveColonyMode()
+	sessionFile.CurrentPhase = state.CurrentPhase
+	sessionFile.CurrentMilestone = state.Milestone
+	sessionFile.ActiveTodos = mergeShelfTodos(sessionFile.ActiveTodos, sessionActiveTodosFromState(state))
+	if strings.TrimSpace(commandName) != "" {
+		sessionFile.LastCommand = commandName
+		sessionFile.LastCommandAt = nowText
+	}
+	if strings.TrimSpace(suggestedNext) != "" {
+		sessionFile.SuggestedNext = suggestedNext
+	} else if strings.TrimSpace(sessionFile.SuggestedNext) == "" {
+		sessionFile.SuggestedNext = nextCommandFromState(state)
+	}
+	if strings.TrimSpace(summary) != "" {
+		sessionFile.Summary = summary
+	}
+	if head := strings.TrimSpace(getGitHEAD()); head != "" {
+		sessionFile.BaselineCommit = head
+	}
+	sessionBytes, err := json.MarshalIndent(sessionFile, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal session summary: %w", err)
+	}
+	sessionBytes = append(sessionBytes, '\n')
+	next := sessionFile.SuggestedNext
+	if strings.TrimSpace(next) == "" {
+		next = nextCommandFromState(state)
+	}
+	contextBytes := []byte(renderContextSnapshot(state, sessionFile, next, summary, defaultSafeToClear(state)))
+	handoffBytes := []byte(renderHandoffSnapshot(state, sessionFile, "Session Snapshot", next, summary))
+	return []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: "session.json", Content: sessionBytes},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.ToSlash(filepath.Join(".aether", "CONTEXT.md")), Content: contextBytes},
+		{Root: lifecycleTransactionRootRepository, Path: filepath.ToSlash(filepath.Join(".aether", "HANDOFF.md")), Content: handoffBytes},
+	}, nil
+}
+
 func runCodexPlan(root string, refresh bool, synthetic bool) (map[string]interface{}, error) {
 	return runCodexPlanWithOptions(root, codexPlanOptions{
-		Refresh:   refresh,
-		Synthetic: synthetic,
+		Refresh:          refresh,
+		Synthetic:        synthetic,
+		RequireTerritory: true,
 	})
 }
 
 func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]interface{}, error) {
+	var result map[string]interface{}
+	sessionRoot := root
+	if store != nil {
+		if authoritativeRoot := aetherRootFromDataPath(store.BasePath()); authoritativeRoot != "" && filepath.Clean(filepath.Join(root, ".aether", "data")) != filepath.Clean(store.BasePath()) {
+			sessionRoot = authoritativeRoot
+		}
+	}
+	// A standard-mode plan-only request that merely reports an existing plan is
+	// provably read-only. Avoid creating the session's durable lock sentinel so
+	// the long-standing --plan-only no-mutation contract remains byte exact.
+	if readOnly, handled, err := runCodexExistingPlanReadOnly(sessionRoot, opts); handled {
+		return readOnly, err
+	}
+	err := withPlanningMutationSession(sessionRoot, "codex-plan", func(session *planningMutationSession) error {
+		var runErr error
+		result, runErr = runCodexPlanWithOptionsInSession(session, opts)
+		return runErr
+	})
+	return result, err
+}
+
+func runCodexExistingPlanReadOnly(_ string, opts codexPlanOptions) (map[string]interface{}, bool, error) {
+	if !opts.PlanOnly || opts.Refresh || opts.RepairArtifact || opts.Accept || len(opts.ResearchDocs) != 0 || store == nil {
+		return nil, false, nil
+	}
+	state, err := loadActiveColonyState()
+	if err != nil || len(state.Plan.Phases) == 0 || state.EffectiveColonyMode() == colony.ColonyModeOrchestrator {
+		return nil, false, nil
+	}
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return nil, true, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, true, err
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), true, nil
+	}
+	opts.Preset = string(preset.Policy.ID)
+	opts.Depth = string(preset.Policy.ID)
+	opts.TargetConfidence = preset.Policy.TargetConfidence
+	opts.MaxIterations = preset.Policy.PassCap
+	granularity, planDepth, err := resolvePlanGranularityDepth(state.PlanGranularity, opts.Depth)
+	if err != nil {
+		return nil, true, err
+	}
+	currentPhase := firstBuildablePhase(state.Plan.Phases)
+	planningPhase := state.Plan.Phases[0]
+	if currentPhase > 0 && currentPhase <= len(state.Plan.Phases) {
+		planningPhase = state.Plan.Phases[currentPhase-1]
+	}
+	planningDepth, err := resolvePlanningDepthSmart(opts.PlanningDepth, planningPhase, len(state.Plan.Phases))
+	if err != nil {
+		return nil, true, err
+	}
+	verificationDepth, err := resolveVerificationDepthSmart(opts.VerificationDepth, planningPhase, len(state.Plan.Phases))
+	if err != nil {
+		return nil, true, err
+	}
+	pending := loadPendingDecisionFile()
+	unresolvedClarifications := countPendingClarifications(pending)
+	clarificationWarning := ""
+	if unresolvedClarifications > 0 {
+		clarificationWarning = "Unresolved clarifications exist. Run `aether discuss` to resolve them before planning, or proceed with implicit assumptions."
+	}
+	nextPhase := firstBuildablePhase(state.Plan.Phases)
+	nextCommand := "aether build 1"
+	if nextPhase > 0 {
+		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
+	}
+	result := map[string]interface{}{
+		"plan_only": true, "planned": true, "existing_plan": true,
+		"colony_mode": string(state.EffectiveColonyMode()), "goal": *state.Goal,
+		"phases": state.Plan.Phases, "plan_revision": planRevisionSummary(state.Plan), "count": len(state.Plan.Phases),
+		"depth": planDepth, "planning_depth": planningDepth, "verification_depth": verificationDepth,
+		"planning_loop": resolvePlanningLoopOptions(planDepth, opts), "preset_required": false,
+		"preset_options": preset.Options, "selected_preset": string(preset.Policy.ID), "selection_source": preset.SelectionSource,
+		"target_confidence": preset.Policy.TargetConfidence, "max_iterations": preset.Policy.PassCap,
+		"verification_smart_default": opts.VerificationDepth == "", "planning_smart_default": opts.PlanningDepth == "",
+		"planning_phase": planningPhase, "granularity": string(granularity),
+		"dispatch_contract": planningDispatchContractWithTimeout(opts.WorkerTimeout), "dispatch_mode": "plan-only",
+		"requires_finalizer": false, "unresolved_clarifications": unresolvedClarifications,
+		"clarification_warning": clarificationWarning, "next": nextCommand,
+	}
+	addBoundaryQuestionResultFields(result, emptyOrchestratorBoundaryQuestionsResult())
+	addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, nil)
+	return result, true, nil
+}
+
+func runCodexPlanWithOptionsInSession(session *planningMutationSession, opts codexPlanOptions) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
+	if opts.Accept {
+		return nil, fmt.Errorf("--accept no longer accepts or activates a plan. Review the pending candidate, then use `aether plan --accept-candidate <candidate-id>`")
+	}
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	state, err := loadActiveColonyState()
+	state, err := loadSpecificationColonyStateInSession(session)
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "specification") {
+			return nil, planningSpecificationRecoveryError("the current specification state is invalid: "+err.Error(), "aether spec")
+		}
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
+		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
+	}
+	if opts.RepairArtifact {
+		if opts.PlanOnly || opts.Refresh || opts.Synthetic || opts.PresetSet || opts.DepthSet || opts.TargetConfidenceSet || opts.MaxIterationsSet || opts.Preset != "" || opts.Depth != "" || opts.PlanningDepth != "" || opts.VerificationDepth != "" || opts.RevisionType != "" || opts.RevisionReason != "" || len(opts.RevisionEvidence) > 0 || len(opts.ResearchDocs) > 0 {
+			return nil, fmt.Errorf("--repair-artifact cannot be combined with plan generation, preset, revision or research options")
+		}
+		return runCodexPlanDependencyRepair(root, state)
+	}
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, err
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), nil
+	}
+	opts.Preset = string(preset.Policy.ID)
+	opts.Depth = string(preset.Policy.ID)
+	opts.TargetConfidence = preset.Policy.TargetConfidence
+	opts.MaxIterations = preset.Policy.PassCap
+	if len(state.Plan.Phases) == 0 || opts.Refresh {
+		if _, err := requireApprovedPlanningSpecification(root, state); err != nil {
+			return nil, err
+		}
+	}
+	// Legacy non-git workspaces have no immutable source revision to bind. They
+	// retain the pre-199 planning behavior; repositories with a real revision
+	// use the strict automatic territory gate below.
+	_, territoryRevisionErr := currentTerritoryRevision(root)
+	if opts.RequireTerritory && territoryRevisionErr == nil && !opts.RepairArtifact && (len(state.Plan.Phases) == 0 || opts.Refresh) {
+		freshness, refreshManifest, err := territoryPlanPreflight(root, opts)
+		if err != nil {
+			return nil, err
+		}
+		if refreshManifest != nil {
+			return territoryRefreshPlanResult(state, freshness, *refreshManifest), nil
+		}
+		opts.Territory = &freshness
 	}
 
 	// --research is additive and persistent: point once, and every later plan
 	// run keeps the document. A bad path fails the run rather than being
 	// dropped -- a silently ignored research document is the failure this
 	// whole handoff exists to prevent.
-	merged, changed, researchErr := mergeColonyResearchDocs(root, state.ResearchDocs, opts.ResearchDocs)
+	merged, researchChanged, researchErr := mergeColonyResearchDocs(root, state.ResearchDocs, opts.ResearchDocs)
 	if researchErr != nil {
 		return nil, researchErr
 	}
-	if changed {
+	if researchChanged {
 		state.ResearchDocs = merged
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			return nil, fmt.Errorf("record research documents on colony state: %w", err)
-		}
 	}
 
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
@@ -341,7 +1337,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if err != nil {
 		return nil, fmt.Errorf("hash active plan before planning: %w", err)
 	}
-
 	granularity, planDepth, err := resolvePlanGranularityDepth(state.PlanGranularity, opts.Depth)
 	if err != nil {
 		return nil, err
@@ -371,27 +1366,30 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if opts.PlanOnly {
-		return runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+		return runCodexPlanPlanOnlyInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, researchChanged, opts)
 	}
-	if opts.RepairArtifact {
-		return runCodexPlanRepairArtifact(root)
-	}
-
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
-		if opts.Accept {
-			return nil, fmt.Errorf("--accept has no effect while an existing plan is active: nothing was accepted. Re-run the loop with `aether plan --refresh --accept`, or adopt a validated on-disk phase-plan.json with `aether plan --repair-artifact`")
-		}
 		// Persist resolved verification depth only for non-plan-only paths.
 		state.VerificationDepth = verificationDepth
-		if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-			return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-		}
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 		}
-		updateSessionSummary("plan", nextCommand, fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases)))
+		summary := fmt.Sprintf("Loaded existing plan (%d phases)", len(state.Plan.Phases))
+		stateBytes, marshalErr := marshalSpecificationState(state)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		targets := []planningSessionTarget{{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes}}
+		sessionTargets, summaryErr := planningSessionSummaryTargets(session, state, "plan", nextCommand, summary, time.Now().UTC())
+		if summaryErr != nil {
+			return nil, summaryErr
+		}
+		targets = append(targets, sessionTargets...)
+		if err := commitPlanningSessionTargets(session, "plan-existing", "plan-existing", targets); err != nil {
+			return nil, fmt.Errorf("persist existing plan metadata: %w", err)
+		}
 		return map[string]interface{}{
 			"planned":                    true,
 			"existing_plan":              true,
@@ -404,6 +1402,12 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
+			"preset_required":            false,
+			"preset_options":             preset.Options,
+			"selected_preset":            string(preset.Policy.ID),
+			"selection_source":           preset.SelectionSource,
+			"target_confidence":          preset.Policy.TargetConfidence,
+			"max_iterations":             preset.Policy.PassCap,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -416,7 +1420,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	}
 
 	if codex.ShouldUseAgentDelegatePath() {
-		return runCodexPlanAgentDelegate(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+		return runCodexPlanAgentDelegateInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, researchChanged, opts)
 	}
 
 	var invoker codex.WorkerInvoker
@@ -427,14 +1431,16 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 	}
 
-	// Persist resolved verification depth only once planning will finalize in this process.
+	// Resolve verification depth before dispatch, but publish it only with the
+	// selected final or intermediate branch transaction.
 	state.VerificationDepth = verificationDepth
-	if err := store.SaveJSON("COLONY_STATE.json", state); err != nil {
-		return nil, fmt.Errorf("failed to persist verification depth: %w", err)
-	}
 
+	var refreshCleanupTargets []planningSessionTarget
 	if opts.Refresh {
-		clearFallbackPlanningArtifacts(root)
+		refreshCleanupTargets, err = fallbackPlanningArtifactRemovalTargetsInSession(session)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	runHandle, err := beginRuntimeSpawnRun("plan", time.Now().UTC())
@@ -444,6 +1450,18 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	runStatus := "failed"
 	defer func() {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
+	}()
+
+	// 202-03 (CEC-05): the planning episode. planEpisodeID reuses the same
+	// run identifier finishRuntimeSpawnRun above persists, so the cockpit
+	// and the durable spawn-run record name the same episode.
+	planEpisodeID := ""
+	if runHandle != nil {
+		planEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(planEpisodeID, events.EpisodeKindPlan)
+	defer func() {
+		emitColonyLiveEpisodeEnded(planEpisodeID, events.EpisodeKindPlan, runStatus)
 	}()
 
 	survey, err := loadCodexSurveyContext(root)
@@ -481,6 +1499,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	artifactSource := "local-synthesis"
 	planSource := "local-synthesis"
 	planningWarning := planningSyntheticWarningForMode(opts.Synthetic)
+	if err := ensurePlanningSpawnTreeInSession(session); err != nil {
+		return nil, err
+	}
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	for _, dispatch := range dispatches {
 		if err := spawnTree.RecordSpawn("Queen", dispatch.Caste, dispatch.Name, dispatch.Task, 1); err != nil {
@@ -532,11 +1553,6 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	if !ok {
 		return nil, fmt.Errorf("planning dispatches missing route-setter worker")
 	}
-	scoutFile, preservedScoutArtifact, err := writePlanningScoutArtifact(root, planningDir, *state.Goal, granularity, survey, scoutDispatch, scoutReport, artifactSnapshots)
-	if err != nil {
-		return nil, err
-	}
-
 	phases, confidence, unresolvedGaps := synthesizeRouteSetterPlan(*state.Goal, granularity, survey, scoutReport)
 	if workerPlan, ok, note, err := loadWorkerPlanArtifact(root, artifactSnapshots, dispatches); err != nil {
 		return nil, err
@@ -594,6 +1610,9 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		FinalizeSurface:      "direct-runtime",
 		RequiresFinalizer:    false,
 	}
+	if opts.Territory != nil {
+		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
+	}
 	planningLoop := evaluatePlanningLoop(confidence, unresolvedGaps, opts, planDepth)
 	if !opts.Synthetic && dispatchMode == "real" {
 		if err := validatePlanningConfidenceEvidence(manifest, confidence, evidenceHash); err != nil {
@@ -601,31 +1620,27 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 		planningLoop = evaluatePlanningLoopIteration(manifest, confidence, unresolvedGaps, evidenceHash)
 	}
-	routeSetterFile, preservedRouteArtifact, err := writeRouteSetterArtifact(root, planningDir, *state.Goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots)
+	publication, err := preparePlanningArtifactPublication(session, *state.Goal, granularity, survey, scoutDispatch, scoutReport, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots, dispatches, true, true)
 	if err != nil {
 		return nil, err
 	}
-	planArtifactFile, preservedPlanArtifact, err := writeWorkerPlanArtifact(root, planningDir, confidence, unresolvedGaps, phases, planningLoop, artifactSnapshots, dispatches)
-	if err != nil {
-		return nil, err
-	}
-	phaseResearchFiles, preservedResearchArtifacts, _, err := writePhaseResearchArtifacts(root, phaseResearchDir, survey, scoutReport, phases, artifactSnapshots, dispatches)
-	if err != nil {
-		return nil, err
-	}
-	if preservedScoutArtifact || preservedRouteArtifact || preservedPlanArtifact || preservedResearchArtifacts > 0 {
+	scoutFile := publication.ScoutFile
+	routeSetterFile := publication.RouteSetterFile
+	planArtifactFile := publication.PlanArtifactFile
+	phaseResearchFiles := publication.PhaseResearchFiles
+	if publication.PreservedScout || publication.PreservedRouteSetter || publication.PreservedPlan || publication.PreservedPhaseResearch > 0 {
 		artifactSource = "worker-written"
 	}
-
-	// Legacy fallback artifacts are cleared after real, simulated, or explicit synthetic planning.
-	if dispatchMode == "fallback" {
-		markerPath := filepath.Join(planningDir, ".fallback-marker")
-		os.WriteFile(markerPath, []byte(time.Now().UTC().Format(time.RFC3339)), 0644)
-	} else {
-		// Real or simulated dispatch succeeded — remove any stale marker.
-		os.Remove(filepath.Join(planningDir, ".fallback-marker"))
+	backupTargets, err := planningBackupRemovalTargetsInSession(session)
+	if err != nil {
+		return nil, err
 	}
-	clearPlanningBackupArtifacts(planningDir)
+	publicationTargets := mergePlanningSessionTargets(
+		refreshCleanupTargets,
+		[]planningSessionTarget{planningFallbackMarkerTarget(dispatchMode, time.Now().UTC())},
+		backupTargets,
+		publication.Targets,
+	)
 
 	for i := range dispatches {
 		status := dispatches[i].Status
@@ -647,6 +1662,22 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		}
 	}
 	emitPlanCeremonyDispatchSequence("aether-plan", dispatches)
+	// 202-03 (CEC-05): the planning wave and its worker started/finished
+	// pairs, immediately adjacent to the ceremony dispatch sequence above --
+	// dispatches are already fully resolved (Name/Caste/Status) by this
+	// point, so start and finish are emitted back to back rather than
+	// bracketing an async run the way build's per-worker loop does.
+	emitColonyLiveWaveStarted(planEpisodeID, events.EpisodeKindPlan, 1)
+	for _, dispatch := range dispatches {
+		planWorker := codex.WorkerDispatch{WorkerName: dispatch.Name, Caste: dispatch.Caste, Wave: 1}
+		emitColonyLiveWorkerStarted(planEpisodeID, events.EpisodeKindPlan, planWorker)
+		status := strings.TrimSpace(dispatch.Status)
+		if status == "" || status == "spawned" {
+			status = "completed"
+		}
+		emitColonyLiveWorkerFinished(planEpisodeID, events.EpisodeKindPlan, planWorker, codex.DispatchResult{WorkerName: dispatch.Name, Status: status})
+	}
+	emitColonyLiveWaveEnded(planEpisodeID, events.EpisodeKindPlan, 1, "completed")
 
 	statuses := make([]string, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -655,7 +1686,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	runStatus = summarizeRunStatus(statuses...)
 	if !opts.Synthetic && dispatchMode == "real" && planningLoop.StopReason == planningLoopPendingStop {
 		phasePlanDraft = workerPlanArtifactFromPhases(confidence, unresolvedGaps, phases, planningLoop)
-		result, err := persistIntermediatePlanningIteration(root, manifest, dispatches, scoutReport, phasePlanDraft, confidence, unresolvedGaps, evidenceHash, planningLoop, codexPlanProvenance{
+		result, err := persistIntermediatePlanningIterationInSession(session, manifest, dispatches, scoutReport, phasePlanDraft, confidence, unresolvedGaps, evidenceHash, planningLoop, codexPlanProvenance{
 			Dispatches:     dispatches,
 			ScoutReport:    scoutReport,
 			PhasePlan:      &phasePlanDraft,
@@ -664,7 +1695,7 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 			PlanSource:     planSource,
 			SourceSummary:  "direct real planning workers",
 			RecordWorkers:  false,
-		})
+		}, &state, publicationTargets)
 		if err != nil {
 			return nil, err
 		}
@@ -710,40 +1741,49 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 	now := time.Now().UTC()
 	planConfidence := float64(confidence.Overall) / 100.0
 	var revision colony.PlanRevision
-	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &state, func() error {
-		state = normalizeLegacyColonyState(state)
-		if err := validatePlanManifestBase(root, manifest, state); err != nil {
-			return err
-		}
-		acceptedPlan, acceptedRevision, err := activateGeneratedPlan(state.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, manifest, evidenceHash)
-		if err != nil {
-			return err
-		}
-		state.State = colony.StateREADY
-		state.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
-		state.BuildStartedAt = nil
-		state.PlanGranularity = granularity
-		state.VerificationDepth = verificationDepth
-		state.Plan = acceptedPlan
-		revision = acceptedRevision
-		state.Events = append(trimmedEvents(state.Events),
-			fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
-			fmt.Sprintf("%s|plan_revision_activated|plan|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
-			fmt.Sprintf("%s|plan_generated|plan|Generated %d active phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, planningLoop.StopReason),
-		)
-		return nil
-	}); err != nil {
+	state = normalizeLegacyColonyState(state)
+	if err := validatePlanManifestBase(root, manifest, state); err != nil {
 		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
 	}
+	acceptedPlan, acceptedRevision, err := activateGeneratedPlan(state.Plan, phases, now, &planConfidence, colony.PlanEvidenceBoundV1, manifest, evidenceHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
+	}
+	state.State = colony.StateREADY
+	state.CurrentPhase = firstBuildablePhase(acceptedPlan.Phases)
+	state.BuildStartedAt = nil
+	state.PlanGranularity = granularity
+	state.VerificationDepth = verificationDepth
+	state.Plan = acceptedPlan
+	revision = acceptedRevision
+	state.Events = append(trimmedEvents(state.Events),
+		fmt.Sprintf("%s|planning_scout|plan|Scout summarized surveyed repo context", now.Format(time.RFC3339)),
+		fmt.Sprintf("%s|plan_revision_activated|plan|Activated %s (%s): %s", now.Format(time.RFC3339), revision.ID, revision.ReasonType, revision.Reason),
+		fmt.Sprintf("%s|plan_generated|plan|Generated %d active phases with %d%% confidence; planning loop stopped: %s", now.Format(time.RFC3339), len(acceptedPlan.Phases), confidence.Overall, planningLoop.StopReason),
+	)
+	stateBytes, err := marshalSpecificationState(state)
+	if err != nil {
+		return nil, err
+	}
 	phases = state.Plan.Phases
-	_ = os.Remove(filepath.Join(store.BasePath(), planningIterationStateRel))
-
 	nextPhase := firstBuildablePhase(phases)
 	nextCommand := "aether build 1"
 	if nextPhase > 0 {
 		nextCommand = fmt.Sprintf("aether build %d", nextPhase)
 	}
-	updateSessionSummary("plan", nextCommand, fmt.Sprintf("Generated %d plan phases with %d%% confidence", len(phases), confidence.Overall))
+	summary := fmt.Sprintf("Generated %d plan phases with %d%% confidence", len(phases), confidence.Overall)
+	targets := []planningSessionTarget{
+		{Root: lifecycleTransactionRootData, Path: "COLONY_STATE.json", Content: stateBytes},
+		{Root: lifecycleTransactionRootData, Path: planningIterationStateRel, Remove: true},
+	}
+	sessionTargets, err := planningSessionSummaryTargets(session, state, "plan", nextCommand, summary, now)
+	if err != nil {
+		return nil, err
+	}
+	targets = mergePlanningSessionTargets(publicationTargets, targets, sessionTargets)
+	if err := commitPlanningSessionTargets(session, "plan-activate", "plan-activate", targets); err != nil {
+		return nil, fmt.Errorf("failed to atomically activate plan revision: %w", err)
+	}
 
 	dispatchMaps := make([]map[string]interface{}, 0, len(dispatches))
 	for _, dispatch := range dispatches {
@@ -809,106 +1849,25 @@ func runCodexPlanWithOptions(root string, opts codexPlanOptions) (map[string]int
 		"iteration":                  manifest.Iteration,
 		"evidence_hash":              evidenceHash,
 	}
+	if manifest.TerritoryRequired {
+		result["territory_freshness"] = manifest.Territory
+		result["territory_snapshot_id"] = manifest.Territory.SnapshotID
+	}
 	return result, nil
 }
 
-// phaseResearchApprovalWarning is the loud, non-blocking warning D-08 and
-// T-164-15 require when the Queen's research batch has not been answered by
-// anyone yet. Research is enrichment, not a gate (Phase 160 classification):
-// this never becomes an error and never blocks manifest generation.
-const phaseResearchApprovalWarning = "research batch not answered — no phase research will run; answer with `aether plan-research-approve --approve-all`"
-
-// phaseResearchProposalResult carries the research proposal fields the
-// plan-only result map and manifest expose in both the existing-plan and
-// fresh-plan branches (RESEARCH-01, RESEARCH-02), plus the approved-phase map
-// dispatch gating consumes (Plan 05 Task 3).
-type phaseResearchProposalResult struct {
-	Proposal         phaseResearchProposal
-	Card             string
-	AwaitingApproval bool
-	Warning          string
-	Approved         map[int]bool
+func ensurePlanningSpawnTreeInSession(session *planningMutationSession) error {
+	_, exists, err := session.ReadFile(lifecycleTransactionRootData, "spawn-tree.txt")
+	if err != nil || exists {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-spawn-tree-init", "planning-spawn-tree-init", []planningSessionTarget{{
+		Root: lifecycleTransactionRootData, Path: "spawn-tree.txt", Content: []byte{},
+	}})
 }
 
-// resultFields renders r as the four json-tagged keys the plan-only result
-// map and manifest struct share: research_proposal, research_proposal_card,
-// research_awaiting_approval, research_warning.
-func (r phaseResearchProposalResult) resultFields() map[string]interface{} {
-	return map[string]interface{}{
-		"research_proposal":          r.Proposal.Phases,
-		"research_proposal_card":     r.Card,
-		"research_awaiting_approval": r.AwaitingApproval,
-		"research_warning":           r.Warning,
-	}
-}
-
-// computePhaseResearchProposalFields computes the research proposal, its
-// rendered tick-to-approve card, and the approval-state fields. When persist
-// is true, the current run's unresolved research-decisions supersede any
-// previous unresolved decisions for the same phases (D-06 -- a fresh manifest
-// re-proposes); resolved decisions are always left untouched so a second
-// manifest fetched after the batch was answered does not lose the answer.
-// Research is enrichment, never a gate (D-08 / Phase 160 classification): a
-// save failure here is swallowed, never returned as an error.
-func computePhaseResearchProposalFields(planDepth string, replan bool, survey codexSurveyContext, candidates []phaseResearchCandidate, phases []colony.Phase, persist bool) phaseResearchProposalResult {
-	proposal := computePhaseResearchProposal(planDepth, replan, survey, candidates, phases)
-
-	var file PendingDecisionFile
-	if store != nil {
-		if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-			file = PendingDecisionFile{Decisions: []PendingDecision{}}
-		}
-	}
-
-	if persist && store != nil && len(proposal.Phases) > 0 {
-		scope := loadCurrentPendingDecisionScope()
-		kept := make([]PendingDecision, 0, len(file.Decisions))
-		for _, d := range file.Decisions {
-			if d.Type == phaseResearchDecisionType && !d.Resolved && pendingDecisionMatchesScope(d, scope) {
-				continue // superseded by the fresh proposal below (D-06)
-			}
-			kept = append(kept, d)
-		}
-		for _, rec := range proposal.Phases {
-			decision := newPhaseResearchDecision(rec)
-			stampPendingDecisionScope(&decision, scope)
-			kept = append(kept, decision)
-		}
-		file.Decisions = kept
-		_ = store.SaveJSON(pendingDecisionsFile, file)
-	}
-
-	resolved := resolvePhaseResearchDecisions(file)
-	approved := map[int]bool{}
-	anyResolved := false
-	for _, rec := range proposal.Phases {
-		direction, ok := resolved[rec.PhaseID]
-		if !ok {
-			continue
-		}
-		anyResolved = true
-		if direction == "research" {
-			approved[rec.PhaseID] = true
-		}
-	}
-
-	awaitingApproval := len(proposal.Phases) > 0 && !anyResolved
-	warning := ""
-	if awaitingApproval {
-		warning = phaseResearchApprovalWarning
-	}
-
-	return phaseResearchProposalResult{
-		Proposal:         proposal,
-		Card:             renderPhaseResearchProposalBlock(proposal),
-		AwaitingApproval: awaitingApproval,
-		Warning:          warning,
-		Approved:         approved,
-	}
-}
-
-func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
-	result, err := runCodexPlanPlanOnly(root, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, opts)
+func runCodexPlanAgentDelegateInSession(session *planningMutationSession, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, persistState bool, opts codexPlanOptions) (map[string]interface{}, error) {
+	result, err := runCodexPlanPlanOnlyInSession(session, state, granularity, planDepth, unresolvedClarifications, clarificationWarning, persistState, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -932,6 +1891,13 @@ func runCodexPlanAgentDelegate(root string, state colony.ColonyState, granularit
 		result["wrapper_contract"] = contract
 	}
 	return result, nil
+}
+
+func planningScoutStageDispatchContract(dispatches []codexPlanningDispatch, workerTimeout time.Duration) map[string]interface{} {
+	contract := planningDispatchContractForDispatches(dispatches, workerTimeout)
+	contract["execution_model"] = "1 staged planning worker: scout only"
+	contract["dependency_behavior"] = "This manifest authorizes only the Scout. Route-Setter requires a later receipt-bound manifest after Scout completion."
+	return contract
 }
 
 // routeSetterResearchBudgetChars bounds the total phase-research content
@@ -983,7 +1949,8 @@ func renderRouteSetterResearchContent(root string, candidates []phaseResearchCan
 	return b.String()
 }
 
-func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, opts codexPlanOptions) (map[string]interface{}, error) {
+func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colony.ColonyState, granularity colony.PlanGranularity, planDepth string, unresolvedClarifications int, clarificationWarning string, persistState bool, opts codexPlanOptions) (map[string]interface{}, error) {
+	root := session.RepositoryRoot()
 	if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 		return nil, fmt.Errorf("No active colony goal. Run `aether init \"goal\"` first.")
 	}
@@ -997,19 +1964,28 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	}
 	verificationSmartDefault := opts.VerificationDepth == ""
 	planningSmartDefault := opts.PlanningDepth == ""
-	proposal := computeDepthProposal(state, granularity, planningDepth, verificationDepth,
-		planningSmartDefault, verificationSmartDefault)
-	proposalCard := renderDepthProposalCard(proposal)
+	preset, err := resolvePlanningPreset(opts)
+	if err != nil {
+		return nil, err
+	}
+	if preset.PresetRequired {
+		return planningPresetRequiredResult(state, preset), nil
+	}
 	planningPhase := colony.Phase{ID: 1}
+	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
+	if err != nil {
+		return nil, err
+	}
 	if len(state.Plan.Phases) > 0 && !opts.Refresh {
+		if persistState {
+			if err := persistPlanningColonyStateInSession(session, "plan-only-research-documents", state); err != nil {
+				return nil, fmt.Errorf("record research documents on colony state: %w", err)
+			}
+		}
 		nextPhase := firstBuildablePhase(state.Plan.Phases)
 		nextCommand := "aether build 1"
 		if nextPhase > 0 {
 			nextCommand = fmt.Sprintf("aether build %d", nextPhase)
-		}
-		boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
-		if err != nil {
-			return nil, err
 		}
 		result := map[string]interface{}{
 			"plan_only":                  true,
@@ -1024,6 +2000,12 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"planning_depth":             planningDepth,
 			"verification_depth":         verificationDepth,
 			"planning_loop":              resolvePlanningLoopOptions(planDepth, opts),
+			"preset_required":            false,
+			"preset_options":             preset.Options,
+			"selected_preset":            string(preset.Policy.ID),
+			"selection_source":           preset.SelectionSource,
+			"target_confidence":          preset.Policy.TargetConfidence,
+			"max_iterations":             preset.Policy.PassCap,
 			"verification_smart_default": verificationSmartDefault,
 			"planning_smart_default":     planningSmartDefault,
 			"planning_phase":             planningPhase,
@@ -1033,19 +2015,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"requires_finalizer":         false,
 			"unresolved_clarifications":  unresolvedClarifications,
 			"clarification_warning":      clarificationWarning,
-			"depth_proposal":             proposal,
-			"depth_proposal_card":        proposalCard,
 			"next":                       nextCommand,
 		}
 		addBoundaryQuestionResultFields(result, boundary)
 		addOrchestratorBoundaryGuidance(result, "plan", state, nextCommand, boundary.Questions)
-		if survey, surveyErr := loadCodexSurveyContext(root); surveyErr == nil {
-			researchCandidates := phaseResearchCandidates(state, codexPlanIterationState{})
-			researchResult := computePhaseResearchProposalFields(planDepth, false, survey, researchCandidates, state.Plan.Phases, false)
-			for k, v := range researchResult.resultFields() {
-				result[k] = v
-			}
-		}
 		return result, nil
 	}
 	revisionContext, err := buildPlanRevisionContext(root, state, opts)
@@ -1056,12 +2029,49 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	if err != nil {
 		return nil, fmt.Errorf("hash active plan before planning: %w", err)
 	}
+	approvedSpecification, err := requireApprovedPlanningSpecification(root, state)
+	if err != nil {
+		return nil, err
+	}
+	baseRevisionID, baseRevisionHash := planningBaseRevisionIdentity(state.Plan, basePlanStateHash)
 
 	survey, err := loadCodexSurveyContext(root)
 	if err != nil {
 		return nil, err
 	}
 	generatedAt := time.Now().UTC()
+
+	// A run already waiting on a worker is resumed BEFORE a second run can be
+	// started beside it. Until this branch existed the planner always prepared
+	// a fresh Scout stage, so a run parked at route_running was unreachable:
+	// re-running produced a stray second run at the Scout stage while the
+	// Route-Setter stage manifest the first run had already issued had nowhere
+	// to be submitted. --refresh stays the deliberate way to abandon an
+	// in-flight run and start over.
+	if !opts.Refresh {
+		resume, resumeErr := resolvePlanningStageResume(session)
+		if resumeErr != nil {
+			return nil, resumeErr
+		}
+		if resume != nil {
+			resumeManifest, buildErr := buildPlanningStageResumeManifest(root, state, *resume, granularity, planDepth, planningDepth, verificationDepth, survey, resolveCodexWorkerContext(), opts, generatedAt)
+			if buildErr != nil {
+				return nil, buildErr
+			}
+			// Questions raised at this boundary are already materialized above
+			// and travel with the resumed dispatch exactly as they do with a
+			// fresh one -- a resumed run must not be the one path where an
+			// unanswered owner question goes unmentioned.
+			resumeManifest.BoundaryQuestions = append([]discussQuestion(nil), boundary.Questions...)
+			resumeManifest.BoundaryQuestionCount = len(boundary.Questions)
+			resumeManifest.BoundaryQuestionsCreated = boundary.Created
+			resumeManifest.BoundaryQuestionsExisting = boundary.Existing
+			envelope := planningStageResumeEnvelope(state, *resume, resumeManifest, granularity, planDepth, planningDepth, verificationDepth)
+			envelope["boundary_questions"] = resumeManifest.BoundaryQuestions
+			envelope["boundary_question_count"] = resumeManifest.BoundaryQuestionCount
+			return envelope, nil
+		}
+	}
 	planningLoop := resolvePlanningLoopOptions(planDepth, opts)
 	iterationSeed := planningManifestIterationSeed(*state.Goal, root, planDepth, planningDepth, planningLoop, revisionContext, generatedAt)
 	iteration := iterationSeed.LastIteration + 1
@@ -1074,93 +2084,130 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 	planningLoop.Gaps = append([]string{}, iterationSeed.SelectedGaps...)
 
 	dispatches := plannedPlanningWorkersForGoal(root, *state.Goal)
+	for i := range dispatches {
+		if dispatches[i].Caste == "scout" {
+			dispatches = []codexPlanningDispatch{dispatches[i]}
+			break
+		}
+	}
 	specs := planningWorkerSpecsForGoal(*state.Goal)
 	iterationAppendix := planningIterationAppendix(iterationSeed, iteration) + renderPlanRevisionWorkerAppendix(root, revisionContext)
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
-		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i])
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i], nil)
 		if iterationAppendix != "" {
 			dispatches[i].Brief += iterationAppendix
 		}
-	}
-	researchCandidates := phaseResearchCandidates(state, iterationSeed)
-	researchResult := computePhaseResearchProposalFields(planDepth, opts.Refresh, survey, researchCandidates, state.Plan.Phases, true)
-	researchDispatches := plannedPhaseResearchDispatches(root, planDepth, *state.Goal, researchCandidates, survey, opts.Refresh && iteration == 1, researchResult.Approved)
-	if len(researchDispatches) > 0 {
-		// The Route-Setter runs after the research wave; point it at the
-		// fresh RESEARCH.md files so findings shape the route. The pointer
-		// sentence stays first (it is what covers iteration 1, before any
-		// research has been written); the content injection below is
-		// additive and empty on iteration 1, byte-identical to the old
-		// pointer-only output.
-		researchContent := renderRouteSetterResearchContent(root, researchCandidates)
-		for i := range dispatches {
-			if dispatches[i].Caste == "route_setter" {
-				dispatches[i].Brief += "\n\n## Phase Research Available\n\nParallel research Scouts are writing per-phase findings to `.aether/data/phase-research/phase-N-research.md` during wave 1. Read each phase's research before finalizing the route, and fold its Recommended Approach and Gotchas into task constraints and hints.\n"
-				if researchContent != "" {
-					dispatches[i].Brief += "\n" + researchContent
-				}
-			}
-		}
-		dispatches = append(dispatches, researchDispatches...)
 	}
 	artifactSnapshots := snapshotRelativeFiles(root,
 		filepath.ToSlash(filepath.Join(".aether", "data", "planning")),
 		filepath.ToSlash(filepath.Join(".aether", "data", "phase-research")),
 	)
-	dispatchContract := planningDispatchContractForDispatches(dispatches, opts.WorkerTimeout)
-	manifest := codexPlanManifest{
-		Goal:                     *state.Goal,
-		Root:                     root,
-		GeneratedAt:              generatedAt.Format(time.RFC3339),
-		BaseRevisionID:           activePlanRevisionID(state.Plan),
-		BasePlanStateHash:        basePlanStateHash,
-		ColonyMode:               string(state.EffectiveColonyMode()),
-		Refresh:                  opts.Refresh,
-		Revision:                 revisionContext,
-		ExistingPlan:             len(state.Plan.Phases) > 0,
-		ExistingPhaseCount:       len(state.Plan.Phases),
-		Synthetic:                opts.Synthetic,
-		SyntheticWarning:         planningSyntheticWarningForMode(opts.Synthetic),
-		PlanningRunID:            iterationSeed.PlanningRunID,
-		Iteration:                iteration,
-		TargetConfidence:         planningLoop.TargetConfidence,
-		MaxIterations:            planningLoop.MaxIterations,
-		PreviousConfidence:       iterationSeed.PreviousConfidence,
-		PreviousEvidenceHash:     iterationSeed.PreviousEvidenceHash,
-		SelectedGaps:             append([]string{}, iterationSeed.SelectedGaps...),
-		PreviousPlanDraft:        iterationSeed.PreviousPlanDraft,
-		ExpectedWorkers:          append([]codexPlanningDispatch{}, dispatches...),
-		Depth:                    planDepth,
-		Granularity:              string(granularity),
-		GranularityMin:           granularityMin(granularity),
-		GranularityMax:           granularityMax(granularity),
-		PlanningDepth:            planningDepth,
-		VerificationDepth:        verificationDepth,
-		PlanningLoop:             planningLoop,
-		Survey:                   survey,
-		Dispatches:               dispatches,
-		Snapshots:                artifactSnapshots,
-		DispatchMode:             "plan-only",
-		DispatchContract:         dispatchContract,
-		FinalizeSurface:          "pending",
-		RequiresFinalizer:        true,
-		ResearchProposal:         researchResult.Proposal.Phases,
-		ResearchProposalCard:     researchResult.Card,
-		ResearchAwaitingApproval: researchResult.AwaitingApproval,
-		ResearchWarning:          researchResult.Warning,
-		DepthProposal:            proposal,
-		DepthProposalCard:        proposalCard,
-	}
+	dispatchContract := planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
 
-	boundary, err := materializeOrchestratorBoundaryQuestions("plan", state, planningPhase, planBoundaryQuestionCandidates(state, granularity, planDepth, planningDepth, verificationDepth))
+	// Compute the colony-prime capsule once, for this plan-only wrapper
+	// manifest only — this function (runCodexPlanPlanOnly) is reached
+	// exclusively via the explicit --plan-only flag or the agent-delegate
+	// route (runCodexPlanAgentDelegate), both of which hand this manifest to
+	// a platform wrapper rather than dispatching workers directly. The
+	// in-process/native lane (dispatchRealPlanningWorkersWithIterationContext)
+	// never calls this function and computes its own capsule per dispatch.
+	// This is the single call site for this field on the plan-only lane; it
+	// must never be computed inside a per-dispatch loop.
+	contextCapsule := resolveCodexWorkerContext()
+	header, runningStage, stageManifest, err := preparePlanningScoutStage(
+		root,
+		state,
+		*state.Goal,
+		preset.Policy,
+		approvedSpecification,
+		baseRevisionID,
+		baseRevisionHash,
+		contextCapsule,
+		survey,
+		iterationSeed,
+		opts.Refresh,
+		generatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
-	manifest.BoundaryQuestions = boundary.Questions
-	manifest.BoundaryQuestionCount = len(boundary.Questions)
-	manifest.BoundaryQuestionsCreated = boundary.Created
-	manifest.BoundaryQuestionsExisting = boundary.Existing
+	var persistedState *colony.ColonyState
+	if persistState {
+		persistedState = &state
+	}
+	if err := persistPlanningScoutStageAndStateInSession(session, header, runningStage, stageManifest, persistedState); err != nil {
+		return nil, err
+	}
+	for i := range dispatches {
+		dispatches[i].Stage = string(planningStageScoutRunning)
+		dispatches[i].TaskID = stageManifest.AuthorizationID
+		dispatches[i].StageManifest = &stageManifest
+		// Re-render now that the stage manifest exists. The brief above was
+		// composed before it did, so it carried the legacy whole-chain
+		// contract -- which a staged worker cannot satisfy.
+		dispatches[i].Brief = renderPlanningWorkerBrief(root, survey, specs[i], &stageManifest)
+		if iterationAppendix != "" {
+			dispatches[i].Brief += iterationAppendix
+		}
+		// The research policy must follow the re-render: it used to be appended
+		// before it, so the re-render silently dropped the Scout's evidence
+		// rules -- record sources as typed evidence, never approve anything.
+		dispatches[i].Brief += renderAutomaticPhaseResearchPolicy(header.ResearchPolicy)
+	}
+	dispatchContract = planningScoutStageDispatchContract(dispatches, opts.WorkerTimeout)
+
+	manifest := codexPlanManifest{
+		Goal:                      *state.Goal,
+		Root:                      root,
+		GeneratedAt:               generatedAt.Format(time.RFC3339),
+		BaseRevisionID:            baseRevisionID,
+		BasePlanStateHash:         basePlanStateHash,
+		ColonyMode:                string(state.EffectiveColonyMode()),
+		Refresh:                   opts.Refresh,
+		Revision:                  revisionContext,
+		ExistingPlan:              len(state.Plan.Phases) > 0,
+		ExistingPhaseCount:        len(state.Plan.Phases),
+		Synthetic:                 opts.Synthetic,
+		SyntheticWarning:          planningSyntheticWarningForMode(opts.Synthetic),
+		PlanningRunID:             stageManifest.RunID,
+		Iteration:                 stageManifest.Pass,
+		TargetConfidence:          planningLoop.TargetConfidence,
+		MaxIterations:             planningLoop.MaxIterations,
+		SelectedPreset:            preset.Policy.ID,
+		PresetSelectionSource:     preset.SelectionSource,
+		PreviousConfidence:        iterationSeed.PreviousConfidence,
+		PreviousEvidenceHash:      iterationSeed.PreviousEvidenceHash,
+		SelectedGaps:              append([]string{}, iterationSeed.SelectedGaps...),
+		PreviousPlanDraft:         iterationSeed.PreviousPlanDraft,
+		ExpectedWorkers:           append([]codexPlanningDispatch{}, dispatches...),
+		Depth:                     planDepth,
+		Granularity:               string(granularity),
+		GranularityMin:            granularityMin(granularity),
+		GranularityMax:            granularityMax(granularity),
+		PlanningDepth:             planningDepth,
+		VerificationDepth:         verificationDepth,
+		PlanningLoop:              planningLoop,
+		Survey:                    survey,
+		Dispatches:                dispatches,
+		Snapshots:                 artifactSnapshots,
+		DispatchMode:              "plan-only",
+		DispatchContract:          dispatchContract,
+		FinalizeSurface:           "pending",
+		RequiresFinalizer:         true,
+		ResearchPolicy:            &header.ResearchPolicy,
+		PhaseResearchEvidence:     append([]phaseResearchEvidenceAttribution(nil), header.PhaseResearchEvidence...),
+		StageManifest:             &stageManifest,
+		PlanningRunHeader:         &header,
+		ContextCapsule:            contextCapsule,
+		BoundaryQuestions:         append([]discussQuestion(nil), boundary.Questions...),
+		BoundaryQuestionCount:     len(boundary.Questions),
+		BoundaryQuestionsCreated:  boundary.Created,
+		BoundaryQuestionsExisting: boundary.Existing,
+	}
+	if opts.Territory != nil {
+		attachTerritoryToPlanManifest(&manifest, *opts.Territory)
+	}
 
 	result := map[string]interface{}{
 		"plan_only":                  true,
@@ -1177,6 +2224,10 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"iteration":                  manifest.Iteration,
 		"target_confidence":          manifest.TargetConfidence,
 		"max_iterations":             manifest.MaxIterations,
+		"preset_required":            false,
+		"preset_options":             preset.Options,
+		"selected_preset":            string(preset.Policy.ID),
+		"selection_source":           preset.SelectionSource,
 		"previous_confidence":        manifest.PreviousConfidence,
 		"selected_gaps":              manifest.SelectedGaps,
 		"verification_smart_default": verificationSmartDefault,
@@ -1187,6 +2238,8 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"granularity_max":            granularityMax(granularity),
 		"plan_manifest":              manifest,
 		"planning_manifest":          manifest,
+		"stage_manifest":             stageManifest,
+		"planning_run_header":        header,
 		"revision_request":           revisionContext,
 		"dispatches":                 dispatches,
 		"dispatch_count":             len(dispatches),
@@ -1194,15 +2247,11 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 		"dispatch_contract":          dispatchContract,
 		"unresolved_clarifications":  unresolvedClarifications,
 		"clarification_warning":      clarificationWarning,
-		"research_proposal":          researchResult.Proposal.Phases,
-		"research_proposal_card":     researchResult.Card,
-		"research_awaiting_approval": researchResult.AwaitingApproval,
-		"research_warning":           researchResult.Warning,
-		"depth_proposal":             proposal,
-		"depth_proposal_card":        proposalCard,
+		"research_policy":            header.ResearchPolicy,
+		"phase_research_evidence":    header.PhaseResearchEvidence,
 		"next":                       "spawn wrapper planning agents, then record completion",
 		"wrapper_contract": map[string]interface{}{
-			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --target <70-99> --max-iterations <2-12>",
+			"source_command":          "AETHER_OUTPUT_MODE=json aether plan --plan-only --preset <fast|balanced|deep|exhaustive>",
 			"spawn_log_required":      true,
 			"spawn_complete_required": true,
 			"finalize_surface":        "pending",
@@ -1211,12 +2260,17 @@ func runCodexPlanPlanOnly(root string, state colony.ColonyState, granularity col
 			"planning_loop":           manifest.PlanningLoop,
 		},
 	}
-	addBoundaryQuestionResultFields(result, boundary)
-	if guidance, ok := addOrchestratorBoundaryGuidance(result, "plan", state, planAfterDiscussNext(opts), boundary.Questions); ok {
-		manifest.OrchestratorGuidance = &guidance
-		result["plan_manifest"] = manifest
-		result["planning_manifest"] = manifest
+	if manifest.TerritoryRequired {
+		result["territory_freshness"] = manifest.Territory
+		result["territory_snapshot_id"] = manifest.Territory.SnapshotID
 	}
+	addBoundaryQuestionResultFields(result, boundary)
+	afterDiscussKey := candidatePlanPreset
+	if opts.Refresh {
+		afterDiscussKey = candidatePlanRefresh
+	}
+	afterDiscussNext := availableCandidateCommand(afterDiscussKey, string(preset.Policy.ID))
+	addOrchestratorBoundaryGuidance(result, "plan", state, afterDiscussNext, boundary.Questions)
 	return result, nil
 }
 
@@ -1510,7 +2564,7 @@ func dispatchRealPlanningWorkersWithIterationContext(ctx context.Context, root s
 			Timeout:           workerTimeout,
 			PermissionProfile: planned[i].PermissionProfile,
 		}
-		dispatch.TaskBrief = renderPlanningWorkerBrief(root, survey, spec, scoutGuidance)
+		dispatch.TaskBrief = renderPlanningWorkerBrief(root, survey, spec, nil, scoutGuidance)
 		if strings.TrimSpace(iterationAppendix) != "" {
 			dispatch.TaskBrief += iterationAppendix
 		}
@@ -2134,7 +3188,18 @@ func renderScoutPlanningGuidance(report codexScoutReport) string {
 	return strings.TrimSpace(b.String())
 }
 
-func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec, scoutGuidanceOpt ...string) string {
+// renderPlanningWorkerBrief composes a planning worker's brief.
+//
+// stage is the staged run's manifest, or nil on the legacy whole-chain lane
+// (dispatchRealPlanningWorkersWithIterationContext), where a worker genuinely
+// does write ROUTE-SETTER.md and phase-plan.json into the repository. On the
+// staged lane neither is true: the worker's permission profile forbids
+// repository writes and the finalizer accepts ONLY the typed result payload,
+// strictly decoded with unknown fields rejected. Briefing a staged worker with
+// the legacy instructions told it to do work that would be refused -- a Scout
+// that followed its brief and returned `scout_report` was rejected outright --
+// so the two lanes must describe their own contracts rather than share one.
+func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec planningWorkerSpec, stage *planningStageManifest, scoutGuidanceOpt ...string) string {
 	planningDir := filepath.ToSlash(filepath.Join(".aether", "data", "planning"))
 	surveyDir := filepath.ToSlash(filepath.Join(".aether", "data", "survey"))
 	phaseResearchDir := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research"))
@@ -2162,11 +3227,35 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 	} else {
 		b.WriteString("- Survey docs to read first: none detected; inspect repo files only when the survey is missing or ambiguous.\n")
 	}
-	if spec.Caste == "route_setter" {
-		b.WriteString("- Read scout output before drafting phases if it exists: ")
-		b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
-		b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
+	// The condensed map digest (WIRE-03): the same content the build and
+	// research briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief. No age-line dedup needed here -- nothing else in
+	// this brief renders surveyStalenessNotice(), so the digest is its only
+	// source. Guarded by its own empty-string check so a colony with no
+	// survey reports produces a byte-identical planning brief to before this
+	// digest existed (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
 		b.WriteString("\n")
+		b.WriteString(digestSection)
+		b.WriteString("\n")
+	}
+	if spec.Caste == "route_setter" {
+		if stage != nil {
+			// The staged Scout's committed output, addressed the way the
+			// runtime addresses it. The old pointer named
+			// .aether/data/planning/SCOUT.md, which the staged lane never
+			// writes, so the Route-Setter was sent to a file that does not
+			// exist and told to treat its absence as a blocker.
+			b.WriteString("- The Scout's committed output for this run is under ")
+			b.WriteString(filepath.ToSlash(filepath.Join(planningDir, stage.RunID, "outputs")))
+			b.WriteString(" (one file per pass and caste). The wrapper also hands you the Scout's terminal result directly; prefer that.")
+			b.WriteString("\n")
+		} else {
+			b.WriteString("- Read scout output before drafting phases if it exists: ")
+			b.WriteString(filepath.ToSlash(filepath.Join(planningDir, "SCOUT.md")))
+			b.WriteString("; if it is missing, proceed from the survey context and note the missing scout artifact in blockers only if it prevents a useful plan.")
+			b.WriteString("\n")
+		}
 	}
 	b.WriteString("- Repo inspection rule: use targeted reads to confirm or extend survey findings; do not trawl the whole tree unless the survey lacks the needed detail.\n")
 	// Research the operator pointed this colony at. This is the only injection
@@ -2194,7 +3283,9 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 		b.WriteString(graphContext)
 		b.WriteString("\n\n")
 	}
-	if spec.Caste == "scout" {
+	if spec.Caste == "scout" && stage != nil {
+		b.WriteString(renderStagedResultContract(*stage, planningDir))
+	} else if spec.Caste == "scout" {
 		b.WriteString("Return planning findings in the final worker claims JSON only.\n")
 		b.WriteString("- Do not write files; Scout is read-only on every supported platform.\n")
 		b.WriteString("- Final result must include scout_report with findings, gaps, confidence, and study_files. Keep it compact enough for the Route-Setter to consume directly.\n")
@@ -2232,6 +3323,14 @@ func renderPlanningWorkerBrief(root string, survey codexSurveyContext, spec plan
 			b.WriteString("## Scout Planning Guidance\n")
 			b.WriteString(scoutGuidance)
 			b.WriteString("\n\n")
+		}
+		if stage != nil {
+			b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
+			b.WriteString("- If the Scout result is missing, continue from the manifest survey context and list that as a gap only if it blocks a useful plan.\n")
+			b.WriteString(renderStagedResultContract(*stage, planningDir))
+			b.WriteString("\nPlan the colony at ")
+			b.WriteString(root)
+			return b.String()
 		}
 		b.WriteString("Write planning outputs directly into the repository.\n")
 		b.WriteString("- Route-Setter read budget: consume the manifest survey context and the Scout terminal result provided by the wrapper, then read at most 6 targeted repository files. Do not redo the Scout survey.\n")
@@ -2413,6 +3512,31 @@ func firstKnownTaskIDExample(knownIDs map[string]bool) string {
 	return ids[0]
 }
 
+func runCodexPlanDependencyRepair(root string, state colony.ColonyState) (map[string]interface{}, error) {
+	if state.Plan.AcceptancePolicy == colony.PlanAcceptanceExplicitOwner && state.Plan.ActiveRevisionID != "" {
+		revision, found := activePlanRevision(state.Plan)
+		if !found {
+			return nil, fmt.Errorf("accepted plan revision %q is missing; restore its original approval-bound records", state.Plan.ActiveRevisionID)
+		}
+		if err := colony.DetectCycles(state.Plan.Phases); err != nil {
+			return nil, fmt.Errorf("accepted revision dependency validation failed: %w; submit a corrected candidate through the existing owner acceptance route; do not mutate the active projection", err)
+		}
+		phase := firstBuildablePhase(state.Plan.Phases)
+		next := "aether status"
+		if phase > 0 {
+			next = fmt.Sprintf("aether build %d --plan-only", phase)
+		}
+		return map[string]interface{}{
+			"status": "accepted_plan_validated", "repair_source": "accepted revision dependency resolver", "repair_scope": "accepted_revision", "validated": true, "repaired": false,
+			"planned": false, "dispatch_count": 0, "state_effect": "unchanged", "active_plan_changed": false, "approval_bindings_changed": false,
+			"revision_id": revision.ID, "revision_hash": revision.PlanHash, "candidate_id": revision.CandidateID, "candidate_content_hash": revision.CandidateContentHash,
+			"phase_count": len(state.Plan.Phases), "task_count": buildablePlanTaskCount(state.Plan.Phases), "next": next,
+			"summary": "The accepted plan's numeric and semantic dependencies are valid. No plan, approval or staging artifact was rewritten; this runtime resolves those references when building.",
+		}, nil
+	}
+	return runCodexPlanRepairArtifact(root)
+}
+
 func runCodexPlanRepairArtifact(root string) (map[string]interface{}, error) {
 	if store == nil {
 		return nil, fmt.Errorf("no store initialized")
@@ -2453,16 +3577,26 @@ func runCodexPlanRepairArtifact(root string) (map[string]interface{}, error) {
 		}
 	}
 	next := "aether plan-finalize --completion-file <file>"
-	updateSessionSummary("plan", next, "Repaired and validated phase-plan dependency references")
+	status := "legacy_artifact_validated"
+	if repaired {
+		status = "legacy_artifact_repaired"
+	}
 	return map[string]interface{}{
-		"repaired":      repaired,
-		"repairs":       repairs,
-		"validated":     true,
-		"phase_plan":    relPath,
-		"phase_count":   len(phases),
-		"task_count":    buildablePlanTaskCount(phases),
-		"next":          next,
-		"repair_source": "phase-plan dependency normalizer",
+		"status":                    status,
+		"repair_scope":              "legacy_phase_plan_artifact",
+		"planned":                   false,
+		"dispatch_count":            0,
+		"state_effect":              "unchanged",
+		"active_plan_changed":       false,
+		"approval_bindings_changed": false,
+		"repaired":                  repaired,
+		"repairs":                   repairs,
+		"validated":                 true,
+		"phase_plan":                relPath,
+		"phase_count":               len(phases),
+		"task_count":                buildablePlanTaskCount(phases),
+		"next":                      next,
+		"repair_source":             "phase-plan dependency normalizer",
 	}, nil
 }
 
@@ -3163,6 +4297,12 @@ func commonConstraints(survey codexSurveyContext) []string {
 	return limitStrings(appendUniqueStringsInOrder(constraints), 6)
 }
 
+// activeRedirectPlanConstraints reads REDIRECT constraints for plan-time
+// injection via the one resolver, rather than its own inline predicate.
+// Before this fix, the predicate here used `<= 0` -- no effective-strength
+// floor at all -- while every other reader used 0.1 (NOW-11's drift in
+// 203-CLASSIC-SYNTHESIS.md SYN-203-10). A REDIRECT the resolver treats as
+// below-floor or expired no longer fires as a plan constraint here.
 func activeRedirectPlanConstraints() []string {
 	if store == nil {
 		return nil
@@ -3173,11 +4313,11 @@ func activeRedirectPlanConstraints() []string {
 	}
 	now := time.Now().UTC()
 	constraints := []string{}
-	for _, signal := range pf.Signals {
-		if !signal.Active || !strings.EqualFold(signal.Type, "REDIRECT") || computeEffectiveStrength(signal, now) <= 0 {
+	for _, resolved := range resolveEffectivePheromones(&pf, now) {
+		if !resolved.InEffect || !strings.EqualFold(resolved.Signal.Type, "REDIRECT") {
 			continue
 		}
-		text := strings.TrimSpace(extractContentText(signal.Content))
+		text := strings.TrimSpace(extractContentText(resolved.Signal.Content))
 		if text != "" {
 			constraints = append(constraints, text)
 		}
@@ -3264,45 +4404,226 @@ func writeWorkerPlanArtifact(root, planningDir string, confidence codexPlanConfi
 	return path, false, nil
 }
 
-func clearFallbackPlanningArtifacts(root string) {
-	planningDir := filepath.Join(root, ".aether", "data", "planning")
-	markerPath := filepath.Join(planningDir, ".fallback-marker")
-	_, markerErr := os.Stat(markerPath)
-	markerExists := markerErr == nil
-
-	fallbackArtifacts := []string{
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "SCOUT.md")),
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "ROUTE-SETTER.md")),
-		filepath.ToSlash(filepath.Join(".aether", "data", "planning", "phase-plan.json")),
-	}
-	for _, relPath := range fallbackArtifacts {
-		removeFallbackArtifact(root, relPath, markerExists)
-	}
-	clearPlanningBackupArtifacts(planningDir)
-	clearFallbackPhaseResearchArtifacts(root, markerExists)
-	os.Remove(markerPath)
+type planningArtifactPublication struct {
+	ScoutFile              string
+	RouteSetterFile        string
+	PlanArtifactFile       string
+	PhaseResearchFiles     []string
+	ResearchFailedPhases   []int
+	PreservedScout         bool
+	PreservedRouteSetter   bool
+	PreservedPlan          bool
+	PreservedPhaseResearch int
+	Targets                []planningSessionTarget
 }
 
-func removeFallbackArtifact(root, relPath string, markerExists bool) {
-	if markerExists && shouldPreserveWorkerArtifact(root, relPath, nil, nil) {
-		return
+// preparePlanningArtifactPublication renders fallback-owned artifacts in an
+// isolated temporary directory. Worker-authored files remain untouched and
+// are captured as session baselines; locally rendered bytes become declared
+// lifecycle targets that the caller can commit with state and projections.
+func preparePlanningArtifactPublication(
+	session *planningMutationSession,
+	goal string,
+	granularity colony.PlanGranularity,
+	survey codexSurveyContext,
+	scoutDispatch codexPlanningDispatch,
+	report codexScoutReport,
+	routeSetterDispatch codexPlanningDispatch,
+	confidence codexPlanConfidence,
+	unresolvedGaps []string,
+	phases []colony.Phase,
+	planningLoop codexPlanningLoop,
+	snapshots map[string]codexArtifactSnapshot,
+	dispatches []codexPlanningDispatch,
+	preservePlanningArtifacts bool,
+	preservePhaseResearch bool,
+) (planningArtifactPublication, error) {
+	publication := planningArtifactPublication{
+		ScoutFile:        filepath.Join(session.DataRoot(), "planning", "SCOUT.md"),
+		RouteSetterFile:  filepath.Join(session.DataRoot(), "planning", "ROUTE-SETTER.md"),
+		PlanArtifactFile: filepath.Join(session.DataRoot(), "planning", "phase-plan.json"),
 	}
-	os.Remove(filepath.Join(root, filepath.FromSlash(relPath)))
-}
-
-func clearFallbackPhaseResearchArtifacts(root string, markerExists bool) {
-	researchDir := filepath.Join(root, ".aether", "data", "phase-research")
-	entries, err := os.ReadDir(researchDir)
+	stagingRoot, err := os.MkdirTemp("", "aether-planning-artifacts-")
 	if err != nil {
-		return
+		return publication, fmt.Errorf("create planning artifact staging directory: %w", err)
 	}
-	for _, entry := range entries {
-		if entry.IsDir() {
+	defer os.RemoveAll(stagingRoot)
+	stagingPlanning := filepath.Join(stagingRoot, "planning")
+	stagingResearch := filepath.Join(stagingRoot, "phase-research")
+	if err := os.MkdirAll(stagingPlanning, 0o755); err != nil {
+		return publication, err
+	}
+	if err := os.MkdirAll(stagingResearch, 0o755); err != nil {
+		return publication, err
+	}
+	preservationRoot := session.RepositoryRoot()
+	if !preservePlanningArtifacts {
+		// Finalization receives validated completion content and deliberately
+		// re-renders its canonical projections. Point preservation checks at the
+		// empty staging root so an older visible projection cannot win merely by
+		// existing before this transaction commits.
+		preservationRoot = stagingRoot
+	}
+	researchPreservationRoot := session.RepositoryRoot()
+	if !preservePhaseResearch {
+		researchPreservationRoot = stagingRoot
+	}
+
+	_, publication.PreservedScout, err = writePlanningScoutArtifact(preservationRoot, stagingPlanning, goal, granularity, survey, scoutDispatch, report, snapshots)
+	if err != nil {
+		return publication, err
+	}
+	_, publication.PreservedRouteSetter, err = writeRouteSetterArtifact(preservationRoot, stagingPlanning, goal, granularity, survey, routeSetterDispatch, confidence, unresolvedGaps, phases, planningLoop, snapshots)
+	if err != nil {
+		return publication, err
+	}
+	_, publication.PreservedPlan, err = writeWorkerPlanArtifact(preservationRoot, stagingPlanning, confidence, unresolvedGaps, phases, planningLoop, snapshots, dispatches)
+	if err != nil {
+		return publication, err
+	}
+	publication.PhaseResearchFiles, publication.PreservedPhaseResearch, publication.ResearchFailedPhases, err = writePhaseResearchArtifacts(researchPreservationRoot, stagingResearch, survey, report, phases, snapshots, dispatches)
+	if err != nil {
+		return publication, err
+	}
+
+	artifacts := []struct {
+		name      string
+		staged    string
+		dataPath  string
+		preserved bool
+	}{
+		{name: "Scout", staged: filepath.Join(stagingPlanning, "SCOUT.md"), dataPath: filepath.ToSlash(filepath.Join("planning", "SCOUT.md")), preserved: publication.PreservedScout},
+		{name: "Route-Setter", staged: filepath.Join(stagingPlanning, "ROUTE-SETTER.md"), dataPath: filepath.ToSlash(filepath.Join("planning", "ROUTE-SETTER.md")), preserved: publication.PreservedRouteSetter},
+		{name: "phase plan", staged: filepath.Join(stagingPlanning, "phase-plan.json"), dataPath: filepath.ToSlash(filepath.Join("planning", "phase-plan.json")), preserved: publication.PreservedPlan},
+	}
+	for _, artifact := range artifacts {
+		if artifact.preserved {
+			content, exists, readErr := session.ReadFile(lifecycleTransactionRootData, artifact.dataPath)
+			if readErr != nil {
+				return publication, readErr
+			} else if !exists {
+				return publication, fmt.Errorf("preserved %s artifact is missing", artifact.name)
+			}
+			publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: artifact.dataPath, Content: content})
 			continue
 		}
-		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research", entry.Name()))
-		removeFallbackArtifact(root, relPath, markerExists)
+		content, readErr := os.ReadFile(artifact.staged)
+		if readErr != nil {
+			return publication, fmt.Errorf("read staged %s artifact: %w", artifact.name, readErr)
+		}
+		publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: artifact.dataPath, Content: content})
 	}
+	for _, name := range publication.PhaseResearchFiles {
+		dataPath := filepath.ToSlash(filepath.Join("phase-research", name))
+		content, readErr := os.ReadFile(filepath.Join(stagingResearch, name))
+		if readErr == nil {
+			publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataPath, Content: content})
+			continue
+		}
+		if !os.IsNotExist(readErr) {
+			return publication, fmt.Errorf("read staged phase research %s: %w", name, readErr)
+		}
+		content, exists, baselineErr := session.ReadFile(lifecycleTransactionRootData, dataPath)
+		if baselineErr != nil {
+			return publication, baselineErr
+		} else if !exists {
+			return publication, fmt.Errorf("preserved phase research %s is missing", name)
+		}
+		publication.Targets = append(publication.Targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataPath, Content: content})
+	}
+	return publication, nil
+}
+
+func mergePlanningSessionTargets(groups ...[]planningSessionTarget) []planningSessionTarget {
+	merged := make(map[string]planningSessionTarget)
+	for _, group := range groups {
+		for _, target := range group {
+			key := string(target.Root) + "\x00" + filepath.ToSlash(target.Path)
+			merged[key] = target
+		}
+	}
+	result := make([]planningSessionTarget, 0, len(merged))
+	for _, target := range merged {
+		result = append(result, target)
+	}
+	return result
+}
+
+func clearFallbackPlanningArtifacts(root string) error {
+	return withPlanningMutationSession(root, "planning-refresh-cleanup", func(session *planningMutationSession) error {
+		return clearFallbackPlanningArtifactsInSession(session)
+	})
+}
+
+func clearFallbackPlanningArtifactsInSession(session *planningMutationSession) error {
+	targets, err := fallbackPlanningArtifactRemovalTargetsInSession(session)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-refresh-cleanup", "planning-refresh-cleanup", targets)
+}
+
+func fallbackPlanningArtifactRemovalTargetsInSession(session *planningMutationSession) ([]planningSessionTarget, error) {
+	root := session.RepositoryRoot()
+	markerRelative := filepath.ToSlash(filepath.Join("planning", ".fallback-marker"))
+	_, markerExists, err := session.ReadFile(lifecycleTransactionRootData, markerRelative)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]planningSessionTarget, 0, 8)
+	appendFallbackRemoval := func(dataRelative, repositoryRelative string) error {
+		// Capture the exact present-or-absent Plan 28 baseline before the
+		// timestamp/source classifier performs its filesystem observation. The
+		// final transaction must consume this same repository moment rather
+		// than silently recapturing a cleanup target immediately before commit.
+		if _, _, err := session.ReadFile(lifecycleTransactionRootData, dataRelative); err != nil {
+			return err
+		}
+		if markerExists && shouldPreserveWorkerArtifact(root, repositoryRelative, nil, nil) {
+			return nil
+		}
+		targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataRelative, Remove: true})
+		return nil
+	}
+	for _, name := range []string{"SCOUT.md", "ROUTE-SETTER.md", "phase-plan.json"} {
+		if err := appendFallbackRemoval(
+			filepath.ToSlash(filepath.Join("planning", name)),
+			filepath.ToSlash(filepath.Join(".aether", "data", "planning", name)),
+		); err != nil {
+			return nil, err
+		}
+	}
+	planningDir := filepath.Join(session.DataRoot(), "planning")
+	if entries, readErr := os.ReadDir(planningDir); readErr == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bak") {
+				dataRelative := filepath.ToSlash(filepath.Join("planning", entry.Name()))
+				if _, _, err := session.ReadFile(lifecycleTransactionRootData, dataRelative); err != nil {
+					return nil, err
+				}
+				targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: dataRelative, Remove: true})
+			}
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("inspect planning backup artifacts: %w", readErr)
+	}
+	researchDir := filepath.Join(session.DataRoot(), "phase-research")
+	if entries, readErr := os.ReadDir(researchDir); readErr == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			dataRelative := filepath.ToSlash(filepath.Join("phase-research", entry.Name()))
+			repositoryRelative := filepath.ToSlash(filepath.Join(".aether", "data", dataRelative))
+			if err := appendFallbackRemoval(dataRelative, repositoryRelative); err != nil {
+				return nil, err
+			}
+		}
+	} else if !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("inspect fallback phase research artifacts: %w", readErr)
+	}
+	targets = append(targets, planningSessionTarget{Root: lifecycleTransactionRootData, Path: markerRelative, Remove: true})
+	return targets, nil
 }
 
 func clearPlanningBackupArtifacts(planningDir string) {
@@ -3311,6 +4632,53 @@ func clearPlanningBackupArtifacts(planningDir string) {
 			os.Remove(f)
 		}
 	}
+}
+
+func persistPlanningFallbackMarkerInSession(session *planningMutationSession, dispatchMode string, now time.Time) error {
+	return commitPlanningSessionTargets(session, "planning-fallback-marker", "planning-fallback-marker", []planningSessionTarget{planningFallbackMarkerTarget(dispatchMode, now)})
+}
+
+func planningFallbackMarkerTarget(dispatchMode string, now time.Time) planningSessionTarget {
+	target := planningSessionTarget{
+		Root: lifecycleTransactionRootData,
+		Path: filepath.ToSlash(filepath.Join("planning", ".fallback-marker")),
+	}
+	if dispatchMode == "fallback" {
+		target.Content = []byte(now.UTC().Format(time.RFC3339))
+	} else {
+		target.Remove = true
+	}
+	return target
+}
+
+func clearPlanningBackupArtifactsInSession(session *planningMutationSession) error {
+	targets, err := planningBackupRemovalTargetsInSession(session)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-backup-cleanup", "planning-backup-cleanup", targets)
+}
+
+func planningBackupRemovalTargetsInSession(session *planningMutationSession) ([]planningSessionTarget, error) {
+	planningDir := filepath.Join(session.DataRoot(), "planning")
+	entries, err := os.ReadDir(planningDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("inspect planning backup artifacts: %w", err)
+	}
+	targets := make([]planningSessionTarget, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".bak") {
+			targets = append(targets, planningSessionTarget{
+				Root:   lifecycleTransactionRootData,
+				Path:   filepath.ToSlash(filepath.Join("planning", entry.Name())),
+				Remove: true,
+			})
+		}
+	}
+	return targets, nil
 }
 
 // prunePhaseResearchOrphans removes phase-N-research.md files that no longer
@@ -3333,6 +4701,42 @@ func prunePhaseResearchOrphans(dir string, phases []colony.Phase) {
 			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
+}
+
+func prunePhaseResearchOrphansInSession(session *planningMutationSession, phases []colony.Phase) error {
+	targets, err := phaseResearchOrphanRemovalTargetsInSession(session, phases)
+	if err != nil {
+		return err
+	}
+	return commitPlanningSessionTargets(session, "planning-research-prune", "planning-research-prune", targets)
+}
+
+func phaseResearchOrphanRemovalTargetsInSession(session *planningMutationSession, phases []colony.Phase) ([]planningSessionTarget, error) {
+	live := make(map[string]bool, len(phases))
+	for _, phase := range phases {
+		live[fmt.Sprintf("phase-%d-research.md", phase.ID)] = true
+	}
+	dir := filepath.Join(session.DataRoot(), "phase-research")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("inspect phase research artifacts: %w", err)
+	}
+	targets := make([]planningSessionTarget, 0)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "phase-") || !strings.HasSuffix(name, "-research.md") || live[name] {
+			continue
+		}
+		targets = append(targets, planningSessionTarget{
+			Root:   lifecycleTransactionRootData,
+			Path:   filepath.ToSlash(filepath.Join("phase-research", name)),
+			Remove: true,
+		})
+	}
+	return targets, nil
 }
 
 func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, report codexScoutReport, phases []colony.Phase, snapshots map[string]codexArtifactSnapshot, dispatches []codexPlanningDispatch) ([]string, int, []int, error) {
@@ -3365,7 +4769,7 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			preserved++
 			continue
 		}
-		// Fallback template in the six-section RESEARCH.md format (the v5
+		// Fallback template in the five-section RESEARCH.md format (the v5
 		// Phase Domain Research contract). Real Scout research written by a
 		// phase_research worker replaces this and is preserved above.
 		var b strings.Builder
@@ -3381,10 +4785,11 @@ func writePhaseResearchArtifacts(root, dir string, survey codexSurveyContext, re
 			b.WriteString(fmt.Sprintf("**Research status:** phase %d planned WITHOUT its research — worker failed\n", phase.ID))
 			failed = append(failed, phase.ID)
 		}
+		// No hive-wisdom stand-in here (WIRE-02): no research worker ran for
+		// this phase, so there is no shared-lessons content to summarise --
+		// the fallback template never invents one (D-16, no empty sections).
 		b.WriteString("\n")
-		b.WriteString("## Hive Wisdom (Pre-existing Knowledge)\n")
-		b.WriteString("No relevant hive wisdom found\n")
-		b.WriteString("\n## Key Patterns\n")
+		b.WriteString("## Key Patterns\n")
 		patterns := []string{}
 		for _, finding := range report.Findings {
 			patterns = append(patterns, fmt.Sprintf("**%s:** %s (Source: %s)", finding.Area, finding.Discovery, firstNonEmpty(finding.Source, "scout survey")))
@@ -3428,4 +4833,128 @@ func renderResearchFailedWarning(failed []int) string {
 		return ""
 	}
 	return fmt.Sprintf("phase(s) %s planned WITHOUT its research — worker failed", joinInts(failed))
+}
+
+// renderStagedResultContract is the brief section telling a staged planning
+// worker exactly what to return.
+//
+// It names the schema, lists its required fields, and states plainly that
+// unknown fields are refused, because the finalizer decodes strictly
+// (DisallowUnknownFields) and accepts exactly one JSON value. Before this
+// existed the brief described a `scout_report` shape with `confidence` and
+// `study_files`, none of which the staged schema has -- so a Scout that
+// followed its own brief was rejected by the finalizer, which is the worst
+// kind of instruction: one that reads as authoritative and cannot succeed.
+//
+// The field list is derived from the result structs by reflection rather than
+// retyped here, so a schema change cannot leave this brief quietly describing
+// the old shape.
+func renderStagedResultContract(stage planningStageManifest, planningDir string) string {
+	resultType := expectedPlanningStageResult(stage.ExpectedCaste)
+	var target interface{}
+	switch stage.ExpectedCaste {
+	case planningStageCasteRouteSetter:
+		target = planningRouteStageResult{}
+	default:
+		target = planningScoutStageResult{}
+	}
+
+	var b strings.Builder
+	b.WriteString("Return exactly one JSON value: the ")
+	b.WriteString(string(resultType))
+	b.WriteString(" payload, as this worker's terminal result.\n")
+	b.WriteString("- Do not write planning files into the repository. This dispatch's permission profile forbids repository writes, and the finalizer accepts only the returned payload.\n")
+	b.WriteString("- Aether persists your artifact itself, under ")
+	b.WriteString(filepath.ToSlash(filepath.Join(planningDir, stage.RunID, "outputs")))
+	b.WriteString(", after the finalizer admits your result.\n")
+	required, optional := jsonFieldNames(target)
+	b.WriteString("- Required top-level fields: ")
+	b.WriteString(strings.Join(required, ", "))
+	b.WriteString("\n")
+	if len(optional) > 0 {
+		b.WriteString("- Optional fields (omit entirely when empty): ")
+		b.WriteString(strings.Join(optional, ", "))
+		b.WriteString("\n")
+	}
+	b.WriteString("- Unknown fields are REFUSED: the result is decoded strictly, so any field not listed above fails the whole submission. Send exactly one JSON value and nothing after it.\n")
+	b.WriteString("- Bind these to the manifest you were dispatched with: result_type=")
+	b.WriteString(string(resultType))
+	b.WriteString(", manifest_id=")
+	b.WriteString(stage.ID)
+	b.WriteString(", manifest_hash=")
+	b.WriteString(stage.ContentHash)
+	b.WriteString(", run_id=")
+	b.WriteString(stage.RunID)
+	b.WriteString(fmt.Sprintf(", pass=%d", stage.Pass))
+	b.WriteString(", caste=")
+	b.WriteString(string(stage.ExpectedCaste))
+	b.WriteString("\n")
+	if stage.ExpectedCaste == planningStageCasteRouteSetter {
+		b.WriteString(renderRouteProofLinkRule())
+	}
+	return b.String()
+}
+
+// renderRouteProofLinkRule states the proof-link rule drafting and acceptance
+// both enforce, generated from planningProofLinkRequired itself, so the
+// Route-Setter is told the rule it will be held to instead of meeting it as a
+// refusal -- or, before the two checks agreed, as a plan the owner could not
+// accept.
+func renderRouteProofLinkRule() string {
+	var everyNode, userFacing []string
+	for _, kind := range planningProofLinkKinds() {
+		switch {
+		case planningProofLinkRequired(kind, false):
+			everyNode = append(everyNode, planningProofField(kind))
+		case planningProofLinkRequired(kind, true):
+			userFacing = append(userFacing, planningProofField(kind))
+		}
+	}
+	var b strings.Builder
+	b.WriteString("- Proof links are checked when you hand the plan in and again when the owner accepts it; one wrong link refuses the whole plan.\n")
+	b.WriteString("  - Every phase and every task must carry " + strings.Join(everyNode, ", ") + ".\n")
+	if len(userFacing) > 0 {
+		b.WriteString("  - " + strings.Join(userFacing, ", ") + ": required on work you declare user-facing (list it in user_facing_semantic_ids, or set user_facing on its task declaration). Leave them off behind-the-scenes work rather than inventing one.\n")
+	}
+	b.WriteString("  - Across the whole plan, at least one phase or task must carry each kind.\n")
+	b.WriteString("  - Copy each ID exactly as the approved specification spells it.\n")
+	return b.String()
+}
+
+// jsonFieldNames splits a struct's top-level JSON field names into required
+// and optional, in declaration order. `omitempty` is the optional marker.
+//
+// Deriving both lists from the struct is what stops the brief and the decoder
+// drifting apart, and the split matters: calling an omitempty field "required"
+// sends a worker hunting for a value it does not have, which is a softer
+// version of the same defect this contract exists to fix.
+func jsonFieldNames(value interface{}) (required []string, optional []string) {
+	t := reflect.TypeOf(value)
+	if t == nil || t.Kind() != reflect.Struct {
+		return nil, nil
+	}
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		if tag == "-" {
+			continue
+		}
+		parts := strings.Split(tag, ",")
+		name := strings.TrimSpace(parts[0])
+		if name == "" {
+			continue
+		}
+		isOptional := false
+		for _, opt := range parts[1:] {
+			if strings.TrimSpace(opt) == "omitempty" {
+				isOptional = true
+				break
+			}
+		}
+		if isOptional {
+			optional = append(optional, name)
+		} else {
+			required = append(required, name)
+		}
+	}
+	return required, optional
 }

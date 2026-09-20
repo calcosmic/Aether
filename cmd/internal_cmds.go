@@ -134,6 +134,114 @@ var entropyScoreCmd = &cobra.Command{
 
 // --- eternal-store ---
 
+// eternalEntry is one record in the hub's long-term ("eternal") memory file.
+// Lifted from eternalStoreCmd's RunE to package scope (198.1-04, FEED-04) so
+// appendEternalMemoryEntry -- the extracted writer both the CLI and the
+// pheromone-expiry promotion path use -- can share the exact shape without
+// re-declaring it.
+type eternalEntry struct {
+	ID         string  `json:"id"`
+	Content    string  `json:"content"`
+	Category   string  `json:"category"`
+	Confidence float64 `json:"confidence"`
+	CreatedAt  string  `json:"created_at"`
+	AccessedAt string  `json:"accessed_at"`
+}
+
+// eternalData is the top-level shape of the hub's eternal/memory.json file.
+type eternalData struct {
+	Entries []eternalEntry `json:"entries"`
+}
+
+// eternalMemoryPath returns the hub-relative path to the long-term memory
+// file, resolved the same way every other hub-scoped write in this package
+// resolves it.
+func eternalMemoryPath() string {
+	return filepath.Join(resolveHubPath(), "eternal", "memory.json")
+}
+
+// loadEternalData reads the hub's eternal/memory.json, returning an empty
+// value when the file does not yet exist or fails to parse -- the same
+// best-effort fallback eternalStoreCmd's RunE always used.
+func loadEternalData() eternalData {
+	var ed eternalData
+	if raw, err := os.ReadFile(eternalMemoryPath()); err == nil {
+		json.Unmarshal(raw, &ed)
+	}
+	return ed
+}
+
+// appendEternalMemoryEntry is the extracted body of eternalStoreCmd's RunE
+// (198.1-04, FEED-04): every existing JSON field name and default
+// (confidence 0.9, category "general") is unchanged, and the 200-entry
+// LRU-eviction cap is preserved exactly. It additionally refuses to append a
+// second copy of an entry already present with identical content and
+// category -- the dedup guard neither the original CLI writer nor any other
+// caller had before, and what makes "the same signal expiring twice" (this
+// plan's own promotion path) leave one entry, not two. reason is accepted
+// for call-site clarity (mirrors pheromone-write's own --reason flag) but is
+// deliberately NOT persisted -- the eternalEntry JSON shape must stay
+// byte-identical to what eternal-store already writes.
+//
+// Returns whether a new entry was appended, and any error resolving the hub
+// or writing the file. A duplicate is not an error: (false, nil).
+func appendEternalMemoryEntry(content, category string, confidence float64, reason string) (bool, error) {
+	if category == "" {
+		category = "general"
+	}
+	if confidence <= 0 {
+		confidence = 0.9
+	}
+
+	hub := resolveHubPath()
+	eternalDir := filepath.Join(hub, "eternal")
+
+	if err := os.MkdirAll(eternalDir, 0755); err != nil {
+		return false, fmt.Errorf("failed to create eternal dir: %w", err)
+	}
+
+	ed := loadEternalData()
+
+	for _, e := range ed.Entries {
+		if e.Content == content && e.Category == category {
+			return false, nil
+		}
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := eternalEntry{
+		ID:         fmt.Sprintf("eternal_%d", time.Now().Unix()),
+		Content:    content,
+		Category:   category,
+		Confidence: confidence,
+		CreatedAt:  now,
+		AccessedAt: now,
+	}
+
+	ed.Entries = append(ed.Entries, entry)
+
+	// Cap at 200 entries with LRU eviction
+	if len(ed.Entries) > 200 {
+		oldestIdx := 0
+		for i, e := range ed.Entries {
+			if e.AccessedAt < ed.Entries[oldestIdx].AccessedAt {
+				oldestIdx = i
+			}
+		}
+		ed.Entries = append(ed.Entries[:oldestIdx], ed.Entries[oldestIdx+1:]...)
+	}
+
+	encoded, err := json.MarshalIndent(ed, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("failed to encode eternal memory: %w", err)
+	}
+	if err := os.WriteFile(eternalMemoryPath(), append(encoded, '\n'), 0644); err != nil {
+		return false, fmt.Errorf("failed to write memory.json: %w", err)
+	}
+
+	return true, nil
+}
+
 var eternalStoreCmd = &cobra.Command{
 	Use:   "eternal-store",
 	Short: "Store a high-value signal in eternal memory",
@@ -144,75 +252,27 @@ var eternalStoreCmd = &cobra.Command{
 			return nil
 		}
 		category, _ := cmd.Flags().GetString("category")
-		if category == "" {
-			category = "general"
-		}
 		confidence, _ := cmd.Flags().GetFloat64("confidence")
-		if confidence <= 0 {
-			confidence = 0.9
-		}
 
-		hub := resolveHubPath()
-		eternalDir := filepath.Join(hub, "eternal")
-
-		if err := os.MkdirAll(eternalDir, 0755); err != nil {
-			outputError(2, fmt.Sprintf("failed to create eternal dir: %v", err), nil)
+		appended, err := appendEternalMemoryEntry(content, category, confidence, "cli")
+		if err != nil {
+			outputError(2, err.Error(), nil)
 			return nil
 		}
 
-		memoryPath := filepath.Join(eternalDir, "memory.json")
-
-		type eternalEntry struct {
-			ID         string  `json:"id"`
-			Content    string  `json:"content"`
-			Category   string  `json:"category"`
-			Confidence float64 `json:"confidence"`
-			CreatedAt  string  `json:"created_at"`
-			AccessedAt string  `json:"accessed_at"`
-		}
-
-		type eternalData struct {
-			Entries []eternalEntry `json:"entries"`
-		}
-
-		var ed eternalData
-		if raw, err := os.ReadFile(memoryPath); err == nil {
-			json.Unmarshal(raw, &ed)
-		}
-
-		now := time.Now().UTC().Format(time.RFC3339)
-		entry := eternalEntry{
-			ID:         fmt.Sprintf("eternal_%d", time.Now().Unix()),
-			Content:    content,
-			Category:   category,
-			Confidence: confidence,
-			CreatedAt:  now,
-			AccessedAt: now,
-		}
-
-		ed.Entries = append(ed.Entries, entry)
-
-		// Cap at 200 entries with LRU eviction
-		if len(ed.Entries) > 200 {
-			oldestIdx := 0
-			for i, e := range ed.Entries {
-				if e.AccessedAt < ed.Entries[oldestIdx].AccessedAt {
-					oldestIdx = i
-				}
+		ed := loadEternalData()
+		id := ""
+		for _, e := range ed.Entries {
+			if e.Content == content {
+				id = e.ID
 			}
-			ed.Entries = append(ed.Entries[:oldestIdx], ed.Entries[oldestIdx+1:]...)
-		}
-
-		encoded, _ := json.MarshalIndent(ed, "", "  ")
-		if err := os.WriteFile(memoryPath, append(encoded, '\n'), 0644); err != nil {
-			outputError(2, fmt.Sprintf("failed to write memory.json: %v", err), nil)
-			return nil
 		}
 
 		outputOK(map[string]interface{}{
-			"stored": true,
-			"id":     entry.ID,
-			"total":  len(ed.Entries),
+			"stored":   true,
+			"id":       id,
+			"total":    len(ed.Entries),
+			"appended": appended,
 		})
 		return nil
 	},
@@ -415,7 +475,47 @@ var instinctApplyCmd = &cobra.Command{
 		}
 
 		instinctID := args[0]
-		success, _ := cmd.Flags().GetBool("success")
+
+		// WR-01 (204-REVIEW.md): --success is a boolean, but the credit
+		// ledger's own outcome vocabulary is three-way (helpful/neutral/
+		// harmful). Mapping --success=false straight onto "harmful"
+		// silently collapsed "this guidance didn't help" into "this
+		// guidance actively made things worse" -- both fed the same
+		// Failures/HarmfulApplications counters downstream. --outcome is
+		// the explicit, unambiguous way to record any of the three;
+		// --success stays as a backward-compatible alias, but false now
+		// means neutral, never harmful. Passing both is refused by name.
+		outcomeFlag, _ := cmd.Flags().GetString("outcome")
+		successChanged := cmd.Flags().Changed("success")
+		outcomeChanged := cmd.Flags().Changed("outcome")
+		if successChanged && outcomeChanged {
+			outputErrorMessage("instinct-apply refuses --success and --outcome together -- pass exactly one")
+			return nil
+		}
+
+		var outcome recruitmentCreditOutcome
+		if outcomeChanged {
+			outcome = recruitmentCreditOutcome(outcomeFlag)
+			switch outcome {
+			case recruitmentCreditOutcomeHelpful, recruitmentCreditOutcomeNeutral, recruitmentCreditOutcomeHarmful:
+				// declared
+			default:
+				outputErrorMessage(fmt.Sprintf(
+					"instinct-apply --outcome %q is not one of helpful, neutral, harmful", outcomeFlag,
+				))
+				return nil
+			}
+		} else {
+			successFlag, _ := cmd.Flags().GetBool("success")
+			if !successChanged || successFlag {
+				outcome = recruitmentCreditOutcomeHelpful
+			} else {
+				outcome = recruitmentCreditOutcomeNeutral
+			}
+		}
+		// success is retained for the JSON payload/output shape only --
+		// true exactly when the recorded outcome is helpful.
+		success := outcome == recruitmentCreditOutcomeHelpful
 
 		file := loadInstinctFileOrEmpty(store)
 		found := false
@@ -428,9 +528,22 @@ var instinctApplyCmd = &cobra.Command{
 				now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 				file.Instincts[i].Provenance.LastApplied = &now
 				file.Instincts[i].Provenance.ApplicationCount++
-				file.Instincts[i].ApplicationHistory = append(file.Instincts[i].ApplicationHistory, map[string]interface{}{
-					"timestamp": now,
-					"success":   success,
+				// SYN-204-05/06 (204-03-PLAN.md Task 2, LEARN-03): this is
+				// a manual, owner-invoked grading via --outcome (or the
+				// backward-compatible --success alias), not an automated
+				// worker self-report -- the discipline SYN-204-06
+				// repudiates is recordInstinctApplicationsForPhase
+				// (cmd/instinct_application.go) trusting a phase having
+				// merely advanced, not an operator's own explicit
+				// judgement here. Mapped onto the same closed outcome
+				// vocabulary the credit ledger declares (never a bare
+				// boolean, and never collapsing "did not help" into
+				// "harmful" -- WR-01, 204-REVIEW.md) so a single
+				// ApplicationHistory slice reads both writers' entries
+				// identically.
+				file.Instincts[i].ApplicationHistory = append(file.Instincts[i].ApplicationHistory, colony.InstinctApplicationEntry{
+					Timestamp: now,
+					Outcome:   string(outcome),
 				})
 				break
 			}
@@ -445,9 +558,15 @@ var instinctApplyCmd = &cobra.Command{
 					}
 					found = true
 					state.Memory.Instincts[i].Applications++
-					if success {
+					// Legacy schema has no neutral counter -- a neutral
+					// outcome increments neither, matching "didn't help,
+					// didn't hurt" rather than being forced into one of
+					// two buckets that both feed downstream review/decay
+					// logic (WR-01, 204-REVIEW.md).
+					switch outcome {
+					case recruitmentCreditOutcomeHelpful:
 						state.Memory.Instincts[i].Successes++
-					} else {
+					case recruitmentCreditOutcomeHarmful:
 						state.Memory.Instincts[i].Failures++
 					}
 					now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
@@ -818,7 +937,8 @@ func init() {
 	incidentRuleAddCmd.Flags().String("rule", "", "Rule content (required)")
 	incidentRuleAddCmd.Flags().String("priority", "normal", "Rule priority")
 
-	instinctApplyCmd.Flags().Bool("success", true, "Whether the application was successful")
+	instinctApplyCmd.Flags().Bool("success", true, "Deprecated alias for --outcome: true means helpful, false means neutral (never harmful)")
+	instinctApplyCmd.Flags().String("outcome", "", "Application outcome: helpful, neutral, or harmful (refused together with --success)")
 
 	spawnGetDepthCmd.Flags().String("name", "", "Ant name to look up (required)")
 

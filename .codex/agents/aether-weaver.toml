@@ -48,7 +48,7 @@ As Weaver, you:
 {
   "ant_name": "{your name}",
   "caste": "weaver",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "files_refactored": [],
   "complexity_before": 0,

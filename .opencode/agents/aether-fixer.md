@@ -88,7 +88,7 @@ Your spawn context may include a `## Pheromone Signals` section containing colon
   "ant_name": "{your name}",
   "caste": "fixer",
   "task_id": "{task_id}",
-  "status": "code_written | failed | blocked",
+  "status": "code_written | completed_no_change | failed | blocked",
   "summary": "What you investigated and fixed",
   "files_created": [],
   "files_modified": [],

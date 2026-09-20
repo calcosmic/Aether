@@ -1,6 +1,9 @@
 package codex
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestParseUsageClaudeResultEvent pins the Claude stream-json shape: a terminal
 // result event carrying usage and cost.
@@ -119,30 +122,51 @@ func TestParseUsageIgnoresNoiseAndPlainOutput(t *testing.T) {
 	}
 }
 
-// TestEstimateUsageIsNeverMistakenForAMeasurement is the load-bearing property
-// of the whole ledger. A run whose worker reported nothing must still appear —
-// a missing row silently shrinks the total and makes a regression look like an
-// improvement — but it must be impossible to read the estimate as measured.
-func TestEstimateUsageIsNeverMistakenForAMeasurement(t *testing.T) {
-	usage := EstimateUsage(24000)
-	if usage.Measured() {
-		t.Error("an estimate must not report itself as measured")
-	}
-	if usage.Source != UsageSourceEstimate {
-		t.Errorf("source = %q, want %q", usage.Source, UsageSourceEstimate)
-	}
-	if usage.InputTokens == 0 {
-		t.Error("an estimate should still carry a number so the row is not empty")
-	}
-	if usage.Empty() {
-		t.Error("an estimate must not look like an absent record")
+// TestUnreportedUsageIsEmptyNotInvented replaces
+// TestEstimateUsageIsNeverMistakenForAMeasurement.
+//
+// That test protected one property: an invented figure must never be mistaken
+// for a measurement. Phase 196 (D-01 as amended, owner 2026-08-27) made that
+// property true by construction — there is no invented figure any more. The
+// character-derived helper and its characters-per-token ratio are deleted, so
+// a worker whose tool reported nothing carries nothing.
+//
+// This asserts exactly that, which is the stronger statement: not "the guess is
+// labelled" but "there is no guess".
+func TestUnreportedUsageIsEmptyNotInvented(t *testing.T) {
+	config := WorkerConfig{
+		WorkerName:     "Roam-90",
+		Caste:          "scout",
+		TaskBrief:      strings.Repeat("a very long assembled prompt. ", 800),
+		ContextCapsule: strings.Repeat("colony context. ", 800),
 	}
 
-	// A zero-length prompt still produces a labelled row, not a blank.
-	zero := EstimateUsage(0)
-	if zero.Source != UsageSourceEstimate {
-		t.Errorf("zero-char estimate source = %q, want %q", zero.Source, UsageSourceEstimate)
+	for _, tc := range []struct {
+		name   string
+		result WorkerResult
+	}{
+		{name: "no parseable usage in a long output", result: WorkerResult{RawOutput: "plain prose, no events"}},
+		{name: "timed out with no output at all", result: WorkerResult{Status: "timeout"}},
+		{name: "failed", result: WorkerResult{Status: "failed", RawOutput: "boom"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AttachWorkerUsage(tc.result, config)
+			if !got.Usage.Empty() {
+				t.Errorf("usage = %+v, want an empty value — an unmeasured worker must carry no figure at all, "+
+					"not a figure wearing a label (D-01 as amended)", got.Usage)
+			}
+			if got.Usage.Source != "" {
+				t.Errorf("source = %q, want empty — nothing tagged the row, because nothing invented one", got.Usage.Source)
+			}
+			if got.Usage.BilledTotalTokens() != 0 {
+				t.Errorf("BilledTotalTokens() = %d, want 0", got.Usage.BilledTotalTokens())
+			}
+		})
 	}
+
+	// The prompt length is deliberately enormous above. If any figure were
+	// still being derived from it, the assertions would show a large number
+	// rather than zero.
 }
 
 // TestParseUsageToleratesNestedCodexShape covers the info.total_token_usage
@@ -161,13 +185,15 @@ func TestParseUsageToleratesNestedCodexShape(t *testing.T) {
 
 // TestEveryDispatchLeavesAUsageRow is the invariant that makes the ledger
 // worth reading. Attaching usage at each dispatcher's own return would mean
-// eight sites today and a ninth whenever a transport is added — and a dispatch
-// path that quietly skips the ledger does not produce an obviously wrong
-// number, it produces a total that is too low, which reads as an improvement.
+// eight sites today and a ninth whenever a transport is added, and a dispatch
+// path that quietly skips the boundary does not produce an obviously wrong
+// number — it produces a total that is too low, which reads as an improvement.
 //
-// AttachWorkerUsage runs at the one boundary all dispatches converge on. This
-// asserts the property directly: whatever a dispatcher returns, and whether or
-// not the provider reported anything, the result carries a row.
+// AttachWorkerUsage runs at the one boundary all dispatches converge on. Since
+// Phase 196 the row it leaves for an unreported worker is deliberately EMPTY
+// rather than a character-derived guess (D-01 as amended); the invariant is
+// that every dispatch passes through the boundary and gets the honest answer,
+// measured or absent, never invented.
 func TestEveryDispatchLeavesAUsageRow(t *testing.T) {
 	config := WorkerConfig{
 		WorkerName:     "Hammer-1",
@@ -189,26 +215,29 @@ func TestEveryDispatchLeavesAUsageRow(t *testing.T) {
 		{
 			name:       "worker produced no parseable usage",
 			result:     WorkerResult{RawOutput: "plain prose, no events"},
-			wantSource: UsageSourceEstimate,
+			wantSource: "",
 		},
 		{
 			name:       "worker timed out with no output at all",
 			result:     WorkerResult{Status: "timeout"},
-			wantSource: UsageSourceEstimate,
+			wantSource: "",
 		},
 		{
 			name:       "worker failed",
 			result:     WorkerResult{Status: "failed", RawOutput: "boom"},
-			wantSource: UsageSourceEstimate,
+			wantSource: "",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := AttachWorkerUsage(tc.result, config)
-			if got.Usage.Empty() {
-				t.Fatal("dispatch left no usage row; the ledger total would silently under-report")
-			}
 			if got.Usage.Source != tc.wantSource {
 				t.Errorf("source = %q, want %q", got.Usage.Source, tc.wantSource)
+			}
+			if tc.wantSource == "" && !got.Usage.Empty() {
+				t.Errorf("usage = %+v, want empty — an unreported worker carries no figure", got.Usage)
+			}
+			if tc.wantSource != "" && got.Usage.Empty() {
+				t.Fatal("a provider-reported dispatch left no usage row; the ledger total would silently under-report")
 			}
 		})
 	}

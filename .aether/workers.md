@@ -263,11 +263,44 @@ Actions: CREATED (path + lines), MODIFIED (path), RESEARCH (finding), SPAWN (cas
 
 ### Spawning Sub-Workers
 
-Workers can spawn sub-workers directly using the **Task tool** with `subagent_type="general-purpose"`.
+A worker that gets stuck or needs backup does not spawn a helper directly.
+It asks the program for one, with the real recruitment command below — and
+the program, never the assistant, decides whether the request is granted. It
+checks a chain-depth limit, the whole run's helper budget, and (for the
+request itself) permission, workspace, cost, and repeated-request rules,
+then either starts a real helper or refuses.
+
+**Ask for help:**
+
+```bash
+aether recruit --parent "{your_name}" --caste "{child_caste}" --objective "{a bounded description of what the helper should do}" --reason "{why you need help}"
+```
+
+- `--parent` is your own recorded name.
+- `--caste` is the kind of helper you want — a *caste*, in this repo's own
+  words, just means a type of helper with one job (writing code, checking
+  work, researching, and so on).
+- `--objective` is bounded: a specific thing the helper should do, not
+  "help with the phase."
+- `--reason` is why — see **Spawn Decision Criteria** below for what counts
+  as a genuine reason.
+
+**A refusal is not an error.** The command still exits successfully; it
+returns the reason the program refused (for example, the chain would go past
+the depth limit, or the whole run has already used its helper budget) and
+tells you plainly to carry on and finish the work alone. Do not retry the
+same request — pick the work back up yourself.
+
+**An admitted request produces a real helper**, started by the program
+itself — you never call a spawning tool directly. The owner sees it join the
+run inline, in the same window they are already working in: there is no
+separate approval step and no second window. When the helper finishes, its
+result is bound back to your request exactly once, even if the completion
+report is somehow duplicated or delayed.
 
 **Caste Emoji Mapping:**
 
-Every spawn must display its caste emoji:
+Every spawn displays its caste emoji:
 - 🔨🐜 Builder
 - 👁️🐜 Watcher
 - 🎲🐜 Chaos
@@ -279,32 +312,41 @@ Every spawn must display its caste emoji:
 
 **Depth-Based Behavior:**
 
-| Depth | Role | Can Spawn? | Max Sub-Spawns | Behavior |
-|-------|------|------------|----------------|----------|
-| 0 | Coordinator (Queen) | Yes | 4 | Dispatch initial workers |
-| 1 | Worker | Yes | 4 | Orchestrate phase, spawn helpers for genuine surprises |
-| 2 | Helper | No | 0 | Complete work inline, no further delegation |
+| Depth | Role | Can Recruit? | Behavior |
+|-------|------|--------------|----------|
+| 0 | Coordinator (Queen) | Yes | Dispatches the initial workers |
+| 1 | Worker | Yes | Runs the phase, recruits a helper for genuine surprises |
+| 2 | Helper | No | Completes the work inline; there is no depth 3 |
 
-A worker's depth can go no deeper than 2 (its helpers). A helper cannot spawn
-anyone — there is no depth 3.
+A worker's depth can go no deeper than 2 (its helpers). A helper cannot
+recruit anyone — there is no depth 3. This is the exact limit `aether
+recruit`'s own admission check enforces; the number here is not advisory
+prose, it is the enforced runtime cap.
+
+**Raising the depth cap for one run.** The owner can raise this cap for a
+single run with an explicit flag (`--max-depth`, passed to `aether
+recruit`). Every time that flag is used, the raise is written permanently
+into that run's own record, so it is never an invisible or silent widening —
+a raised cap always shows up afterward.
 
 **Spawn Budgets:** Two separate limits work together, and neither one does the
 other's job. In any single wave the coordinator sends at most 4 to 8 workers
 at once. Across the whole run, no more than 20 helpers may ever be spawned in
 total — that count includes the coordinator's own workers, not just their
-helpers — and budget spent in one wave is not given back in the next. Depth
+helpers, and recruited helpers draw from this SAME budget, never a separate
+one — and budget spent in one wave is not given back in the next. Depth
 alone cannot be the safety limit: a coordinator sending 8 workers, each of
-whom sends helpers of their own, is 8 workers wide and 2 levels deep — 73
+whom recruits helpers of their own, is 8 workers wide and 2 levels deep — 73
 workers in total — while never once breaking the depth rule above. That is
 why one number cannot do both jobs.
 
 **Spawn Decision Criteria (Depth 1):**
-Only spawn a helper if you encounter genuine surprise:
+Only ask for a helper if you encounter genuine surprise:
 - Task is 3x larger than expected
 - Discovered a sub-domain requiring different expertise
 - Found blocking dependency that needs parallel investigation
 
-**DO NOT spawn for:**
+**DO NOT ask for help for:**
 - Tasks you can complete in < 10 tool calls
 - Work that's merely tedious but straightforward
 - Slight scope expansion within your expertise
@@ -313,106 +355,40 @@ Only spawn a helper if you encounter genuine surprise:
 
 ### Step-by-Step Spawn Protocol
 
-**Step 1: Check if you can spawn**
-```bash
-# Check spawn allowance at your depth (hard-enforced on deny)
-result=$(aether spawn-can-spawn {your_depth} --enforce)
-# Returns: {"can_spawn": true/false, "depth": N, "max_spawns": N, "current_total": N}
-```
+There is one step: run `aether recruit` (see **Spawning Sub-Workers** above
+for the exact command and its flags). The program then, in order:
 
-If `can_spawn` is false, complete the work inline.
+1. **Validates** the request — a malformed request (a missing objective, an
+   unlisted urgency, and so on) is refused by name before anything else
+   runs.
+2. **Records** the request durably, whether it is later admitted or
+   refused, so a refusal is exactly as recoverable as an admission.
+3. **Decides admission** through the same check every spawn in this program
+   goes through: chain-depth, whole-run budget, repeated-request cycles,
+   then — for a real recruitment — permission, workspace containment, cost,
+   and duplicate-request checks.
+4. **If admitted:** starts a real helper in its own workspace, under a
+   bounded time limit, records the admission before the helper's process
+   starts, and tells the owner inline that a helper joined.
+5. **If refused:** tells you the reason and the plain instruction to carry
+   on alone. This exits successfully — it is not an error, and it is not
+   retried automatically.
+6. **When the helper finishes** (or its time runs out), the result is bound
+   back to your request exactly once — a duplicated or delayed completion
+   report can never be double-counted.
 
-**Step 1.5: Inject worktree context (if allocated)**
-Check `worktree_allocations[{child_name}]` from the current wave's allocation (Step 5.0.7 in build-wave.md).
-If a worktree is allocated (not null), include the following section in the child prompt after the "You are" line:
-```
-**Worktree Assignment:**
-You are working in an isolated git worktree. Your changes will NOT affect the main working tree.
+No other tool call is involved. There is no separate "generate a name," "log
+the spawn," "invoke a spawning tool," "log completion" sequence — `aether
+recruit` does all of it, atomically, in one call.
 
-- Worktree path: {path}
-- Branch: {branch}
-- Worktree ID: {id}
-
-IMPORTANT rules for worktree operation:
-1. Before starting work, cd into the worktree path: cd {path}
-2. All file reads, edits, and writes must use absolute paths within this worktree
-3. Run tests from within the worktree path (cd {path} && {test_command})
-4. Commit your changes in the worktree (do NOT commit to main repo)
-5. Do NOT modify files outside your worktree path
-6. Your working directory for all Bash commands must be {path}
-```
-If no worktree is allocated, skip this injection.
-
-**Step 2: Generate child name**
-```bash
-# Generate a name for the child worker
-child_name=$(aether generate-ant-name "{caste}" | jq -r '.result')
-# Returns: "Hammer-42", "Vigil-17", etc.
-```
-
-**Step 3: Log the spawn and update swarm display**
-```bash
-aether spawn-log --parent "{your_name}" --caste "{child_caste}" --name "{child_name}" --task "{task_summary}" --depth 1
-# --depth is advisory only; the recorded depth is derived from --parent.
-aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "excavating"
-```
-
-**Step 4: Use Task tool**
-```
-Use the Task tool with subagent_type="general-purpose":
-
-You are {child_name}, a {emoji} {Caste} Ant in the Aether Colony at depth {your_depth + 1}.
-
---- WORKER SPEC ---
-Read .aether/workers.md for {Caste} discipline.
-
---- CONSTRAINTS ---
-{constraints from constraints.json, if any}
-
---- PARENT CONTEXT ---
-Task: {what you are working on}
-Why spawning: {specific reason for delegation}
-Your parent: {your_name} at depth {your_depth}
-
---- YOUR TASK ---
-{specific sub-task}
-
---- SPAWN CAPABILITY ---
-You are at depth {your_depth + 1}.
-{if depth < 3: "You MAY spawn sub-workers if you encounter genuine surprise (3x complexity)."}
-{if depth >= 3: "You are at max depth. Complete all work inline, no spawning."}
-
-Spawn limits: Depth 1→4, Depth 2→2, Depth 3→0
-
---- RETURN FORMAT ---
-Return a compressed summary:
-{
-  "ant_name": "{child_name}",
-  "status": "completed" | "failed" | "blocked",
-  "summary": "1-2 sentences of what happened",
-  "files_touched": ["path1", "path2"],
-  "key_findings": ["finding1", "finding2"],
-  "spawns": [],
-  "blockers": []
-}
-```
-
-**Step 5: Log completion and update swarm display**
-```bash
-# After Task tool returns
-aether spawn-complete --name "{child_name}" --status "{status}" --summary "{summary}"
-aether swarm-display-update --agent "{child_name}" --id "{your_name}" --status "completed"
-```
-
----
-
-**Compressed Handoffs:**
-- Each level returns ONLY a summary, not full context
-- Parent synthesizes child results, doesn't pass through
-- This prevents context rot across spawn depths
+**Compressed results, always.** Whether admitted or refused, you never get
+more than a short summary back from a helper — never its full transcript.
+That keeps your own context from growing every time you ask for backup.
 
 **Spawn Tree Visualization:**
-All spawns are logged to `.aether/data/spawn-tree.txt` and visible in `/ant-watch`.
+Every spawn — and every recruitment, admitted or refused — is logged to
+`.aether/data/spawn-tree.txt` and visible in `aether watch` and `aether
+status`.
 
 ### Visual Identity
 
@@ -801,7 +777,7 @@ Read .aether/workers.md for role definitions.
 
 --- OUTPUT FORMAT ---
 {
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What the phase accomplished",
   "tasks_completed": ["1.1", "1.2"],
   "tasks_failed": [],

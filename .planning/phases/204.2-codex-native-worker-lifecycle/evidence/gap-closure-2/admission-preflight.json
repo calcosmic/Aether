@@ -1,0 +1,138 @@
+{
+  "attempts": [
+    {
+      "argv": [
+        "python3",
+        "scripts/qualify-native-gap-regression.py",
+        "--prepare",
+        "--evidence-root",
+        "/tmp/aether-gap2-kw0zk0jl/admission-preflight"
+      ],
+      "error": "unadmitted untracked input: .gsd/scratch/blocker1.txt",
+      "exit_code": 1,
+      "manifest": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/admission-preflight/manifest.json",
+        "sha256": "sha256:a1ba535e7afcea6f1813d35a2b5ff23db29969eeca03eba0e2c5ba60b6e5c12f"
+      },
+      "source_revision": "dc062a2a35e5e29d2822cafbfa444f5952a3131f",
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare.stdout",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/qualify-native-gap-regression.py",
+        "--prepare",
+        "--evidence-root",
+        "/tmp/aether-gap2-kw0zk0jl/admission-preflight-2"
+      ],
+      "error": "symlink input requires explicit admission: .claude/skills/to-prd",
+      "exit_code": 1,
+      "manifest": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/admission-preflight-2/manifest.json",
+        "sha256": "sha256:de97aae0b27050e7c1aba65f36c204f763db6120afcbdc9e678359bd85cf3705"
+      },
+      "source_revision": "dc062a2a35e5e29d2822cafbfa444f5952a3131f",
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare-2.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare-2.stdout",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "argv": [
+        "python3",
+        "scripts/qualify-native-gap-regression.py",
+        "--prepare",
+        "--evidence-root",
+        "/tmp/aether-gap2-kw0zk0jl/admission-preflight-3"
+      ],
+      "error": "unadmitted embedded input: .codex/.DS_Store",
+      "exit_code": 1,
+      "manifest": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/admission-preflight-3/manifest.json",
+        "sha256": "sha256:d35c03d5a71b0f27444b138258ec0640b10124853f886ffd0d10ab9dc3e09755"
+      },
+      "source_revision": "dc062a2a35e5e29d2822cafbfa444f5952a3131f",
+      "stderr": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare-3.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "path": "/private/tmp/aether-gap2-kw0zk0jl/prepare-3.stdout",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "cleanup": "none; no current-task compiler/module caches created",
+  "consumed_ignored_input": {
+    "path": "/Users/callumcowie/repos/Aether/.codex/.DS_Store",
+    "sha256": "sha256:a53a881ea87d3cdc683b6e5d42afddd2e906913a853ed6d43086fd2c7b2dd61d"
+  },
+  "consuming_directive": "embedded_assets.go:13 //go:embed all:.codex",
+  "expensive_commands_started": false,
+  "normal_race_preflight": "not executed",
+  "ordinary_tracer": "not executed; admission and capacity blocked",
+  "passed": false,
+  "plan": "204.2-17",
+  "preservation": {
+    "path": "/private/tmp/aether-gap2-kw0zk0jl/plan17-integrity.json",
+    "sha256": "sha256:c03f7ffc515ba62015e2173ab559172a12230f41fb0fe47c97b1593ea82077c9"
+  },
+  "prior_npm_incident": "31 additions, 64 changes and 17 removals retain unestablished prior state.",
+  "recorded_at": "2026-09-18T07:05:06.159242+00:00",
+  "report_revision": "ea8d0b51d6b940be20c181a3d1d09a382d4648d3",
+  "schema_version": "aether-native-gap2-admission/v1",
+  "status": "halted",
+  "storage": {
+    "free_bytes": 6548320256,
+    "historical_manifest": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/manifest.json",
+      "sha256": "sha256:df9bb0d48c12de4d73d9c9bfb57b5cb005bf42cf7a9ff1ea141d23f4ea84ecde"
+    },
+    "measured_bytes": {
+      "candidate_binary": 51789154,
+      "module_copy": 1737657830,
+      "prior_exhausted_free_bytes": 6050009088,
+      "standalone_clone": 552519983
+    },
+    "method": "Incomplete measurements prohibit admission; prior exhausted free bytes are only a lower bound.",
+    "required_bytes": null,
+    "required_lower_bound_bytes": 6050009088,
+    "uncertainties": [
+      "storage estimate input unavailable: /Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-16/final-regression/normal/go-cache"
+    ]
+  },
+  "storage_measurement": {
+    "path": "/private/tmp/aether-gap2-kw0zk0jl/storage-estimate.json",
+    "sha256": "sha256:64e67058d975b5170941505459a9753224f6f94432f9908ee47b829c1a6d8050"
+  },
+  "tests": {
+    "argv": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts",
+      "-p",
+      "test_qualify_native_gap_regression.py",
+      "-v"
+    ],
+    "exit_code": 0,
+    "stdout_stderr": {
+      "path": "/private/tmp/aether-gap2-kw0zk0jl/task2-green-final.log",
+      "sha256": "sha256:504151842e0fd717086019bff9d6a0bb410ca7ecc2cecd7718b8c599d6899bc9"
+    },
+    "tests": 10
+  }
+}

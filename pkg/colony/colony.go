@@ -303,11 +303,31 @@ type Charter struct {
 	Constraints string `json:"constraints"`
 }
 
+const AcceptedCharterSchemaVersion = "accepted-charter/v1"
+
+// AcceptedCharter is the durable episode contract created by init. Charter
+// preserves the optional detailed constraints while these top-level fields
+// make the accepted goal, its provenance, and episode identity replayable
+// without interpreting presentation text.
+type AcceptedCharter struct {
+	SchemaVersion string    `json:"schema_version"`
+	EpisodeID     string    `json:"episode_id"`
+	Goal          string    `json:"goal"`
+	Provenance    string    `json:"provenance"`
+	AcceptedAt    time.Time `json:"accepted_at"`
+	Charter       *Charter  `json:"charter,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Pending suggestion (suggest-analyze)
 // ---------------------------------------------------------------------------
 
-// PendingSuggestion holds an unreviewed pheromone suggestion from suggest-analyze.
+// PendingSuggestion holds an unreviewed item in the shared tick-to-approve
+// queue: either a runtime-proposed pheromone suggestion (from
+// suggest-analyze) or a cross-project import quarantined on arrival. Both
+// kinds share this one struct and one queue (D-07/D-10,
+// 203-CLASSIC-SYNTHESIS.md SYN-203-11) -- there is deliberately no second
+// "quarantine inbox" type.
 type PendingSuggestion struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"` // FOCUS, REDIRECT, or FEEDBACK
@@ -316,7 +336,79 @@ type PendingSuggestion struct {
 	ContentHash string `json:"content_hash"`
 	CreatedAt   string `json:"created_at"`
 	Dismissed   bool   `json:"dismissed"`
+
+	// Origin and SignalID are pointer-backed and omitempty, per the Phase
+	// 199 rule that new evidence fields stay readable on a legacy colony: an
+	// item written before this field existed has Origin == nil and reads as
+	// PendingOriginSuggestion (pendingNoteOrigin in
+	// cmd/pheromone_approval.go), never a fabricated import. SignalID links
+	// an import's queued item to the already-quarantined colony.PheromoneSignal
+	// it names, so approving/rejecting it can find that signal.
+	Origin   *string `json:"origin,omitempty"`
+	SignalID *string `json:"signal_id,omitempty"`
+
+	// Action and ActionAt record the owner's most recent decision --
+	// accepted, edited, or rejected -- with a timestamp, as a fast
+	// convenience scalar kept directly on the item (e.g. for
+	// suggest-approve's own listing). This is deliberately NOT the durable
+	// history: every one of BIO-08's declared actions -- including these
+	// three -- is separately recorded, together with the acting identity
+	// that performed it, in the append-only history
+	// cmd/pheromone_influence.go's appendInfluenceHistory maintains in
+	// pheromones-history.json. Action/ActionAt reflect only the LAST
+	// decision on this item; the full ordered sequence, with every actor,
+	// lives in that history file instead.
+	Action   *string `json:"action,omitempty"`
+	ActionAt *string `json:"action_at,omitempty"`
+
+	// SkillName, SkillSourceRunID, SkillLearningEntryID and SkillConfidence
+	// carry a difficulty-triggered skill candidate's own fields when Origin
+	// is PendingOriginSkillProposal -- nil for every other origin (LEARN-07,
+	// 204-CLASSIC-SYNTHESIS.md ruling (d)). Content already carries the
+	// generated skill markdown body; these four name the skill and its
+	// provenance so approving it can create the real skill, and so its
+	// provenance is nameable without opening a file.
+	SkillName            *string  `json:"skill_name,omitempty"`
+	SkillSourceRunID     *string  `json:"skill_source_run_id,omitempty"`
+	SkillLearningEntryID *string  `json:"skill_learning_entry_id,omitempty"`
+	SkillConfidence      *float64 `json:"skill_confidence,omitempty"`
+
+	// CanaryCandidateID links a queued item whose Origin is
+	// PendingOriginCanaryCandidate back to the quarantined canary run
+	// (cmd/rollback.go's canaryRun, keyed by candidate id) it names, so
+	// approving it releases exactly that run's quarantine (LEARN-07).
+	CanaryCandidateID *string `json:"canary_candidate_id,omitempty"`
 }
+
+// Origin values a queued item may declare. PendingOriginSuggestion is also
+// the read-time fallback for a legacy item with no Origin field.
+// PendingOriginSkillProposal and PendingOriginCanaryCandidate are LEARN-07's
+// two additions (204-09-PLAN.md Task 3): a difficulty-triggered skill
+// candidate, and a canary candidate quarantined after a regression -- both
+// route through this SAME queue, never a second approval surface.
+const (
+	PendingOriginSuggestion      = "suggestion"
+	PendingOriginImport          = "import"
+	PendingOriginSkillProposal   = "skill_proposal"
+	PendingOriginCanaryCandidate = "canary_candidate"
+)
+
+// PendingOrigins returns every origin category a queued item may declare.
+func PendingOrigins() []string {
+	return []string{
+		PendingOriginSuggestion,
+		PendingOriginImport,
+		PendingOriginSkillProposal,
+		PendingOriginCanaryCandidate,
+	}
+}
+
+// Action values recorded on a queued item once the owner has decided it.
+const (
+	PendingActionAccepted = "accepted"
+	PendingActionEdited   = "edited"
+	PendingActionRejected = "rejected"
+)
 
 // ---------------------------------------------------------------------------
 // Top-level state
@@ -369,8 +461,18 @@ type ColonyState struct {
 	RunID                     *string              `json:"run_id,omitempty"`
 	GateResults               []GateResultEntry    `json:"gate_results,omitempty"`
 	Charter                   *Charter             `json:"charter,omitempty"`
+	AcceptedCharter           *AcceptedCharter     `json:"accepted_charter,omitempty"`
+	Specification             *Specification       `json:"specification,omitempty"`
 	PendingSuggestions        *[]PendingSuggestion `json:"pending_suggestions,omitempty"`
 	LastAnalyzeCommit         *string              `json:"last_analyze_commit,omitempty"`
+	// Lifecycle evidence is additive and pointer-backed so state written
+	// before lifecycle/v1 remains distinguishable from explicitly recorded
+	// unknown provenance or closure outcomes.
+	LifecycleReceipt   *LifecycleReceipt      `json:"lifecycle_receipt,omitempty"`
+	PauseHandoff       *PauseHandoffReference `json:"pause_handoff,omitempty"`
+	RecoveryProvenance *RecoveryProvenance    `json:"recovery_provenance,omitempty"`
+	SealOutcome        *SealOutcome           `json:"seal_outcome,omitempty"`
+	ArchiveReference   *ArchiveReference      `json:"archive_reference,omitempty"`
 	// ResearchDocs are repository-relative paths the operator pointed this
 	// colony at, typically saved Oracle runs under .aether/research. They are
 	// pointers, not content: the runtime reads them when composing worker
@@ -396,12 +498,15 @@ func (s ColonyState) EffectiveColonyMode() ColonyMode {
 
 // Plan holds the generated phase plan.
 type Plan struct {
-	GeneratedAt      *time.Time         `json:"generated_at"`
-	Confidence       *float64           `json:"confidence"`
-	EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy,omitempty"`
-	ActiveRevisionID string             `json:"active_revision_id,omitempty"`
-	Revisions        []PlanRevision     `json:"revisions,omitempty"`
-	Phases           []Phase            `json:"phases"`
+	GeneratedAt        *time.Time           `json:"generated_at"`
+	Confidence         *float64             `json:"confidence"`
+	EvidencePolicy     PlanEvidencePolicy   `json:"evidence_policy,omitempty"`
+	AcceptancePolicy   PlanAcceptancePolicy `json:"acceptance_policy,omitempty"`
+	ActiveRevisionID   string               `json:"active_revision_id,omitempty"`
+	PendingCandidateID string               `json:"pending_candidate_id,omitempty"`
+	Candidates         []PlanCandidate      `json:"candidates,omitempty"`
+	Revisions          []PlanRevision       `json:"revisions,omitempty"`
+	Phases             []Phase              `json:"phases"`
 }
 
 // PlanRevisionReason records why an accepted plan replaced its predecessor.
@@ -435,22 +540,36 @@ func (r PlanRevisionReason) Valid() bool {
 // PlanRevision is an immutable snapshot of one accepted plan. The current
 // execution view remains Plan.Phases; revisions explain how that view changed.
 type PlanRevision struct {
-	SchemaVersion       int                `json:"schema_version"`
-	Number              int                `json:"number"`
-	ID                  string             `json:"id"`
-	ParentID            string             `json:"parent_id,omitempty"`
-	CreatedAt           string             `json:"created_at"`
-	ReasonType          PlanRevisionReason `json:"reason_type"`
-	Reason              string             `json:"reason"`
-	Evidence            []string           `json:"evidence,omitempty"`
-	InputEvidenceHash   string             `json:"input_evidence_hash,omitempty"`
-	EvidenceHash        string             `json:"evidence_hash,omitempty"`
-	PlanningRunID       string             `json:"planning_run_id,omitempty"`
-	PlanHash            string             `json:"plan_hash"`
-	PreservedPhaseIDs   []int              `json:"preserved_phase_ids,omitempty"`
-	SupersededPhaseIDs  []int              `json:"superseded_phase_ids,omitempty"`
-	ReplacementPhaseIDs []int              `json:"replacement_phase_ids,omitempty"`
-	Phases              []Phase            `json:"phases"`
+	SchemaVersion             int                `json:"schema_version"`
+	Number                    int                `json:"number"`
+	ID                        string             `json:"id"`
+	ParentID                  string             `json:"parent_id,omitempty"`
+	CreatedAt                 string             `json:"created_at"`
+	ReasonType                PlanRevisionReason `json:"reason_type"`
+	Reason                    string             `json:"reason"`
+	Evidence                  []string           `json:"evidence,omitempty"`
+	InputEvidenceHash         string             `json:"input_evidence_hash,omitempty"`
+	EvidenceHash              string             `json:"evidence_hash,omitempty"`
+	PlanningRunID             string             `json:"planning_run_id,omitempty"`
+	PlanHash                  string             `json:"plan_hash"`
+	PreservedPhaseIDs         []int              `json:"preserved_phase_ids,omitempty"`
+	SupersededPhaseIDs        []int              `json:"superseded_phase_ids,omitempty"`
+	ReplacementPhaseIDs       []int              `json:"replacement_phase_ids,omitempty"`
+	SemanticID                string             `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string           `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string           `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string           `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string           `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string           `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string             `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string             `json:"specification_revision_hash,omitempty"`
+	CandidateID               string             `json:"candidate_id,omitempty"`
+	CandidateContentHash      string             `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string             `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string             `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string           `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string           `json:"preserved_semantic_ids,omitempty"`
+	Phases                    []Phase            `json:"phases"`
 }
 
 // PlanEvidencePolicy identifies whether a plan's acceptance criteria have a
@@ -469,12 +588,15 @@ const (
 // an "overall" field rather than the newer single numeric value.
 func (p *Plan) UnmarshalJSON(data []byte) error {
 	type rawPlan struct {
-		GeneratedAt      *time.Time         `json:"generated_at"`
-		Confidence       json.RawMessage    `json:"confidence"`
-		EvidencePolicy   PlanEvidencePolicy `json:"evidence_policy"`
-		ActiveRevisionID string             `json:"active_revision_id"`
-		Revisions        []PlanRevision     `json:"revisions"`
-		Phases           []Phase            `json:"phases"`
+		GeneratedAt        *time.Time           `json:"generated_at"`
+		Confidence         json.RawMessage      `json:"confidence"`
+		EvidencePolicy     PlanEvidencePolicy   `json:"evidence_policy"`
+		AcceptancePolicy   PlanAcceptancePolicy `json:"acceptance_policy"`
+		ActiveRevisionID   string               `json:"active_revision_id"`
+		PendingCandidateID string               `json:"pending_candidate_id"`
+		Candidates         []PlanCandidate      `json:"candidates"`
+		Revisions          []PlanRevision       `json:"revisions"`
+		Phases             []Phase              `json:"phases"`
 	}
 
 	var raw rawPlan
@@ -484,7 +606,10 @@ func (p *Plan) UnmarshalJSON(data []byte) error {
 
 	p.GeneratedAt = raw.GeneratedAt
 	p.EvidencePolicy = raw.EvidencePolicy
+	p.AcceptancePolicy = raw.AcceptancePolicy
 	p.ActiveRevisionID = raw.ActiveRevisionID
+	p.PendingCandidateID = raw.PendingCandidateID
+	p.Candidates = raw.Candidates
 	p.Revisions = raw.Revisions
 	p.Phases = raw.Phases
 
@@ -636,15 +761,29 @@ func InferPhaseMode(name, description string) PhaseMode {
 
 // Phase represents a single phase in the colony plan.
 type Phase struct {
-	ID                   int                            `json:"id"`
-	Name                 string                         `json:"name"`
-	Description          string                         `json:"description"`
-	Status               string                         `json:"status"`
-	Mode                 PhaseMode                      `json:"mode,omitempty"`
-	Tasks                []Task                         `json:"tasks"`
-	SuccessCriteria      []string                       `json:"success_criteria"`
-	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
-	WatcherFailureCount  int                            `json:"watcher_failure_count,omitempty"`
+	ID                        int                            `json:"id"`
+	Name                      string                         `json:"name"`
+	Description               string                         `json:"description"`
+	Status                    string                         `json:"status"`
+	Mode                      PhaseMode                      `json:"mode,omitempty"`
+	Tasks                     []Task                         `json:"tasks"`
+	SuccessCriteria           []string                       `json:"success_criteria"`
+	EvidenceRequirements      []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	WatcherFailureCount       int                            `json:"watcher_failure_count,omitempty"`
+	SemanticID                string                         `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string                       `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string                       `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string                       `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string                       `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string                       `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string                         `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string                         `json:"specification_revision_hash,omitempty"`
+	CandidateID               string                         `json:"candidate_id,omitempty"`
+	CandidateContentHash      string                         `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string                         `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string                         `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string                       `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string                       `json:"preserved_semantic_ids,omitempty"`
 	// ExpectFailingTests marks a deliberately-RED phase: its deliverable is
 	// failing tests that prove a defect exists (classic TDD red-first).
 	// Continue's verification inverts the tests check for such a phase — a
@@ -659,14 +798,28 @@ type Phase struct {
 
 // Task represents a single task within a phase.
 type Task struct {
-	ID                   *string                        `json:"id"`
-	Goal                 string                         `json:"goal"`
-	Status               string                         `json:"status"`
-	Constraints          []string                       `json:"constraints,omitempty"`
-	Hints                []string                       `json:"hints,omitempty"`
-	SuccessCriteria      []string                       `json:"success_criteria,omitempty"`
-	EvidenceRequirements []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
-	DependsOn            []string                       `json:"depends_on,omitempty"`
+	ID                        *string                        `json:"id"`
+	Goal                      string                         `json:"goal"`
+	Status                    string                         `json:"status"`
+	Constraints               []string                       `json:"constraints,omitempty"`
+	Hints                     []string                       `json:"hints,omitempty"`
+	SuccessCriteria           []string                       `json:"success_criteria,omitempty"`
+	EvidenceRequirements      []CriterionEvidenceRequirement `json:"evidence_requirements,omitempty"`
+	DependsOn                 []string                       `json:"depends_on,omitempty"`
+	SemanticID                string                         `json:"semantic_id,omitempty"`
+	RequirementProofLinks     []string                       `json:"requirement_proof_links,omitempty"`
+	AcceptanceProofLinks      []string                       `json:"acceptance_proof_links,omitempty"`
+	NegativeProofLinks        []string                       `json:"negative_proof_links,omitempty"`
+	RecoveryProofLinks        []string                       `json:"recovery_proof_links,omitempty"`
+	PublicPathProofLinks      []string                       `json:"public_path_proof_links,omitempty"`
+	SpecificationRevisionID   string                         `json:"specification_revision_id,omitempty"`
+	SpecificationRevisionHash string                         `json:"specification_revision_hash,omitempty"`
+	CandidateID               string                         `json:"candidate_id,omitempty"`
+	CandidateContentHash      string                         `json:"candidate_content_hash,omitempty"`
+	PlanningTimelineID        string                         `json:"planning_timeline_id,omitempty"`
+	PlanningTimelineDigest    string                         `json:"planning_timeline_digest,omitempty"`
+	AffectedSemanticIDs       []string                       `json:"affected_semantic_ids,omitempty"`
+	PreservedSemanticIDs      []string                       `json:"preserved_semantic_ids,omitempty"`
 }
 
 // CriterionEvidenceRequirement binds one success criterion to exact project

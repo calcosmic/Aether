@@ -59,6 +59,121 @@ func TestHelpFlag(t *testing.T) {
 	}
 }
 
+func TestSpecCommandIsRegistered(t *testing.T) {
+	configureFrontDoorHelp()
+
+	command, _, err := rootCmd.Find([]string{"spec"})
+	if err != nil {
+		t.Fatalf("find spec command: %v", err)
+	}
+	if command != specCmd {
+		t.Fatalf("registered spec command = %p, want public spec command %p", command, specCmd)
+	}
+	if command.GroupID != frontDoorNormalGroupID {
+		t.Fatalf("spec command group = %q, want %q", command.GroupID, frontDoorNormalGroupID)
+	}
+
+	for _, name := range []string{"discuss", "plan", "build", "run", "status", "update"} {
+		registered, _, findErr := rootCmd.Find([]string{name})
+		if findErr != nil || registered == rootCmd || registered.Name() != name {
+			t.Errorf("existing public command %q is no longer registered", name)
+		}
+	}
+}
+
+func TestRootCodexHelpShowsRestoredLifecycleOrder(t *testing.T) {
+	output := rootHelpOutputForPlatform(t, "codex")
+	compact := strings.Join(strings.Fields(output), " ")
+
+	last := -1
+	for _, command := range []string{
+		`$ant-init "goal"`,
+		"$ant-discuss",
+		"aether spec",
+		"$ant-plan",
+		"$ant-build",
+		"aether run",
+	} {
+		index := strings.Index(compact, command)
+		if index < 0 {
+			t.Fatalf("Codex root help is missing %q:\n%s", command, output)
+		}
+		if index <= last {
+			t.Fatalf("Codex root help lists %q out of lifecycle order:\n%s", command, output)
+		}
+		last = index
+	}
+
+	for _, want := range []string{
+		"Clarify material intent before drafting the specification.",
+		"Draft, review, revise, and explicitly approve the owner-readable specification.",
+		"Generate an evidence-driven candidate plan from the approved specification.",
+	} {
+		if !strings.Contains(compact, want) {
+			t.Errorf("Codex root help is missing authority copy %q", want)
+		}
+	}
+	for _, unsupported := range []string{"/ant-", "$ant-spec", "$ant-status", "$ant-run", "$ant-maintenance"} {
+		if strings.Contains(output, unsupported) {
+			t.Errorf("Codex root help exposes unsupported syntax %q:\n%s", unsupported, output)
+		}
+	}
+}
+
+func TestRootHelpSeparatesSpecificationAndPlanAuthority(t *testing.T) {
+	groups := frontDoorRenderedHelpGroups("codex")
+	var specificationDescription, planDescription string
+	for _, group := range groups {
+		for _, entry := range group.entries {
+			switch entry.command {
+			case "aether spec":
+				specificationDescription = entry.description
+			case "$ant-plan":
+				planDescription = entry.description
+			}
+		}
+	}
+	if specificationDescription == "" || planDescription == "" {
+		t.Fatalf("root journey is missing separated spec/plan entries: spec=%q plan=%q", specificationDescription, planDescription)
+	}
+	if !strings.Contains(strings.ToLower(specificationDescription), "approve") {
+		t.Errorf("spec description does not explain explicit specification approval: %q", specificationDescription)
+	}
+	if !strings.Contains(strings.ToLower(planDescription), "candidate plan") {
+		t.Errorf("plan description does not explain candidate generation: %q", planDescription)
+	}
+	for _, forbidden := range []string{"accepts a plan", "activates a plan", "accept the plan", "activate the plan"} {
+		if strings.Contains(strings.ToLower(specificationDescription), forbidden) {
+			t.Errorf("spec help crosses the plan authority boundary with %q", forbidden)
+		}
+	}
+}
+
+func rootHelpOutputForPlatform(t *testing.T, platform string) string {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	root := t.TempDir()
+	t.Setenv("AETHER_ROOT", root)
+	t.Setenv("COLONY_DATA_DIR", filepath.Join(root, ".aether", "data"))
+	t.Setenv("AETHER_PLATFORM", platform)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("COLUMNS", "120")
+	store = nil
+	var output bytes.Buffer
+	stdout = &output
+	stderr = &output
+	rootCmd.SetOut(&output)
+	rootCmd.SetErr(&output)
+	t.Cleanup(func() { rootCmd.SetErr(os.Stderr) })
+	rootCmd.SetArgs([]string{"--help"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("root help for %s: %v", platform, err)
+	}
+	return output.String()
+}
+
 func TestPersistentPreRunStoreInit(t *testing.T) {
 	// Create a temp directory with .aether/data/
 	tmpDir := t.TempDir()

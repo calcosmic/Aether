@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -104,23 +106,57 @@ func TestColonyPrimeCharterSurvivesTrimming(t *testing.T) {
 
 	// Build state with lots of low-priority content to force trimming under
 	// the 4000-char compact budget -- the same technique
-	// TestColonyPrimeCompactTrimsLowPriorityFirst uses.
-	learnings := make([]colony.Learning, 0, 30)
-	for i := 0; i < 30; i++ {
-		learnings = append(learnings, colony.Learning{
-			Claim:  fmt.Sprintf("Learning %d: %s", i, strings.Repeat("text to fill space. ", 20)),
-			Status: "confirmed",
+	// TestColonyPrimeCompactTrimsLowPriorityFirst uses. This used to be
+	// PhaseLearnings + Decisions filler; both were removed in 198.2-04
+	// (dead capsule slots -- neither field has a writer). instincts.json and
+	// hive wisdom are the replacement: two real, prunable, unprotected
+	// sections with real writers -- the large instincts section consumes
+	// the remaining budget under truncation, leaving hive_wisdom with too
+	// little room to fit even a truncated form, so it lands wholly in
+	// "trimmed" rather than silently rendering nothing.
+	hubDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hubDir, "hive"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+	// Confidence 0.6 at 120 days decays to ~0.38 under the 180-day
+	// half-life -- low enough to be outscored by instincts (below) but
+	// still above the 0.3 dormancy floor, so the entry actually reaches the
+	// candidate list instead of being dropped before ranking even runs.
+	stale := time.Now().Add(-120 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	var hiveEntries []string
+	for i := 0; i < 5; i++ {
+		hiveEntries = append(hiveEntries, fmt.Sprintf(
+			`{"id":"w_%d","text":"Wisdom %d: %s","domain":"go","source_repo":"test","confidence":0.6,"created_at":"%s","accessed_at":"%s","access_count":1}`,
+			i, i, strings.Repeat("text to fill budget ", 20), stale, stale))
+	}
+	wisdomData := `{"entries":[` + strings.Join(hiveEntries, ",") + `]}`
+	if err := os.WriteFile(filepath.Join(hubDir, "hive", "wisdom.json"), []byte(wisdomData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Many SHORT instinct lines rather than few long ones: the ranker fills
+	// a truncated section line-by-line and stops at the first line that
+	// would overflow the remaining budget, discarding that line's leftover
+	// space rather than splitting it further. Short lines keep that
+	// discarded slack small, so instincts consumes remaining budget closely
+	// enough that hive_wisdom (below) is left with too little room to keep
+	// its required two non-empty lines and is dropped outright rather than
+	// truncated-and-kept.
+	now := time.Now().UTC().Format(time.RFC3339)
+	instinctEntries := make([]colony.InstinctEntry, 0, 200)
+	for i := 0; i < 200; i++ {
+		instinctEntries = append(instinctEntries, colony.InstinctEntry{
+			ID:         fmt.Sprintf("i%d", i),
+			Trigger:    fmt.Sprintf("t%d", i),
+			Action:     fmt.Sprintf("fill budget %d", i),
+			Confidence: 0.9,
+			TrustScore: 0.9,
+			Provenance: colony.InstinctProvenance{CreatedAt: now},
 		})
 	}
-	decisions := make([]colony.Decision, 0, 20)
-	for i := 0; i < 20; i++ {
-		decisions = append(decisions, colony.Decision{
-			ID:        fmt.Sprintf("d%d", i),
-			Phase:     1,
-			Claim:     fmt.Sprintf("Decision %d: %s", i, strings.Repeat("long text to fill budget. ", 15)),
-			Rationale: "rationale",
-			Timestamp: "2026-01-01T00:00:00Z",
-		})
+	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Instincts: instinctEntries}); err != nil {
+		t.Fatal(err)
 	}
 
 	goal := "charter trim survival test"
@@ -133,12 +169,6 @@ func TestColonyPrimeCharterSurvivesTrimming(t *testing.T) {
 			Phases: []colony.Phase{
 				{ID: 1, Name: "Phase One", Status: "in_progress"},
 			},
-		},
-		Memory: colony.Memory{
-			PhaseLearnings: []colony.PhaseLearning{
-				{Phase: 1, PhaseName: "Phase One", Learnings: learnings},
-			},
-			Decisions: decisions,
 		},
 		Charter: &colony.Charter{
 			Governance: "Linting: ESLint. Testing: Jest",

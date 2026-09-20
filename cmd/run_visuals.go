@@ -17,17 +17,41 @@ import (
 // stays a clean machine surface.
 
 func renderRunEngageLine(state colony.ColonyState, opts runCompatibilityOptions) string {
-	goal := "(no goal recorded)"
-	if state.Goal != nil && strings.TrimSpace(*state.Goal) != "" {
-		goal = strings.TrimSpace(*state.Goal)
+	_ = opts // The accepted range, not a presentation-only cap, defines this card.
+	facts := lifecycleFactsFromStateSnapshot(state, false, autopilotNow())
+	return renderAutopilotOperatingContract(buildAutopilotPreflight(facts))
+}
+
+func renderAutopilotPreflightRefusal(preflight AutopilotPreflight) string {
+	var b strings.Builder
+	if preflight.Paused {
+		b.WriteString("⏸ Autopilot paused\n")
+		fmt.Fprintf(&b, "Because: %s.\n", emptyFallback(strings.TrimSuffix(strings.TrimSpace(preflight.Diagnostic), "."), "authoritative colony state cannot be read safely"))
+		b.WriteString("State: unchanged.\n")
+		fmt.Fprintf(&b, "Next: %s", emptyFallback(strings.TrimSpace(preflight.Next), "/ant-status"))
+		return b.String()
 	}
-	maxLabel := "all"
-	if opts.MaxPhases > 0 {
-		maxLabel = fmt.Sprintf("%d", opts.MaxPhases)
+	b.WriteString("⛔ Autopilot did not start\n")
+	fmt.Fprintf(&b, "Missing: %s.\n", emptyFallback(strings.TrimSpace(preflight.Missing), "an accepted plan"))
+	b.WriteString("State: unchanged.\n")
+	fmt.Fprintf(&b, "Next: %s", emptyFallback(strings.TrimSpace(preflight.Next), "/ant-status"))
+	return b.String()
+}
+
+func renderAutopilotOperatingContract(preflight AutopilotPreflight) string {
+	pheromones := "none"
+	if len(preflight.ActivePheromones) > 0 {
+		pheromones = strings.Join(preflight.ActivePheromones, "; ")
 	}
 	var b strings.Builder
-	b.WriteString("━━━ 🤖 " + spacedTitle("Autopilot Engaged") + " ━━━\n")
-	b.WriteString(fmt.Sprintf("Goal: %s | Phase %d of %d | Max: %s", goal, state.CurrentPhase, len(state.Plan.Phases), maxLabel))
+	b.WriteString("━━ ⚡ A U T O P I L O T ━━\n")
+	fmt.Fprintf(&b, "Goal: %s\n", emptyFallback(strings.TrimSpace(preflight.Goal), "Not recorded"))
+	fmt.Fprintf(&b, "Range: Phase %d through Phase %d\n", preflight.FirstPhase, preflight.LastPhase)
+	fmt.Fprintf(&b, "Active pheromones: %s\n", pheromones)
+	b.WriteString("May revise: tasks, dependencies, sequencing, and implementation details when evidence requires it.\n")
+	b.WriteString("Will pause before changing: goal, promised behavior, scope, risk authority, or acceptance criteria.\n")
+	b.WriteString("Also pauses for: safety failure, corrupt state, missing authority, a material owner decision, or an invalidating failed dependency.\n")
+	b.WriteString("Starting now.")
 	return b.String()
 }
 
@@ -68,21 +92,121 @@ func renderRunPhaseAdvancement(phase colony.Phase, continueResult map[string]int
 	return b.String()
 }
 
-func renderRunReplanBanner(phasesCompleted, interval int) string {
+func renderRunReplanBanner(phasesCompleted, interval, lessonCount int) string {
 	var b strings.Builder
 	b.WriteString("━━━ 🔄 " + spacedTitle("Replan Suggested") + " ━━━\n")
-	b.WriteString(fmt.Sprintf("%d phase(s) completed since the last checkpoint (interval: every %d).\n", phasesCompleted, interval))
+	b.WriteString(fmt.Sprintf("%d phase(s) completed since the last checkpoint (interval: every %d), with %d unique evidence-confirmed lesson(s) since the active plan revision.\n", phasesCompleted, interval, lessonCount))
 	b.WriteString("Review the plan with `aether plan`, or run `aether run --continue` to keep going.")
 	return b.String()
+}
+
+func renderRunReplanQueued(decision PendingDecision) string {
+	return fmt.Sprintf(
+		"📝 Replan note %s queued for plan revision %s (%d confirmed lesson(s), checkpoints %d-%d). Autopilot continues.",
+		decision.ID,
+		decision.PlanRevisionID,
+		decision.LessonCount,
+		decision.FirstCheckpointPhase,
+		decision.LatestCheckpointPhase,
+	)
+}
+
+func renderRunCheckpointQueued(code autopilotTriggerCode, checkpoint autopilotCheckpointReference) string {
+	return fmt.Sprintf(
+		"📝 %s checkpoint %s queued for phase %d. Autopilot continues; owner recovery: `%s`",
+		strings.ReplaceAll(string(code), "_", " "),
+		checkpoint.ID,
+		checkpoint.Phase,
+		emptyFallback(checkpoint.RecoveryCommand, "aether decision-list"),
+	)
+}
+
+func renderRunBlockerBaseline(snapshot blockerSnapshot) string {
+	if snapshot.Count == 1 {
+		return "ℹ️ 1 existing blocker recorded at this stage boundary; autopilot will continue unless the count grows or an escalation exists."
+	}
+	return fmt.Sprintf("ℹ️ %d existing blockers recorded at this stage boundary; autopilot will continue unless the count grows or an escalation exists.", snapshot.Count)
+}
+
+func renderRunTypedDecision(decision autopilotRunDecision) string {
+	title := "Autopilot Stopped"
+	icon := "⛔"
+	guidance := fmt.Sprintf("Next step: `%s`", emptyFallback(decision.Next, "aether status"))
+	switch decision.Disposition {
+	case autopilotDispositionPause:
+		title = "Autopilot Paused"
+		icon = "⏸"
+	case autopilotDispositionNormalStop:
+		title = "Autopilot Finished This Run"
+		icon = "⏹"
+	}
+	return renderDecisionBlock(icon, title, humanizeAutopilotPauseReason(string(decision.Code)), guidance)
 }
 
 func renderAutopilotComplete(phasesCompleted int) string {
 	var b strings.Builder
 	b.WriteString("━━━ ✅ " + spacedTitle("Autopilot Complete") + " ━━━\n")
 	if phasesCompleted == 1 {
-		b.WriteString("1 phase built, verified, and advanced.")
+		b.WriteString("1 phase built and verified.\n")
 	} else {
-		b.WriteString(fmt.Sprintf("%d phases built, verified, and advanced.", phasesCompleted))
+		b.WriteString(fmt.Sprintf("%d phases built and verified.\n", phasesCompleted))
+	}
+	b.WriteString("Sealing remains an explicit owner action. Next: `aether seal`.")
+	return b.String()
+}
+
+func renderAutopilotRepairReceipt(receipt autopilotRepairReceipt) string {
+	var b strings.Builder
+	b.WriteString("━━━ 🔧 " + spacedTitle("Bounded Repair") + " ━━━\n")
+	fmt.Fprintf(&b, "Receipt: %s | Phase %d | Attempt: %s\n", receipt.ID, receipt.Phase, emptyFallback(receipt.Attempt, "not recorded"))
+	fmt.Fprintf(&b, "Failing check: %s\n", emptyFallback(receipt.Check, "not recorded"))
+	fmt.Fprintf(&b, "Permitted scope: %s\n", emptyFallback(strings.Join(receipt.PermittedScope, ", "), "none"))
+	fmt.Fprintf(&b, "Action: %s\n", emptyFallback(receipt.PlannedAction, "not recorded"))
+	fmt.Fprintf(&b, "Verification: %s — %s\n", emptyFallback(receipt.Verification.Check, receipt.Check), repairVerificationLabel(receipt.Verification.Passed))
+	fmt.Fprintf(&b, "Remaining repair budget: %d", receipt.BudgetRemaining)
+	return b.String()
+}
+
+func repairVerificationLabel(passed bool) string {
+	if passed {
+		return "passed"
+	}
+	return "failed"
+}
+
+func renderAutopilotRepairReport(value interface{}) string {
+	var report autopilotRepairReport
+	switch typed := value.(type) {
+	case autopilotRepairReport:
+		report = typed
+	case *autopilotRepairReport:
+		if typed == nil {
+			return ""
+		}
+		report = *typed
+	default:
+		return ""
+	}
+	if report.Attempts == 0 && len(report.Debt) == 0 && len(report.Blockers) == 0 && len(report.ContinuedPaths) == 0 && len(report.SkippedPaths) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\nRepair and debt\n")
+	fmt.Fprintf(&b, "Attempts: %d | Remaining budget: %d | Exhausted: %t\n", report.Attempts, report.RemainingBudget, report.BudgetExhausted)
+	for _, receipt := range report.Receipts {
+		fmt.Fprintf(&b, "  - %s: phase %d %s — %s\n", receipt.ID, receipt.Phase, receipt.Check, receipt.Status)
+	}
+	for _, debt := range report.Debt {
+		fmt.Fprintf(&b, "  - Debt: %s\n", debt.Summary)
+	}
+	for _, blocker := range report.Blockers {
+		fmt.Fprintf(&b, "  - Blocker: %s\n", blocker.Summary)
+	}
+	if len(report.ContinuedPaths) > 0 {
+		fmt.Fprintf(&b, "Continued independent paths: %s\n", strings.Join(report.ContinuedPaths, ", "))
+	}
+	if len(report.SkippedPaths) > 0 {
+		fmt.Fprintf(&b, "Stopped affected paths: %s\n", strings.Join(report.SkippedPaths, ", "))
 	}
 	return b.String()
 }
@@ -101,6 +225,36 @@ func renderRunPauseBlock(reason, next string) string {
 // reason code into a sentence a person can act on without reading source.
 func humanizeAutopilotPauseReason(reason string) string {
 	switch {
+	case reason == string(autopilotTriggerDeterministicVerificationFailed):
+		return "The current phase did not clear deterministic verification, so continuing would be unsafe."
+	case reason == string(autopilotTriggerAuditorScoreBelowFloor):
+		return "The Auditor scored the current result below the overnight safety floor of 60."
+	case reason == string(autopilotTriggerCriticalReviewFinding):
+		return "The current review produced a Critical finding."
+	case reason == string(autopilotTriggerBlockerCountIncreased):
+		return "The live blocker count increased during this stage."
+	case reason == string(autopilotTriggerBlockerEscalated):
+		return "A blocker escalation is unresolved at this stage boundary."
+	case reason == string(autopilotTriggerColonyNotRunnable):
+		return "The colony cannot safely enter its next build or verification step."
+	case reason == string(autopilotTriggerMissingAuthority):
+		return "The proposed change needs owner authority before it can be applied."
+	case reason == string(autopilotTriggerProviderUnavailable):
+		return "The required worker provider is unavailable; the current phase remains ready to resume."
+	case reason == string(autopilotTriggerRuntimeVerificationNeeded):
+		return "The current phase needs hands-on owner verification."
+	case reason == string(autopilotTriggerVisualCheckpointNeeded):
+		return "The current phase needs an owner to inspect its user-interface changes."
+	case reason == string(autopilotTriggerReplanDue):
+		return "The interval was reached with confirmed lessons that may change the remaining plan."
+	case reason == string(autopilotTriggerCancelled):
+		return "The run was cancelled after preserving its current phase state."
+	case reason == string(autopilotTriggerWorkerTimeout):
+		return "A bounded worker timeout ended this run; the unfinished phase is ready to resume."
+	case reason == string(autopilotTriggerMaxPhasesReached):
+		return "This invocation reached its requested phase limit."
+	case reason == string(autopilotTriggerColonyComplete):
+		return "Every planned phase is complete; sealing remains an explicit owner action."
 	case reason == "blocked":
 		return "Verification could not confirm this phase's work."
 	case strings.HasPrefix(reason, "active_blockers:"):
@@ -179,25 +333,77 @@ func queueAutopilotPauseDecision(reason string, phase int) {
 	_ = store.SaveJSON(pendingDecisionsFile, file)
 }
 
-// autopilotPauseTrigger describes one condition the autopilot stops for. The
-// catalog is the single source for the dry-run preview, the pause tests, and
-// the disposition record in .planning/decisions/autopilot-pause-conditions.md.
+// renderRunDryRunTriggerCatalogue renders the structured policy rows carried
+// by the dry-run result. It explains typed control data; no caller parses this
+// prose to decide what the run does.
+func renderRunDryRunTriggerCatalogue(value interface{}) string {
+	specs := autopilotTriggerSpecsFromDryRunValue(value)
+	var b strings.Builder
+	b.WriteString("\nPause Triggers and Normal Stops (canonical overnight contract)\n")
+	for _, spec := range specs {
+		b.WriteString(fmt.Sprintf("  %s — %s\n", spec.Code, spec.Label))
+		b.WriteString(fmt.Sprintf("    Detects: %s\n", spec.Detection))
+		b.WriteString(fmt.Sprintf("    Headless: %s | Interactive: %s\n", spec.HeadlessDisposition, spec.InteractiveDisposition))
+		b.WriteString(fmt.Sprintf("    Next: `%s`\n", spec.NextActionTemplate))
+	}
+	return b.String()
+}
+
+func autopilotTriggerSpecsFromDryRunValue(value interface{}) []autopilotTriggerSpec {
+	switch rows := value.(type) {
+	case []autopilotTriggerSpec:
+		return rows
+	case []map[string]interface{}:
+		return autopilotTriggerSpecsFromMaps(rows)
+	case []interface{}:
+		maps := make([]map[string]interface{}, 0, len(rows))
+		for _, raw := range rows {
+			row, ok := raw.(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			maps = append(maps, row)
+		}
+		return autopilotTriggerSpecsFromMaps(maps)
+	default:
+		return nil
+	}
+}
+
+func autopilotTriggerSpecsFromMaps(rows []map[string]interface{}) []autopilotTriggerSpec {
+	specs := make([]autopilotTriggerSpec, 0, len(rows))
+	for _, row := range rows {
+		specs = append(specs, autopilotTriggerSpec{
+			Code:                   autopilotTriggerCode(stringValue(row["code"])),
+			Label:                  stringValue(row["label"]),
+			Detection:              stringValue(row["detection"]),
+			NextActionTemplate:     stringValue(row["next_action_template"]),
+			HeadlessDisposition:    autopilotDisposition(stringValue(row["headless_disposition"])),
+			InteractiveDisposition: autopilotDisposition(stringValue(row["interactive_disposition"])),
+		})
+	}
+	if err := validateAutopilotTriggerSpecs(specs); err != nil {
+		return nil
+	}
+	return specs
+}
+
+// autopilotPauseTrigger is a compatibility projection for older focused tests.
+// It contains no independent policy list: every row is derived from the typed
+// canonical catalogue above.
 type autopilotPauseTrigger struct {
 	Condition string
 	Meaning   string
 }
 
 func autopilotPauseTriggerCatalog() []autopilotPauseTrigger {
-	return []autopilotPauseTrigger{
-		{"blocked", "verification could not confirm the phase's work; the run stops with a task-scoped redispatch"},
-		{"active_blockers", "unresolved blocker decisions are waiting on you"},
-		{"test_failures", "a test-failure signal was raised during verification"},
-		{"gate_failure", "a quality or security gate reported failure"},
-		{"critical_chaos_findings", "resilience testing logged a critical finding"},
-		{"uncommitted_changes", "an uncommitted-changes marker was set mid-run"},
-		{"replan_due", "the replan checkpoint interval was reached (default: every 2 phases)"},
-		{"max_phases_reached", "the --max-phases budget was spent"},
-		{"not_runnable", "the colony is not in a runnable state"},
-		{"completed", "every phase is done — the run celebrates and hands off to seal"},
+	specs := autopilotTriggerSpecs()
+	triggers := make([]autopilotPauseTrigger, 0, len(specs))
+	for _, spec := range specs {
+		triggers = append(triggers, autopilotPauseTrigger{
+			Condition: string(spec.Code),
+			Meaning:   spec.Detection,
+		})
 	}
+	return triggers
 }

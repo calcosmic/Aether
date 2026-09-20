@@ -1,13 +1,16 @@
 name: ant-status
-description: "📊 Show colony status at a glance through the Aether CLI runtime"
+description: "Show the complete authoritative colony snapshot."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether status $ARGUMENTS"
+  default_view: "full"
+  compact_flag: "--compact"
 ceremony_contract:
   class: "dashboard"
-  authority: "Go owns status data, warning calculation, and visual dashboard rendering."
-  wrapper_role: "Display current facts only. TypeScript display helpers may call `aether status` in JSON mode and render returned fields, but must not infer worker activity."
+  authority: "Go owns the complete status snapshot, projection, and visual rendering."
+  wrapper_role: "Delegate every invocation to the runtime. With no flag the default is full; --compact selects the strict compact projection subset."
 guardrails:
+  - "Do not inspect host state, cost, files, or activity to supplement the runtime snapshot."
+  - "Status is the complete snapshot; watch is the event stream and does not replace status authority."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
-  - "Do not claim workers were spawned, completed, blocked, or verified from status output."
   - "If docs and runtime disagree, runtime wins."

@@ -25,28 +25,6 @@ const (
 	envOpenCodePath     = "AETHER_OPENCODE_PATH"
 	envOpenCodePrimary  = "AETHER_OPENCODE_PRIMARY_AGENT"
 	envOpenCodeAgentURL = "AETHER_OPENCODE_AGENT_URL"
-	// defaultProbeTimout is the budget for the CHEAP auth probe (`claude auth
-	// status --json`, `codex login status`) -- not the model round-trip
-	// preflight below, which has its own, much larger budget.
-	//
-	// It was 3s with no retry and no override. Idle, these probes answer in
-	// 0.05-0.3s, so 3s looks generous; but they occasionally stall well past
-	// it (a token refresh reaching the network is the likeliest cause), and a
-	// stall was fatal -- the worker never started, on a machine where the CLI
-	// was installed and logged in the whole time.
-	//
-	// Observed on 2026-08-21 in two unrelated places on the same day: a
-	// Formica build lost two of four workers to `claude auth status failed:
-	// timed out` while the OTHER TWO STARTED FINE on the same credentials
-	// (proof the auth was healthy and the probe was not), and this repo's own
-	// suite lost TestCodexReadOnlyProfileSelectsReadOnlySandbox to `codex
-	// login status failed: timed out`, passing on a rerun.
-	//
-	// This is the same lesson hostedPreflightTimeout already learned and
-	// wrote down (20s -> 45s plus one retry, after a run died 22s in while a
-	// hand-run probe answered in 5). The cheap probe never got the same
-	// treatment, so it kept failing the same way for the same reason.
-	defaultProbeTimout = 10 * time.Second
 )
 
 const defaultOpenCodePrimaryAgent = "aether-worker-router"
@@ -229,7 +207,14 @@ func (s *SelectedInvoker) InvokeWithProgress(ctx context.Context, config WorkerC
 // can quietly leave it, so it is populated where the paths converge. Usage
 // already present is left alone so a dispatcher that learns to report its own
 // is not overwritten.
+//
+// The config parameter is retained deliberately even though nothing reads it
+// today: it is the dispatch boundary's stable shape, and the transcript-reading
+// attachment sources added later in this phase need the worker identity it
+// carries. It is NOT a hook for reviving a length-derived figure — see D-01 as
+// amended, and the ratchet TestNoTokenCountIsDerivedFromLength that enforces it.
 func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
+	_ = config
 	if !result.Usage.Empty() {
 		return result
 	}
@@ -237,10 +222,11 @@ func AttachWorkerUsage(result WorkerResult, config WorkerConfig) WorkerResult {
 		result.Usage = usage
 		return result
 	}
-	// No provider figure. Record a labelled estimate rather than nothing: an
-	// absent row shrinks the measured total and makes a regression read as an
-	// improvement.
-	result.Usage = EstimateUsage(config.assembledPromptChars())
+	// No provider figure, so nothing is attached: the usage value stays empty
+	// and downstream reads it as not reported. This deliberately does NOT
+	// invent a figure from the assembled prompt's length — D-01 as amended
+	// (owner, 2026-08-27) forbids a length-derived token count anywhere, and
+	// a marked guess is exactly the thing it forbids, wearing a label.
 	return result
 }
 
@@ -493,7 +479,13 @@ func fileExists(path string) bool {
 func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 	active := DetectActivePlatform()
 	preferences := defaultWorkerPlatformPreferences(active)
-	explicitOverride := PlatformUnknown
+	// A detected host owns its worker dispatch. Availability failure must not
+	// silently transfer the assignment to a different installed provider.
+	pinnedPlatform := PlatformUnknown
+	switch active {
+	case PlatformCodex, PlatformClaude, PlatformOpenCode:
+		pinnedPlatform = active
+	}
 	if rawOverride := strings.TrimSpace(os.Getenv(envWorkerPlatform)); rawOverride != "" {
 		override := normalizePlatform(rawOverride)
 		if override == PlatformUnknown {
@@ -503,7 +495,7 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 			}
 		}
 		if override != PlatformFake {
-			explicitOverride = override
+			pinnedPlatform = override
 			preferences = []Platform{override}
 		}
 	}
@@ -513,9 +505,9 @@ func SelectPlatformInvoker(ctx context.Context) WorkerInvoker {
 		NewClaudeDispatcher(),
 		NewOpenCodeDispatcher(),
 	}, preferences...)
-	if explicitOverride != PlatformUnknown {
+	if pinnedPlatform != PlatformUnknown {
 		for _, dispatcher := range dispatchers {
-			if dispatcher.Platform() == explicitOverride {
+			if dispatcher.Platform() == pinnedPlatform {
 				dispatchers = []PlatformDispatcher{dispatcher}
 				break
 			}
@@ -587,7 +579,7 @@ func DescribeInvokerAvailability(invoker WorkerInvoker, ctx context.Context) str
 					if active == status.Platform {
 						return fmt.Sprintf("using %s worker dispatcher (detected host: %s)", status.Platform, active)
 					}
-					return fmt.Sprintf("detected host %s, falling back to %s worker dispatcher", active, status.Platform)
+					return fmt.Sprintf("using %s worker dispatcher (explicit override; detected host: %s)", status.Platform, active)
 				}
 				return fmt.Sprintf("using %s worker dispatcher", status.Platform)
 			}
@@ -1064,8 +1056,16 @@ func invokeHostedWorker(ctx context.Context, dispatcher PlatformDispatcher, conf
 	}
 	configureWorkerCommand(cmd)
 
+	// Mark the process as an Aether-spawned worker. workerProcessEnv has
+	// existed since the process tracker was written but had NO caller, so
+	// AETHER_WORKER_NAME never actually reached a worker -- which is why
+	// `aether hook-stop`, running inside a worker's own Claude session, could
+	// not tell a worker from a person. It blocked the worker and told it to run
+	// `aether pause`, and a worker that pauses the colony mid-build strands the
+	// whole run. Setting it here is what makes that exemption possible.
+	cmd.Env = workerProcessEnv(os.Environ(), config, dispatcher.Platform())
 	if agentURL := os.Getenv(envOpenCodeAgentURL); agentURL != "" {
-		cmd.Env = append(os.Environ(), envOpenCodeAgentURL+"="+agentURL)
+		cmd.Env = setEnvValue(cmd.Env, envOpenCodeAgentURL, agentURL)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -1175,22 +1175,23 @@ waitLoop:
 // match, and TestHostedWorkerResultCarriesAllClaimsContent pins it.
 func hostedWorkerResultFromClaims(config WorkerConfig, claims workerClaims, duration time.Duration, safeRawOutput string) WorkerResult {
 	return WorkerResult{
-		WorkerName:    config.WorkerName,
-		Caste:         config.Caste,
-		TaskID:        config.TaskID,
-		Status:        claims.Status,
-		Summary:       claims.Summary,
-		FilesCreated:  claims.FilesCreated,
-		FilesModified: claims.FilesModified,
-		TestsWritten:  claims.TestsWritten,
-		Artifacts:     claims.Artifacts,
-		ScoutReport:   claims.ScoutReport,
-		ToolCount:     claims.ToolCount,
-		Blockers:      claims.Blockers,
-		Spawns:        claims.Spawns,
-		Handoff:       claims.Handoff,
-		Duration:      duration,
-		RawOutput:     safeRawOutput,
+		WorkerName:        config.WorkerName,
+		Caste:             config.Caste,
+		TaskID:            config.TaskID,
+		Status:            claims.Status,
+		Summary:           claims.Summary,
+		FilesCreated:      claims.FilesCreated,
+		FilesModified:     claims.FilesModified,
+		TestsWritten:      claims.TestsWritten,
+		Artifacts:         claims.Artifacts,
+		ScoutReport:       claims.ScoutReport,
+		ToolCount:         claims.ToolCount,
+		ToolCountReported: claims.ToolCountReported,
+		Blockers:          claims.Blockers,
+		Spawns:            claims.Spawns,
+		Handoff:           claims.Handoff,
+		Duration:          duration,
+		RawOutput:         safeRawOutput,
 	}
 }
 
@@ -1366,6 +1367,8 @@ type hostedWorkerDebugDetails struct {
 	// "provider_error_envelope", "parse_failure" — lets a reader tell the
 	// four failure paths apart without inferring from the error text.
 	FailureMode string
+	// RetainOutput preserves sanitized complete output for interrupted work.
+	RetainOutput bool
 }
 
 func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args []string, stdoutText, stderrText string, cause error, details hostedWorkerDebugDetails) string {
@@ -1397,6 +1400,10 @@ func writeHostedWorkerOutputDebug(root, label string, config WorkerConfig, args 
 		"exit_code":       details.ExitCode,
 		"provider_run_id": strings.TrimSpace(config.ProviderRunID),
 		"failure_mode":    strings.TrimSpace(details.FailureMode),
+	}
+	if details.RetainOutput {
+		payload["stdout"] = sanitizeWorkerDiagnosticOutput(stdoutText)
+		payload["stderr"] = sanitizeWorkerDiagnosticOutput(stderrText)
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -1649,7 +1656,8 @@ func hasEnvPrefix(prefix string) bool {
 		return false
 	}
 	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, prefix) {
+		key, value, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, prefix) && strings.TrimSpace(value) != "" {
 			return true
 		}
 	}
@@ -1657,12 +1665,12 @@ func hasEnvPrefix(prefix string) bool {
 }
 
 func defaultWorkerPlatformPreferences(active Platform) []Platform {
-	preferences := []Platform{PlatformClaude}
-	if active != PlatformUnknown && active != PlatformClaude {
-		preferences = append(preferences, active)
+	switch active {
+	case PlatformCodex, PlatformClaude, PlatformOpenCode:
+		return []Platform{active}
 	}
-	preferences = append(preferences, PlatformCodex, PlatformOpenCode)
-	return preferences
+	// Preserve standalone-shell selection when no supported host is detected.
+	return []Platform{PlatformClaude, PlatformCodex, PlatformOpenCode}
 }
 
 func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform) []PlatformDispatcher {
@@ -1692,22 +1700,11 @@ func reorderDispatchers(dispatchers []PlatformDispatcher, preferred ...Platform)
 	return out
 }
 
-// resolvedAvailabilityProbeTimeout returns the auth-probe budget, honoring
-// AETHER_PROBE_TIMEOUT (Go duration syntax, e.g. "30s") so a slow host can
-// widen it without a rebuild -- the same escape hatch AETHER_PREFLIGHT_TIMEOUT
-// gives the model round-trip probe, which this one lacked entirely. An invalid
-// or non-positive value falls back to the compiled default: a mistyped env var
-// must not brick dispatch.
+// resolvedAvailabilityProbeTimeout returns the same readiness budget used by
+// the model round-trip probe. One setting and one 45-second default govern
+// every live provider readiness subprocess.
 func resolvedAvailabilityProbeTimeout() time.Duration {
-	envValue := strings.TrimSpace(os.Getenv("AETHER_PROBE_TIMEOUT"))
-	if envValue == "" {
-		return defaultProbeTimout
-	}
-	timeout, err := time.ParseDuration(envValue)
-	if err != nil || timeout <= 0 {
-		return defaultProbeTimout
-	}
-	return timeout
+	return resolvedPreflightTimeout()
 }
 
 // availabilityProbeAttempts mirrors hostedPreflightAttempts: one retry, and

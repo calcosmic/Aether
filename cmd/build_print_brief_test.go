@@ -73,7 +73,7 @@ func basePrintBriefState() colony.ColonyState {
 					SuccessCriteria: []string{"Dashboard renders exporter output"},
 					Tasks: []colony.Task{
 						{Goal: "Research the exporter contract", Status: colony.TaskPending, Hints: []string{"src/app.ts"}},
-						{Goal: "Implement the exporter wiring", Status: colony.TaskPending, Hints: []string{"src/app.ts"}},
+						{Goal: "Implement the exporter wiring", Status: colony.TaskPending, Hints: []string{"src/util.ts"}},
 					},
 				},
 			},

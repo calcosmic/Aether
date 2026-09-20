@@ -20,35 +20,55 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 	}
 
 	required := []string{
-		"## Decision Moment 1 — Depth Proposal",
-		"result.depth_proposal_card",
-		"The plan flow has exactly two decision moments",
-		"Never ask the user to type a value.",
-		"## Planning Manifest",
-		"aether host plan --depth <choice> --planning-depth <choice2> --verification-depth <choice3> $ARGUMENTS",
-		"The TS host is the sole entry point to the Go CLI for manifest generation.",
+		"Use the Go `aether` CLI as the source of truth.",
+		"## Approved Specification Preflight",
+		"AETHER_OUTPUT_MODE=json aether spec --inspect",
+		"current revision is `APPROVED`",
+		"Specification approval never counts as plan acceptance.",
+		"## Choose Planning Preset",
+		"preset_required",
+		"preset_options",
+		"aether host plan --preset <fast|balanced|deep|exhaustive>",
+		planWrapperHostSpineCompatibility,
 		"temporary manifest file outside `.aether/data/`",
 		"result.plan_manifest",
 		"result.planning_manifest",
-		"## Decision Moment 2 — Research Batch",
-		"result.research_proposal_card",
-		"aether plan-research-approve --approve-all",
-		"aether plan-research-approve --auto",
-		"result.research_awaiting_approval",
-		"result.research_warning",
-		"## Clarification Gate",
+		"orchestrator_boundary_guidance",
+		"after_discuss_next",
+		"aether discuss",
 		"unresolved_clarifications",
 		"/ant-discuss",
-		"implicit assumptions",
-		"Do not set `run_in_background`",
-		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
-		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
-		"## After Planning",
-		"/ant-build 1",
-		"Do NOT run direct `aether plan` from this wrapper for manifest generation; use `aether host plan`.",
-		"Do NOT run `aether plan --synthetic` after real agent workers complete.",
-		"Do NOT add a third decision moment",
-		"## Required Cross-Stage State",
+		"## Scout Stage",
+		"Exactly one visible Scout",
+		"plan_manifest.stage_manifest",
+		"scout_result",
+		"stage_receipt",
+		"## First-Pass Owner Decision Boundary",
+		"decision_batch",
+		"decision_cards",
+		"decision_resume_token",
+		"route_stage_manifest",
+		"## Route-Setter Stage",
+		"Exactly one visible Route-Setter",
+		"route_result",
+		"route_stage_receipt",
+		"## Iteration Card and Timeline",
+		"iteration_card",
+		"planning_projection",
+		"## Continue, Pause, or Stop",
+		"scout_stage_manifest",
+		"plan_candidate",
+		"## Candidate Review",
+		"AETHER_OUTPUT_MODE=json aether plan --candidate",
+		"[NOT ACTIVE]",
+		"## Exact Candidate Acceptance",
+		"acceptance_command",
+		"aether plan --accept-candidate <candidate-id>",
+		"acceptance_receipt",
+		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <completion_file>",
+		"AETHER_OUTPUT_MODE=json aether spawn-log",
+		"AETHER_OUTPUT_MODE=json aether spawn-complete",
+		"Do not widen permissions, set background execution, or add owner steering.",
 		"**Purpose:**",
 		"**Reads:**",
 		"**Spawns:**",
@@ -56,23 +76,48 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 		"<success_criteria>",
 		"<failure_modes>",
 		"<read_only>",
+		"aether command-guide plan --platform codex",
 	}
 
-	// The Clarification Gate deliberately precedes Decision Moment 2 — Phase
-	// 165 review WR-04: aether plan-research-approve mutates approval state,
-	// and the gate may route to aether discuss, which discards the very
-	// manifest that state was approved against. A future edit must not
-	// quietly restore the hazardous order and call it a cleanup.
 	inOrder := []string{
-		"## Decision Moment 1 — Depth Proposal",
-		"## Planning Manifest",
+		"## Approved Specification Preflight",
+		"AETHER_OUTPUT_MODE=json aether spec --inspect",
+		"## Choose Planning Preset",
 		"aether host plan",
-		"## Clarification Gate",
-		"## Decision Moment 2 — Research Batch",
-		"AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file",
-		"AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file",
-		"## After Planning",
+		"## Scout Stage",
+		"scout_result",
+		"## First-Pass Owner Decision Boundary",
+		"route_stage_manifest",
+		"## Route-Setter Stage",
+		"route_result",
+		"## Iteration Card and Timeline",
+		"iteration_card",
+		"## Continue, Pause, or Stop",
+		"## Candidate Review",
+		"aether plan --candidate",
+		"## Exact Candidate Acceptance",
+		"acceptance_command",
+		"aether plan --accept-candidate",
+		"acceptance_receipt",
 		"## Guardrails",
+	}
+
+	retired := []string{
+		"## Decision Moment",
+		"depth_proposal_card",
+		"research_proposal_card",
+		"research_awaiting_approval",
+		"research_warning",
+		"plan-research-approve",
+		"aether host plan --depth <choice> --planning-depth <choice>",
+		"--verification-depth",
+		"result.requires_next_iteration",
+		"scout_report",
+		"phase_plan",
+		"Execute `AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS` directly.",
+		"AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS",
+		"Update watch files for tmux visibility",
+		"Write COLONY_STATE.json",
 	}
 
 	for _, wrapperPath := range wrapperPaths {
@@ -87,33 +132,18 @@ func TestPlanWrapperCeremonyContract(t *testing.T) {
 			}
 		}
 		assertSubstringsInOrder(t, wrapperPath, text, inOrder)
-		for _, forbidden := range []string{
-			"Execute `AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS` directly.",
-			"AETHER_OUTPUT_MODE=visual aether plan $ARGUMENTS",
-			"AETHER_OUTPUT_MODE=json aether plan --plan-only --depth <choice> $ARGUMENTS",
-			"Do NOT run `aether plan` without `--plan-only` from this wrapper.",
-			"Update watch files for tmux visibility",
-			"Write COLONY_STATE.json",
-			"## Depth Ceremony",
-			"## Planning Depth",
-		} {
+		for _, forbidden := range retired {
 			if strings.Contains(text, forbidden) {
-				t.Errorf("%s still contains old plan pass-through contract %q", wrapperPath, forbidden)
+				t.Errorf("%s still contains retired or unsafe plan contract %q", wrapperPath, forbidden)
 			}
 		}
 	}
 }
 
-// TestPlanWrapperStageSkeleton is the D-05/D-06 proportion and structure
-// contract for plan.md: every non-exempt stage carries a Purpose line, the
-// wrapper carries the D-06 structured blocks and cross-stage state manifest,
-// termination conditions are documented in prose, and stage-skeleton method
-// outweighs envelope-parsing mechanics by at least 3x.
-//
-// Note: ordered-heading parity between .claude and .opencode plan.md is
-// already owned by TestPlanWrapperCardsParity's ordered_heading_sets_are_identical
-// subtest in cmd/plan_wrapper_cards_test.go — do not add a second
-// ordered-heading-parity subtest here.
+// TestPlanWrapperStageSkeleton protects the stage-based, thin-host shape:
+// every non-exempt section explains its purpose, structured result blocks stay
+// present, all public stop reasons remain explicit, and method prose outweighs
+// low-level envelope bookkeeping.
 func TestPlanWrapperStageSkeleton(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -125,7 +155,6 @@ func TestPlanWrapperStageSkeleton(t *testing.T) {
 		filepath.Join(repoRoot, ".claude", "commands", "ant-plan.md"),
 		filepath.Join(repoRoot, ".opencode", "commands", "ant", "plan.md"),
 	}
-
 	exemptHeadings := []string{
 		"## Required Cross-Stage State",
 		"## Cross-Platform Drift Guard",
@@ -143,47 +172,30 @@ func TestPlanWrapperStageSkeleton(t *testing.T) {
 	})
 
 	t.Run("structured_blocks_present", func(t *testing.T) {
-		required := []string{
-			"<success_criteria>",
-			"<failure_modes>",
-			"<read_only>",
-			"## Required Cross-Stage State",
-		}
+		required := []string{"<success_criteria>", "<failure_modes>", "<read_only>", "## Required Cross-Stage State"}
 		for _, path := range wrapperPaths {
 			content, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("read %s: %v", path, err)
 			}
-			text := string(content)
 			for _, want := range required {
-				if !strings.Contains(text, want) {
+				if !strings.Contains(string(content), want) {
 					t.Errorf("%s missing structured block %q", path, want)
 				}
 			}
 		}
 	})
 
-	t.Run("termination_conditions_documented", func(t *testing.T) {
-		// These four literal substrings name the loop's stop-condition
-		// concepts (target confidence, stall detection, iteration cap,
-		// escape hatch) without asserting a specific numeric threshold —
-		// the wrapper describes what the runtime enforces, it does not
-		// carry the threshold arithmetic itself.
-		concepts := []string{
-			"target confidence",
-			"stall",
-			"max iteration",
-			"escape hatch",
-		}
+	t.Run("reasoned_stop_conditions_documented", func(t *testing.T) {
+		concepts := []string{"Target sufficiency", "diminishing returns", "stall detected", "max iteration cap", "NOT ACTIVE"}
 		for _, path := range wrapperPaths {
 			content, err := os.ReadFile(path)
 			if err != nil {
 				t.Fatalf("read %s: %v", path, err)
 			}
-			text := string(content)
 			for _, concept := range concepts {
-				if !strings.Contains(text, concept) {
-					t.Errorf("%s missing termination-condition concept %q", path, concept)
+				if !strings.Contains(string(content), concept) {
+					t.Errorf("%s missing stop/candidate concept %q", path, concept)
 				}
 			}
 		}

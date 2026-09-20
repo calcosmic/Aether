@@ -1,0 +1,58 @@
+   P H A S E   {id}   C O M P L E T E
+═══════════════════════════════════════════════════ 🔨🐜🏗️🐜🔨
+
+📍 Phase {id}: {name}
+📊 Status: {status}
+💾 Git Checkpoint: {commit_hash}
+
+📝 Summary:
+   {summary from synthesis}
+
+🐜 Colony Work Tree:
+   👑Queen
+{for each spawn in spawn_tree:}
+   ├── {caste_emoji}{ant_name}: {task} [{status}]
+{end for}
+
+✅ Tasks Completed:
+{for each task in tasks_completed:}
+   🐜 {task_id}: done
+{end for}
+{for each task in tasks_failed:}
+   ❌ {task_id}: failed
+{end for}
+
+📁 Files: {files_created count} created, {files_modified count} modified
+
+{if tdd.tests_added > 0:}
+🧪 TDD: {tdd.cycles_completed} cycles | {tdd.tests_added} tests | {tdd.coverage_percent}% coverage
+{end if}
+
+{if learning.patterns_observed not empty:}
+🧠 Patterns Learned:
+{for each pattern in learning.patterns_observed:}
+   🐜 {pattern.trigger} → {pattern.action}
+{end for}
+{end if}
+
+{if debugging.issues_encountered > 0:}
+🔧 Debugging: {debugging.issues_resolved}/{debugging.issues_encountered} resolved
+{end if}
+
+🤖 Model Routing:
+{for each spawn in spawn_tree where model_context exists:}
+   {caste_emoji}{ant_name}: {model_context.assigned} {if model_context.assigned matches caste expectation:}✓{else}⚠️{end if}
+{end for}
+   Proxy: {if proxy_healthy:}✓ Healthy @ http://localhost:4000{else}✗ Not running (using default model){end if}
+
+🐜 Next Steps:
+{if synthesis.status == "completed" AND verification.recommendation == "proceed":}
+   /ant:continue   ➡️  Advance to next phase
+   /ant:feedback   💬 Give feedback first
+{else if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
+   ⚠️  BLOCKERS DETECTED - Cannot proceed until resolved
+   /ant:flags      🚩 View blockers
+   /ant:swarm      🔥 Auto-fix issues
+{end if}
+
+💾 State persisted — safe to /clear, then run /ant:continue

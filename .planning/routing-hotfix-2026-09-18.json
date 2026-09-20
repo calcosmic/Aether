@@ -1,0 +1,21 @@
+{
+  "version": "1.0.80-dev.routing.1",
+  "source_revision": "dd26d757a5caa564fe1c10891ba3c45fe86d937c",
+  "binary": "/Users/callumcowie/.local/bin/aether-dev",
+  "binary_sha256": "ddac2c64f0a1ec4e48edbe0623b1fe0af2e0aca9d0e87d6b499238653fb98ac5",
+  "hub": "/Users/callumcowie/.aether-dev",
+  "stable_checked_files": 2996,
+  "stable_changed_files": [],
+  "consumer_setup_update": "passed",
+  "phase_204_2_qualification": "still blocked; excluded from isolated hotfix",
+  "integrity": "5/5 passed",
+  "tests": {
+    "providers_normal": "passed full pkg/codex",
+    "providers_race": "passed full pkg/codex",
+    "guidance": "passed focused command-guide/docs/shim tests"
+  },
+  "rollback": "/private/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-routing-hotfix-bvhesw_b/rollback",
+  "evidence_root": "/private/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-routing-hotfix-bvhesw_b",
+  "base_revision": "f81f4f6ccf398c3316a3f84a3a2adb423d9ada66",
+  "branch": "fix/same-host-routing-dev-20260918"
+}

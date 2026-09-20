@@ -385,14 +385,15 @@ func TestExternalContinueAdvanceInvokesPhaseEndConsolidation(t *testing.T) {
 	results := make([]codexContinueExternalDispatch, 0, len(plan.Dispatches))
 	for _, dispatch := range plan.Dispatches {
 		results = append(results, codexContinueExternalDispatch{
-			Stage:   dispatch.Stage,
-			Wave:    dispatch.Wave,
-			Caste:   dispatch.Caste,
-			Name:    dispatch.Name,
-			Task:    dispatch.Task,
-			TaskID:  dispatch.TaskID,
-			Status:  "completed",
-			Summary: dispatch.Name + " cleared consolidation wiring review",
+			Stage:     dispatch.Stage,
+			Wave:      dispatch.Wave,
+			Caste:     dispatch.Caste,
+			Name:      dispatch.Name,
+			Task:      dispatch.Task,
+			TaskID:    dispatch.TaskID,
+			Status:    "completed",
+			Summary:   dispatch.Name + " cleared consolidation wiring review",
+			Artifacts: validCompletedReviewerArtifacts(t, dispatch.Caste),
 			// A completed result must relay a non-empty handoff (189-REVIEW.md
 			// CR-01): the finalizer now enforces the same promise every
 			// wrapper brief states.
@@ -624,6 +625,9 @@ func TestRunSealConsolidationQueenPromotedIDsExcludesFailedWrites(t *testing.T) 
 	s, root := newTestStore(t)
 	store = s
 
+	// LEARN-03 (204-06-PLAN.md Task 3): at least one genuinely helpful
+	// application, not merely three applications of any kind.
+	nowStr := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	if err := s.SaveJSON("instincts.json", colony.InstinctsFile{Version: "1", Instincts: []colony.InstinctEntry{{
 		ID:         "inst_queen_write_fails",
 		Trigger:    "eligible pattern behind a failing QUEEN.md write",
@@ -633,6 +637,9 @@ func TestRunSealConsolidationQueenPromotedIDsExcludesFailedWrites(t *testing.T) 
 		TrustTier:  "trusted",
 		Confidence: 0.9,
 		Provenance: colony.InstinctProvenance{ApplicationCount: 3},
+		ApplicationHistory: []colony.InstinctApplicationEntry{
+			{Timestamp: nowStr, Phase: 1, Outcome: "helpful"},
+		},
 	}}}); err != nil {
 		t.Fatalf("seed instincts: %v", err)
 	}

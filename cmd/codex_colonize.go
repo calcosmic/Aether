@@ -60,9 +60,10 @@ type codexWorkspaceFacts struct {
 }
 
 type codexColonizeOptions struct {
-	ForceResurvey bool
-	WorkerTimeout time.Duration
-	PlanOnly      bool
+	ForceResurvey         bool
+	WorkerTimeout         time.Duration
+	PlanOnly              bool
+	RequireCompleteSurvey bool
 }
 
 type codexColonizeManifest struct {
@@ -83,8 +84,25 @@ type codexColonizeManifest struct {
 	DispatchContract     map[string]interface{}           `json:"dispatch_contract"`
 	Dispatches           []codexSurveyorDispatch          `json:"dispatches"`
 	Snapshots            map[string]codexArtifactSnapshot `json:"snapshots,omitempty"`
+	TransactionID        string                           `json:"transaction_id,omitempty"`
+	BaselineDigest       string                           `json:"baseline_digest,omitempty"`
+	CandidateSurveyDir   string                           `json:"candidate_survey_dir,omitempty"`
+	PublicationMode      string                           `json:"publication_mode,omitempty"`
+	RefreshReasons       []SurveyFreshnessReasonCode      `json:"refresh_reasons,omitempty"`
 	FinalizerCommand     string                           `json:"finalizer_command"`
 	Stats                map[string]interface{}           `json:"stats,omitempty"`
+	// ContextCapsule is the colony-prime grounding payload (state, decisions,
+	// phase learnings, instincts, hive wisdom, prior reviews, blockers, user
+	// preferences) for wrapper-spawned surveyor workers. It is computed once
+	// by this manifest's sole caller (runCodexColonizePlanOnly) and passed
+	// into buildCodexColonizeManifest as a parameter — the builder itself
+	// stays a pure assembler and never resolves the capsule itself, so
+	// there is exactly one call site on this lane. The wrapper reads it once
+	// and prepends it, verbatim, to each spawned surveyor's prompt. The
+	// in-process/native surveyor dispatch (dispatchRealSurveyorsWithTimeout)
+	// already computes and shares its own capsule via
+	// codex.WorkerDispatch.ContextCapsule and never builds this struct.
+	ContextCapsule string `json:"context_capsule,omitempty"`
 }
 
 // logActivity appends an entry to the activity log. It is a no-op if the
@@ -179,7 +197,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 		}
 	}
 
-	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, surveySnapshots)
+	surveyFiles, preservedWorkerArtifacts, err := writeSurveyArtifacts(root, surveyDir, facts, dispatches, queenSurveyorSpecs(), surveySnapshots)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +362,18 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 		status = "agent-delegate"
 	}
 
-	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))))
+	// Compute the colony-prime capsule once, for this plan-only/agent-delegate
+	// wrapper manifest only — runCodexColonizePlanOnly is the sole caller of
+	// buildCodexColonizeManifest, reached via the explicit --plan-only flag
+	// or the agent-delegate route, both of which hand this manifest to a
+	// platform wrapper rather than dispatching surveyors directly. The
+	// in-process/native lane (dispatchRealSurveyorsWithTimeout) never calls
+	// this function and computes its own capsule per dispatch. This is the
+	// single call site for this field on the colonize plan-only lane; it
+	// must never be computed inside buildCodexColonizeManifest itself or a
+	// per-dispatch loop.
+	contextCapsule := resolveCodexWorkerContext()
+	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))), contextCapsule)
 	dispatchMaps := surveyorDispatchMaps(manifest.Dispatches)
 	result := map[string]interface{}{
 		"status":                status,
@@ -373,9 +402,16 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	return result, nil
 }
 
-func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot) codexColonizeManifest {
+func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts codexColonizeOptions, dispatchMode string, existingSurvey bool, snapshots map[string]codexArtifactSnapshot, contextCapsule string) codexColonizeManifest {
 	workerTimeout := effectiveSurveyorDispatchTimeout(opts.WorkerTimeout)
 	dispatches := plannedSurveyors(root)
+	if opts.RequireCompleteSurvey {
+		dispatches = make([]codexSurveyorDispatch, 0, len(surveyorSpecs))
+		for i, spec := range surveyorSpecs {
+			dispatches = append(dispatches, surveyDispatchFromSpec(root, spec, i))
+		}
+	}
+	ensureUniqueSurveyorDispatchNames(dispatches)
 	for i := range dispatches {
 		dispatches[i].Stage = "survey"
 		dispatches[i].Wave = 1
@@ -417,6 +453,7 @@ func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts cod
 			"files":       facts.FileCount,
 			"directories": facts.DirectoryCount,
 		},
+		ContextCapsule: contextCapsule,
 	}
 }
 
@@ -605,6 +642,26 @@ func plannedSurveyors(root string) []codexSurveyorDispatch {
 	return dispatches
 }
 
+// ensureUniqueSurveyorDispatchNames keeps compact deterministic display names
+// without treating their two-digit suffix as a protocol identity. A rare name
+// collision is resolved deterministically before the manifest and spawn-tree
+// evidence are emitted.
+func ensureUniqueSurveyorDispatchNames(dispatches []codexSurveyorDispatch) {
+	seen := make(map[string]bool, len(dispatches))
+	for i := range dispatches {
+		base := strings.TrimSpace(dispatches[i].Name)
+		if base == "" {
+			base = "Surveyor"
+		}
+		candidate := base
+		for suffix := 2; seen[candidate]; suffix++ {
+			candidate = fmt.Sprintf("%s-%d", base, suffix)
+		}
+		dispatches[i].Name = candidate
+		seen[candidate] = true
+	}
+}
+
 // surveyorSpec defines a single surveyor for real dispatch.
 type surveyorSpec struct {
 	Caste       string
@@ -646,12 +703,24 @@ func surveyOutputPaths(outputs []string) []string {
 }
 
 func queenSurveyorSpecs() []surveyorSpec {
+	// Colonize used to be the one flow where verification depth changed
+	// nothing: every survey sent exactly four surveyors. The operator's depth
+	// choice now reaches the surveyor roster (light = structure + dependency
+	// surveyors only).
+	state := colony.ColonyState{}
+	if active, err := loadActiveColonyState(); err == nil {
+		state = active
+	}
+	return queenSurveyorSpecsForState(state)
+}
+
+func queenSurveyorSpecsForState(state colony.ColonyState) []surveyorSpec {
 	phase := colony.Phase{
 		Name:        "Colonize repository",
 		Description: "Survey architecture, provisions, disciplines, and pathogens",
 		Mode:        colony.PhaseModeDiscovery,
 	}
-	selected := queenBuildCasteSet(queenOrchestrate(phase, "colonize", colony.ColonyState{}))
+	selected := queenBuildCasteSet(queenOrchestrate(phase, "colonize", state))
 	specs := make([]surveyorSpec, 0, len(surveyorSpecs))
 	for _, spec := range surveyorSpecs {
 		if selected[spec.Caste] {
@@ -843,9 +912,9 @@ func applySurveyDispatchResult(dispatch *codexSurveyorDispatch, result codex.Dis
 	}
 }
 
-func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dispatches []codexSurveyorDispatch, snapshots map[string]codexArtifactSnapshot) ([]string, int, error) {
+func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dispatches []codexSurveyorDispatch, roster []surveyorSpec, snapshots map[string]codexArtifactSnapshot) ([]string, int, error) {
 	generatedAt := time.Now().UTC().Format(time.RFC3339)
-	dispatchByOutput, err := surveyDispatchesByRequiredOutput(dispatches)
+	dispatchByOutput, err := surveyDispatchesByRequiredOutput(dispatches, roster)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -867,9 +936,22 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 
 	names := make([]string, 0, len(files))
 	preserved := 0
+	relativeRoot := filepath.Clean(root)
+	if resolved, resolveErr := filepath.EvalSymlinks(relativeRoot); resolveErr == nil {
+		relativeRoot = resolved
+	}
+	relativeSurveyDir := filepath.Clean(surveyDir)
+	if resolved, resolveErr := filepath.EvalSymlinks(relativeSurveyDir); resolveErr == nil {
+		relativeSurveyDir = resolved
+	}
 	for name, content := range files {
-		relPath := filepath.ToSlash(filepath.Join(".aether", "data", "survey", name))
-		if err := ensureSurveyArtifactPathWritable(filepath.Join(surveyDir, name), name); err != nil {
+		artifactPath := filepath.Join(surveyDir, name)
+		relPath, relErr := filepath.Rel(relativeRoot, filepath.Join(relativeSurveyDir, name))
+		if relErr != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+			return nil, 0, fmt.Errorf("survey artifact %s is outside the repository", artifactPath)
+		}
+		relPath = filepath.ToSlash(relPath)
+		if err := ensureSurveyArtifactPathWritable(artifactPath, name); err != nil {
 			return nil, 0, err
 		}
 		if shouldPreserveWorkerArtifact(root, relPath, snapshots, claimed) {
@@ -877,7 +959,7 @@ func writeSurveyArtifacts(root, surveyDir string, facts codexWorkspaceFacts, dis
 			preserved++
 			continue
 		}
-		if err := os.WriteFile(filepath.Join(surveyDir, name), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(artifactPath, []byte(content), 0644); err != nil {
 			return nil, 0, fmt.Errorf("failed to write %s: %w", name, err)
 		}
 		names = append(names, name)
@@ -903,7 +985,13 @@ func ensureSurveyArtifactPathWritable(path, name string) error {
 	return nil
 }
 
-func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[string]codexSurveyorDispatch, error) {
+// surveyDispatchesByRequiredOutput resolves which surveyor owns each required
+// survey document. roster is the survey's INTENDED team (depth-aware): the
+// requirement is the union of what the roster promised and what the dispatch
+// set claims, so a deliberately smaller light survey is not asked for
+// documents it never planned to write, while a surveyor that was supposed to
+// run and went missing from the results is still caught.
+func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch, roster []surveyorSpec) (map[string]codexSurveyorDispatch, error) {
 	required := make(map[string]bool, len(requiredSurveyMarkdownFiles))
 	for _, name := range requiredSurveyMarkdownFiles {
 		required[name] = true
@@ -923,9 +1011,42 @@ func surveyDispatchesByRequiredOutput(dispatches []codexSurveyorDispatch) (map[s
 		}
 	}
 
+	// Demanding all seven documents whatever the roster meant a light
+	// colonize -- which correctly sends two surveyors instead of four --
+	// aborted with "missing required surveyor output DISCIPLINES.md" and
+	// wrote nothing at all. The requirement is the union of the intended
+	// roster and the dispatch set: a surveyor that was planned or that turned
+	// up still owes every one of its own files.
+	expected := map[string]string{}
+	owe := func(caste, owner string) {
+		caste = strings.TrimSpace(caste)
+		for _, spec := range surveyorSpecs {
+			if spec.Caste != caste {
+				continue
+			}
+			for _, output := range spec.Outputs {
+				if required[output] {
+					expected[output] = owner
+				}
+			}
+		}
+	}
+	for _, spec := range roster {
+		owe(spec.Caste, spec.Caste)
+	}
+	for _, dispatch := range dispatches {
+		owe(dispatch.Caste, firstNonEmpty(dispatch.Name, dispatch.Caste))
+	}
+	if len(expected) == 0 {
+		return nil, fmt.Errorf("no surveyor in this survey owns any required output; the survey would write nothing")
+	}
 	for _, name := range requiredSurveyMarkdownFiles {
+		owner, owed := expected[name]
+		if !owed {
+			continue
+		}
 		if _, ok := byOutput[name]; !ok {
-			return nil, fmt.Errorf("missing required surveyor output %s", name)
+			return nil, fmt.Errorf("missing required surveyor output %s owed by %s", name, owner)
 		}
 	}
 	return byOutput, nil

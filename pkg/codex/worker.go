@@ -66,24 +66,28 @@ func (c WorkerConfig) effectiveTimeout() time.Duration {
 // WorkerResult captures the outcome of a worker invocation.
 // Field names match the documented codexWorkerResult in doc.go.
 type WorkerResult struct {
-	WorkerName    string                     // The worker's assigned name
-	Caste         string                     // Worker caste
-	TaskID        string                     // Task identifier
-	Status        string                     // "completed", "failed", "blocked", or "timeout"
-	Summary       string                     // Worker's self-reported summary
-	FilesCreated  []string                   // Files the worker claims to have created
-	FilesModified []string                   // Files the worker claims to have modified
-	TestsWritten  []string                   // Test files the worker created
-	Artifacts     map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
-	ScoutReport   json.RawMessage            // Optional top-level scout_report artifact for planning Scout workers
-	ToolCount     int                        // Number of tool calls reported
-	Blockers      []string                   // Blocking issues reported
-	Spawns        []string                   // Sub-workers spawned
-	Duration      time.Duration              // Wall-clock time of the invocation
-	RawOutput     string                     // Full stdout from the subprocess
-	Usage         WorkerUsage                // Provider-reported token spend (or a labelled estimate)
-	Error         error                      // Invocation error (if any)
-	Handoff       WorkerHandoff              // Worker handoff relay data
+	WorkerName        string                     // The worker's assigned name
+	Caste             string                     // Worker caste
+	TaskID            string                     // Task identifier
+	Status            string                     // "completed", "completed_no_change", "failed", "blocked", "interrupted", or "timeout"
+	Summary           string                     // Worker's self-reported summary
+	FilesCreated      []string                   // Files the worker claims to have created
+	FilesModified     []string                   // Files the worker claims to have modified
+	TestsWritten      []string                   // Test files the worker created
+	TaskReceipts      []TaskReceipt              `json:"task_receipts,omitempty"` // Optional task-specific completion evidence
+	Artifacts         map[string]json.RawMessage // Optional structured artifacts requested by task-specific briefs
+	ScoutReport       json.RawMessage            // Optional top-level scout_report artifact for planning Scout workers
+	ToolCount         int                        // Number of tool calls reported
+	ToolCountReported bool                       // True only when a final result explicitly reports a count
+	ObservedToolCalls int                        // Lower bound from recognized incremental provider events; never completion proof
+	DiagnosticPath    string                     // Retained diagnostic artifact, relative to TrackingRoot (or Root)
+	Blockers          []string                   // Blocking issues reported
+	Spawns            []string                   // Sub-workers spawned
+	Duration          time.Duration              // Wall-clock time of the invocation
+	RawOutput         string                     // Full stdout from the subprocess
+	Usage             WorkerUsage                // Provider-reported token spend (or a labelled estimate)
+	Error             error                      // Invocation error (if any)
+	Handoff           WorkerHandoff              // Worker handoff relay data
 }
 
 type jsonSchema struct {
@@ -95,20 +99,39 @@ type jsonSchema struct {
 
 // workerClaims represents the trailing JSON block returned by a Codex worker.
 type workerClaims struct {
-	AntName       string                     `json:"ant_name"`
-	Caste         string                     `json:"caste"`
-	TaskID        string                     `json:"task_id"`
-	Status        string                     `json:"status"`
-	Summary       string                     `json:"summary"`
-	FilesCreated  stringList                 `json:"files_created"`
-	FilesModified stringList                 `json:"files_modified"`
-	TestsWritten  stringList                 `json:"tests_written"`
-	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
-	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
-	ToolCount     int                        `json:"tool_count"`
-	Blockers      stringList                 `json:"blockers"`
-	Spawns        stringList                 `json:"spawns"`
-	Handoff       WorkerHandoff              `json:"handoff,omitempty"`
+	AntName           string                     `json:"ant_name"`
+	Caste             string                     `json:"caste"`
+	TaskID            string                     `json:"task_id"`
+	Status            string                     `json:"status"`
+	Summary           string                     `json:"summary"`
+	FilesCreated      stringList                 `json:"files_created"`
+	FilesModified     stringList                 `json:"files_modified"`
+	TestsWritten      stringList                 `json:"tests_written"`
+	TaskReceipts      []TaskReceipt              `json:"task_receipts,omitempty"`
+	Artifacts         map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport       json.RawMessage            `json:"scout_report,omitempty"`
+	ToolCount         int                        `json:"tool_count"`
+	ToolCountReported bool                       `json:"-"`
+	Blockers          stringList                 `json:"blockers"`
+	Spawns            stringList                 `json:"spawns"`
+	Handoff           WorkerHandoff              `json:"handoff,omitempty"`
+}
+
+// Preserve presence: an omitted/null count is unknown, not a measured zero.
+func (c *workerClaims) UnmarshalJSON(data []byte) error {
+	type plain workerClaims
+	var value plain
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*c = workerClaims(value)
+	raw, present := fields["tool_count"]
+	c.ToolCountReported = present && string(bytes.TrimSpace(raw)) != "null" && c.ToolCount >= 0
+	return nil
 }
 
 // agentTOML represents the required fields from a Codex agent TOML file.
@@ -121,6 +144,7 @@ type agentTOML struct {
 
 // WorkerProgressEvent reports non-terminal worker execution progress.
 type WorkerProgressEvent struct {
+	Source     string // provider_output, process_started, or process_heartbeat
 	Status     string
 	Message    string
 	OccurredAt time.Time
@@ -184,17 +208,19 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	})
 
 	claims := workerClaims{
-		AntName:       config.WorkerName,
-		Caste:         config.Caste,
-		TaskID:        config.TaskID,
-		Status:        "completed",
-		Summary:       fmt.Sprintf("FakeInvoker completed task %s for worker %s (caste: %s)", config.TaskID, config.WorkerName, config.Caste),
-		FilesCreated:  []string{},
-		FilesModified: []string{},
-		TestsWritten:  []string{},
-		ToolCount:     0,
-		Blockers:      nil,
-		Spawns:        nil,
+		AntName:           config.WorkerName,
+		Caste:             config.Caste,
+		TaskID:            config.TaskID,
+		Status:            "completed",
+		Summary:           fmt.Sprintf("FakeInvoker completed task %s for worker %s (caste: %s)", config.TaskID, config.WorkerName, config.Caste),
+		FilesCreated:      []string{},
+		FilesModified:     []string{},
+		TestsWritten:      []string{},
+		TaskReceipts:      nil,
+		ToolCount:         0,
+		ToolCountReported: true,
+		Blockers:          nil,
+		Spawns:            nil,
 		Handoff: NormalizeWorkerHandoff(config.Root, WorkerHandoff{
 			VerificationStatus:     "not_run",
 			NextWorkerInstructions: []string{"Synthetic worker completed without repo changes."},
@@ -209,22 +235,24 @@ func (f *FakeInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	rawOutput := fmt.Sprintf("Fake invocation for %s\n%s", config.WorkerName, string(claimsJSON))
 
 	return WorkerResult{
-		WorkerName:    config.WorkerName,
-		Caste:         config.Caste,
-		TaskID:        config.TaskID,
-		Status:        claims.Status,
-		Summary:       claims.Summary,
-		FilesCreated:  claims.FilesCreated,
-		FilesModified: claims.FilesModified,
-		TestsWritten:  claims.TestsWritten,
-		Artifacts:     claims.Artifacts,
-		ScoutReport:   claims.ScoutReport,
-		ToolCount:     claims.ToolCount,
-		Blockers:      claims.Blockers,
-		Spawns:        claims.Spawns,
-		Handoff:       claims.Handoff,
-		Duration:      time.Since(start),
-		RawOutput:     rawOutput,
+		WorkerName:        config.WorkerName,
+		Caste:             config.Caste,
+		TaskID:            config.TaskID,
+		Status:            claims.Status,
+		Summary:           claims.Summary,
+		FilesCreated:      claims.FilesCreated,
+		FilesModified:     claims.FilesModified,
+		TestsWritten:      claims.TestsWritten,
+		TaskReceipts:      claims.TaskReceipts,
+		Artifacts:         claims.Artifacts,
+		ScoutReport:       claims.ScoutReport,
+		ToolCount:         claims.ToolCount,
+		ToolCountReported: claims.ToolCountReported,
+		Blockers:          claims.Blockers,
+		Spawns:            claims.Spawns,
+		Handoff:           claims.Handoff,
+		Duration:          time.Since(start),
+		RawOutput:         rawOutput,
 	}, nil
 }
 
@@ -402,7 +430,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	}
 	defer os.Remove(lastMessagePath)
 
-	schemaJSON, err := marshalJSON(workerClaimsSchemaForConfig(config))
+	schemaJSON, err := WorkerOutputSchema(config)
 	if err != nil {
 		return WorkerResult{
 			WorkerName: config.WorkerName,
@@ -477,6 +505,7 @@ func (r *RealInvoker) InvokeWithProgress(ctx context.Context, config WorkerConfi
 	})
 	defer GlobalProcessTracker().UntrackProcess(cmd.Process.Pid)
 	emitWorkerProgress(observer, WorkerProgressEvent{
+		Source:     "process_started",
 		Status:     "running",
 		Message:    "provider process started",
 		OccurredAt: time.Now().UTC(),
@@ -515,14 +544,21 @@ waitLoop:
 		if duration >= time.Second {
 			reportedTimeout = duration.Round(time.Second)
 		}
+		timeoutErr := fmt.Errorf("worker timeout after %v", reportedTimeout)
+		diagnosticPath := writeHostedWorkerOutputDebug(workerTrackingRoot(config), "codex", config, args, stdout.String(), stderr.String(), timeoutErr, hostedWorkerDebugDetails{Duration: duration, ExitCode: -1, FailureMode: "timeout", RetainOutput: true})
+		if diagnosticPath != "" {
+			timeoutErr = fmt.Errorf("%w (debug: %s)", timeoutErr, diagnosticPath)
+		}
 		return WorkerResult{
-			WorkerName: config.WorkerName,
-			Caste:      config.Caste,
-			TaskID:     config.TaskID,
-			Status:     "timeout",
-			Duration:   duration,
-			RawOutput:  safeRawOutput,
-			Error:      fmt.Errorf("worker timeout after %v", reportedTimeout),
+			WorkerName:        config.WorkerName,
+			Caste:             config.Caste,
+			TaskID:            config.TaskID,
+			Status:            "timeout",
+			Duration:          duration,
+			RawOutput:         safeRawOutput,
+			Error:             timeoutErr,
+			ObservedToolCalls: observedCodexToolCalls(stdout.Bytes()),
+			DiagnosticPath:    diagnosticPath,
 		}, nil
 	}
 
@@ -592,22 +628,24 @@ waitLoop:
 	claims = normalizeWorkerClaims(claims, config)
 
 	return WorkerResult{
-		WorkerName:    config.WorkerName,
-		Caste:         config.Caste,
-		TaskID:        config.TaskID,
-		Status:        claims.Status,
-		Summary:       claims.Summary,
-		FilesCreated:  claims.FilesCreated,
-		FilesModified: claims.FilesModified,
-		TestsWritten:  claims.TestsWritten,
-		Artifacts:     claims.Artifacts,
-		ScoutReport:   claims.ScoutReport,
-		ToolCount:     claims.ToolCount,
-		Blockers:      claims.Blockers,
-		Spawns:        claims.Spawns,
-		Handoff:       claims.Handoff,
-		Duration:      duration,
-		RawOutput:     safeRawOutput,
+		WorkerName:        config.WorkerName,
+		Caste:             config.Caste,
+		TaskID:            config.TaskID,
+		Status:            claims.Status,
+		Summary:           claims.Summary,
+		FilesCreated:      claims.FilesCreated,
+		FilesModified:     claims.FilesModified,
+		TestsWritten:      claims.TestsWritten,
+		TaskReceipts:      claims.TaskReceipts,
+		Artifacts:         claims.Artifacts,
+		ScoutReport:       claims.ScoutReport,
+		ToolCount:         claims.ToolCount,
+		ToolCountReported: claims.ToolCountReported,
+		Blockers:          claims.Blockers,
+		Spawns:            claims.Spawns,
+		Handoff:           claims.Handoff,
+		Duration:          duration,
+		RawOutput:         safeRawOutput,
 	}, nil
 }
 
@@ -809,11 +847,17 @@ func renderResponseContract(config WorkerConfig) string {
 	if root == "" {
 		root = "."
 	}
-	statusLine := "completed, failed, blocked"
+	statusLine := "completed, completed_no_change, failed, blocked"
 	if strings.EqualFold(strings.TrimSpace(config.Caste), "builder") {
-		statusLine = "code_written, completed, failed, blocked"
+		statusLine = "code_written, completed, completed_no_change, failed, blocked"
 	}
 	scoutReportLine := ""
+	if strings.EqualFold(strings.TrimSpace(config.Caste), "auditor") {
+		scoutReportLine = "\n- Also include artifacts.review. A completed Auditor must supply an object with overall_score (integer 0–100) and findings (array). Each finding has severity (CRITICAL, HIGH, MEDIUM, LOW, or INFO), title (non-empty), description, domain, file, line, category, suggestion, and blocking. Use empty strings/zero/false for inapplicable detail fields, and an empty findings array for no findings. If blocked or failed without a review, set review to null; never invent a score. Never omit a completed Auditor review or replace it with prose."
+	}
+	if strings.EqualFold(strings.TrimSpace(config.Caste), "gatekeeper") {
+		scoutReportLine = "\n- Also include artifacts.review as an object with findings (array). Each finding has severity (CRITICAL, HIGH, MEDIUM, LOW, or INFO), title (non-empty), description, domain, file, line, category, suggestion, and blocking. Use empty strings/zero/false for inapplicable detail fields and an empty findings array for no findings. Do not include overall_score; Gatekeeper reports findings, not an Auditor score. If blocked or failed without a review, set review to null."
+	}
 	if workerClaimsShouldIncludeScoutReport(config) {
 		scoutReportLine = "\n- Include scout_report as an object with findings, gaps, confidence, and study_files."
 	}
@@ -826,22 +870,64 @@ Return ONLY a single JSON object as your final response.
 - Do not tell the user which command to run next. The orchestrator owns lifecycle decisions; advice appended after the JSON is discarded and breaks result parsing.
 - Do not wrap the JSON in markdown code fences.
 - Use repo-relative paths rooted at %q in files_created, files_modified, and tests_written.
+- Include task_receipts as an array (empty when no task-specific evidence is reported). Each receipt uses task_id, status, summary, files_created, files_modified, tests_written, and handoff; it never redefines manifest requirements or supplies authoritative hashes.
 - Set status to one of: %s.
+- If the required behavior ALREADY exists and you proved it, report status completed_no_change with disposition "verified_existing", put the exact verification commands you ran in handoff commands_run, and set handoff verification_status to pass. NEVER fabricate an edit just to have changed files — an honest no-change with evidence is a first-class success; one without evidence is rejected.
+- If you are stopped by a rate limit or quota, report status interrupted (not failed): save what you completed and describe the last durable state in your handoff. The handoff is kept and handed to whoever picks the work up next; the phase itself is restarted by the operator, so leave next_worker_instructions precise enough to continue from.
 - Report blockers truthfully. If blocked, explain why in blockers.
 - Include handoff with %s.
+- %s
 - Keep summary concise and concrete.
 - Include artifacts as an object with research_file, survey_file, and plan_file. Set the one the task brief ordered you to produce (e.g. renderPhaseResearchBrief's research file path); set the rest to null.
 %s
-`, filepath.Clean(root), statusLine, HandoffFieldsSummary, scoutReportLine))
+`, filepath.Clean(root), statusLine, HandoffFieldsSummary, HandoffOpenDecisionsGuidance, scoutReportLine))
 }
 
 func workerClaimsSchemaForConfig(config WorkerConfig) jsonSchema {
 	schema := workerClaimsSchema()
+	caste := strings.ToLower(strings.TrimSpace(config.Caste))
+	if caste == "auditor" || caste == "gatekeeper" {
+		artifacts := schema.Properties["artifacts"].(map[string]interface{})
+		artifacts["properties"].(map[string]interface{})["review"] = workerReviewClaimSchema(caste == "auditor")
+		artifacts["required"] = append(artifacts["required"].([]string), "review")
+	}
 	if !workerClaimsShouldIncludeScoutReport(config) {
 		return schema
 	}
 	schema.Properties["scout_report"] = scoutReportClaimSchema()
 	schema.Required = append(schema.Required, "scout_report")
+	return schema
+}
+
+// WorkerOutputSchema returns the exact strict schema supplied to Codex exec.
+// Consumers can validate their review contract against the producer without
+// duplicating a schema fixture or depending on an unexported schema type.
+func WorkerOutputSchema(config WorkerConfig) ([]byte, error) {
+	return marshalJSON(workerClaimsSchemaForConfig(config))
+}
+
+func workerReviewClaimSchema(includeScore bool) map[string]interface{} {
+	properties := map[string]interface{}{}
+	for _, key := range []string{"domain", "file", "category", "description", "suggestion"} {
+		properties[key] = map[string]interface{}{"type": "string"}
+	}
+	properties["title"] = map[string]interface{}{"type": "string", "minLength": 1}
+	properties["severity"] = map[string]interface{}{"type": "string", "enum": []string{"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}}
+	properties["line"] = map[string]interface{}{"type": "integer", "minimum": 0}
+	properties["blocking"] = map[string]interface{}{"type": "boolean"}
+	schema := map[string]interface{}{"type": []string{"object", "null"}, "additionalProperties": false,
+		"required": []string{"findings"},
+		"properties": map[string]interface{}{
+			"findings": map[string]interface{}{"type": "array", "items": map[string]interface{}{
+				"type": "object", "additionalProperties": false, "properties": properties,
+				"required": []string{"domain", "severity", "file", "line", "category", "title", "description", "suggestion", "blocking"},
+			}},
+		},
+	}
+	if includeScore {
+		schema["properties"].(map[string]interface{})["overall_score"] = map[string]interface{}{"type": "integer", "minimum": 0, "maximum": 100}
+		schema["required"] = []string{"overall_score", "findings"}
+	}
 	return schema
 }
 
@@ -874,6 +960,7 @@ func workerClaimsSchema() jsonSchema {
 			"blockers",
 			"spawns",
 			"handoff",
+			"task_receipts",
 		},
 		Properties: map[string]interface{}{
 			"ant_name": map[string]interface{}{"type": "string"},
@@ -887,6 +974,10 @@ func workerClaimsSchema() jsonSchema {
 			"files_created":  stringArray,
 			"files_modified": stringArray,
 			"tests_written":  stringArray,
+			"task_receipts": map[string]interface{}{
+				"type":  "array",
+				"items": taskReceiptClaimSchema(stringArray),
+			},
 			// artifacts carries named, typed fields a worker reports when its task
 			// brief orders a specific output — e.g. renderPhaseResearchBrief
 			// (cmd/phase_research.go:124) orders a scout to write phase research to
@@ -915,32 +1006,64 @@ func workerClaimsSchema() jsonSchema {
 			},
 			"blockers": stringArray,
 			"spawns":   stringArray,
-			"handoff": map[string]interface{}{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required": []string{
-					"changed_files",
-					"commands_run",
-					"verification_status",
-					"known_failures",
-					"open_decisions",
-					"assumptions",
-					"next_worker_instructions",
-					"do_not_repeat",
-					"freshness",
-				},
-				"properties": map[string]interface{}{
-					"changed_files":            stringArray,
-					"commands_run":             stringArray,
-					"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
-					"known_failures":           stringArray,
-					"open_decisions":           stringArray,
-					"assumptions":              stringArray,
-					"next_worker_instructions": stringArray,
-					"do_not_repeat":            stringArray,
-					"freshness":                map[string]interface{}{"type": "string"},
-				},
+			"handoff":  workerHandoffClaimSchema(stringArray),
+		},
+	}
+}
+
+func taskReceiptClaimSchema(stringArray map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required": []string{
+			"task_id",
+			"status",
+			"summary",
+			"files_created",
+			"files_modified",
+			"tests_written",
+			"handoff",
+		},
+		"properties": map[string]interface{}{
+			"task_id": map[string]interface{}{"type": "string"},
+			"status": map[string]interface{}{
+				"type": "string",
+				"enum": []string{TaskReceiptStatusCompleted, TaskReceiptStatusCompletedNoChange},
 			},
+			"summary":        map[string]interface{}{"type": "string"},
+			"files_created":  stringArray,
+			"files_modified": stringArray,
+			"tests_written":  stringArray,
+			"handoff":        workerHandoffClaimSchema(stringArray),
+		},
+	}
+}
+
+func workerHandoffClaimSchema(stringArray map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"required": []string{
+			"changed_files",
+			"commands_run",
+			"verification_status",
+			"known_failures",
+			"open_decisions",
+			"assumptions",
+			"next_worker_instructions",
+			"do_not_repeat",
+			"freshness",
+		},
+		"properties": map[string]interface{}{
+			"changed_files":            stringArray,
+			"commands_run":             stringArray,
+			"verification_status":      map[string]interface{}{"type": "string", "enum": []string{"pass", "fail", "partial", "not_run", "unknown"}},
+			"known_failures":           stringArray,
+			"open_decisions":           stringArray,
+			"assumptions":              stringArray,
+			"next_worker_instructions": stringArray,
+			"do_not_repeat":            stringArray,
+			"freshness":                map[string]interface{}{"type": "string"},
 		},
 	}
 }
@@ -1022,16 +1145,44 @@ func normalizeWorkerClaims(claims workerClaims, config WorkerConfig) workerClaim
 		claims.Status = status
 	case "code_written":
 		claims.Status = "completed"
+	// Honest no-change success (ruling D6) — before this case existed, a
+	// worker truthfully reporting completed_no_change fell into the default
+	// branch and was coerced to "failed": the accounting schema punished
+	// honesty, which is exactly the incentive-to-lie the spec forbids.
+	case "completed_no_change", "no_change", "no-change", "verified_existing", "already_complete", "already_correct":
+		claims.Status = "completed_no_change"
+	// Quota/rate-limit stop is a resumable interruption, never a code
+	// failure (ruling D7).
+	case "interrupted", "rate_limit", "rate_limited", "suspended_quota":
+		claims.Status = "interrupted"
 	default:
+		// An unrecognized status is a broken contract, not evidence of
+		// nothing. Overwriting it with a bare "failed" threw away the one
+		// piece of diagnostic information available: a real build halted on
+		// "Keen-6=failed" with an empty error message, an empty summary, no
+		// blockers, and a worker report still reading "Status: spawned" --
+		// nothing anywhere recorded what the worker had actually said. The
+		// coercion stays (an unknown status cannot be trusted as success),
+		// but what it displaced is now written down.
+		reported := strings.TrimSpace(claims.Status)
 		if len(claims.Blockers) > 0 {
 			claims.Status = "blocked"
-		} else {
-			claims.Status = "failed"
+			break
 		}
+		claims.Status = "failed"
+		note := "worker returned no status"
+		if reported != "" {
+			note = fmt.Sprintf("worker returned unrecognized status %q", reported)
+		}
+		if summary := strings.TrimSpace(claims.Summary); summary != "" {
+			note += "; its summary said: " + summary
+		}
+		claims.Blockers = append(claims.Blockers, note)
 	}
 	claims.FilesCreated = normalizeClaimPaths(config.Root, claims.FilesCreated)
 	claims.FilesModified = normalizeClaimPaths(config.Root, claims.FilesModified)
 	claims.TestsWritten = normalizeClaimPaths(config.Root, claims.TestsWritten)
+	claims.TaskReceipts = normalizeTaskReceipts(config.Root, claims.TaskReceipts)
 	claims.Blockers = compactStrings(claims.Blockers)
 	claims.Spawns = compactStrings(claims.Spawns)
 	if IsEmptyWorkerHandoffIncludingFreshness(claims.Handoff) {
@@ -1113,6 +1264,7 @@ func (s *workerRunningSignal) Report(message string) {
 		return
 	}
 	emitWorkerProgress(s.observer, WorkerProgressEvent{
+		Source:     "provider_output",
 		Status:     "running",
 		Message:    strings.TrimSpace(message),
 		OccurredAt: time.Now().UTC(),
@@ -1123,12 +1275,39 @@ func (s *workerRunningSignal) Pulse(message string) {
 	if s == nil {
 		return
 	}
-	s.seen.Store(true)
 	emitWorkerProgress(s.observer, WorkerProgressEvent{
+		Source:     "process_heartbeat",
 		Status:     "running",
 		Message:    strings.TrimSpace(message),
 		OccurredAt: time.Now().UTC(),
 	})
+}
+
+// Count only identified provider tool items, deduplicating start/update/end.
+// Timeout streams may be incomplete: this count is an observed lower bound,
+// deliberately separate from the final reported tool count.
+func observedCodexToolCalls(raw []byte) int {
+	seen := map[string]bool{}
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				ID   string `json:"id"`
+				Type string `json:"type"`
+			} `json:"item"`
+		}
+		if json.Unmarshal(line, &event) != nil || event.Item.ID == "" {
+			continue
+		}
+		if event.Type != "item.started" && event.Type != "item.updated" && event.Type != "item.completed" {
+			continue
+		}
+		switch event.Item.Type {
+		case "command_execution", "file_change", "mcp_tool_call", "web_search", "collab_tool_call":
+			seen[event.Item.ID] = true
+		}
+	}
+	return len(seen)
 }
 
 func (s *workerRunningSignal) Observed() bool {
@@ -1194,6 +1373,17 @@ func configureWorkerCommand(cmd *exec.Cmd) {
 		}()
 		return err
 	}
+}
+
+// ConfigureWorkerCommand exports configureWorkerCommand's process-group /
+// Cancel / WaitDelay hardening for callers outside this package that spawn
+// their own worker-shaped exec.Cmd -- e.g. cmd/recruitment_dispatch.go's
+// recruited-child dispatch (203-02, BIO-03). Every existing in-package
+// caller (worker.go, platform_dispatch.go) keeps calling the unexported
+// configureWorkerCommand directly; this is purely an additive seam so the
+// SAME already-tested fix is not duplicated for a cross-package caller.
+func ConfigureWorkerCommand(cmd *exec.Cmd) {
+	configureWorkerCommand(cmd)
 }
 
 func validateWorkerLaunchConfig(config WorkerConfig) error {
@@ -1369,13 +1559,4 @@ func classifyWorkerFinalMessageError(action string, err error, runningObserved b
 
 func runningInGoTest() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
-}
-
-// assembledPromptChars approximates the delivered prompt size from the parts
-// the dispatcher composes. It exists only to give an unmeasured run a
-// non-zero, clearly-labelled estimate; the real figure comes from the provider
-// whenever one is reported.
-func (c WorkerConfig) assembledPromptChars() int {
-	return len(c.TaskBrief) + len(c.ContextCapsule) + len(c.SkillSection) +
-		len(c.PheromoneSection) + len(c.HandoffSection)
 }

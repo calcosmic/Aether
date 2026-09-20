@@ -26,10 +26,20 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 		VerificationDepth: string(colony.VerificationDepthStandard),
 	}
 
-	buildDispatches := plannedBuildDispatchesForSelectionWithState(authPhase, authState, nil, colony.VerificationDepthStandard)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback
+	// from build and continue's no-proposal helpers -- this fixture's
+	// wording ("Auth token rotation" / "session permissions") does not
+	// match any of the five named risk-signal phrases either (the lone word
+	// "token" is deliberately excluded, D-02), so an explicit proposal is
+	// used to prove the WIRING (build/continue both route a proposed
+	// gatekeeper through to the dispatch list), matching how plan/swarm
+	// below are already exercised through their own real selection paths.
+	buildDispatches := testPlannedBuildDispatchesWithJudgement(authPhase, authState, nil, colony.VerificationDepthStandard,
+		[]string{"builder", "gatekeeper"}, "", map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireBuildCaste(t, buildDispatches, "gatekeeper")
 
-	continueSpecs := queenContinueReviewSpecs(authPhase, colony.VerificationDepthStandard)
+	continueSpecs := queenContinueReviewSpecsWithJudgement(authPhase, colony.VerificationDepthStandard,
+		[]string{"gatekeeper"}, "", nil, nil, map[string]string{"gatekeeper": "this phase touches auth tokens and session permissions"})
 	regressionRequireContinueSpec(t, continueSpecs, "gatekeeper")
 
 	planningDispatches := plannedPlanningWorkersForGoal(root, "Plan secure auth token rotation and permission checks")
@@ -66,11 +76,16 @@ func TestQueenAdaptiveCasteContractAcrossFlowHelpers(t *testing.T) {
 		ColonyDepth:       "full",
 		VerificationDepth: string(colony.VerificationDepthLight),
 	}
-	routineDispatches := plannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
-	if got, want := regressionBuildCastes(routineDispatches), []string{"builder", "probe", "watcher"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	// Phase 193 (D-08): watcher drops off the build-side dispatch list too --
+	// no explicit Queen proposal named it here, so the build leaves review to
+	// `continue`. Plan 194-02 (D-07): probe is no longer unconditionally
+	// required either, and this fixture's wording does not score it above
+	// the relevance threshold, so it is legitimately absent too.
+	routineDispatches := testPlannedBuildDispatchesForSelectionWithState(routinePhase, routineState, nil, colony.VerificationDepthLight)
+	if got, want := regressionBuildCastes(routineDispatches), []string{"builder"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("routine UI build dispatches = %v, want lean Queen plan %v", got, want)
 	}
-	for _, caste := range []string{"gatekeeper", "oracle", "chaos", "measurer"} {
+	for _, caste := range []string{"gatekeeper", "oracle", "chaos", "measurer", "probe"} {
 		regressionRejectBuildCaste(t, routineDispatches, caste)
 	}
 

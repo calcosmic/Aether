@@ -1,10 +1,16 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +18,293 @@ import (
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
+
+// TestBuildAttemptExternalFixturesUseCanonicalTransaction200 is the bounded
+// migration ratchet for Plan 36's remaining fixture families. The wider
+// repository ratchet is added only after these callers are gone; this test
+// first gives every migration a fail-first boundary of its own.
+func TestBuildAttemptExternalFixturesUseCanonicalTransaction200(t *testing.T) {
+	files := []string{
+		"build_attempt_external_test.go",
+		"coherent_job_retry_test.go",
+		"coherent_job_retry_plan_only_test.go",
+		"coherent_job_retry_command_test.go",
+		"pause_resume_199_test.go",
+	}
+	forbiddenCalls := map[string]bool{
+		"beginBuildAttempt":       true,
+		"beginBuildAttemptRecord": true,
+		"beginChildBuildAttempt":  true,
+	}
+	var violations []string
+	for _, name := range files {
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, name, nil, 0)
+		if err != nil {
+			t.Fatalf("parse remaining build-start fixture %s: %v", name, err)
+		}
+		canonicalCalls := 0
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			identifier, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if identifier.Name == "commitTestBuildStart" {
+				canonicalCalls++
+			}
+			if forbiddenCalls[identifier.Name] {
+				violations = append(violations, name+":"+set.Position(call.Pos()).String()+" calls legacy "+identifier.Name)
+			}
+			return true
+		})
+		if canonicalCalls == 0 {
+			violations = append(violations, name+" has no canonical commitTestBuildStart call")
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok || function.Body == nil {
+				continue
+			}
+			hasAttemptRecord := false
+			hasLatestPointer := false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				literal, ok := node.(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				identifier, ok := literal.Type.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				hasAttemptRecord = hasAttemptRecord || identifier.Name == "buildAttemptRecord"
+				hasLatestPointer = hasLatestPointer || identifier.Name == "latestBuildAttemptPointer"
+				return true
+			})
+			if hasAttemptRecord && hasLatestPointer {
+				violations = append(violations, name+":"+set.Position(function.Pos()).String()+" reconstructs attempt and latest-pointer writes")
+			}
+		}
+	}
+	if len(violations) > 0 {
+		t.Fatalf("remaining build-start fixtures bypass the canonical transaction:\n%s", strings.Join(violations, "\n"))
+	}
+}
+
+func TestBuildAttemptExternalUnboundStartReplayIsByteStable(t *testing.T) {
+	generatedAt := time.Date(2026, time.September, 9, 10, 0, 0, 0, time.UTC)
+	dispatch := codexBuildDispatch{
+		Stage: "wave", Wave: 1, Caste: "builder", Name: "Mason-external-replay",
+		TaskID: "1.1", CoveredTaskIDs: []string{"1.1"}, Status: "completed",
+	}
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartExternalUnbound, GeneratedAt: generatedAt,
+		SelectedTasks: []string{"1.1"}, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "external-task", DispatchMode: "external-task", MakeLatest: testBuildStartBool(true),
+	})
+	attemptBefore, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(fixture.AttemptPath)))
+	if err != nil {
+		t.Fatalf("read bound external attempt before replay: %v", err)
+	}
+	pointerBefore, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(latestBuildAttemptPointerPath(fixture.Request.Phase))))
+	if err != nil {
+		t.Fatalf("read bound external pointer before replay: %v", err)
+	}
+
+	replayed, err := commitBuildStart(fixture.Root, fixture.Request, buildStartOptions{})
+	if err != nil {
+		t.Fatalf("replay already-bound external start: %v", err)
+	}
+	if replayed.ID != fixture.Receipt.ID || replayed.ContentHash != fixture.Receipt.ContentHash || replayed.TransactionID != fixture.Receipt.TransactionID {
+		t.Fatalf("bound replay minted new receipt identity: first=%+v replay=%+v", fixture.Receipt, replayed)
+	}
+	attemptAfter, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(fixture.AttemptPath)))
+	if err != nil {
+		t.Fatalf("read bound external attempt after replay: %v", err)
+	}
+	pointerAfter, err := os.ReadFile(filepath.Join(fixture.DataRoot, filepath.FromSlash(latestBuildAttemptPointerPath(fixture.Request.Phase))))
+	if err != nil {
+		t.Fatalf("read bound external pointer after replay: %v", err)
+	}
+	if !bytes.Equal(attemptBefore, attemptAfter) || !bytes.Equal(pointerBefore, pointerAfter) {
+		t.Fatal("already-bound external replay rewrote attempt or latest-pointer bytes")
+	}
+}
+
+func TestBuildAttemptExternalAttemptEnumerationExcludesStartReceipts200(t *testing.T) {
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: time.Date(2026, time.September, 9, 10, 30, 0, 0, time.UTC),
+		MakeLatest:  testBuildStartBool(true),
+	})
+	records := listBuildAttemptsForPhase(fixture.Request.Phase)
+	if len(records) != 1 || records[0].ID != fixture.Attempt.ID {
+		t.Fatalf("attempt enumeration included non-attempt receipt siblings: records=%+v, want only %q", records, fixture.Attempt.ID)
+	}
+}
+
+func TestBuildAttemptPathContract200(t *testing.T) {
+	startedAt := time.Date(2026, time.September, 9, 11, 10, 0, 0, time.UTC)
+	goal := "Keep build-attempt paths inside one data root"
+	phase := colony.Phase{ID: 1, Name: "Canonical paths", Status: colony.PhaseReady}
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{phase}},
+	}
+	base := buildAttemptDerivation{
+		State: state, Phase: phase, PhaseNumber: 1, StartedAt: startedAt,
+		AttemptID: deriveBuildAttemptID(startedAt, 4700), RunID: "run-path-contract-200",
+		ProcessID: 4700, WorkspaceSHA256: strings.Repeat("a", 64), MakeLatest: true,
+	}
+
+	tests := []struct {
+		name       string
+		claimsPath string
+		want       string
+		wantErr    bool
+	}{
+		{name: "optional empty path stays empty", claimsPath: "", want: ""},
+		{name: "relative path is displayed once", claimsPath: "last-build-claims.json", want: ".aether/data/last-build-claims.json"},
+		{name: "already displayed path is normalized once", claimsPath: ".aether/data/last-build-claims.json", want: ".aether/data/last-build-claims.json"},
+		{name: "duplicate display prefix is ambiguous", claimsPath: ".aether/data/.aether/data/last-build-claims.json", wantErr: true},
+		{name: "absolute path is refused", claimsPath: "/tmp/last-build-claims.json", wantErr: true},
+		{name: "relative traversal is refused", claimsPath: "../last-build-claims.json", wantErr: true},
+		{name: "display traversal is refused", claimsPath: ".aether/data/../last-build-claims.json", wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := base
+			input.ClaimsPath = test.claimsPath
+			attemptPath, record, pointer, err := deriveBuildAttempt(input)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("deriveBuildAttempt(%q) succeeded with record %+v; want fail-closed path refusal", test.claimsPath, record)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("deriveBuildAttempt(%q): %v", test.claimsPath, err)
+			}
+			if record.ClaimsPath != test.want {
+				t.Fatalf("persisted claims path = %q, want %q", record.ClaimsPath, test.want)
+			}
+			if strings.HasPrefix(attemptPath, ".aether/data/") {
+				t.Fatalf("internal attempt path kept a public display prefix: %q", attemptPath)
+			}
+			wantAttempt := ".aether/data/" + attemptPath
+			if pointer == nil || pointer.Path != wantAttempt {
+				t.Fatalf("latest pointer path = %+v, want one public prefix %q", pointer, wantAttempt)
+			}
+
+			secondPath, secondRecord, secondPointer, secondErr := deriveBuildAttempt(input)
+			if secondErr != nil {
+				t.Fatalf("repeat derivation: %v", secondErr)
+			}
+			firstBytes, _ := json.Marshal(struct {
+				Path    string
+				Record  buildAttemptRecord
+				Pointer *latestBuildAttemptPointer
+			}{attemptPath, record, pointer})
+			secondBytes, _ := json.Marshal(struct {
+				Path    string
+				Record  buildAttemptRecord
+				Pointer *latestBuildAttemptPointer
+			}{secondPath, secondRecord, secondPointer})
+			if !bytes.Equal(firstBytes, secondBytes) {
+				t.Fatalf("same-attempt replay changed path fields:\nfirst:  %s\nsecond: %s", firstBytes, secondBytes)
+			}
+		})
+	}
+}
+
+// TestBuildStartLegacyHelpersRetired200 is the repository-wide compile-time
+// migration boundary. Pure derivation and post-start transitions remain
+// available, but no package may restore the old multi-write start adapters or
+// recreate their attempt-then-pointer sequence under a new name.
+func TestBuildStartLegacyHelpersRetired200(t *testing.T) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatalf("resolve repository root: %v", err)
+	}
+	retired := map[string]bool{
+		"beginBuildAttempt":                  true,
+		"beginBuildAttemptRecord":            true,
+		"beginChildBuildAttempt":             true,
+		"attachBuildAttemptParentLink":       true,
+		"prepareBuildAttemptManifestBinding": true,
+		"bindBuildAttemptManifest":           true,
+	}
+	var violations []string
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			switch entry.Name() {
+			case ".git", ".gsd", "node_modules", "vendor", "worktrees":
+				if path != root {
+					return fs.SkipDir
+				}
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".go") {
+			return nil
+		}
+		set := token.NewFileSet()
+		parsed, parseErr := parser.ParseFile(set, path, nil, 0)
+		if parseErr != nil {
+			return parseErr
+		}
+		for _, declaration := range parsed.Decls {
+			function, ok := declaration.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if retired[function.Name.Name] {
+				violations = append(violations, set.Position(function.Pos()).String()+" declares retired "+function.Name.Name)
+			}
+			if function.Body == nil {
+				continue
+			}
+			writeCalls := 0
+			referencesLatestPointerPath := false
+			ast.Inspect(function.Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				switch called := call.Fun.(type) {
+				case *ast.Ident:
+					if retired[called.Name] {
+						violations = append(violations, set.Position(call.Pos()).String()+" calls retired "+called.Name)
+					}
+					if called.Name == "latestBuildAttemptPointerPath" {
+						referencesLatestPointerPath = true
+					}
+				case *ast.SelectorExpr:
+					switch called.Sel.Name {
+					case "SaveJSON", "AtomicWrite":
+						writeCalls++
+					}
+				}
+				return true
+			})
+			if referencesLatestPointerPath && writeCalls > 1 {
+				violations = append(violations, set.Position(function.Pos()).String()+" directly writes an attempt-plus-latest start sequence")
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("scan repository Go source: %v", err)
+	}
+	if len(violations) > 0 {
+		t.Fatalf("legacy build-start helpers or partial writers remain:\n%s", strings.Join(violations, "\n"))
+	}
+}
 
 func TestBuildCompletionStageMakesWrapperResultResumableWithoutRedispatch(t *testing.T) {
 	root := setupExternalBuildAttemptTest(t)
@@ -298,13 +591,79 @@ func setupExternalBuildAttemptTest(t *testing.T) string {
 	return root
 }
 
+// setupExternalBuildAttemptTestWithVerifiableWork is a variant of
+// setupExternalBuildAttemptTest whose phase wording legitimately scores a
+// second caste (architect, via the "design" keyword) above the build spawn
+// threshold, so the resulting manifest carries two REAL dispatches from the
+// program's own relevance scoring. Watcher cannot be used for this: 193
+// (D-08) removed watcher from the build dispatch plans entirely (see
+// queenBuildPreWavePlans / queenBuildPostWavePlans), so a watcher can score
+// above threshold and still never appear in a real manifest. Architect DOES
+// have a build dispatch plan (queenBuildPreWavePlans, wave 2). Unlike a
+// post-hoc synthetic dispatch (prepareExternalBuildCompletionWithSecondWorker),
+// this stays consistent with the durable build-attempt hash check
+// runCodexBuildFinalize enforces, so it is the right fixture for any test
+// that runs a real finalize and needs more than one dispatch. The base
+// fixture stays single-dispatch (just the builder, after 194-02's floor
+// shrink) for every other caller.
+func setupExternalBuildAttemptTestWithVerifiableWork(t *testing.T) string {
+	t.Helper()
+	saveGlobals(t)
+	resetRootCmd(t)
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Make external build finalization durable"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "standard",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "External attempt",
+			Description: "Bind one wrapper dispatch to one lifecycle commit; design the boundary first",
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Write durable evidence", Status: colony.TaskPending}},
+		}}},
+	})
+	return root
+}
+
 func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManifest, codexExternalBuildCompletion) {
 	t.Helper()
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	return externalBuildCompletionFromPlanOnlyResult(t, root, result)
+}
+
+// prepareExternalBuildCompletionWithProposal is prepareExternalBuildCompletion
+// for a fixture that needs a genuine SECOND worker in the real build manifest
+// (not a synthetic one appended after the fact -- appending post-hoc breaks
+// the durable build-attempt hash, since that hash is computed over the
+// manifest the finalizer actually received). Plan 194-05 (D-11) removed the
+// no-proposal keyword-scoring fallback at build, so a fixture that used to
+// get a second dispatch "for free" from its own wording now needs an
+// explicit --castes-equivalent proposal to reach the judgement path instead
+// of the required-caste-only fallback.
+func prepareExternalBuildCompletionWithProposal(t *testing.T, root string, castes []string, why []string) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{QueenCastes: castes, QueenCasteWhy: why})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	return externalBuildCompletionFromPlanOnlyResult(t, root, result)
+}
+
+func externalBuildCompletionFromPlanOnlyResult(t *testing.T, root string, result map[string]interface{}) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
+	// Packet-only fixtures exercise the explicitly retained historical lane.
+	// New protocol tests use the production factory and native journal directly.
+	manifest := nativeManifestProtocolForTest(t, result["dispatch_manifest"].(codexBuildManifest), "")
 	if err := os.WriteFile(filepath.Join(root, "external-evidence.txt"), []byte("durable external work\n"), 0o644); err != nil {
 		t.Fatalf("write external evidence: %v", err)
 	}
@@ -333,6 +692,45 @@ func prepareExternalBuildCompletion(t *testing.T, root string) (codexBuildManife
 		results = append(results, worker)
 	}
 	return manifest, codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+}
+
+// prepareExternalBuildCompletionWithSecondWorker extends
+// prepareExternalBuildCompletion with a synthetic second worker dispatch.
+// Before plan 194-02 shrank the build floor to the builder alone
+// (194-CONTEXT.md D-07), this fixture's phase always produced at least two
+// dispatches -- builder plus the unconditionally-required watcher -- with no
+// extra setup. That floor is gone, so a test that needs two independent
+// workers to prove per-worker (not per-caste-floor) behavior now builds that
+// second worker explicitly. "Keen-6" was this fixture's watcher's actual name
+// before the floor shrank (see the finalize test's own comment); reused here
+// so the fixture reads the same to anyone who remembers it.
+func prepareExternalBuildCompletionWithSecondWorker(t *testing.T, root string) (codexBuildManifest, codexExternalBuildCompletion) {
+	t.Helper()
+	manifest, completion := prepareExternalBuildCompletion(t, root)
+
+	base := manifest.Dispatches[0]
+	second := base
+	second.Caste = "watcher"
+	second.Name = "Keen-6"
+	manifest.Dispatches = append(manifest.Dispatches, second)
+	completion.DispatchManifest = &manifest
+
+	completion.Dispatches = append(completion.Dispatches, codexExternalBuildWorkerResult{
+		Stage:         second.Stage,
+		Wave:          second.Wave,
+		ExecutionWave: second.ExecutionWave,
+		Caste:         second.Caste,
+		Name:          second.Name,
+		TaskID:        second.TaskID,
+		Status:        "completed",
+		Summary:       second.Name + " completed externally",
+		Handoff: codex.WorkerHandoff{
+			CommandsRun:            []string{"go test ./..."},
+			VerificationStatus:     "pass",
+			NextWorkerInstructions: []string{second.Name + " work is complete"},
+		},
+	})
+	return manifest, completion
 }
 
 // TestBuildFinalizeRejectsCompletedWorkerWithoutHandoff locks in the
@@ -455,5 +853,299 @@ func TestCommitBuildFinalizeStateDoesNotOverwritePausedState(t *testing.T) {
 	}
 	if after.State == colony.StateBUILT {
 		t.Fatalf("stale build-finalize commit overwrote state to BUILT despite a concurrent pause")
+	}
+}
+
+// TestGroupedJobPartialRetryIsAppendOnlyExternal is the external/wrapper-lane
+// counterpart of TestGroupedJobPartialRetryIsAppendOnlyDirect: a real
+// `aether build-finalize` call for a four-of-six failed grouped completion
+// must, per D-10, credit exactly the four proven tasks, leave the colony
+// honestly non-BUILT, seal the parent attempt as `partial` (never `built`,
+// since it did not finish everything it was responsible for), and create a
+// brand-new, parent-linked, append-only retry attempt naming exactly the two
+// unfinished tasks -- without rewriting the parent's own dispatches,
+// receipts, or claims.
+func TestGroupedJobPartialRetryIsAppendOnlyExternal(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "External lane partial credit creates an append-only retry")
+
+	proven := ids[:4]
+	pending := ids[4:]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	parentAttemptID := manifest.AttemptID
+	result, updatedState, _, _, err := runCodexBuildFinalize(root, 1, completion, false)
+	if err != nil {
+		t.Fatalf("build-finalize should accept a validated partial-credit failure, got error: %v", err)
+	}
+	if updatedState.State == colony.StateBUILT {
+		t.Fatalf("partial credit advanced colony to BUILT: %s", updatedState.State)
+	}
+	if recovery, _ := result["recovery_job"].(bool); !recovery {
+		var captured string
+		if buffer, ok := stderr.(*bytes.Buffer); ok {
+			captured = buffer.String()
+		}
+		t.Fatalf("result did not report a D-10 recovery job: %+v\nstderr: %s", result, captured)
+	}
+	gotParentID, _ := result["parent_attempt_id"].(string)
+	if gotParentID != parentAttemptID {
+		t.Fatalf("result parent_attempt_id = %q, want %q", gotParentID, parentAttemptID)
+	}
+	retryAttemptID, _ := result["retry_attempt_id"].(string)
+	if retryAttemptID == "" || retryAttemptID == parentAttemptID {
+		t.Fatalf("expected a distinct non-empty retry attempt id, got %q (parent %q)", retryAttemptID, parentAttemptID)
+	}
+	unfinished, _ := result["unfinished_task_ids"].([]string)
+	if len(unfinished) != len(pending) {
+		t.Fatalf("unfinished_task_ids = %v, want the two pending tasks %v", unfinished, pending)
+	}
+
+	var parentBefore buildAttemptRecord
+	parentRel := strings.TrimPrefix(manifest.AttemptPath, ".aether/data/")
+	if err := store.LoadJSON(parentRel, &parentBefore); err != nil {
+		t.Fatalf("load parent attempt: %v", err)
+	}
+	if parentBefore.Status != buildAttemptPartial {
+		t.Fatalf("parent attempt status = %q, want %q (D-10: partial, never a misleading built)", parentBefore.Status, buildAttemptPartial)
+	}
+	if len(parentBefore.Claims.TaskClaims) == 0 {
+		t.Fatalf("parent attempt lost its own task claims: %+v", parentBefore.Claims)
+	}
+
+	var child buildAttemptRecord
+	found := false
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentAttemptID {
+			child = record
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no retry attempt linked to parent %s was found in the phase's attempt journal", parentAttemptID)
+	}
+	if child.ID != retryAttemptID {
+		t.Fatalf("linked child attempt id = %q, want %q", child.ID, retryAttemptID)
+	}
+	if child.ParentJobName == "" {
+		t.Fatalf("child attempt has no ParentJobName recorded: %+v", child)
+	}
+	if !reflect.DeepEqual(child.SelectedTasks, pending) {
+		t.Fatalf("child selected tasks = %v, want exactly unfinished tasks %v", child.SelectedTasks, pending)
+	}
+	if child.Status != buildAttemptPrepared {
+		t.Fatalf("child attempt status = %q, want %q until the recovery command is dispatched", child.Status, buildAttemptPrepared)
+	}
+	wantCommand := buildUnfinishedRetryRedispatchCommand(1, pending)
+	if got, _ := result["recovery_command"].(string); got != wantCommand {
+		t.Fatalf("recovery command = %q, want %q", got, wantCommand)
+	}
+	_, latest, ok := loadLatestBuildAttempt(1)
+	if !ok || latest.ID != parentAttemptID {
+		t.Fatalf("latest attempt = %+v (found=%t), want unchanged parent %q", latest, ok, parentAttemptID)
+	}
+
+	// Idempotency at the full entrypoint layer: re-running reconcilePartialBuildRetry
+	// directly (the same call build-finalize makes) for the same parent must
+	// return the SAME child, never create a second one.
+	dispatches, _, err := mergeExternalBuildResults(manifest, results)
+	if err != nil {
+		t.Fatalf("merge completion results: %v", err)
+	}
+	dispatches = resolveCoherentJobDispatchReceipts(root, updatedState.Plan.Phases[0], dispatches)
+	secondOutcome, err := reconcilePartialBuildRetry(updatedState, 1, updatedState.Plan.Phases[0], parentAttemptID, time.Now().UTC(), dispatches)
+	if err != nil {
+		t.Fatalf("second reconcilePartialBuildRetry call: %v", err)
+	}
+	if secondOutcome == nil || secondOutcome.RetryAttemptID != retryAttemptID {
+		t.Fatalf("second reconcilePartialBuildRetry call = %+v, want the SAME retry attempt %q", secondOutcome, retryAttemptID)
+	}
+	childrenLinkedToParent := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentAttemptID {
+			childrenLinkedToParent++
+		}
+	}
+	if childrenLinkedToParent != 1 {
+		t.Fatalf("expected exactly 1 attempt linked to parent %s, found %d (duplicate child created)", parentAttemptID, childrenLinkedToParent)
+	}
+}
+
+// TestPartialRetryFailureIsNeverSuccessful200 locks the owner-facing half of
+// the D-10 contract: finalize may either return a durable recovery child or a
+// non-success, but it may never return nil error while omitting the only job
+// that can finish the partially credited work.
+func TestPartialRetryFailureIsNeverSuccessful200(t *testing.T) {
+	root, manifest, chain, ids := setupCoherentJobExternalFinalizeTest(t, "Partial recovery must be durable before success")
+
+	proven := ids[:4]
+	receipts := make([]codex.TaskReceipt, 0, len(proven))
+	touchedFiles := make([]string, 0, len(proven))
+	for _, id := range proven {
+		receipts = append(receipts, receiptForTask(t, root, id))
+		touchedFiles = append(touchedFiles, taskFileName(id))
+	}
+	results := []codexExternalBuildWorkerResult{{
+		Stage: chain.Stage, Wave: chain.Wave, ExecutionWave: normalizedDispatchWave(chain),
+		Caste: chain.Caste, Name: chain.Name, TaskID: chain.TaskID,
+		Status:        "failed",
+		Summary:       "crashed after finishing four of six steps",
+		FilesModified: touchedFiles,
+		Handoff: codex.WorkerHandoff{
+			VerificationStatus: "fail",
+			CommandsRun:        []string{"go test ./..."},
+		},
+		TaskReceipts: receipts,
+	}}
+	completion := codexExternalBuildCompletion{DispatchManifest: &manifest, Dispatches: results}
+
+	injected := errors.New("injected partial recovery start failure")
+	result, state, _, _, err := runCodexBuildFinalize(root, 1, completion, false, buildStartOptions{
+		Fault: func(point string) error {
+			if point == buildStartBeforeCommitFaultPoint {
+				return injected
+			}
+			return nil
+		},
+	})
+	if err == nil {
+		t.Fatalf("partial finalize downgraded a recovery-start failure to success: %+v", result)
+	}
+	if !errors.Is(err, injected) {
+		t.Fatalf("partial finalize error = %v, want injected recovery-start failure", err)
+	}
+	if result != nil {
+		t.Fatalf("failed partial finalize returned a success payload: %+v", result)
+	}
+	parentID := manifest.AttemptID
+	children := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parentID {
+			children++
+		}
+	}
+	if children != 0 {
+		t.Fatalf("failed recovery start left %d partial recovery children, want zero", children)
+	}
+	statusByID := make(map[string]string, len(state.Plan.Phases[0].Tasks))
+	for _, task := range state.Plan.Phases[0].Tasks {
+		statusByID[*task.ID] = task.Status
+	}
+	for _, id := range proven {
+		if statusByID[id] != colony.TaskCompleted {
+			t.Fatalf("credited task %s = %q after explicit finalize failure, want durable %q", id, statusByID[id], colony.TaskCompleted)
+		}
+	}
+	for _, id := range ids[4:] {
+		if statusByID[id] == colony.TaskCompleted {
+			t.Fatalf("unfinished task %s was credited despite recovery-start failure", id)
+		}
+	}
+}
+
+// TestGroupedJobPartialRetryIsIdempotent proves D-10's "repeating the same
+// completion cannot create duplicate children" contract directly against
+// reconcilePartialBuildRetry: calling it twice with the same parent and the
+// same partially-credited dispatches must return the identical retry
+// attempt, and the phase's attempt journal must end up with exactly one
+// child linked to that parent.
+func TestGroupedJobPartialRetryIsIdempotent(t *testing.T) {
+	goal := "reconcilePartialBuildRetry is idempotent per parent attempt"
+	tasks, ids := sixChainedTasks()
+	phase := colony.Phase{
+		ID: 1, Name: "Idempotent retry chain", Description: "One worker, six dependent steps",
+		Status: colony.PhaseReady, Tasks: tasks,
+	}
+	state := colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateREADY, ColonyDepth: "standard", CurrentPhase: 0,
+		Plan: colony.Plan{
+			AcceptancePolicy: colony.PlanAcceptanceLegacyUnbound,
+			EvidencePolicy:   colony.PlanEvidenceNotRequired,
+			Phases:           []colony.Phase{phase},
+		},
+	}
+
+	proven := ids[:4]
+	touched := make([]string, 0, len(proven))
+	for _, id := range proven {
+		touched = append(touched, taskFileName(id))
+	}
+	dispatch := codexBuildDispatch{
+		Name: "Mason-1", Caste: "builder", TaskID: ids[0], CoveredTaskIDs: ids,
+		Status: "failed", CompletedTaskIDs: append([]string{}, proven...),
+	}
+
+	parentStartedAt := time.Now().UTC()
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		Variant: buildStartDirect, GeneratedAt: parentStartedAt,
+		SelectedTasks: ids, Dispatches: []codexBuildDispatch{dispatch},
+		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
+		PrepareRoot: func(root string) {
+			createTestColonyState(t, filepath.Join(root, ".aether", "data"), state)
+			for _, id := range proven {
+				if err := os.WriteFile(filepath.Join(root, taskFileName(id)), []byte("package fixture\n"), 0o644); err != nil {
+					t.Fatalf("write fixture file for task %s: %v", id, err)
+				}
+			}
+		},
+	})
+	state, phase, parentRel := fixture.State, fixture.Phase, fixture.AttemptPath
+	if err := transitionBuildAttempt(parentRel, buildAttemptFailed, "crashed after finishing four of six", []codexBuildDispatch{dispatch}, nil, "real", nil); err != nil {
+		t.Fatalf("transition parent to failed: %v", err)
+	}
+	var parent buildAttemptRecord
+	if err := store.LoadJSON(parentRel, &parent); err != nil {
+		t.Fatalf("load parent attempt: %v", err)
+	}
+
+	first, err := reconcilePartialBuildRetry(state, 1, phase, parent.ID, parentStartedAt.Add(time.Second), []codexBuildDispatch{dispatch})
+	if err != nil {
+		t.Fatalf("first reconcilePartialBuildRetry: %v", err)
+	}
+	if first == nil {
+		t.Fatal("expected a retry outcome for a genuine partial dispatch")
+	}
+	second, err := reconcilePartialBuildRetry(state, 1, phase, parent.ID, parentStartedAt.Add(2*time.Second), []codexBuildDispatch{dispatch})
+	if err != nil {
+		t.Fatalf("second reconcilePartialBuildRetry: %v", err)
+	}
+	if second == nil || second.RetryAttemptID != first.RetryAttemptID {
+		t.Fatalf("second call = %+v, want the identical retry attempt %q", second, first.RetryAttemptID)
+	}
+
+	linked := 0
+	for _, record := range listBuildAttemptsForPhase(1) {
+		if record.ParentAttemptID == parent.ID {
+			linked++
+		}
+	}
+	if linked != 1 {
+		t.Fatalf("expected exactly 1 attempt linked to parent %s after two reconcile calls, found %d", parent.ID, linked)
+	}
+
+	var parentAfter buildAttemptRecord
+	if err := store.LoadJSON(parentRel, &parentAfter); err != nil {
+		t.Fatalf("reload parent attempt: %v", err)
+	}
+	if parentAfter.Status != buildAttemptFailed {
+		t.Fatalf("parent attempt status changed across idempotent retry calls: %+v", parentAfter)
 	}
 }

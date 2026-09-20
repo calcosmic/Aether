@@ -1,79 +1,61 @@
 name: ant-plan
-description: "📋 Generate a depth-scoped colony plan with real Scout and Route-Setter agents"
+description: "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
-  command: "aether host plan --depth <fast|balanced|deep|exhaustive> --planning-depth <light|standard|deep> --verification-depth <light|standard|heavy> --target <70-99> --max-iterations <2-12>"
+  command: "aether host plan"
+  manifest_command: "aether host plan --preset <fast|balanced|deep|exhaustive>"
+  finalizer_command: "aether plan-finalize --completion-file <completion_file>"
   contract: ".aether/docs/wrapper-host-contract.md"
 codex_orchestration:
   category: "full-orchestration"
   skill: "aether-colony-build-cycle"
   guide: "aether command-guide plan --platform codex"
-  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+  drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, cmd/command_guide.go, and public plan contract together."
 wrapper_additions:
-  depth_proposal_card: |
-    The plan flow has exactly two decision moments; this is the first. Request a first manifest with `aether host plan`, omitting `--depth`, `--planning-depth`, and `--verification-depth` unless the user already named them, so the runtime computes its smart defaults and a plain-English reason for each of the three knobs (granularity, task decomposition depth, verification depth) together.
-    Print `result.depth_proposal_card` verbatim — do not restate, summarize, or re-reason the recommendations; the runtime computes the reasons and the wrapper only prints the card it is given.
-    Accept the recommendations on a single confirmation, or, when the user names a knob and an option number, request a fresh manifest with the corresponding `--depth` / `--planning-depth` / `--verification-depth` flag set to that option's value. Never ask the user to type a value.
-    Under `/ant-run`, accept the depth recommendations without prompting.
-  research_batch_card: |
-    The second and final decision moment. After the planning manifest is fetched, print `result.research_proposal_card` verbatim when it is non-empty — do not compose your own recommendation or reason.
-    Approve the batch with `aether plan-research-approve --approve-all`, or flip specific phases with `aether plan-research-approve --flip <ids>`. Request a fresh manifest afterward so the gated `phase_research` dispatches appear, and surface `result.research_warning` whenever `result.research_awaiting_approval` is true.
-    On a fast run the Queen recommends skip for every phase, the batch still appears, and a flipped-on phase researches at the fast preset's 80% / 4-iteration budget.
-    Under `/ant-run`, answer the research batch with `aether plan-research-approve --auto` and print the returned `log_line` in the run log. Autopilot never pauses for either decision moment.
-  iterative_planning_ceremony: |
-    Restore the classic planning-loop controls while leaving state writes to Go:
-    - `--target <70-99>` sets the confidence target. Presets default to fast=80, balanced=90, deep=95, exhaustive=99. These bounds also govern per-phase research iteration under the confidence loop.
-    - `--max-iterations <2-12>` sets the loop budget. Presets default to fast=4, balanced=6, deep=8, exhaustive=12. This budget also bounds per-phase research iteration.
-    - `--accept` records that the current best plan may finalize below target.
-    Each `aether host plan` response is one planning iteration manifest. It includes `planning_run_id`, `iteration`, `target_confidence`, `max_iterations`, `previous_confidence`, `selected_gaps`, `previous_plan_draft`, and the expected workers: one Scout (plus any phase_research Scouts, one per approved research phase) in wave 1, followed by one Route-Setter in wave 2.
-    The wrapper loops by dispatching Scout, then Route-Setter with the Scout result, then calling `plan-finalize`. If `plan-finalize` returns `requires_next_iteration: true`, request a fresh `aether host plan` manifest and repeat. Do not reuse the previous manifest or completion packet.
-    The runtime emits `planning_loop.stop_reason` as `pending`, `target_reached`, `stalled`, `max_iterations`, or `accepted`; wrappers must surface that reason and must not hand-edit state.
-    Confidence may only increase when the Scout/Route-Setter evidence changes or selected gaps are resolved; `plan-finalize` rejects confidence-only bumps.
+  explicit_dependency_repair: |
+    If the owner supplied --repair-artifact, run AETHER_OUTPUT_MODE=json aether plan --repair-artifact before the planning steps, render its result and stop. Do not choose a preset or dispatch workers; refuse conflicting generation/revision flags.
+    Report repair_scope accurately: accepted_revision means dependency validation without changing plan or approval bindings; legacy_phase_plan_artifact means only the older .aether/data/planning/phase-plan.json staging file may be repaired. Numeric and semantic IDs resolve to the same tasks across phases. Never rewrite active plan.phases, accepted candidates or approval records as a workaround. Follow the returned next command; invalid approved work needs the existing candidate acceptance path.
+  approved_specification_preflight: |
+    Inspect the canonical specification through `AETHER_OUTPUT_MODE=json aether spec --inspect` before choosing a preset or issuing a worker. Planning may start only from the exact APPROVED revision returned by Go. A missing, draft, stale, drifted, or unreconciled specification stops with State: unchanged and routes to `/ant-spec` or the runtime's exact repair action. Specification approval is never plan acceptance.
+  preset_selection: |
+    When no valid explicit quality flag is present, request `aether host plan` without a preset and render the runtime's `preset_required` result as exactly four unbiased choices:
+
+    Fast        Target 80   Up to 4 passes
+    Balanced    Target 90   Up to 6 passes
+    Deep        Target 95   Up to 8 passes
+    Exhaustive  Target 99   Up to 12 passes
+
+    No option is preselected, recommended, or silently chosen. Invalid, blank, cancelled, or interrupted input starts no worker and leaves state unchanged. After one exact selection, request a fresh manifest with `aether host plan --preset <fast|balanced|deep|exhaustive>`. Valid explicit owner flags bypass only this card; Go still validates the approved specification and preset bounds.
+    The TS host is the sole entry point for planning manifest generation. `--planning-depth` remains only as a legacy host-contract compatibility marker; it is not an owner control and this wrapper never presents or selects it. The four-preset card is the only owner-facing planning-budget choice.
+  staged_scout_route_loop: |
+    A planning result initially authorizes exactly one Scout through `plan_manifest.stage_manifest`. Dispatch only that stage, pass its exact manifest and brief, then submit its strict `scout_result` with the unchanged `plan_manifest` to `aether plan-finalize --completion-file <completion_file>`. Render `stage_receipt`, admitted evidence, remaining gaps, and the returned next boundary.
+    Route-Setter has no authority until Scout finalization returns `route_stage_manifest`. Dispatch exactly one Route-Setter only from that manifest, bind the completed Scout receipt, and submit its strict `route_result` through a fresh completion file. Never combine Scout and Route-Setter results into a retired whole-chain packet, predict the next stage, reuse a consumed manifest, or dispatch beyond the exact runtime authorization.
+  material_decision_boundaries: |
+    If the first Scout result returns `decision_batch` and `decision_cards`, render the complete evidence-first batch before Route-Setter is issued. Every card includes the decision, why now, evidence, Queen recommendation, viable-choice consequences, prior-answer/revalidation state, and exact resume condition. Collect all owner choices in one host-native interaction and resume only with the exact completed token/result issued by Go; never compose, truncate, answer, or hand-mint a token.
+    A material choice discovered later appears only after the completed pass's `iteration_card` has been rendered. Pause at that pass boundary; the active plan remains unchanged. Routine read-only phase research is automatic inside the selected preset and never creates a separate approval checkpoint.
+  iteration_card_and_timeline: |
+    After every completed Route-Setter stage, render the runtime-issued `iteration_card` exactly once. Preserve fresh evidence, all five before-to-after readiness dimensions, derived overall against target, weakest gap, evidence that would change it, semantic plan delta, authority impact, and the causal continue/pause/stop reason. Cards append to the ordered timeline; wrappers never calculate scores, materiality, semantic changes, or stop policy.
+    Continue only when Go returns `scout_stage_manifest`, which targets the weakest evidenced gap for the next pass. A later material decision pauses after its card. Target sufficiency, diminishing returns, detected stall, or the selected pass cap creates a reviewable candidate only; stopping never activates a plan.
+  candidate_review_and_acceptance: |
+    When Go returns `plan_candidate`, label it NOT ACTIVE and run `AETHER_OUTPUT_MODE=json aether plan --candidate` for the full review. Render the exact candidate, approved specification binding, base revision, preset and stop reason, five readiness scores, remaining gaps and evidence that would change them, semantic delta, Queen recommendation, complete ordered timeline, and proposed plan. Do not offer build or Autopilot yet.
+    After the owner explicitly confirms the exact reviewed candidate, execute `acceptance_command` verbatim. It is the receipt-bound `aether plan --accept-candidate <candidate-id>` command with the exact specification, base-plan, timeline, proposal, and acceptance-token bindings returned by Go. Never reconstruct, shorten, or substitute it. Only a successful `acceptance_receipt` makes the accepted revision READY and exposes `/ant-build 1` and `/ant-run` as coequal next actions.
+  context_capsule_delivery: |
+    Read `plan_manifest.context_capsule` once from the initial manifest and prepend it verbatim to the authorized Scout brief. For every later stage, use only the context, evidence frontier, weakest gap, prior receipt/card, and result contract carried by that stage's runtime-issued authorization; never synthesize additional owner steering or widen permissions.
   revision_ceremony: |
-    When refreshing a plan after any phase completed, treat it as a versioned revision rather than a reset:
-    - Pass `--refresh --revision-type <user_feedback|research|verification_failure|scope_change|manual> --revision-reason "<why>"` to every `aether host plan` iteration.
-    - For research or verification-driven revisions, also pass one or more repository-relative `--revision-evidence <path>` files.
-    - Preserve the manifest `revision` context and each worker brief verbatim. Completed phases are immutable; Route-Setter outputs replacement unfinished phases only.
-    - Surface the accepted `plan_revision` ID, reason, preserved phase IDs, and replacement phase IDs from `plan-finalize`.
-    - Never reuse a planning or build packet from the superseded revision.
-  post_plan: |
-    Close from the `plan-finalize` result only:
-    1. If `requires_next_iteration` is true, do not render final closeout. Request the next manifest and continue the loop unless the runtime reports a stop condition, provider unavailable, or the user explicitly accepts below target.
-    2. After the JSON finalizer succeeds with a completed plan, run the visual closeout command first; use its next-step line as the source of truth.
-    3. Summarize selected depth, planning depth, phase count, confidence, `planning_loop.stop_reason`, and which planning agents ran.
-    4. Route first to `/ant-build 1` or the runtime-surfaced next build command.
-    5. If finalization blocks, follow the runtime recovery command first.
+    A refresh remains a versioned revision bound to the approved specification and current base plan. Preserve completed work and unaffected semantic IDs, surface any successor draft or reconciliation boundary, and do not reuse a stage result, candidate, or acceptance command after the specification, base plan, proposal, or timeline changes.
   stage_skeleton: |
-    Every stage of plan.md follows the same D-05 order: one colony beat line, then Purpose, then Reads, then Spawns where the stage spawns anything, then the stage's imperative instructions and command blocks, then Stop conditions. `## Required Cross-Stage State` sits between the opening prose and Decision Moment 1 and names the values carried across every stage of one planning iteration: `planning_run_id`, `iteration`, `target_confidence`, `manifest_file`, `selected_gaps`, `stop_reason`, `next_action`.
-  termination_conditions: |
-    The planning loop enforces four ways one `aether host plan` iteration cycle can end: the loop exits when the selected target confidence is reached; stall detection ends a loop whose confidence has stopped improving; an iteration cap bounds how many passes the loop may take; and an escape hatch lets the user accept the current best plan below target rather than continuing. No numeric thresholds are named in wrapper prose — the runtime enforces them.
-  clarification_gate_precedence: |
-    The Clarification Gate runs after the Planning Manifest and before
-    Decision Moment 2 — Research Batch, not after it. Boundary guidance and
-    unresolved clarifications must be settled before `aether
-    plan-research-approve` mutates approval state, because the gate may
-    route to `aether discuss` and discard the very manifest that state was
-    approved against. The gate reads `orchestrator_boundary_guidance` and
-    `unresolved_clarifications` from the manifest already fetched in the
-    Planning Manifest stage, so it needs nothing new to run one stage
-    earlier.
+    Every stage uses one colony beat, Purpose, Reads, Spawns when applicable, imperative instructions, and Stop conditions. Carry only runtime-returned identifiers and artifacts across stages: approved specification binding, selected preset, planning run/pass, current stage manifest, stage receipt, weakest gap, completed card/timeline digest, candidate ID/hash, and next action.
 guardrails:
-  - "The TS host is the sole entry point to the Go CLI; respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
-  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest — always fresh."
-  - "Use visible live Task/subagent panels for plan ceremony. Run aether spawn-log before each dispatch and aether spawn-complete after."
-  - "Inspect each planning dispatch permission_profile and pass it through verbatim from the manifest; never substitute or broaden it. Scout's canonical profile is workspace_write, scoped behaviorally to writing only under .aether/data/phase-research."
-  - "Do NOT run direct `aether plan` from Claude/OpenCode wrapper orchestration for manifest generation; use `aether host plan`."
-  - "Do NOT run `aether plan --synthetic` after real wrapper Task agents complete."
-  - "Do NOT read or write colony state files, session files, planning artifacts, or pheromone files by hand from this command spec."
-  - "Do NOT parse visual output as authoritative state."
-  - "Do NOT invent Scout or Route-Setter names, castes, waves, or task IDs; use `plan_manifest`."
-  - "Do NOT dispatch planning workers beyond the manifest dispatch list. The contract is Scout plus manifest-listed phase_research Scouts in wave 1, then one Route-Setter in wave 2, per iteration."
-  - "Do NOT treat `requires_next_iteration: true` as a completed colony plan."
-  - "Do NOT reuse a manifest or completion packet across iterations."
-  - "Do NOT hand-edit, repeat, or renumber completed phases during a revision; the Go finalizer owns completed-prefix preservation and final IDs."
-  - "Do NOT describe platform workers as background agents or replace the live worker stack with a markdown table."
-  - "Do NOT add a third decision moment; the plan flow has exactly two — the depth proposal card and the research batch card."
-  - "Do NOT route either decision-moment card through `aether discuss`; the discuss redirect remains only for `orchestrator_boundary_guidance`."
-  - "Do NOT compose depth recommendations, reasons, or research recommendations in the wrapper; print the runtime-emitted card verbatim."
-  - "Do NOT hand-render any visual that `aether ceremony` renders."
+  - "The host adapter is the manifest entry point; use structured Go results and never parse visual output as state."
+  - "Respect orchestrator_boundary_guidance and route to aether discuss when the boundary is active."
+  - "After a discuss redirect, request a fresh manifest after_discuss_next; never reuse a pre-discuss manifest."
+  - "Dispatch exactly one runtime-authorized stage at a time: Scout first, then Route-Setter only after the Scout receipt, then later Scout stages only after completed cards."
+  - "Use visible live Task/subagent panels. Run aether spawn-log before each dispatch and aether spawn-complete afterward."
+  - "Pass every returned permission_profile, identity, stage manifest, result contract, context capsule, and brief verbatim; never substitute or broaden them."
+  - "Do not synthesize worker success, stage receipts, evidence, confidence, semantic deltas, stop reasons, decisions, candidates, acceptance commands, or next actions."
+  - "Do not dispatch routine phase-research workers from a wrapper-authored list or ask for separate research approval; follow only the current runtime authorization."
+  - "Do not reuse a consumed stage manifest, completion packet, decision token, candidate review, or acceptance command across a changed frontier."
+  - "Do not edit planning artifacts, specification files, colony state, sessions, receipts, or pheromone files by hand."
+  - "Do not treat preset selection, specification approval, a stop reason, or a candidate as plan acceptance."
+  - "Do not expose build or Autopilot until exact candidate acceptance succeeds."
   - "If docs and runtime disagree, runtime wins."

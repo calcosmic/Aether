@@ -92,6 +92,55 @@ func TestImportPheromonesSanitizeValidContent(t *testing.T) {
 	}
 }
 
+// TestImportPheromonesStampsImportProvenanceAndQuarantine is BIO-07/D-10's
+// end-to-end proof: a signal arriving through the REAL cross-project import
+// command (not a hand-built fixture) is quarantined and excluded from
+// worker briefs until the owner releases it. Without this, the resolver's
+// quarantine rule (cmd/pheromone_resolver.go) would have nothing to exclude
+// on this path, since importPheromonesData never called writePheromoneSignal.
+func TestImportPheromonesStampsImportProvenanceAndQuarantine(t *testing.T) {
+	tmpDir, s := setupExchangeTest(t)
+
+	xmlContent := `<?xml version="1.0" encoding="UTF-8"?>
+<pheromones version="1.0" count="1">
+  <signal id="sig_imported" type="FOCUS" priority="normal" source="user" created_at="2026-04-01T10:00:00Z" active="true" strength="1.0">
+    <content><text>A note from another project</text></content>
+  </signal>
+</pheromones>`
+
+	xmlFile := filepath.Join(tmpDir, "imported-signals.xml")
+	if err := os.WriteFile(xmlFile, []byte(xmlContent), 0644); err != nil {
+		t.Fatalf("failed to write XML file: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"import", "pheromones", xmlFile})
+	defer rootCmd.SetArgs([]string{})
+
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("import pheromones failed: %v", err)
+	}
+
+	var file colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &file); err != nil {
+		t.Fatalf("failed to load pheromones: %v", err)
+	}
+	if len(file.Signals) != 1 {
+		t.Fatalf("expected 1 imported signal, got %d", len(file.Signals))
+	}
+	sig := file.Signals[0]
+	if sig.Provenance == nil || *sig.Provenance != colony.PheromoneProvenanceImport {
+		t.Errorf("Provenance = %v, want %q", sig.Provenance, colony.PheromoneProvenanceImport)
+	}
+	if sig.Quarantined == nil || !*sig.Quarantined {
+		t.Errorf("Quarantined = %v, want true", sig.Quarantined)
+	}
+
+	// The resolver must exclude it from worker-brief text.
+	if got := extractSignalTextsFrom(&file, 8); len(got) != 0 {
+		t.Errorf("extractSignalTextsFrom: expected the imported note excluded from worker brief text, got %v", got)
+	}
+}
+
 // TestImportPheromonesSanitizeSkipsMalicious verifies that signals with
 // malicious content (prompt injection) are skipped during import, but
 // valid signals still get imported.

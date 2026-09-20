@@ -123,10 +123,12 @@ node_modules/
 cmd/.aether/worktrees/
 
 # Planning artifacts
-.planning/
+.planning/milestone.lock
 
 # Go build output
 /aether
 *.test
 # Retired TypeScript control-plane quarantine state
 control-ts/.retired-state/
+# GSD planning-tool scratch (local only)
+.gsd/

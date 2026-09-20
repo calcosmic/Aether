@@ -1,0 +1,60 @@
+{
+  "schema_version": "aether-child-fetch-attribution-pending/v1",
+  "created_at": "2026-09-19T01:24:00.417099+00:00",
+  "status": "source-reviewed-tests-not-run-resource-blocked",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "source_base_revision": "60f7323a44ced195386d6967a8ea058d23020bf1",
+  "uncommitted_source_files": {
+    "cmd/codex_native_worker_live_test.go": "sha256:a7a705b7bdc33a1943072741042f38854f6438b41691b1052e9b75c152231209",
+    "cmd/codex_native_gap_attribution_test.go": "sha256:76f634d941b732b69f888328ef04a04d7fd93bd52e7db3182e4e2aa8a1484a79"
+  },
+  "review": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/attribution-code-review.json",
+    "sha256": "sha256:83a8006bacfad6b7bd43a09555336aa651d10314bc23aefb4871485ea45e554d"
+  },
+  "focused_runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/run-focused-attribution.py",
+    "sha256": "sha256:e728a409ae6172629ed71bf0fcab1bf874dc7b5522fa23b116a9b2b73c3e8f55"
+  },
+  "initial_pending_config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/config.PENDING.json",
+    "sha256": "sha256:3f430c7c6d231db144506a38ce91d531a45d0daaba6b3c07c1995a03eba47bee"
+  },
+  "initial_read_only_preflight": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/current-state-preflight.json",
+    "sha256": "sha256:0903de8266e471b1cdecaa924e22b67df5046c1346acce8b551e6d59cee9810a"
+  },
+  "normal_cache_retirement": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/cache-retirement-old-cmd-tests-20260919T011356Z-78n_q77t/receipt.json",
+    "sha256": "sha256:db7faac89c49a4b1340b4774921a2d921183c8c548c2d7e9eea227bf2d570d09"
+  },
+  "free_bytes_at_checkpoint": 10040311808,
+  "minimum_scoped_required_bytes": 10471960576,
+  "full_plan23_required_bytes": 14191223120,
+  "go_tests_run_for_this_patch": false,
+  "new_actual_run_started": false,
+  "historical_outcomes_unchanged": true,
+  "diagnosis": {
+    "child_id": "01a0b72d-0f40-7222-aad7-a6bc94dec89f",
+    "required_test_call": "call_KXSSw8V6RPd9JcMdYTS4aiR3",
+    "required_test_event": "exec-06f7ba65-3457-48d3-9427-486e32a08989",
+    "observed_sequence": "Initial failing check; owned patch; successful go test ./... -json -count=1; later successful plain-output check incorrectly reset prior proof; bare diff and coverage also unclassified."
+  },
+  "preparation_only": [
+    "Exact same 24 test families normal/race; added positive and rejection controls inside those families.",
+    "Initial read-only preflight passed 10192 unique reference checks, history, old snapshot, parser capture and exact cache ownership.",
+    "Initial config predates this checkpoint and must not be activated after main changes; create separately named config-resume.PENDING.json using frozen runner and exact updated planning/source pins."
+  ],
+  "resource_findings": [
+    "Successful exact two-archive retirement removed 381550592 allocated bytes; all other files/directories and protected references preserved.",
+    "Other recorded closed compiler/scratch roots were transferred or empty; retained fixtures and warm package cache excluded.",
+    "User asked to free at least 6GB or supply another writable disk; no permission to delete unrelated data inferred."
+  ],
+  "next_steps": [
+    "Refresh and independently review source/planning pins after checkpoint commit; require actual resource admission before READY/copy/Go.",
+    "Run exact isolated focused normal/race checks; only after pass commit the two tested source files.",
+    "Run a new actual ordinary fixture and strict replay, then independent review and scoped-question scenarios on the same candidate.",
+    "Complete recovery, all 11 final cases and all four standard regressions; preserve mandatory Claude comparison and owner acceptance boundaries."
+  ]
+}

@@ -72,9 +72,9 @@ func TestLoadRecentRuntimeInstincts_PrefersUsefulAppliedInstincts(t *testing.T) 
 					LastApplied:      runtimeStrPtr("2026-04-21T11:00:00Z"),
 					ApplicationCount: 4,
 				},
-				ApplicationHistory: []interface{}{
-					map[string]interface{}{"timestamp": "2026-04-20T10:00:00Z", "success": true},
-					map[string]interface{}{"timestamp": "2026-04-21T11:00:00Z", "success": true},
+				ApplicationHistory: []colony.InstinctApplicationEntry{
+					{Timestamp: "2026-04-20T10:00:00Z", Outcome: "helpful"},
+					{Timestamp: "2026-04-21T11:00:00Z", Outcome: "helpful"},
 				},
 			},
 		},
@@ -82,7 +82,7 @@ func TestLoadRecentRuntimeInstincts_PrefersUsefulAppliedInstincts(t *testing.T) 
 		t.Fatalf("failed to save instincts.json: %v", err)
 	}
 
-	got := loadRecentRuntimeInstincts(s, &colony.ColonyState{}, 2)
+	got := loadStrongestRuntimeInstincts(s, &colony.ColonyState{}, 2)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 instincts, got %d", len(got))
 	}

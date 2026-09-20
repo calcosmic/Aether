@@ -45,17 +45,28 @@ type internalWorkerDispatchRequest struct {
 }
 
 type internalWorkerResult struct {
-	Name          string                     `json:"name"`
-	Caste         string                     `json:"caste"`
-	TaskID        string                     `json:"task_id,omitempty"`
-	Status        string                     `json:"status"`
-	Summary       string                     `json:"summary,omitempty"`
-	FilesCreated  []string                   `json:"files_created,omitempty"`
-	FilesModified []string                   `json:"files_modified,omitempty"`
-	TestsWritten  []string                   `json:"tests_written,omitempty"`
-	Artifacts     map[string]json.RawMessage `json:"artifacts,omitempty"`
-	ScoutReport   json.RawMessage            `json:"scout_report,omitempty"`
-	ToolCount     int                        `json:"tool_count,omitempty"`
+	Name          string   `json:"name"`
+	Caste         string   `json:"caste"`
+	TaskID        string   `json:"task_id,omitempty"`
+	Status        string   `json:"status"`
+	Summary       string   `json:"summary,omitempty"`
+	FilesCreated  []string `json:"files_created,omitempty"`
+	FilesModified []string `json:"files_modified,omitempty"`
+	TestsWritten  []string `json:"tests_written,omitempty"`
+	// TaskReceipts carries this worker's own task-specific completion
+	// evidence, copied through by mapInternalWorkerResult REGARDLESS of the
+	// terminal status (D-08, D-09): a failed/interrupted native worker can
+	// still have honestly finished some of a merged job's tasks before it
+	// crashed, and that proof must survive to
+	// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go) instead of being dropped here.
+	TaskReceipts      []codex.TaskReceipt        `json:"task_receipts,omitempty"`
+	Artifacts         map[string]json.RawMessage `json:"artifacts,omitempty"`
+	ScoutReport       json.RawMessage            `json:"scout_report,omitempty"`
+	ToolCount         int                        `json:"tool_count,omitempty"`
+	ToolCountReported bool                       `json:"tool_count_reported,omitempty"`
+	ObservedToolCalls int                        `json:"observed_tool_calls,omitempty"`
+	DiagnosticPath    string                     `json:"diagnostic_path,omitempty"`
 	// Usage is populated only by codex.AttachWorkerUsage on the real
 	// dispatch boundary (pkg/codex/platform_dispatch.go). It was silently
 	// dropped by mapInternalWorkerResult before Phase 174 (SPEND-01) --
@@ -92,8 +103,9 @@ var internalWorkerAdapterCmd = &cobra.Command{
 		preflight, _ := cmd.Flags().GetBool("preflight")
 		simulate, _ := cmd.Flags().GetBool("simulate")
 		requestPath, _ := cmd.Flags().GetString("request-file")
+		phase, _ := cmd.Flags().GetInt("phase")
 
-		response, err := runInternalWorkerAdapter(cmd.Context(), requestPath, preflight, simulate)
+		response, err := runInternalWorkerAdapterForPhase(cmd.Context(), requestPath, preflight, simulate, phase)
 		if err != nil {
 			outputError(1, sanitizeInternalWorkerAdapterError(err.Error()), nil)
 			return renderedErrorExit(1)
@@ -106,11 +118,20 @@ var internalWorkerAdapterCmd = &cobra.Command{
 func init() {
 	internalWorkerAdapterCmd.Flags().String("request-file", "", "Approved temporary JSON worker request")
 	internalWorkerAdapterCmd.Flags().Bool("preflight", false, "Validate the selected provider without dispatching a worker")
+	internalWorkerAdapterCmd.Flags().Int("phase", 0, "Phase scope for provider readiness (0 is unscoped)")
 	internalWorkerAdapterCmd.Flags().Bool("simulate", false, "Use the deterministic test-only adapter")
 	rootCmd.AddCommand(internalWorkerAdapterCmd)
 }
 
 func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight, simulate bool) (internalWorkerAdapterResponse, error) {
+	return runInternalWorkerAdapterForPhase(ctx, requestPath, preflight, simulate, 0)
+}
+
+func runInternalWorkerAdapterForPhase(ctx context.Context, requestPath string, preflight, simulate bool, phase int) (internalWorkerAdapterResponse, error) {
+	if phase < 0 {
+		return internalWorkerAdapterResponse{}, fmt.Errorf("preflight phase must be non-negative")
+	}
+
 	root, err := os.Getwd()
 	if err != nil {
 		return internalWorkerAdapterResponse{}, fmt.Errorf("resolve worker root: %w", err)
@@ -147,7 +168,7 @@ func runInternalWorkerAdapter(ctx context.Context, requestPath string, preflight
 		status := availability
 		if provider, ok := invoker.(codex.WorkerProviderPreflighter); ok {
 			var outcome preflightOutcome
-			status, outcome = gatedProviderPreflight(ctx, provider, platform, root, time.Now())
+			status, outcome = gatedProviderPreflightForPhase(ctx, provider, platform, phase, root, time.Now())
 			if outcome.Source != "" && outcome.Notice != "" {
 				response.Preflight = &outcome
 			}
@@ -249,7 +270,10 @@ func validateInternalWorkerExecutionBinding(root string, request internalWorkerD
 	workflow := strings.ToLower(strings.TrimSpace(request.Workflow))
 	if workflow != "build" {
 		if request.ExecutionBinding != nil {
-			return codex.ValidateExecutionWorkspace(root, *request.ExecutionBinding)
+			if err := codex.ValidateExecutionWorkspace(root, *request.ExecutionBinding); err != nil {
+				return err
+			}
+			return validateInternalNonBuildWorkerLane(*request.ExecutionBinding)
 		}
 		return nil
 	}
@@ -266,8 +290,43 @@ func validateInternalWorkerExecutionBinding(root string, request internalWorkerD
 	if err := validateBuildExecutionBinding(record, *request.ExecutionBinding, record.ManifestSHA256, false); err != nil {
 		return err
 	}
+	if err := validateBuildWorkerProviderLane(record); err != nil {
+		return err
+	}
 	if record.Status != buildAttemptAwaiting && record.Status != buildAttemptDispatching {
 		return fmt.Errorf("build attempt %s is %s and cannot dispatch workers", record.ID, record.Status)
+	}
+	return nil
+}
+
+// A request cannot change only its workflow label to launch the exact saved
+// native assignment through an ordinary provider. Unrelated non-build bindings
+// retain their existing workspace-only admission; phase is not caller authority.
+func validateInternalNonBuildWorkerLane(binding codex.ExecutionBinding) error {
+	if store == nil || !validBuildAttemptID(binding.AttemptID) {
+		return nil
+	}
+	directories, err := filepath.Glob(filepath.Join(store.BasePath(), "build", "phase-*", "attempts"))
+	if err != nil {
+		return err
+	}
+	for _, directory := range directories {
+		path, err := filepath.Rel(store.BasePath(), filepath.Join(directory, binding.AttemptID+".json"))
+		if err != nil {
+			return err
+		}
+		var record buildAttemptRecord
+		if err := store.LoadJSON(filepath.ToSlash(path), &record); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("read bound build attempt before provider dispatch: %w", err)
+		}
+		if record.ID == binding.AttemptID && record.PlanManifest != nil && record.PlanManifest.ExecutionBinding != nil && *record.PlanManifest.ExecutionBinding == binding {
+			if err := validateBuildWorkerProviderLane(record); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -460,8 +519,8 @@ func validateInternalWorkerResult(request internalWorkerDispatchRequest, result 
 	if result.TaskID != expectedTaskID {
 		return fmt.Errorf("worker provider result task identity does not match the issued request")
 	}
-	if invokeErr != nil && result.Status == "completed" {
-		return fmt.Errorf("worker provider returned completed with an invocation error")
+	if invokeErr != nil && isSuccessfulExternalBuildStatus(result.Status) {
+		return fmt.Errorf("worker provider returned a success status with an invocation error")
 	}
 	return nil
 }
@@ -474,23 +533,27 @@ func mapInternalWorkerResult(result codex.WorkerResult, invokeErr error) *intern
 		errorText = sanitizeInternalWorkerAdapterError(invokeErr.Error())
 	}
 	return &internalWorkerResult{
-		Name:          result.WorkerName,
-		Caste:         result.Caste,
-		TaskID:        result.TaskID,
-		Status:        result.Status,
-		Summary:       strings.TrimSpace(result.Summary),
-		FilesCreated:  append([]string(nil), result.FilesCreated...),
-		FilesModified: append([]string(nil), result.FilesModified...),
-		TestsWritten:  append([]string(nil), result.TestsWritten...),
-		Artifacts:     result.Artifacts,
-		ScoutReport:   result.ScoutReport,
-		ToolCount:     result.ToolCount,
-		Usage:         result.Usage,
-		Blockers:      append([]string(nil), result.Blockers...),
-		Spawns:        append([]string(nil), result.Spawns...),
-		Duration:      result.Duration.Seconds(),
-		Error:         errorText,
-		Handoff:       result.Handoff,
+		Name:              result.WorkerName,
+		Caste:             result.Caste,
+		TaskID:            result.TaskID,
+		Status:            result.Status,
+		Summary:           strings.TrimSpace(result.Summary),
+		FilesCreated:      append([]string(nil), result.FilesCreated...),
+		FilesModified:     append([]string(nil), result.FilesModified...),
+		TestsWritten:      append([]string(nil), result.TestsWritten...),
+		TaskReceipts:      append([]codex.TaskReceipt(nil), result.TaskReceipts...),
+		Artifacts:         result.Artifacts,
+		ScoutReport:       result.ScoutReport,
+		ToolCount:         result.ToolCount,
+		ToolCountReported: result.ToolCountReported,
+		ObservedToolCalls: result.ObservedToolCalls,
+		DiagnosticPath:    result.DiagnosticPath,
+		Usage:             result.Usage,
+		Blockers:          append([]string(nil), result.Blockers...),
+		Spawns:            append([]string(nil), result.Spawns...),
+		Duration:          result.Duration.Seconds(),
+		Error:             errorText,
+		Handoff:           result.Handoff,
 	}
 }
 

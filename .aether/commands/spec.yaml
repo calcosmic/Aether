@@ -1,0 +1,58 @@
+name: ant-spec
+description: "📜 Review, revise, approve, or repair the owner-readable specification"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=json aether spec $ARGUMENTS"
+  inspect_command: "AETHER_OUTPUT_MODE=json aether spec --inspect"
+  add_command: "AETHER_OUTPUT_MODE=json aether spec --add --section <section> --lineage <lineage> --text <text> --evidence <evidence-id> --predecessor-revision <revision-id> --predecessor-hash <content-hash>"
+  modify_command: "AETHER_OUTPUT_MODE=json aether spec --modify --section <section> --item-id <stable-id> --text <text> --evidence <evidence-id> --predecessor-revision <revision-id> --predecessor-hash <content-hash>"
+  remove_command: "AETHER_OUTPUT_MODE=json aether spec --remove --section <section> --item-id <stable-id> --predecessor-revision <revision-id> --predecessor-hash <content-hash>"
+  approve_command: "AETHER_OUTPUT_MODE=json aether spec --approve --revision-id <revision-id> --revision-hash <content-hash> --approval-token <approval-token>"
+  repair_projection_command: "AETHER_OUTPUT_MODE=json aether spec --repair-projection"
+codex_orchestration:
+  category: "runtime-native"
+  command: "aether spec"
+  guidance: "Codex uses direct `aether spec` commands. Do not advertise or synthesize a native `$ant-spec` alias."
+  drift_guard: "Keep direct Codex guidance on `aether spec`; synchronize this YAML and every managed Claude/OpenCode `/ant-spec` projection together."
+ceremony_contract:
+  class: "guided_ritual"
+  authority: "Go owns canonical specification state, immutable successor revisions, classified deltas, exact approval tokens and receipts, affected-scope calculation, projection repair, and every state write."
+  wrapper_role: "Invoke the structured runtime result, render its exact revision and content-hash binding, status, nine typed body categories, classified delta, affected and preserved scope, approval action, projection state, receipt, and next action. Submit only an explicit owner-selected operation through `aether spec`."
+  draft_boundary: "A new or materially changed revision remains DRAFT. Editor completion, generic confirmation, projection existence, and file contents are not approval."
+  approval_boundary: "Approve only the exact current draft named by revision ID, content hash, and runtime-issued approval token. Exact replay may retain the existing receipt; stale or mismatched bindings leave state unchanged."
+  plan_boundary: "Specification approval establishes only the planning contract. It never stops planning, accepts a plan candidate, activates a plan revision, or makes work eligible for build or Autopilot."
+body_contract:
+  order:
+    - outcomes
+    - included_behaviors
+    - exclusions
+    - binding_decisions
+    - requirements
+    - acceptance_checks
+    - negative_expectations
+    - recovery_expectations
+    - affected_public_paths
+  stable_ids: "Render each category separately with its runtime-issued stable IDs. Never collapse the owner contract into a generic item list or derive IDs in the wrapper."
+routes:
+  inspect: "Open the current canonical revision read-only. Show specification ID, before/after revision identity, revision number, full content hash, DRAFT/APPROVED/SUPERSEDED status, scope, lineage, body, projection drift, classified delta, affected scope, and exact next action."
+  add: "Collect one typed section, semantic lineage, owner-readable text (or one contained regular repository file), evidence IDs, and the exact predecessor revision/hash. Acceptance checks also require verification text; affected public paths also require the public path. Run `aether spec --add`; Go derives the stable ID and creates an immutable successor DRAFT."
+  modify: "Collect one typed section, existing stable item ID, replacement owner-readable text (or one contained regular repository file), evidence IDs, and the exact predecessor revision/hash. Run `aether spec --modify`; Go preserves the stable ID and creates an immutable successor DRAFT."
+  remove: "Collect one typed section, existing stable item ID, and the exact predecessor revision/hash. Run `aether spec --remove`; Go retains the historical item in its predecessor and creates an immutable successor DRAFT."
+  approve: "Show `Approve SPEC <spec-id> revision <N> (<short-hash>) as the planning contract? [y/N]`. Only after an explicit owner Yes, execute the runtime-issued exact approval command with revision ID, full content hash, and approval token."
+  repair_projection: "When inspection reports projection drift or absence, run `aether spec --repair-projection`. Render that `.aether/SPEC.md` was regenerated from canonical state and that specification authority, revision, approval, and plan state were unchanged."
+revision_impact:
+  classified_delta: "Render unchanged, added, modified, and removed stable IDs for all nine typed categories. Removed content remains historical."
+  affected_scope: "Render affected specification, requirement, task, and proof-link IDs. State which completed and unaffected work remains preserved."
+  reconciliation: "A contract-changing successor must be approved and its exact affected plan scope reconciled before work or Seal may rely on it. The wrapper never computes or clears affected scope."
+guardrails:
+  - "Do not write `COLONY_STATE.json`, `.aether/SPEC.md`, plan files, transaction journals, approval receipts, or affected-scope records by hand."
+  - "Do not parse `.aether/SPEC.md` into authority, derive stable IDs, classify deltas, calculate affected scope, mint approval tokens, or fabricate receipts in the wrapper."
+  - "Do not treat file existence, an editor save, a generic Yes/OK, discussion completion, preset selection, planning stop, or candidate readiness as specification approval."
+  - "Do not treat specification approval as plan-candidate acceptance, plan activation, build eligibility, Autopilot eligibility, or Seal authority."
+  - "Do not execute, reconstruct, or shorten a plan candidate acceptance command from this surface. `/ant-plan` owns exact candidate review and acceptance."
+  - "Use only the current runtime result and exact predecessor/revision/hash/token bindings; never silently substitute the latest revision after a stale request."
+  - "If docs and runtime disagree, runtime wins."
+follow_up:
+  draft: "Keep the specification DRAFT or run another exact add, modify, or remove operation; approval remains a separate explicit action."
+  approved: "After exact approval succeeds and affected scope is reconciled, wrapper users may continue to `/ant-plan`. Direct Codex users continue with `aether plan`."
+  plan_candidate: "Review and accept an exact plan candidate only through `/ant-plan`; direct Codex uses `aether plan --candidate` and the runtime-issued `aether plan --accept-candidate ...` command."

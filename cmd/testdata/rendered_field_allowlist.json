@@ -1,0 +1,211 @@
+[
+  {
+    "key": "artifact_source",
+    "finalizer": "plan completed",
+    "reason": "Dispatch/artifact provenance for wrapper tooling (RESEARCH.md Q1: provenance-only, used to select messaging, not narrated as its own line)."
+  },
+  {
+    "key": "depth",
+    "finalizer": "plan completed",
+    "reason": "Legacy top-level manifest depth field superseded by the separately-rendered planning_depth/verification_depth pair; kept for API compatibility, not narrated on its own."
+  },
+  {
+    "key": "evidence_hash",
+    "finalizer": "plan completed",
+    "reason": "Internal audit hash for evidence-tracking tooling; not owner-facing content."
+  },
+  {
+    "key": "iteration",
+    "finalizer": "plan completed",
+    "reason": "Duplicates the already-rendered planning_loop.Iterations count; kept as a flat top-level field for API consumers, not narrated separately."
+  },
+  {
+    "key": "plan_artifact",
+    "finalizer": "plan completed",
+    "reason": "Reference filename for the written plan artifact; redundant with the already-rendered Planning Artifacts list, not repeated verbatim."
+  },
+  {
+    "key": "plan_source",
+    "finalizer": "plan completed",
+    "reason": "Provenance-only (RESEARCH.md Q1): records which planning path produced the plan, used to select messaging, not narrated as its own line."
+  },
+  {
+    "key": "planned",
+    "finalizer": "plan completed",
+    "reason": "Internal completion flag -- the screen itself only renders when a plan was actually produced, so the value is implied by the screen's own existence."
+  },
+  {
+    "key": "planning_dir",
+    "finalizer": "plan completed",
+    "reason": "Reference directory path; redundant with the already-rendered Planning Artifacts / Plan Artifact filenames, not repeated verbatim."
+  },
+  {
+    "key": "planning_run_id",
+    "finalizer": "plan completed",
+    "reason": "Internal run identifier for audit tooling; not owner-facing content."
+  },
+  {
+    "key": "refreshed",
+    "finalizer": "plan completed",
+    "reason": "Records whether --refresh was passed; the screen's own narrative already distinguishes an existing plan from a freshly-built one, which is the fact the owner cares about."
+  },
+  {
+    "key": "survey_docs",
+    "finalizer": "plan completed",
+    "reason": "Reference list of survey documents consulted during planning; input provenance for audit tooling, not narrated as its own line."
+  },
+
+  {
+    "key": "artifact_source",
+    "finalizer": "plan mid-loop",
+    "reason": "Provenance-only (RESEARCH.md Q1): records which planning path produced this iteration, used to select messaging, not narrated as its own line."
+  },
+  {
+    "key": "depth",
+    "finalizer": "plan mid-loop",
+    "reason": "Legacy top-level manifest depth field superseded by the separately-rendered planning_depth line; kept for API compatibility, not narrated on its own."
+  },
+  {
+    "key": "evidence_hash",
+    "finalizer": "plan mid-loop",
+    "reason": "Internal audit hash for evidence-tracking tooling; not owner-facing content."
+  },
+  {
+    "key": "gaps",
+    "finalizer": "plan mid-loop",
+    "reason": "Superseded by the rendered, more actionable selected_gaps subset chosen for the next iteration ('Next Iteration Gaps'); this full unresolved list is kept for API consumers."
+  },
+  {
+    "key": "iteration",
+    "finalizer": "plan mid-loop",
+    "reason": "Duplicates the already-rendered planning_loop.Iterations count; kept as a flat top-level field for API consumers, not narrated separately."
+  },
+  {
+    "key": "iteration_completed",
+    "finalizer": "plan mid-loop",
+    "reason": "Internal completion flag -- the mid-loop narrative branch this screen takes already implies another iteration is required."
+  },
+  {
+    "key": "iteration_state",
+    "finalizer": "plan mid-loop",
+    "reason": "Reference filename for the persisted iteration-state JSON; not narrated to the owner."
+  },
+  {
+    "key": "plan_source",
+    "finalizer": "plan mid-loop",
+    "reason": "Provenance-only (RESEARCH.md Q1): records which planning path produced this iteration, used to select messaging, not narrated as its own line."
+  },
+  {
+    "key": "planned",
+    "finalizer": "plan mid-loop",
+    "reason": "Internal completion flag, always false for a mid-loop result by construction; the screen's own narrative already states another iteration is required."
+  },
+  {
+    "key": "planning_dir",
+    "finalizer": "plan mid-loop",
+    "reason": "Reference directory path; not narrated to the owner."
+  },
+  {
+    "key": "planning_run_id",
+    "finalizer": "plan mid-loop",
+    "reason": "Internal run identifier for audit tooling; not owner-facing content."
+  },
+
+  {
+    "key": "advanced",
+    "finalizer": "continue advanced",
+    "reason": "Internal completion flag -- the screen already conveys advancement by being renderContinueVisual rather than renderContinueBlockedVisual."
+  },
+  {
+    "key": "assessment",
+    "finalizer": "continue advanced",
+    "reason": "An internal aggregate of the verification/gate outcome; its constituent facts (verification tally and detail, gates, worker flow) are already rendered individually -- the struct itself is not narrated as one block."
+  },
+  {
+    "key": "continued_phase_name",
+    "finalizer": "continue advanced",
+    "reason": "Redundant with the live colony state's own phase name, resolved via continued_phase's ID lookup (closeoutContinueRenderInputs/colonyPhaseByID) -- that resolved name is what's actually rendered, not this snapshot string."
+  },
+  {
+    "key": "current_phase",
+    "finalizer": "continue advanced",
+    "reason": "Duplicates the live colony state's own CurrentPhase pointer, which the screen resolves independently (nextPhase/state.Plan.Phases), rather than reading this snapshot value."
+  },
+  {
+    "key": "next_phase_name",
+    "finalizer": "continue advanced",
+    "reason": "Redundant with the live colony state's own next-phase name, resolved via next_phase's ID lookup (closeoutContinueRenderInputs/colonyPhaseByID) -- that resolved name is what's actually rendered."
+  },
+  {
+    "key": "reconciled_tasks",
+    "finalizer": "continue advanced",
+    "reason": "Internal task-reconciliation bookkeeping; the operationally relevant facts already surface via the rendered worker flow and verification detail, this raw list is not narrated separately."
+  },
+  {
+    "key": "recovery",
+    "finalizer": "continue advanced",
+    "reason": "A structured recovery plan for automated tooling (e.g. aether unblock), distinct from the human-readable blocking_issues/recovery_instructions surfaced on the blocked screen; not narrated as its own block on the advanced screen."
+  },
+  {
+    "key": "state",
+    "finalizer": "continue advanced",
+    "reason": "Redundant with the live colony.ColonyState parameter already passed to and rendered by this function (the Colony State / Colony Complete stage), which is authoritative; this snapshot value is not re-read."
+  },
+  {
+    "key": "task_evidence",
+    "finalizer": "continue advanced",
+    "reason": "A misnomer distinct from result[\"verification\"].Criteria, the actual per-requirement evidence D-11 requires and which IS rendered via renderCriterionEvidenceLines. Decided out of scope by 198-06 (198-06-SUMMARY.md key-decisions): task_evidence (assessment.Tasks) carries only TaskID/Goal/Outcome/Verified with no Evidence proof text, so it cannot satisfy the evidence-line shape."
+  },
+
+  {
+    "key": "advanced",
+    "finalizer": "continue blocked",
+    "reason": "Internal completion flag -- the screen already conveys blockage by being renderContinueBlockedVisual rather than renderContinueVisual."
+  },
+  {
+    "key": "assessment",
+    "finalizer": "continue blocked",
+    "reason": "An internal aggregate of the verification/gate outcome; its constituent facts (verification tally and detail, gates, blocking issues, worker flow) are already rendered individually -- the struct itself is not narrated as one block."
+  },
+  {
+    "key": "continued_phase_name",
+    "finalizer": "continue blocked",
+    "reason": "Redundant with the live colony state's own phase name, resolved via continued_phase's ID lookup (closeoutContinueRenderInputs/colonyPhaseByID) -- that resolved name is what's actually rendered, not this snapshot string."
+  },
+  {
+    "key": "current_phase",
+    "finalizer": "continue blocked",
+    "reason": "Duplicates the live colony state's own CurrentPhase pointer, which the screen resolves independently, rather than reading this snapshot value."
+  },
+  {
+    "key": "phase_name",
+    "finalizer": "continue blocked",
+    "reason": "Redundant with the live colony state's own phase name, resolved via continued_phase's ID lookup -- that resolved name is what's actually rendered, not this snapshot string."
+  },
+  {
+    "key": "reconciled_tasks",
+    "finalizer": "continue blocked",
+    "reason": "Internal task-reconciliation bookkeeping; the operationally relevant facts already surface via blocking_issues and the rendered worker flow, this raw list is not narrated separately."
+  },
+  {
+    "key": "recovery",
+    "finalizer": "continue blocked",
+    "reason": "A structured recovery plan for automated tooling (e.g. aether unblock), distinct from the human-readable blocking_issues/recovery_instructions that ARE rendered; not narrated as its own block."
+  },
+  {
+    "key": "state",
+    "finalizer": "continue blocked",
+    "reason": "Redundant with the live colony.ColonyState parameter already passed to and rendered by this function, which is authoritative; this snapshot value is not re-read."
+  },
+  {
+    "key": "task_evidence",
+    "finalizer": "continue blocked",
+    "reason": "A misnomer distinct from result[\"verification\"].Criteria, the actual per-requirement evidence D-11 requires and which IS rendered via renderCriterionEvidenceLines. Decided out of scope by 198-06 (198-06-SUMMARY.md key-decisions): task_evidence (assessment.Tasks) carries only TaskID/Goal/Outcome/Verified with no Evidence proof text, so it cannot satisfy the evidence-line shape."
+  },
+
+  {
+    "key": "milestone",
+    "finalizer": "seal",
+    "reason": "Always the constant \"Crowned Anthill\" today -- renderSealVisual shows this fact via fixed prose (the title art and \"Colony sealed at Crowned Anthill\" line) rather than re-reading a dynamic value; there is currently only one milestone name a seal can reach."
+  }
+]

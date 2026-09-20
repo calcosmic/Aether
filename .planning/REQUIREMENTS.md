@@ -1,186 +1,181 @@
-# Requirements — v1.26 Intelligent Orchestration
+# Requirements: Aether v1.28 Classic Colony Restoration
 
-**Milestone goal:** The colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost — so a non-technical operator gets good results on an inexpensive model without tuning anything.
+**Defined:** 2026-09-02
 
-**Supersedes v1.25 "Switch It On."** v1.25 reached 24% (7 of 29 phases). Its still-live intent — cheap-model capability, context reaching workers, phase-fit caste selection, real-world proof — is absorbed below. Its remaining categories (SEE 14, TYPED 8, RECLAIM 9, LOCK 4) are **not** in this scope and move to Future Requirements.
+**Status:** Approved 2026-09-02; owner-requested Codex scope amendment 2026-09-16
 
-**Evidence standard:** every requirement below traces to a finding verified by reading or *running* current code during v1.26 research. Where a claim could not be verified, it is marked and scoped as a decision rather than a build.
+**Authoritative brief:** `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`
+
+**Historical baselines:** `3a5b81c2`, `v5.0.0`, and `v5.4`
+
+**Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
+
+## Milestone outcome
+
+Reunite Aether's modern Go safety kernel with the understandable, visible, Queen-led colony experience of the February-April era. The restored experience must be causally real: workers, planning iterations, signals, recruitment, learning, checks, and recovery must change durable runtime decisions and leave evidence, not merely produce nostalgic text.
+
+For dummies: keep the reliable modern engine and brakes, then restore the dashboard, crew, steering feel, and journey that made Aether feel like Aether.
+
+## Requirements
+
+### Historical-to-Modern Synthesis
+
+- [x] **SYNTH-01** — Front-door mechanism study: Before Phase 199 implementation is planned, reconstruct the exact Classic setup, help, init, colonize, orientation, pause/resume, and closure flows from relevant historical source, wrappers, fixtures, and output; trace their current Go equivalents and produce an evidence-backed keep-current, restore-modern, replace-better, or retire-with-proof decision for each mechanism.
+- [x] **SYNTH-02** — Planning mechanism study: Before Phase 200 implementation is planned, reconstruct how the Classic Scout/Route-Setter loop gathered evidence, scored confidence, targeted gaps, presented deltas, stopped, and involved the owner; compare it with the current Go planning/revision/finalizer path and select the most appropriate combined design.
+- [x] **SYNTH-03** — Work-cycle mechanism study: Before Phase 201 implementation is planned, reconstruct how Classic Queen judgment, caste selection, job/wave coordination, build, continue, run, checks, recovery, context relay, and ceremony actually worked; compare those causal mechanisms with the current attempt, manifest, result, and verification kernel before choosing changes.
+- [ ] **SYNTH-04** — Swarm/Oracle/live mechanism study: Before Phase 202 implementation is planned, reconstruct the precise Classic Swarm lenses, hypothesis comparison, repair loop, Oracle research iterations, synthesis, typed or inferred state, and live presentation; audit the current issuance, event, research, and rendering systems and derive a modern design rather than restoring names or screens alone.
+- [x] **SYNTH-05** — Biological mechanism study: Before Phase 203 implementation is planned, reconstruct prior worker emergence, help-seeking, delegation, result return, trophallaxis, pheromone propagation, and shared-environment effects—including what was real, simulated, or platform-dependent—then reconcile them with modern Go authorization, ledgers, workspaces, adapters, and safety limits.
+- [x] **SYNTH-06** — Learning mechanism study: Before Phase 204 implementation is planned, reconstruct how Classic observations, instincts, Queen memory, Hive, midden, signal reinforcement, and learning presentation influenced later work; compare that with every current store and reader, then choose the smallest architecture that can prove beneficial application and rollback. Ticked on `.planning/phases/204-learning-governor/204-CLASSIC-SYNTHESIS.md` and `204-CLASSIC-HISTORICAL-EVIDENCE.md` existing and being cited by `TestClassicContractPhase204MechanismRegistry`, `TestClassicContractPhase204Cases`, and `TestClassicContractRegistryHasNoRuntimeWriter`, all observed passing in this session.
+- [x] **SYNTH-07** — Research-to-execution ratchet: Every Phase 199-204 directory contains a `CLASSIC-SYNTHESIS.md` or equivalent artifact following `.planning/research/v1.28-classic-synthesis-template.md`; it cites exact historical and current evidence, explains the user value and causal mechanism, records considered alternatives and the chosen synthesis, and links each conclusion to plan tasks, tests, CAP rows, and verification; Phase 205 rejects label-only restoration, unjustified legacy copying, or implementation that ignores a demonstrably better current Go mechanism. Ticked on `cmd/classic_synthesis_audit_test.go`'s 9 `TestClassicSynthesis*` tests (a real command that fails, by name, on a missing/empty/mislabelled section or a double-claimed capability row) and `.planning/phases/205-owner-acceptance-and-restoration-seal/205-SYNTH-07-AUDIT.md`'s plain-English judgement of all seven artifacts against the four clauses above — six fully compliant, Phase 199 substantively compliant with a named, non-blocking heading-structure gap carried to the limitations card, all observed passing in this session.
+
+### Classic Experience Contract
+
+- [x] **CEC-01** — Identity: Every ordinary lifecycle screen identifies the colony, current goal or episode, active phase, and acting castes from authoritative runtime state; wrappers may style that truth but may not invent it.
+- [x] **CEC-02** — Orientation: At any ordinary entry point, the owner can see where the colony is, what is active or blocked, and one canonical next safe action without interpreting manifests, ledgers, or internal protocol commands.
+- [x] **CEC-03** — Intention: Every planning iteration, worker choice, specialist escalation, recovery wave, and stop explains why it happened and what evidence would make the next decision different.
+- [x] **CEC-04** — Agency: The owner can steer, pause, resume, stop, answer a material decision, and inspect advanced detail without corrupting active work or being asked again for a decision already valid in the current scope.
+- [x] **CEC-05** — Liveness: Planning, building, Swarm, Oracle, recovery, and verification expose typed live events for active workers, waves, questions, confidence, contradictions, signals, findings, and lineage rather than simulated activity.
+- [x] **CEC-06** — Evidence: Claims, deterministic checks, independent findings, elapsed time, reported cost, changed files, provenance, and incomplete owner work remain linked to the exact attempt and visible at the decision that consumes them.
+- [x] **CEC-07** — Colony Effect: A recruitment result, pheromone, memory item, or specialist contribution earns credit only when the runtime records the decision it changed and the later verified outcome, including neutral or harmful results.
+- [x] **CEC-08** — Closure: Completion, seal, archive, and delivery views distinguish verified work, residual risk, queued owner evidence, and future ideas, then preserve one honest summary and next action.
+- [x] **CEC-09** — Voice: Every ordinary lifecycle screen renders in the Classic colony voice, not only with a correct banner: content lines carry their own caste//status glyphs and colony vocabulary at the reference density of `3a5b81c2`, next-step menus name each option's effect beside its command, and no owner-facing line exposes a raw internal identifier, hash, or state token in place of a sentence. The rendered voice is asserted against the reference, so it cannot silently flatten again.
+
+### Front Door and Lifecycle Grammar
+
+- [x] **LIFE-01** — One understandable front door: Help, first-run setup, `lay-eggs`, and `init` present one normal goal journey; `aether do "goal"` or its approved equivalent drives that journey while advanced and internal protocol surfaces remain inspectable but clearly separated.
+- [x] **LIFE-02** — Automatic territory understanding: The lifecycle decides when repository colonization or survey refresh is needed, shows survey freshness, and feeds the resulting territory evidence into planning without requiring the owner to choose an internal survey command.
+- [x] **LIFE-03** — One orientation model: `status`, `phase`, `history`, health or maturity information, activity interpretation, research or Dreams visibility, escalated flags, and Next Up agree on the same authoritative lifecycle projection.
+- [x] **LIFE-04** — Safe pause and return: Pause, stop, session staleness, `resume`, recovery, and the `resume-colony` compatibility path preserve partial work, attempts, scoped decisions, context, and worker lineage exactly once.
+- [x] **LIFE-05** — Honest closure: Seal, archive, and the useful safety or memory behavior formerly attached to `entomb` preserve findings, learnings, signals, owner checkpoints, and rollback information while refusing malformed or incomplete completion truth.
+- [x] **LIFE-06** — Safe internal maintenance: State migration, update, cleanup, registry, chamber or context integrity, generated-artifact maintenance, and compatibility operations validate before mutation, checkpoint where needed, roll back on failure, and surface an actionable result through an expert or internal namespace.
+
+### Iterative Planning
+
+- [x] **PLAN-01** — Visible Scout/Route-Setter loop: Planning visibly alternates grounded Scout research and Route-Setter synthesis until a complete plan or a genuine owner boundary is reached; the loop uses the current Go revision/finalizer as state authority.
+- [x] **PLAN-02** — Five-dimensional confidence: Every iteration scores the five historical confidence dimensions from evidence, identifies the weakest material gaps, and directs the next research pass at those gaps rather than repeating broad discovery.
+- [x] **PLAN-03** — Explain iteration and stopping: The owner can see what changed since the prior pass, which evidence raised or lowered confidence, and whether planning stopped for sufficiency, diminishing returns, a detected stall, or a material unresolved choice.
+- [x] **PLAN-04** — Ask only material questions: Planning batches only choices that change product behavior, authority, risk, or scope; answers are bound to goal/session/revision and can create scoped steering or learning without becoming stale universal permission.
+- [x] **PLAN-05** — Owner-readable specification and accepted plan: Intent capture produces a plain-language specification for the whole goal or one feature—what it does, what it excludes, binding decisions and owner-checkable acceptance—then the final plan adds grounded tasks, dependencies, negative and recovery cases, verification evidence, affected public entry points, and durably linked research.
+- [x] **PLAN-06** — Safe living plan: Survey, Hive, prior outcomes, charter, context deltas, and durable research can prime planning; insert-phase and revision flows preserve history, validate scope, and explain why reality required the change.
+
+### Queen-Led Work Cycle
+
+- [x] **WORK-01** — Queen chooses and explains: The Queen selects the smallest capable team from the work and its risks, names every worker and job, records the reason, and remains subject to deterministic safety floors and declared caps.
+- [x] **WORK-02** — Proportionate ordinary work: A one-task low-risk change uses one Builder plus free program checks; optional castes appear only for named evidence or risk, and explicit heavy review still exercises the independent-review pipeline.
+- [x] **WORK-03** — Coherent jobs and waves: Related tasks form dependency-safe jobs with exact workspace leases, receipts, result lineage, and visible waves; disjoint work may run in parallel without shared-root overwrite or lost fan-in.
+- [x] **WORK-04** — One build/continue/run story: Build, continue, and autopilot consume the same accepted result model, perform verification once at the authoritative boundary, and render one coherent narrative rather than three competing lifecycle interpretations.
+- [x] **WORK-05** — Complete result truth: Success, no-change, partial work, blockers, flags, findings, deterministic checks, independent review, elapsed time, reported or unreported cost, and changed-file precision persist against the exact attempt and govern advance.
+- [x] **WORK-06** — Bounded recovery and learning: Failures write canonical midden evidence, relevant blockers and signals; repair or Swarm waves checkpoint first, remain bounded, verify the repair, and restore the checkpoint if verification fails.
+- [x] **WORK-07** — Goal-level autopilot: From one accepted goal, the controller can select survey, planning, work, verification, repair, replan, and ready-to-seal transitions automatically, stopping only for a declared owner, authority, physical, or unrecoverable boundary.
+- [x] **WORK-08** — Measured worker turnaround: The runtime records per-job queue, preflight, model, tool-call, context, work, verification, and wait time; workers receive only task-relevant context plus compact handoffs, and representative one-plan latency is reduced through test architecture, model/routing, and brief improvements without weakening TDD or safety gates.
+
+### Swarm, Oracle, and Live Colony
+
+- [ ] **LIVE-01** — Typed event bridge: One versioned runtime event model carries planning, dispatch, worker, research, signal, check, recovery, and completion transitions to all supported renderers, with replay and resume semantics.
+- [x] **LIVE-02** — Real live cockpit: `watch` and status views show authoritative active workers, castes, parent/child lineage, waves, workspaces, current questions, confidence, contradictions, signals, findings, recovery state, elapsed time, and reported cost without polling fabricated state.
+- [ ] **LIVE-03** — Substantive Swarm diagnosis: Swarm runs four distinct evidence-producing lenses, compares competing hypotheses, identifies contradictions and shared causes, and ranks candidate repairs instead of launching four cosmetically different prompts.
+- [ ] **LIVE-04** — Safe Swarm repair: Swarm uses runtime-issued identities and manifests, checkpoints before mutation, applies the ranked repair through an authorized path, verifies it, rolls back failed repair, and preserves the proven three-strike architectural escalation.
+- [ ] **LIVE-05** — Durable Swarm outcome: Swarm activity, success or failure, strikes, archive/cleanup, relevant FOCUS or REDIRECT learning, and the final evidence-backed synthesis remain one replay-safe episode available to status, history, and later work.
+- [x] **LIVE-06** — Iterative Oracle: Oracle offers an understandable research entry point, clarifies the actual question, runs multi-round evidence gathering and synthesis, displays confidence and contradictions, targets gaps, and stops on sufficiency or diminishing returns.
+- [ ] **LIVE-07** — Durable Oracle synthesis: Oracle writes a final synthesis with sources, provenance, confidence, unresolved questions, and actionable conclusions; useful partial research is saved honestly, and plan research or Dreams artifacts remain discoverable without being mislabelled as verified truth.
+
+### Biological Runtime
+
+- [x] **BIO-01** — Typed recruitment intent: A worker can emit one versioned `RecruitmentIntent` containing authenticated parent/attempt identity, requested caste and capability, bounded objective, reason, evidence, permissions, urgency, scope, and cost limits.
+- [x] **BIO-02** — Atomic admission: Go validates depth, tree budget, cycles, duplicates, permissions, paths, cost, parent authority, and evidence, then atomically records a manifest amendment before dispatch; unavailable truth or failed logging denies launch.
+- [x] **BIO-03** — Honest platform dispatch: Each supported platform either binds a native child to the issued capability or uses a root/host-mediated fallback with an exact workspace lease; availability probes are configurable, bounded, process-tree-safe, and isolated from the repository; unsupported nesting is reported before launch and never faked in prompts.
+- [x] **BIO-04** — Durable child result: `RecruitmentResult` binds the child, intent, dispatch, execution generation, terminal status, evidence, artifacts, handoff, and usage exactly once; missing, duplicated, altered, timed-out, or replayed results drive explicit recovery.
+- [x] **BIO-05** — Trophallaxis and follow-on: A scoped `TrophallaxisPacket` carries the useful child result to an acknowledged parent continuation or one named follow-on consumer, which records the downstream decision it made from that packet.
+- [x] **BIO-06** — Whole-subtree truth: Status, watch, recovery, worktree handling, and cost/depth accounting include every governed descendant and follow-on edge without weakening immutable build-attempt authorization.
+- [x] **BIO-07** — Canonical pheromone bus: User, runtime, import, and learning paths share one sanitizer, normalizer, deduplicating writer, provenance model, and effective scope/expiry/strength resolver; cross-project input starts quarantined.
+- [x] **BIO-08** — Evidence-backed influence: Suggested pheromones support accept, edit, reject, reinforce, defer, expire, revoke, and appeal with immutable history; declared decision-domain adapters record influence and outcome-weighted strengthening, weakening, or quarantine.
+
+### Learning Governor
+
+- [x] **LEARN-01** — Memory truth and lineage: Observations, instincts, learned entries, Queen/Hive wisdom, midden, pheromones, and eternal memory use compatible versioned schemas and common provenance; hypotheses and disproven material are never labelled or injected as verified, and writerless legacy fields have an explicit migration or retirement. Ticked on `TestEveryMemoryStoreFieldHasALiveWriter`, `TestLegacyRecordsReadAsLegacy`, `TestNewRecordsCarryVersionAndLineage`, `TestHypothesisIsNeverRenderedAsVerified`, `TestOneLearningStatusVocabulary`, and `TestRetiredFieldWithoutOwnerAgreementIsRefused`, all observed passing in this session.
+- [x] **LEARN-02** — Outcome and intervention ledger: Each started goal episode records immutable task/outcome IDs, revisions, runtime/policy versions, acceptance and evaluator digests, evidence, hard gates, changed decisions, categorized owner interventions, time, tokens, reported cost, and terminal result through append-only events and idempotent views. Ticked on `TestEveryLifecycleLaneWritesADurableOutcome` (zero skips), `TestSwarmLaneOpensAndClosesADurableEpisode`, `TestRecoveryLaneOpensADurableEpisodeOnlyWhenItOwnsOne` (204-13), and `TestBuildEpisodeRecordsItsOwnFacts`, `TestCheckEpisodeRecordsItsOwnFacts`, `TestDelegateCheckEpisodeRecordsItsOwnFacts`, `TestEpisodeOutcomeIsRecordedFromBothCheckLanes`, `TestEveryMemoryStoreFieldHasALiveWriter` (204-15), all observed passing in this session. Remaining limit: `usage`/`reported_cost_usd` stay absent on both check lanes (204-15-SUMMARY.md's own documented gap) — a watcher/reviewer worker's token usage is not yet surfaced to the episode-close boundary on `runCodexContinue`/`runCodexContinueFinalize`, though it is recorded on the build and swarm lanes.
+- [x] **LEARN-03** — Real application evidence: Guidance records whether it was available, rendered, consulted, acted on, ignored, contradicted, helpful, neutral, or harmful; a delivered note plus a passing phase is not automatically a successful application. Ticked on `TestPhaseApplicationCreditTracerEndToEnd`, `TestPhaseApplicationCreditIsReachedFromBothCheckLanes`, and `TestCreditRequiresBothFacts`, all observed passing in this session.
+- [x] **LEARN-04** — Failure-to-evaluation conversion: Confirmed incidents become minimal sanitized, deduplicated, versioned regression fixtures with the failing baseline, invariant, allowed mutations, provenance, privacy controls, and retirement or successor rules. Ticked on `TestSeededBankFixturesAllCiteRealProvenance`, all observed passing in this session; the fixture bank's own structure, provenance, and dedup/retirement rules are real regardless of how many fixtures currently carry a guard test, which is LEARN-05's own concern, not this requirement's wording.
+- [ ] **LEARN-05** — Permanent evaluation and test architecture: The 43-task seed bank, hard-gate sentinels, environment and budget metadata, hidden holdouts, and named fast/focused/integration/provider/overnight/race/release gates preserve coverage while completing within explicit observable budgets. Left unticked: the named gates, sentinels, holdouts and budgets are real and tested (`TestEvalGateVocabularyMatchesTheManifest`, `TestTruncatedGateRunFails`, `TestEverySentinelStillExists`, all observed passing in this session), but 30 of the fixture bank's 51 confirmed incidents still carry no guarding test (`cmd/eval_gates.go`'s `seedBankUnguardedFloor = 30`, confirmed against `cmd/testdata/fixture-bank/v1/bank.json` in this session) — most of "the seed bank... preserve[s] coverage" is not yet true of the running program.
+- [x] **LEARN-06** — Independent shadow comparison: Immutable candidates declare scope, expected benefit, harms, expiry, and rollback, then run beside a frozen baseline on relevant visible tasks and inaccessible holdouts; the candidate cannot select or edit its evaluator or acceptance criteria. Ticked on `TestShadowGraderDistinguishesBeneficialFromHarmful`, `TestOverfitCandidateIsRefusedAtTheGate`, and `TestEvaluatorDigestIsStableAndChanged` (204-12), all observed passing in this session. Remaining limit: `shadowClassifyAgainstBank`'s comparison is a real per-fixture classifier over this project's own settings/routing fixtures, and never covers a code-valued candidate — exactly what LEARN-06 itself, and the canary-promotable scope in LEARN-07, already restrict this mechanism to.
+- [x] **LEARN-07** — Tiered promotion and rollback: Only proven reversible low-risk project knowledge or routing may enter a bounded canary; regressions atomically restore the prior policy and quarantine the candidate, while preferences, skills, workflows, source, security, deletion, permission, verification, and external-action changes retain their required owner or independent authority. Ticked on `TestAutomaticImprovementPassTracerEndToEnd`, `TestAutomaticImprovementPassIsReachedFromBothCheckLanes`, `TestAutomaticPassNeverPromotesOutsideTheTwoScopes`, and `TestAutomaticPassCarriesNoBypassParameter` (204-12), all observed passing in this session.
+- [x] **LEARN-08** — Honest improvement and source boundary: Aether reports verified useful-task success and preventable interventions separately with hard failures non-gameable; source improvements may be proposed only on an isolated, independently verified branch or PR and can never self-approve, self-merge, publish, or deploy. Ticked on `TestTwoFiguresAreRealOnALiveColony`, `TestReportBoundariesOnRealRecords`, `TestRenderedLiveReportKeepsTheTwoFiguresApart` (204-15), and `TestRepeatedInterventionProposesExactlyOneSourceChange`, `TestAutomaticProposalReplayCreatesNoSecondBranch`, `TestSourceProposalCannotMergePublishOrDeploy` (204-16), all observed passing in this session.
+
+### Restoration Proof
+
+- [x] **PROOF-01** — Executable Classic corpus: From each phase's historical/current mechanism study, build versioned outcome, behavior, and experience fixtures for the public commands and journeys that slice changes; snapshots or remembered feature names alone cannot prove causality.
+- [ ] **PROOF-02** — Complete capability traceability: Every `CAP-001` through `CAP-072` row maps exactly once to a v1.28 requirement and phase, while its final implementation disposition is signed only after the relevant phase study demonstrates the historical mechanism, current successor, and chosen synthesis; missing, duplicate, or unsupported dispositions fail the planning and completion ratchets.
+- [ ] **PROOF-03** — Three-dimensional parity: Each phase proves useful outcome parity, actual behavior parity, and understandable experience parity while preserving the modern kernel's fail-closed safety; endpoint counts or broad percentage claims are not completion evidence.
+- [ ] **PROOF-04** — Honest supported-platform contract: Real public entry points prove the declared outcomes for Claude Code, OpenCode, and Codex `$ant-*` skills and runtime commands, or fail early with a truthful limitation; native platform ability is never called Aether-governed without ledger binding. Inserted ANT-01..16 supply the Codex implementation and proof before final acceptance.
+- [ ] **PROOF-05** — Real-repository journeys: Owner-visible UAT covers at least a clean small change, a dirty-worktree change, iterative planning, a stubborn Swarm defect, multi-round Oracle research, pause/resume and interruption recovery, governed recruitment/result use, queued physical or authority work, and a learned candidate that can be rolled back.
+- [ ] **PROOF-06** — Owner acceptance and seal: v1.28 cannot complete until the full restored journey is usable and Callum accepts that it feels like Aether again and is trustworthy to operate; residual limitations and deferred proof remain explicit rather than being converted into green metrics.
+
+### Codex Ant Skills and Behavioral Parity
+
+Added by owner direction on 2026-09-16 before the remaining Phase 205 acceptance. The [GSD integration record](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md) supersedes the earlier Codex deferral and preserves all existing acceptance history.
+
+- [x] **ANT-01** — Canonical Codex names: Fresh supported Codex sessions discover and invoke the existing nine public workflows as $ant-*; obsolete Aether-owned public $aether-* entries migrate without a duplicate default menu, and internal helpers remain supporting instructions.
+- [x] **ANT-02** — Safe skill distribution: Clean install, publish, supported update, repeated update, and failed-update rollback install the intended versioned skills while preserving custom skills, edited files, ownership boundaries, and channel isolation.
+- [x] **ANT-03** — Consistent guidance: Generated project instructions, help, next actions, command guides, and discovery guidance teach the actual supported $ant-* surface and remain correct after updates; machine-facing runtime identities stay stable.
+- [ ] **ANT-04** — Governed native dispatch: Exactly one launcher binds each real Codex helper to the Go-issued assignment, attempt, role, workspace, and result contract; duplicate or stale launches/results cannot earn completion credit.
+- [ ] **ANT-05** — Durable native recovery: Helper completion is persisted before aggregate finalization, and interruption followed by a fresh-session resume preserves finished work, identifies unfinished work, and avoids repeated writes or completion credit.
+- [ ] **ANT-06** — Complete helper context: Native helpers receive the current runtime capsule, matched skills, applicable steering, prior handoffs, and scope-bound owner answers; questions return through the governed decision path and stale answers are refused.
+- [ ] **ANT-07** — Honest host capabilities and visibility: Supported permission, cancellation, nesting, and workspace behavior are verified on the real Codex host; activity reflects actual helpers, and missing usage/cost or unavailable abilities remain explicitly unreported or refused.
+- [ ] **ANT-08** — Current lifecycle decisions: Codex follows the current init/discuss/spec/plan acceptance sequence, approved Oracle brief, build/continue/run transitions, and seal/retained-review/archive boundaries through the same Go-owned decisions as Claude Code.
+- [ ] **ANT-09** — Proportionate team and verification parity: Codex explains the smallest justified team, relays owner check-ins and worker answers, runs the authoritative checks without duplicate review or weakened gates, and honors bounded repair and owner-only confirmations.
+- [ ] **ANT-10** — Complete public command coverage: One tested inventory covers all 64 current Claude/OpenCode command names as $ant-* skills, with explicit runtime aliases and adapted prompt-only workflows, faithful arguments, correct read-only behavior, and no fabricated executable routes.
+- [ ] **ANT-11** — Useful governed recruitment: An admitted additional helper launches through the actual selected provider/native bridge, returns a linked usable result that reaches the requesting parent, and respects refusal, depth, budget, cancellation, and authorization limits across affected platforms.
+- [ ] **ANT-12** — Native workspace integrity: In-repo and isolated-worktree native paths allocate the correct runtime-owned workspace, bind the helper working directory, reconcile accepted edits once, and preserve or refuse conflicting and interrupted edits honestly.
+- [ ] **ANT-13** — Swarm recovery parity: Native Swarm execution saves checkpoints at the required stage boundaries and restores or preserves work on failure/interruption under the same runtime rules as the direct path, with shared-platform regression proof.
+- [ ] **ANT-14** — Real public-path parity proof: Source-pinned installed $ant-* journeys prove discovery, planning, actual worker/result use, checks, failure/repair, resume, research, recruitment, workspace modes, and closure against the current Claude reference; synthetic providers or status-only runs cannot stand in for those claims.
+- [ ] **ANT-15** — Qualified candidate: Disposable consumer install/upgrade/rollback and fresh-session discovery are proven for the exact candidate, relevant focused and full normal/race gates have complete recorded outcomes, and old failures are distinguished from regressions and unresolved required behavior.
+- [ ] **ANT-16** — Versioned owner handoff: Phase 205 resumes only after a candidate-specific handoff names phase verification, release/installation identities, limitations, and the correct preserved or separately captured pre-session inventory; prior preparation and assistant-run proof never count as owner evidence or acceptance.
+
+## Explicit exclusions
+
+- No return to shell scripts, wrapper prose, or platform prompts as state authority.
+- No standalone pre-restoration reconciliation phase and no repeat of the 69 already-researched capability questions.
+- No feature-name-driven restoration: “Swarm,” “Oracle,” “Queen,” “planning,” or any other Classic label is not an implementation specification without the phase's historical/current mechanism study and synthesis decision.
+- No irreversible pruning merely because the current runtime lacks a caller; the 72-row ledger governs disposition.
+- No fake recursive delegation, unbounded worker spawning, or weakened immutable-attempt checks.
+- No direct self-edit/self-merge/publish/deploy authority for learned source candidates.
+- No automatic weakening of security, deletion, permission, verification, or external-action gates.
+- Codex lifecycle-skill integration is now in v1.28 through Phases 204.1-204.5 by owner direction; this amendment does not weaken Go authority, native-result binding, or owner-only acceptance.
+- No owner-watched showdown against the fragmented interim experience; final proof follows the implemented restoration slices.
+
+## Requirement-to-phase traceability
+
+| Phase | Requirements | Count |
+|---|---|---:|
+| Phase 199 — Front Door and Classic Contract | SYNTH-01, CEC-01, CEC-02, CEC-04, CEC-08, LIFE-01..06, PROOF-01 | 12 |
+| Phase 200 — Iterative Planning | SYNTH-02, CEC-03, PLAN-01..06 | 8 |
+| Phase 201 — Queen-Led Work Cycle | SYNTH-03, CEC-06, WORK-01..08 | 10 |
+| Phase 202 — Swarm, Oracle, and Live Colony | SYNTH-04, CEC-05, LIVE-01..07 | 9 |
+| Phase 202.1 — Classic Visual Voice | CEC-09 | 1 |
+| Phase 203 — Biological Runtime | SYNTH-05, CEC-07, BIO-01..08 | 10 |
+| Phase 204 — Learning Governor | SYNTH-06, LEARN-01..08 (8/9 satisfied; LEARN-05 partial, 30/51 fixtures unguarded) | 9 |
+| Phase 204.1 — Codex Ant Skill Surface | ANT-01, ANT-02, ANT-03 (3/3 verified within the recorded entrypoint/distribution scope) | 3 |
+| Phase 204.2 — Codex Native Worker Lifecycle | ANT-04, ANT-05, ANT-06, ANT-07 | 4 |
+| Phase 204.3 — Codex Workflow Parity | ANT-08, ANT-09, ANT-10 | 3 |
+| Phase 204.4 — Governed Recruitment and Recovery | ANT-11, ANT-12, ANT-13 | 3 |
+| Phase 204.5 — Codex Parity Proof and Acceptance Handoff | ANT-14, ANT-15, ANT-16 | 3 |
+| Phase 205 — Owner Acceptance and Restoration Seal | SYNTH-07, PROOF-02..06 | 6 |
+| **Total** | **81 requirements mapped exactly once** | **81** |
+
+## Coverage summary
+
+- Historical-to-Modern Synthesis: 7 requirements
+- Classic Experience Contract: 9 requirements
+- Front Door and Lifecycle Grammar: 6 requirements
+- Iterative Planning: 6 requirements
+- Queen-Led Work Cycle: 8 requirements
+- Swarm, Oracle, and Live Colony: 7 requirements
+- Biological Runtime: 8 requirements
+- Learning Governor: 8 requirements
+- Restoration Proof: 6 requirements
+- Codex Ant Skills and Behavioral Parity: 16 requirements
+- **Total: 81** (65 existing requirements, including CEC-09, plus 16 ANT requirements)
 
 ---
 
-## The organising finding
-
-Four independent researchers converged on the same thing: **most of this milestone already exists and was never wired to a caller.**
-
-| Capability | What exists today | Reaches |
-|---|---|---|
-| Recursive delegation policy | Full engine in `.aether/ts-host/src/spawn-orchestrator.ts` | nobody — build path forbids the TS hop |
-| Depth guard | `spawn-can-spawn` (`cmd/spawn.go:169`) | nobody — takes `--depth`, ignores it, always returns true |
-| Depth recording | `workers.md:328` hardcodes `--depth 0` | `spawn-tree-depth` structurally always returns 0 |
-| Documented guard invocation | `workers.md:292` says run `--enforce` | executing it errors: flag never registered |
-| Agent roster | `colony/agents/*.yaml`, 27 castes | zero Go/TS readers |
-| Skill lifecycle | 9 commands | 8 have zero references outside their own definition |
-| Selection rationale | composed in `caste_relevance.go:168`, carried to manifest | never rendered to a human |
-| Token spend | `pkg/codex/usage.go` parses it at dispatch | never persisted; wrapper path has no usage field |
-
-**This is why WIRE-01 lands first.** A ratchet written after the capabilities gets shaped to whatever shipped.
-
----
-
-## Wiring Proof (WIRE)
-
-- [x] **WIRE-01**: A test fails when a registered subcommand has no caller outside its own definition, seeded with today's known orphans in an allowlist that may only shrink
-- [x] **WIRE-02**: The documented invocation in `.aether/workers.md` matches a flag that exists — running the documented command succeeds rather than erroring on `--enforce`
-- [x] **WIRE-03**: A test fails when a `.aether/*.md` instruction names a CLI flag the binary does not register
-
-## Delegation Guard (SPAWN)
-
-Enforcement lands before capability: parent/depth linkage is recorded at spawn time and cannot be retrofitted.
-
-- [x] **SPAWN-01**: `spawn-can-spawn` refuses at a configured depth — a specific test proves it returns `can_spawn: false`, which it has never done
-- [x] **SPAWN-02**: A spawned child records its true depth; `spawn-tree-depth` returns a non-zero value for a nested tree
-- [x] **SPAWN-03**: A whole-tree worker budget stops a run that stays within the depth limit — depth alone is not a budget, and a 2-deep 8-wide tree is 72 workers
-- [x] **SPAWN-04**: A `PreToolUse` hook lets the Go runtime deny a spawn before the platform executes it, and denies when it cannot resolve the requester's depth (fail closed)
-- [x] **SPAWN-05**: The runtime detects ancestor-chain repetition (a caste spawning itself on the same task) and refuses — the real hazard, since a spawn tree cannot contain a cycle
-- [x] **SPAWN-06**: *(Decision)* A written decision records what depth 0 means, resolving the inconsistency present in the repo today
-- [x] **SPAWN-07**: The operator can see a delegation tree as it grows — a runaway subtree is visible while running, not discovered on the bill
-- [x] **SPAWN-08**: An abandoned child worker is reaped and its budget released, and the operator has a command to see and clear orphans — an orphan wastes money once and then progressively locks the colony out of spawning as the tree budget fills with ghosts
-
-## Spend Ledger (SPEND)
-
-- [x] **SPEND-01**: Worker token usage persists beyond the process and is readable after a run
-- [ ] **SPEND-02**: The wrapper path reports token usage — today `codexExternalBuildWorkerResult` has no usage field, so the path an operator actually runs measures nothing
-- [x] **SPEND-03**: A total includes cache-read and cache-creation tokens — the counts are disjoint, and deriving `input + output` undercounted a real run by 186x
-- [x] **SPEND-04**: A run that produced no provider figure appears in the ledger tagged as an estimate, and cannot be read as a measurement
-- [ ] **SPEND-05**: Nested child spend rolls up to its parent, so a delegating worker's true cost is visible — parent attribution per row and a no-double-count invariant; the full self/subtree dual-column view is deferred until worker delegation exists (Phase 177)
-- [ ] **SPEND-06**: `aether spend` reports per-worker tokens and tool calls for the current run, mutating nothing — dollars never headline and no model-price table is ever built; USD appears only where the provider itself reported it, labelled as hypothetical API price *(reworded 2026-08-13: the owner is on subscription billing — tokens are the unit that draws their limits)*
-- [ ] **SPEND-07**: No figure in the spend report derives from a character budget, and documentation stops naming a character budget a "Token Budget" — a dashboard fed by `colonyPrimeBudgetChars` can go green while real cost is unchanged, which is how the 186x undercount stayed invisible
-- [ ] **SPEND-08**: *(added 2026-08-13)* The normal end of a build or continue prints one plain-English token line sourced from the ledger ("This phase used ~N tokens (measured)") — the primary surface for a non-technical operator who does not run inspection commands
-
-## Orchestration Visibility (SEEN)
-
-- [x] **SEEN-01**: The operator can see which workers the Queen chose and why, in plain English, before they spawn
-- [x] **SEEN-02**: When the runtime overrides the Queen's choice — restoring a required caste, trimming to budget — the override and its reason are stated, not applied silently
-- [x] **SEEN-03**: A worker that returned no actionable finding is distinguishable in the run summary from one that did
-
-## Agent Roster (ROSTER) — reshaped 2026-08-13
-
-ROSTER-01/02 reframed as a wire-or-delete ruling (Phase 176). ROSTER-03..08 (operator-authored agents) **shelved to Future Requirements** by the owner-approved reshape: the owner selects among the 27 existing castes, they do not author new ones.
-
-- [ ] **ROSTER-01**: The `colony/agents/*.yaml` zero-reader contradiction is resolved by an explicit recorded ruling — wired with executable proof, or deleted with the compiled registry documented as authoritative *(reworded 2026-08-13; original: "has a working Go reader")*
-- [ ] **ROSTER-02**: After the ruling, no file remains that claims to define agents and defines nothing — including `colony/policies/model-routing.yaml`, ruled in the same breath *(reworded 2026-08-13; original: hub distribution — applies only under a "wire" ruling)*
-
-## Worker Delegation Grant (SPAWN, continued) — added 2026-08-13
-
-Phase 173 built the complete guard system and deliberately granted nothing. These grant the capability, per-caste, under those guards (Phase 177).
-
-- [ ] **SPAWN-09**: An ordinary worker of a granted caste can actually spawn a helper when its task needs one, on the wrapper path the operator runs — today only Queen and Route-Setter carry the dispatch tool, so workers.md's spawn protocol is unreachable for every ordinary worker
-- [ ] **SPAWN-10**: A worker-spawned helper is recorded in the spawn tree with correct parent linkage and derived depth, counted by the whole-run budget, and visible under its parent in the live tree — the Phase 173 guards demonstrably bound worker-originated spawns
-- [ ] **SPAWN-11**: The grant is per-caste and recorded: a written list states which castes carry the tool and why, a test asserts non-granted castes carry none, and the third delegation level is re-verified refused after the grant makes that path reachable
-
-## Skill Authoring (SKILL)
-
-Security lands in this phase, not a phase later.
-
-- [ ] **SKILL-01**: The unreferenced skill-lifecycle commands either have a caller or are removed — 8 of 9 reach nobody today
-- [x] **SKILL-02**: Skill selection cannot be won by filename — an alphabetical tiebreak currently lets one broad `aaa-*` skill evict three shipped skills from every worker prompt
-- [ ] **SKILL-03**: Skill validation runs on the Claude path — `/ant-skill-create` currently hand-writes `SKILL.md` and bypasses `aether skill-create`, so validation would protect Codex users only
-- [ ] **SKILL-04**: A skill that fails validation is reported with the file and reason, not silently dropped
-
-## Proof (PROOF)
-
-The milestone's verdict. Not satisfiable by tests.
-
-- [ ] **PROOF-01**: Three real development tasks complete in real repositories on an inexpensive model, with operator interventions counted and recorded per task
-- [ ] **PROOF-02**: A full colony lifecycle runs in a downstream repo without Aether modifying its own repository
-- [ ] **PROOF-03**: Measured tokens-per-phase before and after this milestone are recorded, including if the result is unfavourable
-- [ ] **PROOF-04**: A task interrupted mid-session resumes in a fresh session without the operator re-explaining what was in progress
-
----
-
-## Future Requirements (deferred, not abandoned)
-
-Carried from v1.25, out of scope for v1.26:
-
-- **SEE** (14) — rich terminal visibility beyond SEEN-01..03. *(Substantially delivered 2026-08-16 by the v5.4.0-richness restoration: SEE-01 health breakdown, SEE-03 one-terminal decision, SEE-06 decision blocks, SEE-07 diagnosis, SEE-08 identity, SEE-10 charter ceremony, SEE-11 preservation boundary, SEE-12/13 standards — see `.planning/decisions/` and the named tests there. Remaining SEE scope, if any, re-derives from the owner's daily-driver feedback.)*
-- **TYPED** (8) — required `mode` field and removal of prose-based inference. *(Substantially delivered before the 2026-08-16 restoration, unrecorded until then: migration backfills modes (`TestMigrateStateBackfillsPhaseModes`), runtime inference removed (`TestEffectiveQueenPhaseModeNeverInfersFromProse`), grounding reads typed mode (`TestGroundingGateUsesTypedModeNotKeywords`), the research-worded-production regression holds (`TestResearchWordedProductionPhaseDispatchesBuilder`), and `TestInferPhaseModeCallSitesAreBounded` caps the remaining call sites. TYPED-02's hard-error variant was deliberately softened to a labelled default at authoring (`resolveAuthoredPhaseMode`) — recorded in `.planning/decisions/prose-to-control-flow.md`.)*
-- **RECLAIM** (9) — the wider unreachable-command sweep beyond WIRE-01's ratchet. *(Substantially delivered 2026-08-16 by the restoration's reclaim sweep: RECLAIM-01 medic checkpoint+fixed rollback (`TestMedicFixCreatesRollbackCheckpoint`, `TestAutofixRollbackRestoresStateNotEnvelope`); RECLAIM-02 automatic registry population at init/seal (`TestInitRegistersColonyAndSeedsHive`, `TestSealMarksRegistryEntryInactive`); RECLAIM-03 XML ruling (`.planning/decisions/xml-exchange.md`); RECLAIM-04 `aether recover` already wrapper-reachable; RECLAIM-07 swarm state populated in-process, three redundant CLI mutators retired, read/cleanup documented in the swarm wrapper; RECLAIM-08 Class A orphans dispositioned with dated reasons; RECLAIM-09 hive seeding wired into init (`TestInitRegistersColonyAndSeedsHive`). Allowlist 291 → 279. Remaining entries stay for later sweeps; RECLAIM-05/06 (playbook dedup, colony/ file audit) largely resolved by v1.25's playbook retirement + `.planning/decisions/colony-policies-files.md`.)*
-- **COLONY-01..05** (5) — re-homed 2026-08-16 after falling out of both v1.26 scope and this list. Dispositions: COLONY-01 (all 27 caste YAMLs kept) holds by default — nothing deletes them; COLONY-02/03 (phase-fit dispatch, failable test) delivered from the suppression side by Phase 182 and from the positive side by `TestDispatchComposesForPhaseCharacter` (restoration Stage 7); COLONY-04 (YAML loader) closed as rejected — Phase 176's cut stands, the compiled registry is authoritative; COLONY-05 (Dream 28th caste) decided — Dream stays a command (`.planning/decisions/dream-caste.md`)
-- **LOCK** (4) — state locking and lifecycle transactions
-- **MODEL** — revised per the 2026-07-28 decision: automatic model selection is rejected; cheap-model capability means the framework carries the intelligence, not that it picks models
-- **ROSTER-03..08** (6) — operator-authored agents (one-command creation, three-lane translation, safety exclusions, identity rendering). Shelved 2026-08-13 by the owner-approved reshape: the owner selects among the 27 existing castes and has never asked to author a 28th. Revisit only if that changes
-
-Also tracked, deliberately unbundled:
-- `gopkg.in/yaml.v3` is archived and author-declared unmaintained. v1.26 makes YAML the format a non-technical user hand-writes, which changes the risk profile. Migration to `go.yaml.in/yaml/v3` is a mechanical import swap and gets its own plan.
-
-## Out of Scope (explicit exclusions)
-
-| Excluded | Reason |
-|---|---|
-| Automatic model routing | Rejected by user decision 2026-07-28 and reaffirmed. Capability, not allocation |
-| A compressed inter-agent language (SAP) | Targets the ~5% of spend the framework composes. The README already rejected schema-based agent messages: "one hallucinated bracket crashes the system" |
-| Intra-wave peer communication | Would make a worker's context depend on peer completion order, destroying reproducibility. Waves already express independence |
-| A tokenizer dependency | Both providers report exact counts including cache reads |
-| User-configurable depth flags | Anti-feature per research — vendors that shipped them retreated |
-| An interactive agent-authoring wizard | Built and removed by two vendors (Claude Code v2.1.198, Cursor). One command that writes files |
-| An agent/skill marketplace | Third-party skill markets now sell security scanning as the headline feature |
-| Compressing the worker brief further | ~6k tokens against ~117k spent. Spend the budget better, not smaller |
-| Visuals map expansion as a roster | `casteColorMap` et al. are a 35-entry superset including queen and curation ants — not a caste roster |
-
----
-
-## Traceability
-
-**Coverage: 35/35 v1.26 requirements mapped to exactly one phase. No orphans, no duplicates.**
-
-Phase ordering is load-bearing and argued in `research/SUMMARY.md` and `research/PITFALLS.md`:
-WIRE first (the ratchet must precede the capabilities it constrains) → SPAWN before SPEND
-(parent/depth linkage is recorded at spawn time and cannot be retrofitted) → SPEND before
-ROSTER/SKILL (extensibility changes what workers cost) → ROSTER reader before the user path →
-SKILL security inside the skill phase → PROOF last.
-
-| REQ-ID | Phase | Phase Name | Status |
-|--------|-------|------------|--------|
-| WIRE-01 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
-| WIRE-02 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
-| WIRE-03 | Phase 172 | Wiring Proof | Satisfied (2026-08-12) |
-| SPAWN-01 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-02 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-03 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-04 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-05 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-06 | Phase 173 | Delegation Guard *(decision, not build)* | Satisfied (2026-08-13) |
-| SPAWN-07 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPAWN-08 | Phase 173 | Delegation Guard | Satisfied (2026-08-13) |
-| SPEND-01 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
-| SPEND-02 | Phase 185 | Remapped 2026-08-17 (wrapper-path usage for the cost line) | Pending |
-| SPEND-03 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
-| SPEND-04 | Phase 174 | Spend Ledger (plans 01–02) | Satisfied (2026-08-14) |
-| SPEND-05 | — | Cut 2026-08-14 (needs cut Phase 177) | Dropped |
-| SPEND-06 | — | Cut 2026-08-14 (no inspection command — ruling stands) | Dropped |
-| SPEND-07 | Phase 185 | Merged 2026-08-17 into criterion 3 | Pending |
-| SPEND-08 | Phase 185 | One Honest Cost Line | Pending |
-| SEEN-01 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
-| SEEN-02 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
-| SEEN-03 | Phase 175 | Orchestration Visibility | Satisfied (2026-08-16) |
-| ROSTER-01 | Phase 191 | Remapped 2026-08-17 (ruling-by-deletion, Dead Wood) | Pending |
-| ROSTER-02 | Phase 191 | Remapped 2026-08-17 (ruling-by-deletion, Dead Wood) | Pending |
-| ROSTER-03 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| ROSTER-04 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| ROSTER-05 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| ROSTER-06 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| ROSTER-07 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| ROSTER-08 | — | Shelved to Future Requirements (2026-08-13) | Deferred |
-| SPAWN-09 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
-| SPAWN-10 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
-| SPAWN-11 | — | Cut 2026-08-14 with Phase 177 (cut stands) | Dropped |
-| SKILL-01 | Phase 191 | Remapped 2026-08-17 (caller-or-removal, Dead Wood) | Pending |
-| SKILL-02 | Phase 181 | Delivered by the 2026-08-14 tiebreak fix | Satisfied (2026-08-14) |
-| SKILL-03 | — | Deferred 2026-08-17 (off the golden path) | Deferred |
-| SKILL-04 | — | Deferred 2026-08-17 (off the golden path) | Deferred |
-| PROOF-01 | Phases 186+192 | Remapped 2026-08-17 (comparative benchmark) | Pending |
-| PROOF-02 | Phase 192 | Remapped 2026-08-17 (Final Showdown) | Pending |
-| PROOF-03 | Phases 186+192 | Remapped 2026-08-17 (harness-side measurement) | Pending |
-| PROOF-04 | Phases 186+192 | Remapped 2026-08-17 (interrupt category) | Pending |
-
-*Reconciled 2026-08-17 (Audit Addendum): the body checkboxes above and this table were stale against ROADMAP.md — phases 173 and 175 completed with their requirements unticked. Statuses now reflect roadmap truth; remapped rows point at the Audit Addendum phases in ROADMAP.md.*
+*Requirements approved: 2026-09-02 after the Classic-to-Go synthesis adjustment; Codex scope/order amended by owner direction 2026-09-16. ANT-01..03 verified in Phase 204.1 on 2026-09-16, including delegated guidance/scope review; ANT-04..16 remain pending. This does not establish complete workflow/native-helper parity or Phase 205 owner acceptance.*

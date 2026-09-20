@@ -18,10 +18,10 @@ import (
 // Repair orchestrator
 // ---------------------------------------------------------------------------
 
-// performRecoverRepairs is the entry point for aether recover --apply. It creates
-// a backup, then dispatches each fixable issue to the appropriate category-specific
-// repair function. Destructive categories (dirty_worktree, bad_manifest) require
-// confirmation unless --force is set.
+// performRecoverRepairs remains an internal historical repair helper for its
+// direct unit coverage. It has no command entry point: current mutations must
+// use the maintenance preview, authority checkpoint, transaction, rollback,
+// and typed-receipt flow.
 func performRecoverRepairs(issues []HealthIssue, dataDir string, force bool, jsonMode bool) (*RepairResult, error) {
 	// Backup before any mutations.
 	backupPath, err := createBackup(dataDir)
@@ -658,7 +658,7 @@ func repairDirtyWorktree(issue HealthIssue, dataDir string, force bool) RepairRe
 		safety := branchMergeSafety(root, branchName)
 		if !safety.Safe {
 			// D-01: preserve, don't delete, and don't stop to ask (this path
-			// only runs under `recover --apply`, already an explicit,
+			// only ran under the retired direct repair entry, already an explicit,
 			// intentional action). The commits are already durable on the
 			// branch -- the preservation action here is the decision NOT to
 			// run `git branch -D`.

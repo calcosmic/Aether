@@ -1,8 +1,19 @@
 name: ant-resume
-description: "💾 Resume previous session through the Aether CLI runtime"
+description: "Validate and restore the safest honest recovery point."
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS"
+ceremony_contract:
+  class: "lifecycle"
+  authority: "The Go runtime reads and validates every recovery source, classifies provenance, and owns the exactly-once recovery transaction."
+  wrapper_role: "Invoke the canonical runtime command exactly once, then render its Confirmed, Reconstructed, Conflicting, or Unknown provenance group, receipt, state effect, and stop result."
+  provenance_groups:
+    - "Confirmed — validated handoff and matching durable evidence."
+    - "Reconstructed — one honest recovery point derived from named durable evidence."
+    - "Conflicting — independent durable sources disagree."
+    - "Unknown — evidence is insufficient or unavailable."
+  conflict_stop: "Conflicting or Unknown results have state effect: none; render the named evidence or owner decision and stop without making the colony runnable."
 guardrails:
-  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "Do not inspect, select, or modify recovery evidence; the runtime alone decides whether restoration is safe."
+  - "Do not invent another public recovery route or host-side repair path."
   - "If docs and runtime disagree, runtime wins."

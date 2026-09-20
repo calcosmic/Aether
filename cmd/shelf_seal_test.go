@@ -24,8 +24,8 @@ func TestDetectExpiredFocus(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	// Create expired FOCUS pheromone
 	archivedAt := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
@@ -66,8 +66,8 @@ func TestDetectLowConfidenceInstinct(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	state := colony.ColonyState{
 		Memory: colony.Memory{
@@ -105,8 +105,8 @@ func TestDetectUnresolvedFlag(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	ff := colony.FlagsFile{
 		Decisions: []colony.FlagEntry{
@@ -144,8 +144,8 @@ func TestDetectRecurringRedirect(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	contentHash := "sha256:abc123"
 	phase1 := 1
@@ -200,8 +200,8 @@ func TestDetectNoCandidates(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	var state colony.ColonyState
 	candidates, err := detectShelfCandidates(state, s)
@@ -223,8 +223,8 @@ func TestDetectDeduplicates(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	// Two unresolved flags with same description
 	ff := colony.FlagsFile{

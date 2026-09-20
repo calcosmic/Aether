@@ -81,3 +81,205 @@ phase/plan that removed it).
   `TestInitPromotesShelfEntriesAtomically` (shelf-todo seeding on the one
   remaining colony-creation path).
 - **Removed in:** v5.4.0-richness restoration, Stage 3 (ceremonies).
+
+### `TestWatcherIsAlwaysRequiredOnBuild` (function in `cmd/queen_probe_gating_test.go`)
+
+- **Original path:** `cmd/queen_probe_gating_test.go` (single function
+  removed; file survives).
+- **What it covered:** that Watcher was unconditionally present in
+  `queenBuildSafetyRequiredCastes`'s output for every build phase regardless
+  of mode, content, or wording.
+- **Disposition:** `dead-with-no-replacement`. Ruling D11
+  (`.planning/decisions/2026-08-22-queen-decides-program-checks.md`)
+  explicitly supersedes this rule: the build side no longer requires or
+  dispatches a Watcher at all (Phase 193 D-08 stopped the dispatch; plan
+  194-02 removes the requirement that used to restore it). The thing that
+  checks the build now lives entirely in `continue`'s deterministic floor
+  (`TestPhaseVerifiedOnce`), which this test never asserted against.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestQueenCannotDropTheWatcher` (function in `cmd/queen_judgement_test.go`)
+
+- **Original path:** `cmd/queen_judgement_test.go` (single function removed;
+  file survives).
+- **What it covered:** the same claim as `TestWatcherIsAlwaysRequiredOnBuild`
+  seen from the judgement side — `queenApplyJudgement` restoring Watcher into
+  `Final` when a Queen proposal for the `build` flow omitted it.
+- **Disposition:** `dead-with-no-replacement`, same ruling (D11). Watcher is
+  no longer a required build caste for `queenApplyJudgement` to restore.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestSafetyCastesSurviveProbeGating` (function in `cmd/queen_probe_gating_test.go`)
+
+- **Original path:** `cmd/queen_probe_gating_test.go` (single function
+  removed; file survives).
+- **What it covered:** that `queenBuildSafetyRequiredCastes` kept Auditor,
+  Gatekeeper, and Watcher required on a production/security-worded phase
+  regardless of what Probe-gating did.
+- **Disposition:** `dead-with-no-replacement`. It directly asserted the
+  inference D-06 deletes ("production mode ⇒ auditor", the unconditional
+  security-wording ⇒ gatekeeper rule, and the always-required Watcher) — the
+  exact "'Add a CSV export' summons a security auditor" failure mode the
+  ruling exists to stop.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestGatekeeperNeedsASecuritySignal` (function in `cmd/queen_probe_gating_test.go`)
+
+- **Original path:** `cmd/queen_probe_gating_test.go` (single function
+  removed; file survives).
+- **What it covered:** that Gatekeeper was required by
+  `queenBuildSafetyRequiredCastes` only when a phase carried high risk or
+  matched `queenPhaseHasSecuritySignal`'s keyword list, tested across five
+  fixtures (CSV export, credential rotation, auth, final sign-off, release).
+- **Disposition:** `recovered-by:cmd/queen_forced_reviewer_test.go
+  (TestReviewerForcedOnlyByNamedRisk)`. The claim survives in changed form —
+  a reviewer forced only by a named risk signal — but the mechanism and
+  boundary both moved (D-05): forcing now happens once, at the `continue`
+  step, off the five-signal table in `cmd/queen_risk_signals.go`, not at
+  `build` off a keyword list `queenPhaseHasSecuritySignal` no longer exists
+  to hold. The replacement test asserts on the real continue dispatch list,
+  per this repo's own established pattern (assert the spawn list, not the
+  decision record), which this retired test did not.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestHighRiskPhaseKeepsBothReviewers` (function in `cmd/queen_probe_gating_test.go`)
+
+- **Original path:** `cmd/queen_probe_gating_test.go` (single function
+  removed; file survives).
+- **What it covered:** that a phase classified `phaseRiskLevel == "high"`
+  kept both Auditor and Gatekeeper (plus Watcher) required at build,
+  regardless of its own wording.
+- **Disposition:** `dead-with-no-replacement`. D-04
+  (`.planning/decisions/2026-08-22-queen-decides-program-checks.md`) replaces
+  "both reviewers on high risk" with one reviewer per named signal —
+  Gatekeeper for credentials/auth, payments, release sign-off; Auditor for
+  data deletion and migrations — never both from a single risk-level
+  computation. The plan's own fixture ("Rework the permissions model") names
+  no signal in the new table, so a rewritten version would have to assert a
+  rule that no longer exists; retiring it was the documented choice over
+  rewriting (194-02-PLAN.md flagged judgement call).
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestQueenOrchestratePreservesSafetyCastes` (function in `cmd/caste_relevance_test.go`)
+
+- **Original path:** `cmd/caste_relevance_test.go` (single function removed;
+  file survives).
+- **What it covered:** the full-pipeline (`queenOrchestrate`, candidate
+  scoring + budget) version of the same claim as
+  `TestSafetyCastesSurviveProbeGating` — Builder, Watcher, Probe, Gatekeeper
+  and Auditor all present on security/release/final-review production
+  phases at build.
+- **Disposition:** `dead-with-no-replacement`, ruling D11. Watcher and Probe
+  are no longer required at build under any condition, and Auditor/Gatekeeper
+  are no longer inferred from mode or blast-radius wording at build — the
+  equivalent "cannot be dropped" behaviour for a named-risk signal now lives
+  at `continue` only (D-05).
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestQueenSpawnBudgetDecisionsPreservesSafetyCastesUnderPressure` (function in `cmd/caste_relevance_test.go`)
+
+- **Original path:** `cmd/caste_relevance_test.go` (single function removed;
+  its helper `budgetPressureDispatches` removed with it; file survives).
+- **What it covered:** the same "safety castes survive" claim under
+  synthetic budget pressure (a 12-candidate dispatch list, all scored below
+  the required castes) for security/release/final-review phase fixtures.
+- **Disposition:** `dead-with-no-replacement`, ruling D11 — same reasoning as
+  `TestQueenOrchestratePreservesSafetyCastes`, with budget pressure added.
+  The budget-pressure survival property this plan actually keeps is proven
+  at `continue` by `unionForcedContinueReviewers`
+  (`TestForcedReviewerCrossesTheBuildContinueBoundary`,
+  `cmd/queen_forced_reviewer_test.go`, plan 194-01), which unions a forced
+  reviewer in AFTER budget trimming so no trim can drop it.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestCodexBuildPlanOnlySpawnBudgetPreservesSafetyCastesUnderLightAndHeavy` (function in `cmd/codex_build_test.go`)
+
+- **Original path:** `cmd/codex_build_test.go` (single function removed;
+  file survives).
+- **What it covered:** the manifest-level (`dispatch_manifest.dispatches` +
+  `queen_execution_policy.spawn_budget`) version of the same claim, checked
+  at both `--light` and `--heavy` for a security-hardening and a
+  final-review production phase.
+- **Disposition:** `dead-with-no-replacement`, ruling D11. Same reasoning as
+  the lower-level tests above — the manifest's `required_castes` for build is
+  now just `[builder]`.
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestCodexBuildPlanOnlyPhaseFiveSafetyVerificationKeepsRequiredCastes` (function in `cmd/codex_build_test.go`)
+
+- **Original path:** `cmd/codex_build_test.go` (single function removed;
+  file survives).
+- **What it covered:** the same manifest-level claim for a single
+  release/security/final-safeguard phase fixture at `--heavy`, added to
+  guard a specific historical regression ("adaptive pruning weakens state,
+  security, release, or final safeguards").
+- **Disposition:** `dead-with-no-replacement`, ruling D11 — same reasoning.
+  The regression it guarded against (pruning silently dropping a forced
+  reviewer) is now guarded at `continue` by
+  `TestForcedReviewerCrossesTheBuildContinueBoundary`
+  (`cmd/queen_forced_reviewer_test.go`, plan 194-01).
+- **Removed in:** Phase 194 Plan 02.
+
+### `TestTeamCheckinFallsBackToRosterProduces` (function in `cmd/ceremony_team_checkin_test.go`)
+
+- **Original path:** `cmd/ceremony_team_checkin_test.go` (single function
+  removed; file survives).
+- **What it covered:** that when the spawn budget carried no per-caste
+  rationale for a worker, the check-in card fell back to the roster's
+  generic "produces" prose so no worker line was ever reason-less.
+- **Disposition:** `recovered-by:cmd/ceremony_team_checkin_test.go
+  (TestTeamCheckinNeverShowsAGenericBlurbAsAReason)`. The retired test
+  asserted exactly the behaviour D-09 forbids: a generic caste description
+  standing in for a per-phase reason reads as a justification for sending
+  the worker and is not one. The replacement test inverts the assertion —
+  the roster description must NOT appear in the reason slot — and pins the
+  roster prose to a separately labelled `what_it_does` slot instead. A
+  renamed test whose assertion inverted is a removal, per RETIRE-04.
+- **Removed in:** Phase 194 Plan 04.
+
+### `TestQueenTrimsContinueReviewersAndKeepsTheWatcher` (function in `cmd/queen_judgement_test.go`)
+
+- **Original path:** `cmd/queen_judgement_test.go` (single function removed;
+  file survives).
+- **What it covered:** that `queenApplyJudgement` TRIMS the deterministic
+  (no-proposal) continue team down to a smaller judgement-proposed team,
+  never grows it — proven by comparing `queenContinueDispatches` (the
+  keyword-selected "before" team) against `queenContinueDispatchesWithJudgement`
+  (the "after" team) and asserting `len(after) <= len(before)`.
+- **Disposition:** `dead-with-no-replacement`, ruling D11 / D-13
+  (194-CONTEXT.md, plan 194-05). The test's entire premise was that the
+  no-proposal continue engine over-selects via keyword scoring, and
+  judgement's job is to trim that over-selection back down. Plan 194-05
+  removed the keyword engine from continue's no-proposal path outright
+  (`queenFallbackTeam`, D-11): with no proposal, continue now sends only
+  what the phase's required-caste floor demands, which is usually nothing.
+  On this test's own fixture the "before" team is now empty (0 dispatches),
+  so `len(after) > len(before)` fires the moment a proposal adds anything at
+  all — including the very Watcher the test's own name says it exists to
+  keep. There is no smaller-than-empty team to trim to; the property this
+  test asserted no longer has a meaningful floor to hold. What survives is
+  `TestContinueJudgementCannotDropASecurityReview` (same file), which pins
+  the actual invariant that matters: an explicitly proposed, reasoned worker
+  is never dropped by judgement.
+- **Removed in:** Phase 194 Plan 05.
+
+### `TestProbeStillRequiredWhenTheRepositoryHasCode` (function in `cmd/queen_relevance_floor_test.go`)
+
+- **Original path:** `cmd/queen_relevance_floor_test.go` (single function
+  removed; file survives).
+- **What it covered:** that `isAlwaysRequired("probe", "continue", phase,
+  colony.ColonyState{})` (default/standard depth) returned true on a phase
+  whose workspace looked like it contained real code -- Probe's "always
+  required" membership at standard-depth continue.
+- **Disposition:** `recovered-by:cmd/queen_probe_gating_test.go
+  (TestProbeIsRequiredOnlyWhereItCanFindSomething's "proposing probe on a
+  phase that produces testable code is not refused" subtest) and
+  cmd/owner_dials_test.go (TestContinueRequiredSetByDepth)`. D-13
+  (194-CONTEXT.md, plan 194-05) removed standard depth's unconditional
+  membership entirely -- light and standard now require NOTHING
+  unconditionally at continue. The code-detection gate this test actually
+  protected (a real-code phase is not silently starved of coverage) survives
+  as a REFUSAL rule instead: a proposed Probe is refused on a
+  no-testable-code phase and NOT refused on a testable-code phase, asserted
+  directly on `queenApplyJudgement`'s output.
+- **Removed in:** Phase 194 Plan 05.

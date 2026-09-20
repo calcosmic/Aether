@@ -32,6 +32,7 @@ func loadReleasePipelineSnapshot(t *testing.T) *ReleasePipelineSnapshot {
 func createMockSourceCheckoutForRelease(t *testing.T, version string) string {
 	t.Helper()
 	dir := t.TempDir()
+	seedCodexSkillSupportFixture(t, dir)
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module github.com/calcosmic/Aether\n"), 0644); err != nil {
 		t.Fatalf("failed to write go.mod: %v", err)
 	}
@@ -187,10 +188,13 @@ func TestReleasePipelineE2E(t *testing.T) {
 
 	// 10. Run install logic to a fresh mock home (simulate install from source to fresh home)
 	freshHome := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", hubDir)
 	_, platformErrors := syncPlatformHomeAssets(sourceDir, freshHome, channelStable, false)
 	if len(platformErrors) > 0 {
 		t.Fatalf("platform home sync errors: %v", platformErrors)
 	}
+
+	assertCodexSkillFixtureInstalled(t, sourceDir, freshHome)
 
 	// 11. Verify platform home files exist
 	for _, pair := range installSyncPairs() {

@@ -1,0 +1,568 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.dev/schemas/classic-contract/v1",
+  "title": "Aether Classic behavior contract v1",
+  "description": "A versioned semantic contract for public Classic restoration cases. Text assertions supplement, but never replace, causal state or filesystem assertions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cases"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "classic-contract/v1"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
+  },
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "group",
+        "kind",
+        "historical_anchors",
+        "synthesis_decision",
+        "cap_ids",
+        "source_citations",
+        "platform",
+        "command",
+        "expected"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "group": {
+          "enum": [
+            "front-door",
+            "territory",
+            "orientation",
+            "autopilot",
+            "agency",
+            "pause-resume",
+            "closure",
+            "maintenance",
+            "V-200-E2E",
+            "V-200-CONFIDENCE",
+            "V-200-DECISION",
+            "V-200-STOP",
+            "V-200-ACCEPT",
+            "V-200-REVISION",
+            "V-200-REPLAY",
+            "V-200-PLATFORM",
+            "V-201-BOUNDARY",
+            "V-201-OUTCOME",
+            "V-201-IDENTITY",
+            "V-201-REPAIR",
+            "V-201-AUTOPILOT",
+            "V-201-TELEMETRY",
+            "V-202-EVENTS",
+            "V-202-COCKPIT",
+            "V-202-LENS",
+            "V-202-REPAIR",
+            "V-202-EPISODE",
+            "V-202-ORACLE",
+            "V-203-INTENT",
+            "V-203-ADMISSION",
+            "V-203-DISPATCH",
+            "V-203-RESULT",
+            "V-203-SUBTREE",
+            "V-203-SIGNALS",
+            "V-204-TRUTH",
+            "V-204-LEDGER",
+            "V-204-EVIDENCE",
+            "V-204-FIXTURES",
+            "V-204-GATES",
+            "V-204-PROMOTION"
+          ]
+        },
+        "kind": {
+          "const": "behavior"
+        },
+        "historical_anchors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "synthesis_decision": {
+          "type": "string",
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4])|202-(?:0[1-9]|1[0-2])|203-(?:0[1-9]|1[0-2])|204-(?:0[1-9]|1[0-2]))$"
+        },
+        "cap_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-[0-9]{3}$"
+          }
+        },
+        "source_citations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "platform": {
+          "enum": [
+            "runtime",
+            "claude",
+            "opencode"
+          ]
+        },
+        "command": {
+          "$ref": "#/$defs/invocation"
+        },
+        "expected": {
+          "$ref": "#/$defs/expected"
+        },
+        "phase200_proof": {
+          "$ref": "#/$defs/phase200_proof"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "synthesis_decision": {
+                "pattern": "^SYN-200-"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "phase200_proof"
+            ]
+          }
+        }
+      ]
+    },
+    "phase200_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "scenario",
+        "evidence_that_would_change",
+        "assertions"
+      ],
+      "properties": {
+        "class": {
+          "enum": [
+            "success",
+            "refusal"
+          ]
+        },
+        "scenario": {
+          "enum": [
+            "approved-two-pass-journey",
+            "draft-planning-refusal",
+            "fresh-evidence-confidence",
+            "restated-evidence-refusal",
+            "ordered-material-boundaries",
+            "unanswered-decision-refusal",
+            "reasoned-stop-matrix",
+            "material-stop-refusal",
+            "exact-candidate-acceptance",
+            "stale-candidate-refusal",
+            "scoped-spec-revision",
+            "unscoped-revision-refusal",
+            "exact-replay",
+            "divergent-replay-refusal",
+            "platform-projection-parity",
+            "wrapper-authority-refusal"
+          ]
+        },
+        "evidence_that_would_change": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "recommendation": {
+          "$ref": "#/$defs/phase200_recommendation"
+        },
+        "assertions": {
+          "$ref": "#/$defs/phase200_assertions"
+        }
+      }
+    },
+    "phase200_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "rationale",
+        "evidence_ids",
+        "producer"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "accept",
+            "revise"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "producer": {
+          "const": "queen"
+        }
+      }
+    },
+    "phase200_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state_hash_relation",
+        "artifact_set_relation",
+        "dispatch_delta",
+        "receipt_chain_relation",
+        "required_result_fields",
+        "prohibited_side_effects"
+      ],
+      "properties": {
+        "state_hash_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "artifact_set_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "dispatch_delta": {
+          "type": "integer"
+        },
+        "receipt_chain_relation": {
+          "enum": [
+            "changed",
+            "unchanged"
+          ]
+        },
+        "required_result_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "prohibited_side_effects": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "mechanism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "disposition",
+        "cap_ids",
+        "public_commands",
+        "source_citations",
+        "groups"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SYN-(?:199-(?:0[1-9]|10)|200-(?:0[1-9]|1[0-2])|201-(?:0[1-9]|1[0-4])|202-(?:0[1-9]|1[0-2])|203-(?:0[1-9]|1[0-2])|204-(?:0[1-9]|1[0-2]))$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "enum": [
+            "keep-current",
+            "restore-modern",
+            "replace-better",
+            "retire-with-proof"
+          ]
+        },
+        "cap_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^CAP-[0-9]{3}$"
+          }
+        },
+        "public_commands": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_citations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source_anchors": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "modern_invariant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "positive_case_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+          }
+        },
+        "negative_case_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "id": {
+                "pattern": "^SYN-200-"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "source_anchors",
+              "modern_invariant",
+              "positive_case_ids",
+              "negative_case_ids"
+            ]
+          }
+        }
+      ]
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "args",
+        "environment"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exit_code",
+        "outcome",
+        "semantic_fields"
+      ],
+      "properties": {
+        "exit_code": {
+          "type": "integer"
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantic_fields": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": true
+        },
+        "required_text_tokens": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden_text_tokens": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "state_assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state_assertion"
+          }
+        },
+        "forbidden_artifacts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "replay": {
+          "$ref": "#/$defs/replay"
+        },
+        "fault_point": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "state_assertions"
+          ],
+          "properties": {
+            "state_assertions": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": [
+            "forbidden_artifacts"
+          ],
+          "properties": {
+            "forbidden_artifacts": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "state_assertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "operator"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "enum": [
+            "equals",
+            "exists",
+            "absent",
+            "unchanged",
+            "changed",
+            "contains"
+          ]
+        },
+        "value": true
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "expected_outcome"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "idempotent",
+            "reject-altered",
+            "not-applicable"
+          ]
+        },
+        "expected_outcome": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

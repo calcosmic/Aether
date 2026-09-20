@@ -37,6 +37,10 @@ func activeColonyFixture(t *testing.T, dataDir string) {
 // instincts to the cross-colony hive.
 func TestActiveColonyRefusalNamesTheEscapeHatch(t *testing.T) {
 	saveGlobals(t)
+	// The escape hatch lives on the non-guided (codex) init path; claude
+	// and opencode get the guided proposal flow instead. Pin the platform
+	// so the assertion does not depend on which terminal runs the suite.
+	t.Setenv("AETHER_PLATFORM", "codex")
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	activeColonyFixture(t, dataDir)
@@ -67,6 +71,7 @@ func TestActiveColonyRefusalNamesTheEscapeHatch(t *testing.T) {
 // in progress.
 func TestActiveColonyIsNotReplacedWithoutConfirmation(t *testing.T) {
 	saveGlobals(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	activeColonyFixture(t, dataDir)
@@ -90,6 +95,7 @@ func TestActiveColonyIsNotReplacedWithoutConfirmation(t *testing.T) {
 // it replaced.
 func TestConfirmedReinitAbandonsActiveColonyAndBacksItUp(t *testing.T) {
 	saveGlobals(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	activeColonyFixture(t, dataDir)
@@ -133,6 +139,7 @@ func TestConfirmedReinitAbandonsActiveColonyAndBacksItUp(t *testing.T) {
 // inherit the other's rules by accident.
 func TestSealedColonyPathStillRequiresConfirmation(t *testing.T) {
 	saveGlobals(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
 	resetRootCmd(t)
 	dataDir := setupBuildFlowTest(t)
 	goal := "A finished colony"

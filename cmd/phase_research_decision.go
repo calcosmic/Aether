@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +35,10 @@ var phaseResearchReasons = map[string]string{
 	"discovery_mode":   "phase mode is discovery -- exploring unmapped territory before committing to an approach",
 	"survey_covered":   "pure refactor -- the domain is already mapped by the territory survey",
 	"no_external_tech": "no external technology signals found in the phase description -- the domain looks internal",
-	"fast_preset":      "fast run -- speed is the default contract; flip this phase on to research it at 80% / 4 iterations",
+	"fresh_evidence":   "fresh applicable research evidence already covers the current gap",
+	"preset_budget":    "the selected preset does not spend another research pass on this nonmaterial gap",
+	"material_gap":     "the current material gap requires evidence before the shared owner-decision boundary",
+	"refresh":          "the caller requested a fresh planning pass, so prior research is not silently reused",
 }
 
 // phaseResearchHint carries the cheap, deterministic signals computed for one
@@ -54,68 +61,373 @@ type phaseResearchRecommendation struct {
 	Hints     phaseResearchHint `json:"hints"`
 }
 
-// phaseResearchProposal is the full batched, tick-to-approve proposal (D-01)
-// for one plan run: one recommendation per candidate phase, always.
-type phaseResearchProposal struct {
-	Depth  string                        `json:"depth"`
-	Replan bool                          `json:"replan"`
-	Phases []phaseResearchRecommendation `json:"phases"`
+const phaseResearchAutomaticPolicySchemaVersion = "phase-research-policy/v1"
+
+// phaseResearchEvidenceContract is the exact evidence shape an autonomous
+// Scout must return. It grants research authority only: specification
+// approval, candidate acceptance, and plan activation remain Go/owner-owned.
+type phaseResearchEvidenceContract struct {
+	SourceKind              colony.PlanningEvidenceKind `json:"source_kind"`
+	ProducerCaste           planningStageWorkerCaste    `json:"producer_caste"`
+	RequiredFields          []string                    `json:"required_fields"`
+	MayApproveSpecification bool                        `json:"may_approve_specification"`
+	MayAcceptCandidate      bool                        `json:"may_accept_candidate"`
+	MayActivatePlan         bool                        `json:"may_activate_plan"`
 }
 
-// computePhaseResearchProposal returns exactly one grounded recommendation
-// per candidate phase. On a fast run every phase is recommended "skip" (D-15)
-// but every phase still appears so the user can flip one on. Otherwise the
-// recommendation is grounded in runtime-computed hints, never in
-// researchPhaseKeywords/isResearchPhase.
-func computePhaseResearchProposal(planDepth string, replan bool, survey codexSurveyContext, candidates []phaseResearchCandidate, phases []colony.Phase) phaseResearchProposal {
-	proposal := phaseResearchProposal{
-		Depth:  planDepth,
-		Replan: replan,
-		Phases: make([]phaseResearchRecommendation, 0, len(candidates)),
-	}
+// phaseResearchEvidenceAttribution binds a typed evidence ID to the worker
+// caste that produced it without changing the authority-neutral evidence ref.
+type phaseResearchEvidenceAttribution struct {
+	EvidenceID    string                      `json:"evidence_id"`
+	ProducerCaste planningStageWorkerCaste    `json:"producer_caste"`
+	SourceKind    colony.PlanningEvidenceKind `json:"source_kind"`
+}
 
-	fast := strings.ToLower(strings.TrimSpace(planDepth)) == "fast"
-	surveyEmpty := len(survey.Languages) == 0 && len(survey.Frameworks) == 0 && len(survey.Dependencies) == 0
+type phaseResearchEvidenceCollection struct {
+	Records      []planningEvidenceRecord
+	Attributions []phaseResearchEvidenceAttribution
+}
+
+// phaseResearchAutomaticDecision is a deterministic per-phase research call.
+// It is informational and never becomes a PendingDecision.
+type phaseResearchAutomaticDecision struct {
+	PhaseID        int               `json:"phase_id"`
+	PhaseName      string            `json:"phase_name"`
+	ResearchNeeded bool              `json:"research_needed"`
+	Reason         string            `json:"reason"`
+	Hints          phaseResearchHint `json:"hints"`
+}
+
+// phaseResearchAutomaticPolicy replaces the former routine approval card.
+// The preset bounds cost, the weakest gap identifies value, and freshness
+// prevents duplicate work. Product ambiguity is reported only after the Scout
+// pass to the shared material-decision policy.
+type phaseResearchAutomaticPolicy struct {
+	SchemaVersion         string                           `json:"schema_version"`
+	Preset                planningStagePreset              `json:"preset"`
+	WeakestGapID          string                           `json:"weakest_gap_id,omitempty"`
+	ResearchRequired      bool                             `json:"research_required"`
+	Refresh               bool                             `json:"refresh"`
+	RequiresOwnerPrompt   bool                             `json:"requires_owner_prompt"`
+	OwnerDecisionBoundary string                           `json:"owner_decision_boundary"`
+	FreshEvidenceIDs      []string                         `json:"fresh_evidence_ids,omitempty"`
+	Phases                []phaseResearchAutomaticDecision `json:"phases,omitempty"`
+	EvidenceContract      phaseResearchEvidenceContract    `json:"evidence_contract"`
+}
+
+func automaticPhaseResearchEvidenceContract() phaseResearchEvidenceContract {
+	return phaseResearchEvidenceContract{
+		SourceKind:    colony.PlanningEvidenceResearch,
+		ProducerCaste: planningStageCasteScout,
+		RequiredFields: []string{
+			"origin", "source_revision", "observed_at", "applicable_dimensions", "content_hash",
+		},
+	}
+}
+
+// computeAutomaticPhaseResearchPolicy never consults or writes owner-decision
+// state. A valid fresh research ref suppresses duplicate work unless refresh
+// explicitly asks for a new observation.
+func computeAutomaticPhaseResearchPolicy(preset planningStagePreset, weakestGap *colony.PlanningGap, survey codexSurveyContext, candidates []phaseResearchCandidate, phases []colony.Phase, evidence []planningEvidenceRecord, refresh bool) phaseResearchAutomaticPolicy {
+	policy := phaseResearchAutomaticPolicy{
+		SchemaVersion:         phaseResearchAutomaticPolicySchemaVersion,
+		Preset:                preset,
+		Refresh:               refresh,
+		RequiresOwnerPrompt:   false,
+		OwnerDecisionBoundary: "after_scout_pass",
+		EvidenceContract:      automaticPhaseResearchEvidenceContract(),
+		Phases:                make([]phaseResearchAutomaticDecision, 0, len(candidates)),
+	}
+	if weakestGap != nil {
+		policy.WeakestGapID = strings.TrimSpace(weakestGap.ID)
+	}
+	policy.FreshEvidenceIDs = freshApplicablePhaseResearchEvidenceIDs(evidence, weakestGap)
+	hasFreshEvidence := len(policy.FreshEvidenceIDs) > 0
 
 	phaseByID := make(map[int]colony.Phase, len(phases))
-	for _, p := range phases {
-		phaseByID[p.ID] = p
+	for _, phase := range phases {
+		phaseByID[phase.ID] = phase
 	}
+	surveyEmpty := len(survey.Languages) == 0 && len(survey.Frameworks) == 0 && len(survey.Dependencies) == 0
+	gapWarrantsResearch := automaticPhaseResearchGapWarrants(preset, weakestGap)
 
 	for _, candidate := range candidates {
 		hint := computePhaseResearchHint(candidate, survey, phaseByID[candidate.ID])
-
-		rec := phaseResearchRecommendation{
-			PhaseID:   candidate.ID,
-			PhaseName: candidate.Name,
-			Hints:     hint,
+		candidateFresh := hasFreshApplicablePhaseResearchEvidence(evidence, weakestGap, candidate.ID)
+		signalWarrantsResearch := len(hint.DomainGaps) > 0 ||
+			(len(hint.ExternalTech) > 0 && surveyEmpty) ||
+			hint.PhaseMode == string(colony.PhaseModeDiscovery)
+		needed := !candidateFresh && automaticPhaseResearchCandidateWarrants(preset, weakestGap, gapWarrantsResearch, signalWarrantsResearch, len(candidates))
+		if refresh && automaticPhaseResearchCandidateWarrants(preset, weakestGap, gapWarrantsResearch, signalWarrantsResearch, len(candidates)) {
+			needed = true
 		}
-
-		switch {
-		case fast:
-			rec.Recommend = "skip"
-			rec.Reason = phaseResearchReasons["fast_preset"]
-		case len(hint.DomainGaps) > 0:
-			rec.Recommend = "research"
-			rec.Reason = fmt.Sprintf(phaseResearchReasons["domain_gap"], hint.DomainGaps[0])
-		case len(hint.ExternalTech) > 0 && surveyEmpty:
-			rec.Recommend = "research"
-			rec.Reason = fmt.Sprintf(phaseResearchReasons["no_survey"], hint.ExternalTech[0])
-		case hint.PhaseMode == string(colony.PhaseModeDiscovery):
-			rec.Recommend = "research"
-			rec.Reason = phaseResearchReasons["discovery_mode"]
-		case len(hint.ExternalTech) == 0:
-			rec.Recommend = "skip"
-			rec.Reason = phaseResearchReasons["no_external_tech"]
-		default:
-			rec.Recommend = "skip"
-			rec.Reason = phaseResearchReasons["survey_covered"]
+		decision := phaseResearchAutomaticDecision{
+			PhaseID: candidate.ID, PhaseName: candidate.Name, ResearchNeeded: needed, Hints: hint,
+			Reason: automaticPhaseResearchReason(refresh, candidateFresh, weakestGap, hint, needed),
 		}
-
-		proposal.Phases = append(proposal.Phases, rec)
+		policy.Phases = append(policy.Phases, decision)
+		policy.ResearchRequired = policy.ResearchRequired || needed
 	}
 
-	return proposal
+	// A first Scout pass may not have Route-Setter phase candidates yet. The
+	// weakest-gap decision still governs whether that one Scout should gather
+	// authoritative external evidence during its pass.
+	if len(candidates) == 0 {
+		policy.ResearchRequired = (refresh || !hasFreshEvidence) && gapWarrantsResearch
+	}
+	return policy
+}
+
+func automaticPhaseResearchGapWarrants(preset planningStagePreset, gap *colony.PlanningGap) bool {
+	if gap != nil && gap.Materiality == colony.PlanningGapMaterial {
+		return true
+	}
+	severity := 0
+	if gap != nil {
+		severity = gap.Severity
+	}
+	switch preset {
+	case planningStagePresetFast:
+		return false
+	case planningStagePresetBalanced:
+		return severity >= 70
+	case planningStagePresetDeep:
+		return severity >= 40
+	case planningStagePresetExhaustive:
+		return true
+	default:
+		return false
+	}
+}
+
+func automaticPhaseResearchCandidateWarrants(preset planningStagePreset, gap *colony.PlanningGap, gapWarrants, signalWarrants bool, candidateCount int) bool {
+	switch preset {
+	case planningStagePresetFast:
+		return gap != nil && gap.Materiality == colony.PlanningGapMaterial && (signalWarrants || gapWarrants)
+	case planningStagePresetBalanced:
+		return signalWarrants || (candidateCount == 1 && gapWarrants)
+	case planningStagePresetDeep:
+		return signalWarrants || (candidateCount == 1 && gapWarrants)
+	case planningStagePresetExhaustive:
+		return true
+	default:
+		return false
+	}
+}
+
+func automaticPhaseResearchReason(refresh, fresh bool, gap *colony.PlanningGap, hint phaseResearchHint, needed bool) string {
+	switch {
+	case refresh && needed:
+		return phaseResearchReasons["refresh"]
+	case fresh:
+		return phaseResearchReasons["fresh_evidence"]
+	case needed && gap != nil && gap.Materiality == colony.PlanningGapMaterial:
+		return phaseResearchReasons["material_gap"]
+	case needed && len(hint.DomainGaps) > 0:
+		return fmt.Sprintf(phaseResearchReasons["domain_gap"], hint.DomainGaps[0])
+	case needed && len(hint.ExternalTech) > 0:
+		return fmt.Sprintf(phaseResearchReasons["no_survey"], hint.ExternalTech[0])
+	case needed && hint.PhaseMode == string(colony.PhaseModeDiscovery):
+		return phaseResearchReasons["discovery_mode"]
+	case !needed && len(hint.ExternalTech) == 0:
+		return phaseResearchReasons["no_external_tech"]
+	default:
+		return phaseResearchReasons["preset_budget"]
+	}
+}
+
+func freshApplicablePhaseResearchEvidenceIDs(records []planningEvidenceRecord, gap *colony.PlanningGap) []string {
+	ids := make([]string, 0)
+	for _, record := range records {
+		ref := record.Reference
+		if ref.Kind != colony.PlanningEvidenceResearch || !ref.Fresh || !ref.Admissible || ref.Validate() != nil {
+			continue
+		}
+		if gap != nil && !planningDimensionIncluded(ref.ApplicableDimensions, gap.Dimension) {
+			continue
+		}
+		ids = append(ids, ref.ID)
+	}
+	return uniqueSortedStrings(ids)
+}
+
+func hasFreshApplicablePhaseResearchEvidence(records []planningEvidenceRecord, gap *colony.PlanningGap, phaseID int) bool {
+	for _, record := range records {
+		ref := record.Reference
+		if ref.Kind != colony.PlanningEvidenceResearch || !ref.Fresh || !ref.Admissible || ref.Validate() != nil {
+			continue
+		}
+		if gap != nil && !planningDimensionIncluded(ref.ApplicableDimensions, gap.Dimension) {
+			continue
+		}
+		if artifactPhaseID, phaseScoped := phaseResearchArtifactPhaseID(ref.RepositoryPath); phaseScoped && artifactPhaseID != phaseID {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func planningDimensionIncluded(values []colony.PlanningDimension, want colony.PlanningDimension) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func (p phaseResearchAutomaticPolicy) SelectedPhases() map[int]bool {
+	selected := make(map[int]bool)
+	for _, phase := range p.Phases {
+		if phase.ResearchNeeded {
+			selected[phase.PhaseID] = true
+		}
+	}
+	return selected
+}
+
+// collectScoutPhaseResearchEvidence upgrades worker-authored phase research
+// files into normal typed planning evidence and records Scout provenance next
+// to their authority-neutral IDs. Paths are restricted to the phase-research
+// directory, inspected before reading, and rejected if secret-bearing.
+func collectScoutPhaseResearchEvidence(root string, docs []string, scope planningEvidenceScope, observedAt time.Time) (phaseResearchEvidenceCollection, error) {
+	result := phaseResearchEvidenceCollection{}
+	cleaned := uniqueSortedStrings(docs)
+	if len(cleaned) == 0 {
+		return result, nil
+	}
+	canonicalRoot, err := canonicalPlanningEvidenceRoot(root)
+	if err != nil {
+		return phaseResearchEvidenceCollection{}, err
+	}
+	const approvedRoot = ".aether/data/phase-research"
+	sources := make([]planningEvidenceSource, 0, len(cleaned))
+	for _, doc := range cleaned {
+		rel, fullPath, err := resolvePlanningEvidencePath(canonicalRoot, []string{approvedRoot}, doc)
+		if err != nil {
+			return phaseResearchEvidenceCollection{}, err
+		}
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			return phaseResearchEvidenceCollection{}, &planningEvidenceRefusal{
+				Code: planningEvidenceRefusalReadFailed, Kind: colony.PlanningEvidenceResearch,
+				Origin: rel, Detail: "could not read the validated Scout research source",
+			}
+		}
+		if scan := privacyScan(string(content)); scan.Blocked {
+			return phaseResearchEvidenceCollection{}, fmt.Errorf("Scout research evidence %s refused: source contains secret-bearing material", rel)
+		}
+		sources = append(sources, planningEvidenceSource{
+			Kind: colony.PlanningEvidenceResearch, Origin: rel, RepositoryPath: rel,
+			Scope: scope, SourceRevision: planningEvidenceSourceRevision("scout-research", content),
+			ObservedAt: observedAt, ApplicableDimensions: planningEvidenceDimensions(colony.PlanningEvidenceResearch),
+			State: planningEvidenceSourceCurrent,
+		})
+	}
+	records, err := collectPlanningEvidence(planningEvidenceCollectionRequest{
+		RepositoryRoot: root,
+		ApprovedRoots:  []string{approvedRoot},
+		Sources:        sources,
+	})
+	if err != nil {
+		return phaseResearchEvidenceCollection{}, err
+	}
+	result.Records = records
+	result.Attributions = make([]phaseResearchEvidenceAttribution, 0, len(records))
+	for _, record := range records {
+		result.Attributions = append(result.Attributions, phaseResearchEvidenceAttribution{
+			EvidenceID: record.Reference.ID, ProducerCaste: planningStageCasteScout, SourceKind: colony.PlanningEvidenceResearch,
+		})
+	}
+	sort.Slice(result.Attributions, func(i, j int) bool {
+		return result.Attributions[i].EvidenceID < result.Attributions[j].EvidenceID
+	})
+	return result, nil
+}
+
+func discoverScoutPhaseResearchDocs(root string) ([]string, error) {
+	relDir := filepath.ToSlash(filepath.Join(".aether", "data", "phase-research"))
+	dir := filepath.Join(root, filepath.FromSlash(relDir))
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read Scout phase research directory: %w", err)
+	}
+	docs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !phaseResearchArtifactName(entry.Name()) {
+			continue
+		}
+		rel := filepath.ToSlash(filepath.Join(relDir, entry.Name()))
+		if !hasWorkerAuthoredResearch(filepath.Join(dir, entry.Name())) {
+			continue
+		}
+		docs = append(docs, rel)
+	}
+	sort.Strings(docs)
+	return docs, nil
+}
+
+func phaseResearchArtifactName(name string) bool {
+	const prefix = "phase-"
+	const suffix = "-research.md"
+	if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, suffix) {
+		return false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(name, prefix), suffix)
+	value, err := strconv.Atoi(id)
+	return err == nil && value > 0 && strconv.Itoa(value) == id
+}
+
+func phaseResearchArtifactPhaseID(repositoryPath string) (int, bool) {
+	path := filepath.ToSlash(strings.TrimSpace(repositoryPath))
+	name := filepath.Base(path)
+	if !phaseResearchArtifactName(name) || filepath.ToSlash(filepath.Dir(path)) != ".aether/data/phase-research" {
+		return 0, false
+	}
+	id := strings.TrimSuffix(strings.TrimPrefix(name, "phase-"), "-research.md")
+	value, err := strconv.Atoi(id)
+	return value, err == nil
+}
+
+func mergePlanningEvidenceRecords(groups ...[]planningEvidenceRecord) []planningEvidenceRecord {
+	byID := make(map[string]planningEvidenceRecord)
+	for _, records := range groups {
+		for _, record := range records {
+			if _, exists := byID[record.Reference.ID]; !exists {
+				byID[record.Reference.ID] = record
+			}
+		}
+	}
+	merged := make([]planningEvidenceRecord, 0, len(byID))
+	for _, record := range byID {
+		merged = append(merged, record)
+	}
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Reference.ID < merged[j].Reference.ID })
+	return merged
+}
+
+func renderAutomaticPhaseResearchPolicy(policy phaseResearchAutomaticPolicy) string {
+	var b strings.Builder
+	b.WriteString("\n\n## Autonomous Research Policy\n")
+	fmt.Fprintf(&b, "Preset: %s. Research required in this Scout pass: %t.\n", policy.Preset, policy.ResearchRequired)
+	if policy.WeakestGapID != "" {
+		fmt.Fprintf(&b, "Weakest gap: %s.\n", policy.WeakestGapID)
+	}
+	b.WriteString("Routine repository and authoritative external research is pre-authorized by this manifest; do not request a phase-research approval.\n")
+	for _, phase := range policy.Phases {
+		fmt.Fprintf(&b, "- Phase %d research=%t: %s\n", phase.PhaseID, phase.ResearchNeeded, phase.Reason)
+	}
+	b.WriteString(renderPhaseResearchEvidenceContract(policy.EvidenceContract))
+	b.WriteString("Report material product ambiguity as a decision candidate; the shared policy evaluates it only after this Scout pass completes.\n")
+	return b.String()
+}
+
+func renderPhaseResearchEvidenceContract(contract phaseResearchEvidenceContract) string {
+	return fmt.Sprintf("Every research result must become typed planning evidence with source kind %s and Scout attribution. Record origin, source revision, observation time/freshness, applicable dimensions, and content hash. Reject sources outside the repository scope, unavailable sources, and secret-bearing content. The Scout must not approve a specification, accept a candidate, or activate a plan.\n", contract.SourceKind)
 }
 
 // computePhaseResearchHint computes the deterministic, lowercase-normalised
@@ -165,128 +477,7 @@ func surveyContainsSignal(entries []string, signal string) bool {
 	return false
 }
 
-// phaseResearchDecisionType is the PendingDecision.Type value used for
-// research/skip decisions and their overrides. RESEARCH-06 forbids a new
-// planning store, so these are recorded as PendingDecision entries, not in a
-// new struct or a new JSON file.
+// phaseResearchDecisionType is retained only as the legacy record discriminator
+// used by migration regression tests. Phase 200 planning never creates these
+// rows, and the former public approval command has been retired.
 const phaseResearchDecisionType = "research-decision"
-
-// renderPhaseResearchProposalBlock renders the batched, tick-to-approve
-// proposal (D-01): a header naming the depth and whether this is a replan,
-// then per phase a [research]/[skip] tag line, an indented reason line, and
-// an indented per-phase flip line. Exactly one approve-all line closes the
-// whole batch -- one interaction for the batch, not one per phase. Mirrors
-// renderPendingSuggestionsBlock's shape (cmd/ceremony_cmd.go).
-func renderPhaseResearchProposalBlock(p phaseResearchProposal) string {
-	if len(p.Phases) == 0 {
-		return ""
-	}
-
-	var b strings.Builder
-	header := fmt.Sprintf("Research proposal (%s depth", firstNonEmpty(strings.TrimSpace(p.Depth), "standard"))
-	if p.Replan {
-		header += ", replan"
-	}
-	header += "):"
-	b.WriteString(header)
-	b.WriteString("\n")
-
-	for _, rec := range p.Phases {
-		fmt.Fprintf(&b, "[%s] Phase %d: %s\n", rec.Recommend, rec.PhaseID, rec.PhaseName)
-		fmt.Fprintf(&b, "  Reason: %s\n", rec.Reason)
-		fmt.Fprintf(&b, "  Flip: aether plan-research-approve --flip %d\n", rec.PhaseID)
-	}
-
-	b.WriteString("Approve all: aether plan-research-approve --approve-all\n")
-	return b.String()
-}
-
-// newPhaseResearchDecision builds a PendingDecision for a phase research
-// recommendation, using the same ID/CreatedAt stamping shape
-// pendingDecisionAddCmd uses (cmd/pending_decision.go). No new struct is
-// declared for decision storage -- the existing PendingDecision type carries
-// this record end to end.
-func newPhaseResearchDecision(rec phaseResearchRecommendation) PendingDecision {
-	phaseID := rec.PhaseID
-	return PendingDecision{
-		ID:          fmt.Sprintf("prd_%d_%d", rec.PhaseID, time.Now().UnixNano()),
-		Type:        phaseResearchDecisionType,
-		Description: fmt.Sprintf("%s phase %d (%s): %s", rec.Recommend, rec.PhaseID, rec.PhaseName, rec.Reason),
-		Source:      "queen-research-proposal",
-		Phase:       &phaseID,
-		Resolved:    false,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-	}
-}
-
-// phaseResearchDecisionResolution builds the resolution string written when a
-// research decision is resolved -- the durable record of the flip (T-164-06),
-// so it carries the resulting direction, not just the fact of a flip.
-func phaseResearchDecisionResolution(rec phaseResearchRecommendation, flipped bool, auto bool) string {
-	var resolution string
-	if flipped {
-		resolution = fmt.Sprintf("user overrode: %s research on phase %d", oppositeRecommend(rec.Recommend), rec.PhaseID)
-	} else {
-		resolution = fmt.Sprintf("approved: %s phase %d", rec.Recommend, rec.PhaseID)
-	}
-	if auto {
-		resolution = "auto-accepted (autopilot) -- " + resolution
-	}
-	return resolution
-}
-
-// oppositeRecommend returns the opposite research direction of recommend.
-func oppositeRecommend(recommend string) string {
-	if recommend == "skip" {
-		return "research"
-	}
-	return "skip"
-}
-
-// resolvePhaseResearchDecisions walks a PendingDecisionFile and returns a map
-// from phase ID to the resolved direction ("research" or "skip"). Decisions
-// whose Type is not phaseResearchDecisionType, whose Phase pointer is nil, or
-// whose Resolved is false are skipped. When two resolved decisions exist for
-// the same phase, the later one in the slice wins (map assignment order),
-// matching D-06: a replan re-proposes and the newest record is the live one.
-func resolvePhaseResearchDecisions(file PendingDecisionFile) map[int]string {
-	result := make(map[int]string)
-	for _, d := range file.Decisions {
-		if d.Type != phaseResearchDecisionType {
-			continue
-		}
-		if d.Phase == nil {
-			continue
-		}
-		if !d.Resolved {
-			continue
-		}
-		direction := extractResearchDirection(d.Resolution)
-		if direction == "" {
-			continue
-		}
-		result[*d.Phase] = direction
-	}
-	return result
-}
-
-// extractResearchDirection derives "research" or "skip" from a resolution
-// string by checking the text after the first colon. "skip" is checked
-// before "research" so a flip-to-skip resolution (which also names
-// "research" as the noun being skipped, e.g. "skip research on phase N")
-// resolves to "skip", the direction that actually took effect.
-func extractResearchDirection(resolution string) string {
-	tail := resolution
-	if idx := strings.Index(resolution, ":"); idx >= 0 {
-		tail = resolution[idx+1:]
-	}
-	tail = strings.ToLower(tail)
-	switch {
-	case strings.Contains(tail, "skip"):
-		return "skip"
-	case strings.Contains(tail, "research"):
-		return "research"
-	default:
-		return ""
-	}
-}

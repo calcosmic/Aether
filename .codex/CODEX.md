@@ -78,12 +78,12 @@ Aether Repo (this repo)
                                                      ~/.aether/ (THE HUB)
                                                      +-- system/      <- global Aether assets
                                                      |   +-- codex/   <- .codex/agents/
-                                                     |   +-- shipped skills for Codex
+                                                     |   +-- codex-skills/ <- versioned public skills and support
                                                      +-- agents/      <- user-level Claude/OpenCode assets
                                                      +-- commands/
                                                      |     +-- claude/
                                                      |     +-- opencode/
-                                                     |     (no codex/ -- no slash commands)
+                                                     |     (Codex actions live in system/codex-skills/)
                                                            |
   aether update (in ANY repo)  <---------------------------+
   aether lay-eggs (initializes colony)
@@ -113,44 +113,54 @@ any-repo/.aether/ (LOCAL ONLY)
 
 ## Codex-Specific Conventions
 
-### No Slash Commands
+### Public Skills and Direct CLI
 
-Codex CLI does **not** support slash commands like Claude Code (`/ant-build`) or OpenCode.
-Instead, all colony operations use the **`aether` CLI directly** or are described as natural
-language prompts in `AGENTS.md`.
+Pick an ant skill in Codex to start the matching workflow. The skill reads Aether's
+instructions; the `aether` executable still owns state, checks, and authorization.
 
-```bash
-# Instead of /ant-init "Build feature X"
-aether init "Build feature X"
+Aether's Codex actions use skills, with exactly nine public names:
 
-# Instead of /ant-build 1
-aether build 1
+| Skill | Workflow |
+|-------|----------|
+| `$ant-init` | Start a colony |
+| `$ant-discuss` | Clarify intent |
+| `$ant-oracle` | Research a concern |
+| `$ant-colonize` | Survey existing code |
+| `$ant-plan` | Plan phases |
+| `$ant-build` | Build a phase |
+| `$ant-continue` | Verify and advance |
+| `$ant-swarm` | Route work or watch workers |
+| `$ant-seal` | Seal and retain work for review |
 
-# Instead of /ant-status
-aether status
+The remaining 55 action skills and native-worker parity belong to later inserted
+phases. These nine names establish entrypoints, not complete lifecycle parity.
 
-# Instead of /ant-pheromones
-aether pheromone-display
-```
+The selected installation root is `~/.codex/skills/aether/`, qualified with Codex
+CLI 0.154.0. Each public `ant-<command>/SKILL.md` reads private support relative to
+its own installed file, not the working directory:
 
-When the user message is already a literal `aether ...` command, execute that exact CLI
-command first for literal passthrough commands such as `status`, `update`, `focus`,
-`pheromones`, and `reference-list`.
+- `support/aether-colony-creation.md`
+- `support/aether-colony-research.md`
+- `support/aether-colony-build-cycle.md`
 
-Exception: `aether init`, `aether oracle`, `aether plan`, `aether build`,
-`aether continue`, `aether seal`, and `aether discuss` have wrapper-equivalent Codex
-orchestration. For those commands, run or inspect
-`aether command-guide <command> --platform codex` and use the matching Codex skill:
-`aether-colony-creation`, `aether-colony-research`, or `aether-colony-build-cycle`.
-Only bypass that layer when the user explicitly says raw, exact, no-interview, or
-no-orchestration.
+These three ordinary files are private support, not public helper skills. Worker
+skills still arrive automatically in runtime dispatch briefs. Start a fresh Codex
+session after skill files are copied or removed; unchanged updates need no refresh.
 
-Do not treat command-doc mirrors as more authoritative than the installed `aether`
-binary. For lifecycle commands run through Codex shell execution, prefer
-`AETHER_OUTPUT_MODE=visual aether ...` unless the user explicitly wants JSON output.
-Do not preface literal passthrough commands with repo archaeology, skill narration, or
-"I'm checking..." commentary. Let the CLI output stand on its own and keep any extra
-explanation to one short sentence unless the user asks for more.
+When a user types a literal `aether ...` passthrough command such as `status`,
+`update`, `focus`, `pheromones`, or `reference-list`, execute that exact command
+first. The installed binary and `aether --help` are the runtime source of truth.
+
+For the nine lifecycle actions above, run or inspect
+`aether command-guide <command> --platform codex` and follow the matching public
+skill and its private support. If the user explicitly says raw, exact,
+no-interview, or no-orchestration, execute the requested CLI command directly.
+Do not reinterpret a literal passthrough command as a vague workflow request.
+
+For lifecycle shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...`
+unless the user explicitly wants JSON. Preserve exact arguments. Do not preface
+literal passthrough execution with repo archaeology or skill narration; the CLI
+output is primary, with at most one short sentence of extra explanation.
 
 ### Agent Definitions (TOML Format)
 
@@ -181,7 +191,7 @@ You are a **Builder Ant** in the Aether Colony...
 ### Skills
 
 The shared skill sources live in `.aether/skills/`.
-For Codex, installed skills are copied into the global Codex skills directory and matched
+Worker skills are published to `~/.aether/system/skills/` and matched
 in-process by the Go runtime's skill-matching logic against worker role, workspace files,
 and package manifests -- there is no standalone `skill-*` CLI surface (Phase 191 deleted the
 8 CLI wrappers as dead code; the matching and injection logic itself is unconditionally
@@ -193,11 +203,11 @@ Skills are not a separate Codex plugin bundle. Codex agent definitions remain in
 Skills are automatically matched and injected into worker prompts during `build`,
 `colonize`, `plan`, and `continue` dispatches.
 
-Codex lifecycle orchestration skills are intentionally separate from worker skill
-injection. `aether-colony-creation`, `aether-colony-research`, and
-`aether-colony-build-cycle` tell Codex how to interview, synthesize, spawn, and
-summarize before or around the runtime command. They must stay aligned with
-`.aether/commands/*.yaml` and `aether command-guide`.
+The nine public Codex skills and their three private support bodies are
+separate from worker skill injection. Their ordinary `support/*.md` files
+coordinate interviews, synthesis, dispatch and summaries only as the runtime
+guide permits. Keep those sources aligned with `.aether/commands/*.yaml` and
+`aether command-guide`. Internal support and worker IDs stay unchanged.
 
 ### Pheromone Signals
 
@@ -225,6 +235,9 @@ aether pheromone-import --file signals.xml
 ## Workflow for Codex Users
 
 ### Colony Setup
+
+In Codex chat, use `$ant-init "Build feature X"`, `$ant-colonize`, `$ant-plan`,
+`$ant-build 1`, `$ant-continue`, and `$ant-seal`. The executable route remains:
 
 ```bash
 # Initialize colony with a goal
@@ -265,7 +278,7 @@ aether swarm --watch    # Live worker activity
 aether flags            # Active flags
 aether flag --title "Investigate auth bug"
 aether history          # Colony events
-aether memory-details   # Drill-down memory view
+aether memory-details   # What the colony has learned: wisdom, lessons waiting to be promoted, lessons put aside, and recent failures
 aether patrol           # System health check
 ```
 
@@ -432,8 +445,8 @@ Runtime note:
 | System prompt file | `CLAUDE.md` | `.opencode/OPENCODE.md` | `AGENTS.md` |
 | Agent format | Markdown `.md` | Markdown `.md` | TOML `.toml` |
 | Agent location | `.claude/agents/ant/` | `.opencode/agents/` | `.codex/agents/` |
-| Slash commands | Yes (60 commands) | Yes (60 commands) | **No** -- use `aether` CLI |
-| Command location | `.claude/commands/ant/` | `.opencode/commands/ant/` | N/A |
+| Public actions | 64 slash commands | 64 slash commands | Nine `$ant-*` skills + `aether` CLI |
+| Command location | `.claude/commands/ant/` | `.opencode/commands/ant/` | `~/.codex/skills/aether/ant-*/SKILL.md` |
 | Agent metadata | In markdown header | In markdown header | TOML keys |
 | Hub sync path | global Claude home + hub | global OpenCode home + hub | global Codex home + hub |
 | Worker runtime | `Task` tool | `Task` tool | `codex exec` driven by `aether` |
@@ -453,20 +466,21 @@ Runtime note:
 
 | Goal | Claude Code | OpenCode | Codex |
 |------|-------------|----------|-------|
-| Start colony | `/ant-init "goal"` | `/ant-init "goal"` | `aether init "goal"` |
-| Build phase | `/ant-build 1` | `/ant-build 1` | `aether build 1` |
+| Start colony | `/ant-init "goal"` | `/ant-init "goal"` | `$ant-init "goal"` |
+| Build phase | `/ant-build 1` | `/ant-build 1` | `$ant-build 1` |
 | Check status | `/ant-status` | `/ant-status` | `aether status` |
 | Focus signal | `/ant-focus "area"` | `/ant-focus "area"` | `aether focus "area"` |
 | Update Aether | `/ant-update` | `/ant-update` | `aether update` |
-| Seal colony | `/ant-seal` | `/ant-seal` | `aether seal` |
-| Deep research | `/ant-oracle` | `/ant-oracle` | Use the `aether-oracle` agent plus `aether skill-*` and research commands |
+| Seal colony | `/ant-seal` | `/ant-seal` | `$ant-seal` |
+| Deep research | `/ant-oracle` | `/ant-oracle` | `$ant-oracle` |
 | View pheromones | `/ant-pheromones` | `/ant-pheromones` | `aether pheromone-display` |
 
 ### Next-step hints
 
 The runtime adapts its "Next Up" suggestions to the active platform: Claude
-Code and OpenCode see slash wrappers (`/ant-continue`), Codex sees the raw CLI
-(`aether continue`), because Codex has no slash commands. Detection reads
+Code and OpenCode see slash wrappers (`/ant-continue`); Codex sees `$ant-continue`
+for a supported public action and raw CLI text for other actions. Runtime
+command IDs and exact arguments retain their meaning. Detection reads
 `AETHER_PLATFORM` first, then the active-platform signals, then the process
 tree. If a nested or wrapped invocation is ever misdetected and you see
 `/ant-*` suggestions, export the platform explicitly:
@@ -477,4 +491,4 @@ export AETHER_PLATFORM=codex
 
 ---
 
-*Updated for Aether v1.0.61 — 2026-08-21*
+*Updated for Aether v1.0.82 — 2026-09-20*

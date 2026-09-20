@@ -2,6 +2,10 @@ package colony
 
 import "fmt"
 
+// ErrCompletionNotVerified is returned when a caller requests the verified
+// completion transition without a valid verified seal outcome.
+var ErrCompletionNotVerified = fmt.Errorf("completion is not verified")
+
 // Transition validates and returns the target state if the transition from
 // current to target is legal. Returns ErrInvalidTransition if not allowed.
 func Transition(current, target State) error {
@@ -15,6 +19,29 @@ func Transition(current, target State) error {
 		}
 	}
 	return fmt.Errorf("%w: %s -> %s is not allowed", ErrInvalidTransition, current, target)
+}
+
+// IsVerifiedCompletion reports verified completion only when both the
+// existing state machine and a valid lifecycle/v1 seal outcome agree. A
+// legacy COMPLETED state has unknown evidence, while a forced-incomplete seal
+// remains a closure record rather than verified completion.
+func (s ColonyState) IsVerifiedCompletion() bool {
+	return s.State == StateCOMPLETED &&
+		s.SealOutcome != nil &&
+		s.SealOutcome.IsVerifiedCompletion()
+}
+
+// TransitionToVerifiedCompletion uses Transition as the sole state-machine
+// authority, adding only the evidence guard required by the stronger
+// "verified completion" claim.
+func TransitionToVerifiedCompletion(current State, outcome *SealOutcome) error {
+	if outcome == nil {
+		return fmt.Errorf("%w: seal outcome is not recorded", ErrCompletionNotVerified)
+	}
+	if !outcome.IsVerifiedCompletion() {
+		return fmt.Errorf("%w: seal outcome disposition is %q", ErrCompletionNotVerified, outcome.Disposition)
+	}
+	return Transition(current, StateCOMPLETED)
 }
 
 // AdvancePhase finds the next pending phase after currentPhase, marks it as

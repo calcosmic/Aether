@@ -15,6 +15,7 @@ package cmd
 // record (D-01 through D-15) this file implements.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -30,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/spf13/cobra"
 )
@@ -52,13 +54,76 @@ var callerWrapperCorpora = []string{
 	filepath.Join(".aether", "commands"),
 }
 
+// This exact source is copied into the installed private support payload and
+// read by ant-build. Do not widen this to arbitrary skill/document trees.
+var codexSupportCallerFiles = []string{
+	filepath.Join(".aether", "skills", "colony", "aether-colony-build-cycle", "SKILL.md"),
+}
+
 // hookScriptCorpora are the D-01(c) "shipped hook or script" trees.
+//
+// Phase 197 plan 03 added the third entry. The first two cover files that
+// CONTAIN hook logic; neither covers the file that REGISTERS a hook. Every
+// Aether hook is invoked by `.claude/settings.json` naming its command, and
+// because that file was outside the scan, all three shipped hook commands
+// (hook-pre-tool-use, hook-stop, hook-pre-compact) counted as having no caller
+// and sat on the tolerated-orphan list — tolerated for being unreachable while
+// the platform fired them on every session. Reading the settings file's own
+// command strings credits them, and the list shrinks by three rather than
+// growing by one when a fourth hook is added.
 var hookScriptCorpora = []struct {
 	dir string
 	ext string
 }{
 	{filepath.Join(".aether", "utils", "hooks"), ".js"},
 	{filepath.Join("scripts"), ".sh"},
+	{filepath.Join(".claude"), ".json"},
+}
+
+// workerDisciplineCallerFiles are the D-01(d) "shipped worker prompt"
+// caller-evidence source: files whose contents become a dispatched worker's
+// own instructions.
+//
+// CORRECTED 2026-09-13. This list was introduced naming `.aether/workers.md`,
+// justified by the claim that `.claude/agents/ant/*.md` carry a
+// "Read .aether/workers.md for {caste} discipline" line. That line does not
+// exist -- zero of the 27 Claude agent files reference workers.md, none do
+// across OpenCode or Codex, and no runtime code loads it into a prompt. So the
+// original entry admitted a document nobody is instructed to read and nothing
+// executes, which is precisely the "a doc mention is not an execution" case
+// D-02/D-06 excludes .aether/docs/command-playbooks for. It turned the orphan
+// check green while `aether recruit` still had no caller -- worse than the
+// honest red, because a passing test then says otherwise.
+//
+// These entries are different in kind: an agent definition IS the worker's
+// prompt, the same way a wrapper command doc in callerWrapperCorpora is the
+// prompt the assistant executes. A command named here is genuinely run.
+//
+// Belt and braces, and the stronger half: the runtime also writes the
+// invitation into every dispatched worker's brief
+// (renderRecruitmentInvitation, cmd/codex_build.go), proven on the
+// plan-only/wrapper build lane by TestEveryDispatchedWorkerIsToldHowToAskForHelp
+// and, since 203-REVIEW.md's CR-05/WR-08, on the two lanes that fix closed
+// too: TestNativeBuildLaneWorkerIsToldHowToAskForHelp (native/direct build,
+// the lane autopilot's `aether run` uses) and
+// TestContinueLaneWorkersAreToldHowToAskForHelp (the check step's review
+// castes and Watcher). That is execution the scanner cannot see, so it is
+// tested directly rather than asserted here.
+//
+// The Codex platform's own agent definitions (.codex/agents/*.toml) are
+// deliberately NOT added to this list, even though they now carry the same
+// invitation text (TestCodexAgentDefinitionsCarryTheRecruitInvitation): this
+// list exists to credit OTHER subcommands an agent definition happens to
+// mention as orphan-scanner caller evidence, and singleFileCallerNames has no
+// ".toml" case at all -- adding a path here that the scanner cannot parse
+// would be inert, the same "looks covered, proves nothing" mistake this
+// file's own CORRECTED note above already found once with workers.md. Codex
+// reachability for `aether recruit` specifically is proven the stronger way,
+// directly, by the test named above.
+var workerDisciplineCallerFiles = []string{
+	filepath.Join(".claude", "agents", "ant", "aether-builder.md"),
+	filepath.Join(".claude", "agents", "ant", "aether-watcher.md"),
+	filepath.Join(".claude", "agents", "ant", "aether-scout.md"),
 }
 
 // buildConstraintRe matches a real Go build-constraint directive, which is
@@ -294,14 +359,24 @@ type registeredCommandInfo struct {
 
 // enumerateRegisteredCommands recursively walks the real, registered cobra
 // tree. Cobra's own generated "help" and "completion" commands are skipped —
-// they are not repo-owned and have no definition file to point at. Hidden
-// commands are NOT skipped: a hidden orphan is still an orphan.
+// they are not repo-owned and have no definition file to point at. A command
+// explicitly marked internal-only is parser or runtime compatibility plumbing,
+// not a public surface that needs a caller. TestInternalOnlyCommandsAreAnExact-
+// ReviewedSet keeps that exception narrow: adding the annotation anywhere else
+// is a test failure until its classification is deliberately reviewed.
 func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 	var out []registeredCommandInfo
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		for _, child := range c.Commands() {
 			if child.Name() == "help" || child.Name() == "completion" {
+				continue
+			}
+			if child.Annotations["aether.io/internal-only"] == "true" {
+				continue
+			}
+			if !child.Runnable() && child.HasSubCommands() {
+				walk(child) // A namespace is not executable; every runnable descendant still is.
 				continue
 			}
 			path := child.CommandPath()
@@ -321,6 +396,78 @@ func enumerateRegisteredCommands(root *cobra.Command) []registeredCommandInfo {
 	}
 	walk(root)
 	return out
+}
+
+// TestInternalOnlyCommandsAreAnExactReviewedSet prevents the reachability
+// ratchet from becoming a generic escape hatch. These are compatibility-only
+// parser routes, not public front doors: all must be hidden, legacy-command migration
+// routes must be explicitly store-free, and maintenance remains in the normal
+// caller-backed population.
+func TestInternalOnlyCommandsAreAnExactReviewedSet(t *testing.T) {
+	want := map[string]map[string]string{
+		abandonCmd.CommandPath():         {"aether.io/read-only": "true", "aether.io/store-free": "true"},
+		recoverCmd.CommandPath():         {"aether.io/read-only": "true", "aether.io/store-free": "true"},
+		resumeDashboardCmd.CommandPath(): {"aether.io/read-only": "true"},
+	}
+	got := map[string]*cobra.Command{}
+	var walk func(*cobra.Command)
+	walk = func(command *cobra.Command) {
+		for _, child := range command.Commands() {
+			if child.Annotations["aether.io/internal-only"] == "true" {
+				got[child.CommandPath()] = child
+			}
+			walk(child)
+		}
+	}
+	walk(rootCmd)
+
+	if len(got) != len(want) {
+		t.Fatalf("internal-only command set = %v, want exactly %v", sortedCommandPaths(got), sortedAnnotationPaths(want))
+	}
+	for path, command := range got {
+		required, known := want[path]
+		if !known {
+			t.Errorf("%s is internal-only without an explicit reviewed classification", path)
+			continue
+		}
+		if !command.Hidden {
+			t.Errorf("%s is internal-only but public; compatibility plumbing must be hidden", path)
+		}
+		for key, value := range required {
+			if got := command.Annotations[key]; got != value {
+				t.Errorf("%s annotation %q = %q, want %q", path, key, got, value)
+			}
+		}
+	}
+	for path := range want {
+		if _, ok := got[path]; !ok {
+			t.Errorf("reviewed internal-only command %s is missing its annotation", path)
+		}
+	}
+
+	for _, command := range enumerateRegisteredCommands(rootCmd) {
+		if strings.HasPrefix(command.Path, "aether maintenance") && command.Hidden {
+			t.Errorf("%s is a hidden maintenance operation; maintenance must remain caller-backed public advanced surface", command.Path)
+		}
+	}
+}
+
+func sortedCommandPaths(commands map[string]*cobra.Command) []string {
+	paths := make([]string, 0, len(commands))
+	for path := range commands {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
+}
+
+func sortedAnnotationPaths(commands map[string]map[string]string) []string {
+	paths := make([]string, 0, len(commands))
+	for path := range commands {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 // buildCommandDefinitionIndex maps a command name (the first whitespace-
@@ -363,6 +510,13 @@ func buildCommandDefinitionIndex(t *testing.T, cmdDir string) map[string]string 
 				continue
 			}
 			ast.Inspect(body, func(inner ast.Node) bool {
+				if loop, ok := inner.(*ast.RangeStmt); ok {
+					for _, command := range literalRangeCommandNames(loop) {
+						if _, exists := index[command]; !exists {
+							index[command] = name
+						}
+					}
+				}
 				// Case 1: a direct `&cobra.Command{Use: "..."}` composite
 				// literal — the common shape.
 				if cl, ok := inner.(*ast.CompositeLit); ok {
@@ -434,6 +588,156 @@ func buildCommandDefinitionIndex(t *testing.T, cmdDir string) map[string]string 
 		}
 	}
 	return index
+}
+
+// Model only an unconditional AddCommand of a directly constructed command
+// whose Use is the unmodified value of a finite []string literal range. The
+// optional `operation := operation` closure capture is an identity binding.
+// Unknown expressions, mutations and conditional registrations earn no credit.
+func literalRangeCommandNames(loop *ast.RangeStmt) []string {
+	value, ok := loop.Value.(*ast.Ident)
+	if !ok || value.Obj == nil || loop.Tok != token.DEFINE {
+		return nil
+	}
+	list, ok := loop.X.(*ast.CompositeLit)
+	if !ok || len(list.Elts) == 0 {
+		return nil
+	}
+	array, ok := list.Type.(*ast.ArrayType)
+	if !ok || array.Len != nil {
+		return nil
+	}
+	element, ok := array.Elt.(*ast.Ident)
+	if !ok || element.Name != "string" {
+		return nil
+	}
+	var names []string
+	for _, item := range list.Elts {
+		literal, ok := item.(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			return nil
+		}
+		name, err := strconv.Unquote(literal.Value)
+		if err != nil || !subcommandNameShapeRe.MatchString(name) {
+			return nil
+		}
+		names = append(names, name)
+	}
+	current := value.Obj
+	var capture *ast.AssignStmt
+	children := map[*ast.Object]bool{}
+	declarations := map[*ast.AssignStmt]bool{}
+	allowedChildUses := map[*ast.Ident]bool{}
+	registered := false
+	for _, statement := range loop.Body.List {
+		if assignment, ok := statement.(*ast.AssignStmt); ok && assignment.Tok == token.DEFINE && len(assignment.Lhs) == 1 && len(assignment.Rhs) == 1 {
+			lhs, ok := assignment.Lhs[0].(*ast.Ident)
+			if !ok {
+				continue
+			}
+			if rhs, ok := assignment.Rhs[0].(*ast.Ident); ok && lhs.Name == value.Name && rhs.Obj == current && capture == nil {
+				capture, current = assignment, lhs.Obj
+				continue
+			}
+			address, ok := assignment.Rhs[0].(*ast.UnaryExpr)
+			if !ok || address.Op != token.AND {
+				continue
+			}
+			literal, ok := address.X.(*ast.CompositeLit)
+			if !ok {
+				continue
+			}
+			typ, ok := literal.Type.(*ast.SelectorExpr)
+			if !ok {
+				continue
+			}
+			pkg, ok := typ.X.(*ast.Ident)
+			if !ok || pkg.Name != "cobra" || typ.Sel.Name != "Command" {
+				continue
+			}
+			for _, item := range literal.Elts {
+				field, ok := item.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				key, keyOK := field.Key.(*ast.Ident)
+				use, useOK := field.Value.(*ast.Ident)
+				if keyOK && useOK && key.Name == "Use" && use.Obj == current {
+					children[lhs.Obj] = true
+					declarations[assignment], allowedChildUses[lhs] = true, true
+				}
+			}
+		}
+		if expression, ok := statement.(*ast.ExprStmt); ok {
+			if call, ok := expression.X.(*ast.CallExpr); ok {
+				if selector, ok := call.Fun.(*ast.SelectorExpr); ok && selector.Sel.Name == "AddCommand" {
+					for _, arg := range call.Args {
+						if child, ok := arg.(*ast.Ident); ok && children[child.Obj] {
+							registered = true
+							allowedChildUses[child] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	mutated := false
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		if _, ok := node.(*ast.FuncLit); ok {
+			return false // Handler return statements do not govern registration.
+		}
+		switch node.(type) {
+		case *ast.ReturnStmt, *ast.BranchStmt, *ast.RangeStmt, *ast.ForStmt:
+			mutated = true // No registration proof across an early exit or another loop.
+		}
+		return true
+	})
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		// Captured-variable writes remain unknown even inside a closure: unlike
+		// a handler return, an immediately invoked closure can change the Use.
+		if assignment, ok := node.(*ast.AssignStmt); ok && assignment != capture {
+			for _, lhs := range assignment.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && (id.Name == value.Name || children[id.Obj]) {
+					// The command's initial declaration is allowed; reassignment is not.
+					if id.Name == value.Name || !declarations[assignment] {
+						mutated = true
+					}
+				}
+			}
+		}
+		if call, ok := node.(*ast.CallExpr); ok && len(call.Args) == 0 {
+			if method, ok := call.Fun.(*ast.SelectorExpr); ok && method.Sel.Name == "Flags" {
+				if child, ok := method.X.(*ast.Ident); ok && children[child.Obj] {
+					allowedChildUses[child] = true
+				}
+			}
+		}
+		if address, ok := node.(*ast.UnaryExpr); ok && address.Op == token.AND {
+			if id, ok := address.X.(*ast.Ident); ok && id.Name == value.Name {
+				mutated = true
+			}
+		}
+		if assignment, ok := node.(*ast.AssignStmt); ok {
+			for _, lhs := range assignment.Lhs {
+				if field, ok := lhs.(*ast.SelectorExpr); ok && field.Sel.Name == "Use" {
+					if id, ok := field.X.(*ast.Ident); ok && children[id.Obj] {
+						mutated = true
+					}
+				}
+			}
+		}
+		return true
+	})
+	ast.Inspect(loop.Body, func(node ast.Node) bool {
+		if child, ok := node.(*ast.Ident); ok && children[child.Obj] && !allowedChildUses[child] {
+			mutated = true // No aliasing or passing the command to an unknown mutator.
+		}
+		return true
+	})
+	if !registered || mutated {
+		return nil
+	}
+	return names
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +906,14 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 				credit(name, args)
 			}
 		}
+	case ".json":
+		// A hook settings file registers a command by naming it; that IS the
+		// invocation, and the platform performs it. Parsed as data rather than
+		// grepped, so a command name appearing in an unrelated string (a
+		// description, a permission rule) is never mistaken for a caller.
+		for _, argv := range hookSettingsCommandArgs(path) {
+			credit(argv[0], argv[1:])
+		}
 	case ".js", ".sh":
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -627,6 +939,60 @@ func singleFileCallerNames(t *testing.T, path string) map[string]bool {
 		}
 	}
 	return names
+}
+
+// hookSettingsCommandArgs returns the argv of every `aether …` invocation a
+// hook settings file registers, as [command, args...].
+//
+// The file is decoded into the platform's documented hook shape
+// (`hooks` → event name → entries → inner hooks → `command`), so only a string
+// the platform will actually EXECUTE is credited. A JSON file that is not a
+// hook settings file — `.claude/package.json`, for instance — decodes to an
+// empty map and credits nothing.
+//
+// The command string itself is tokenised with the same shell-like tokenizer
+// and the same command-name shape the script scan already uses, so an entry
+// like `AETHER_OUTPUT_MODE=visual aether status` resolves identically here and
+// there rather than through a second, drifting parser.
+func hookSettingsCommandArgs(path string) [][]string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil
+	}
+
+	var invocations [][]string
+	for _, entries := range settings.Hooks {
+		for _, entry := range entries {
+			for _, inner := range entry.Hooks {
+				fields := tokenizeShellLike(inner.Command)
+				for j, field := range fields {
+					if !isBinaryToken(field, nil) {
+						continue
+					}
+					if j+1 >= len(fields) {
+						continue
+					}
+					name := normalizeShellToken(fields[j+1])
+					if !subcommandNameShapeRe.MatchString(name) {
+						continue
+					}
+					invocations = append(invocations, append([]string{name}, fields[j+2:]...))
+				}
+			}
+		}
+	}
+	return invocations
 }
 
 // callerFileKey is the repo-root-relative, forward-slashed identity of a
@@ -793,6 +1159,19 @@ func collectCallerEvidence(t *testing.T, root string, skipFiles map[string]bool)
 		}
 	}
 
+	for _, f := range append(append([]string{}, workerDisciplineCallerFiles...), codexSupportCallerFiles...) {
+		p := filepath.Join(root, f)
+		if _, statErr := os.Stat(p); statErr != nil {
+			continue
+		}
+		if skipFiles[callerFileKey(root, p)] {
+			continue
+		}
+		for name := range singleFileCallerNames(t, p) {
+			evidence[name] = true
+		}
+	}
+
 	defIndex := buildCommandDefinitionIndex(t, filepath.Join(root, "cmd"))
 	for name := range collectGoSelfInvocationCallers(t, root, defIndex, skipFiles) {
 		evidence[name] = true
@@ -838,6 +1217,13 @@ func listCallerCorpusFiles(root string) []string {
 			}
 			files = append(files, callerFileKey(root, filepath.Join(dir, e.Name())))
 		}
+	}
+	for _, f := range append(append([]string{}, workerDisciplineCallerFiles...), codexSupportCallerFiles...) {
+		p := filepath.Join(root, f)
+		if _, statErr := os.Stat(p); statErr != nil {
+			continue
+		}
+		files = append(files, callerFileKey(root, p))
 	}
 	sort.Strings(files)
 	return files
@@ -1016,13 +1402,23 @@ func loadOrphanAllowlist(t *testing.T, path string) []orphanAllowlistEntry {
 	return entries
 }
 
-// writeOrphanAllowlist writes the scanner's real, honest output (D-07) to
-// testdata/orphan_allowlist.json ONLY — never the baseline (D-11).
-func writeOrphanAllowlist(t *testing.T, orphans []string) {
-	t.Helper()
-	preByLeaf := loadPreMigrationReasonByLeaf(t)
+// buildOrphanAllowlistEntries combines the scanner's real, honest output
+// with the reviewed metadata already attached to surviving exact paths. The
+// frozen pre-migration metadata is only a fallback for paths absent from the
+// live list, so regeneration cannot erase a later disposition or owner.
+func buildOrphanAllowlistEntries(orphans []string, current []orphanAllowlistEntry, preByLeaf map[string]orphanAllowlistEntry) []orphanAllowlistEntry {
+	currentByPath := make(map[string]orphanAllowlistEntry, len(current))
+	for _, entry := range current {
+		currentByPath[entry.Name] = entry
+	}
+
 	entries := make([]orphanAllowlistEntry, 0, len(orphans))
 	for _, name := range orphans {
+		if existing, ok := currentByPath[name]; ok {
+			entries = append(entries, existing)
+			continue
+		}
+
 		reason, owner := "unreviewed-pre-existing", "RECLAIM"
 		switch {
 		// The skill-lifecycle / 178 case was removed in Phase 191: that
@@ -1045,13 +1441,93 @@ func writeOrphanAllowlist(t *testing.T, orphans []string) {
 		}
 		entries = append(entries, orphanAllowlistEntry{Name: name, Reason: reason, OwnerPhase: owner})
 	}
+	return entries
+}
+
+func marshalOrphanAllowlist(entries []orphanAllowlistEntry) ([]byte, error) {
 	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+
+	var ascii strings.Builder
+	ascii.Grow(len(data))
+	for _, r := range string(data) {
+		switch {
+		case r <= 0x7f:
+			ascii.WriteRune(r)
+		case r <= 0xffff:
+			fmt.Fprintf(&ascii, `\u%04x`, r)
+		default:
+			high, low := utf16.EncodeRune(r)
+			fmt.Fprintf(&ascii, `\u%04x\u%04x`, high, low)
+		}
+	}
+	return []byte(ascii.String()), nil
+}
+
+// writeOrphanAllowlist writes the scanner's real, honest output (D-07) to
+// testdata/orphan_allowlist.json only, preserving reviewed metadata on paths
+// that survive the scan and never writing either baseline (D-11).
+func writeOrphanAllowlist(t *testing.T, orphans []string) {
+	t.Helper()
+	var current []orphanAllowlistEntry
+	if data, err := os.ReadFile("testdata/orphan_allowlist.json"); err == nil {
+		if err := json.Unmarshal(data, &current); err != nil {
+			t.Fatalf("parse testdata/orphan_allowlist.json before regeneration: %v", err)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("read testdata/orphan_allowlist.json before regeneration: %v", err)
+	}
+
+	preByLeaf := loadPreMigrationReasonByLeaf(t)
+	entries := buildOrphanAllowlistEntries(orphans, current, preByLeaf)
+	data, err := marshalOrphanAllowlist(entries)
 	if err != nil {
 		t.Fatalf("marshal orphan allowlist: %v", err)
 	}
 	data = append(data, '\n')
 	if err := os.WriteFile("testdata/orphan_allowlist.json", data, 0644); err != nil {
 		t.Fatalf("write testdata/orphan_allowlist.json: %v", err)
+	}
+}
+
+func assertOrphanGeneratorPreservesReviewedLiveMetadata(t *testing.T) {
+	current := []orphanAllowlistEntry{
+		{Name: "aether keep-reviewed", Reason: "reviewed disposition", OwnerPhase: "191.1"},
+		{Name: "aether removed-command", Reason: "old", OwnerPhase: "RECLAIM"},
+	}
+	preByLeaf := map[string]orphanAllowlistEntry{
+		"keep-reviewed": {Name: "keep-reviewed", Reason: "frozen fallback", OwnerPhase: "RECLAIM"},
+		"new-orphan":    {Name: "new-orphan", Reason: "pre-existing fallback", OwnerPhase: "RECLAIM"},
+	}
+
+	got := buildOrphanAllowlistEntries(
+		[]string{"aether keep-reviewed", "aether new-orphan"},
+		current,
+		preByLeaf,
+	)
+	want := []orphanAllowlistEntry{
+		{Name: "aether keep-reviewed", Reason: "reviewed disposition", OwnerPhase: "191.1"},
+		{Name: "aether new-orphan", Reason: "pre-existing fallback", OwnerPhase: "RECLAIM"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("entries = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	encoded, err := marshalOrphanAllowlist([]orphanAllowlistEntry{{
+		Name: "aether keep-reviewed", Reason: "reviewed — disposition", OwnerPhase: "191.1",
+	}})
+	if err != nil {
+		t.Fatalf("marshal allowlist: %v", err)
+	}
+	if !bytes.Contains(encoded, []byte(`reviewed \u2014 disposition`)) || bytes.Contains(encoded, []byte("—")) {
+		t.Fatalf("non-ASCII metadata encoding drifted: %s", encoded)
 	}
 }
 
@@ -1100,6 +1576,8 @@ func stripGoComments(src string) string {
 // no caller among the three permitted kinds and is not in the committed
 // allowlist.
 func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
+	t.Run("generator_preserves_reviewed_live_metadata", assertOrphanGeneratorPreservesReviewedLiveMetadata)
+
 	root, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -1232,6 +1710,139 @@ func TestNoRegisteredSubcommandIsUnreferenced(t *testing.T) {
 	for _, e := range allowlist {
 		if e.OwnerPhase == "178" {
 			t.Errorf("%q still carries owner_phase \"178\", but Phase 191 deleted the entire reviewed skill-lifecycle set (SKILL-01) rather than wiring it — no live orphan should carry this owner_phase anymore", e.Name)
+		}
+	}
+}
+
+func TestNativeReachabilityFiniteRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		want         bool
+	}{
+		{"literal", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, true},
+		{"captured", `for _, operation := range []string{"native-first", "native-second"} { operation := operation; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, true},
+		{"handler-and-flags", `for _, operation := range []string{"native-first", "native-second"} { operation := operation; child := &cobra.Command{Use: operation, RunE: func() error { return nil }}; if operation == "native-first" { child.Flags().Int("phase", 0, "phase") }; parent.AddCommand(child) }`, true},
+		{"nonliteral-list", `for _, operation := range operations { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"nonliteral-entry", `for _, operation := range []string{"native-first", computed} { child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"computed-use", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: prefix + operation}; parent.AddCommand(child) }`, false},
+		{"reassigned", `for _, operation := range []string{"native-first", "native-second"} { operation = replacement; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"different-binding", `for _, operation := range []string{"native-first", "native-second"} { other := replacement; child := &cobra.Command{Use: other}; parent.AddCommand(child) }`, false},
+		{"unregistered", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; _ = child }`, false},
+		{"conditional-continue", `for _, operation := range []string{"native-first", "native-second"} { if stop { continue }; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"conditional-return", `for _, operation := range []string{"native-first", "native-second"} { if stop { return }; child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"child-short-reassignment", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; child, extra := replacement, value; parent.AddCommand(child) }`, false},
+		{"child-use-reassigned", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; child.Use = replacement; parent.AddCommand(child) }`, false},
+		{"child-unknown-mutator", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; mutate(child); parent.AddCommand(child) }`, false},
+		{"addressed-range-value", `for _, operation := range []string{"native-first", "native-second"} { mutate(&operation); child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"closure-mutation", `for _, operation := range []string{"native-first", "native-second"} { func() { operation = replacement }(); child := &cobra.Command{Use: operation}; parent.AddCommand(child) }`, false},
+		{"conditional-registration", `for _, operation := range []string{"native-first", "native-second"} { child := &cobra.Command{Use: operation}; if selected { parent.AddCommand(child) } }`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "native.go"), []byte("package fixture\nfunc init() { "+tc.source+" }\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			index := buildCommandDefinitionIndex(t, root)
+			for _, name := range []string{"native-first", "native-second"} {
+				if got := index[name] == "native.go"; got != tc.want {
+					t.Fatalf("definition %s attributed=%t, want %t: %+v", name, got, tc.want, index)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeReachabilityNamespacesKeepRunnableDescendants(t *testing.T) {
+	root := &cobra.Command{Use: "aether"}
+	for _, runnable := range []bool{false, true} {
+		parent := &cobra.Command{Use: fmt.Sprintf("parent-%t", runnable)}
+		if runnable {
+			parent.Run = func(*cobra.Command, []string) {}
+		}
+		parent.AddCommand(&cobra.Command{Use: "child", Run: func(*cobra.Command, []string) {}})
+		root.AddCommand(parent)
+	}
+	paths := map[string]bool{}
+	for _, command := range enumerateRegisteredCommands(root) {
+		paths[command.Path] = true
+	}
+	if paths["aether parent-false"] || !paths["aether parent-true"] || !paths["aether parent-false child"] || !paths["aether parent-true child"] || len(paths) != 3 {
+		t.Fatalf("namespace handling hid a runnable command or required a non-runnable parent: %+v", paths)
+	}
+}
+
+func TestNativeReachabilityUsesInstalledSupport(t *testing.T) {
+	root, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(".aether", "skills", "colony", "aether-colony-build-cycle", "SKILL.md")
+	body, err := os.ReadFile(filepath.Join(root, source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := buildCodexSkillPayload(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var support, shim []byte
+	for _, file := range payload.Files {
+		switch file.RelativePath {
+		case "support/aether-colony-build-cycle.md":
+			support = file.Content
+		case "ant-build/SKILL.md":
+			shim = file.Content
+		}
+	}
+	if !bytes.Equal(support, body) || !strings.Contains(string(shim), "Read `../support/aether-colony-build-cycle.md`") {
+		t.Fatal("caller evidence is no longer the installed ant-build support")
+	}
+	fixture := t.TempDir()
+	path := filepath.Join(fixture, source)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := collectCallerEvidence(t, fixture, nil)
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "question"} {
+		if !before["aether codex-native-worker "+operation] {
+			t.Errorf("installed support did not credit native %s", operation)
+		}
+	}
+	if collectCallerEvidence(t, fixture, map[string]bool{filepath.ToSlash(source): true})["aether codex-native-worker observe"] {
+		t.Fatal("removing the actual support caller retained native observe credit")
+	}
+	removed := strings.ReplaceAll(string(body), "aether codex-native-worker observe", "aether codex-native-worker no-observation-call")
+	if removed == string(body) {
+		t.Fatal("observation-call mutation changed nothing")
+	}
+	if err := os.WriteFile(path, []byte(removed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	after := collectCallerEvidence(t, fixture, nil)
+	if after["aether codex-native-worker observe"] || !after["aether codex-native-worker bind"] {
+		t.Fatalf("removing observe did not remove exactly that native caller: %+v", after)
+	}
+	other := &cobra.Command{Use: "ratchet-native-other"}
+	other.AddCommand(&cobra.Command{Use: "observe", Run: func(*cobra.Command, []string) {}})
+	rootCmd.AddCommand(other)
+	defer rootCmd.RemoveCommand(other)
+	for _, content := range []string{
+		"The command aether codex-native-worker observe is discussed here.\n",
+		"```sh\naether codex-native-worker\n```\n",
+		"```sh\naether ratchet-native-other observe\n```\n",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		names := collectCallerEvidence(t, fixture, nil)
+		if names["aether codex-native-worker observe"] {
+			t.Fatalf("non-caller credited native observe: %q", content)
+		}
+		if strings.Contains(content, "ratchet-native-other") && !names["aether ratchet-native-other observe"] {
+			t.Fatal("same-leaf negative failed to recognize its actual different parent")
 		}
 	}
 }
@@ -1445,38 +2056,63 @@ func TestOrphanAllowlistOnlyShrinks(t *testing.T) {
 }
 
 // TestOrphanAllowlistIsPathKeyed is 172-09's guard against a silent revert to
-// leaf-name keys (or a stale entry for a command that no longer exists):
-// every entry name in BOTH the live list and the baseline must contain a
-// space, carry the "aether " prefix, and resolve through rootCmd.Find to a
-// command whose CommandPath() equals the entry name exactly.
+// leaf-name keys. Every entry in both files must remain a full "aether " path.
+// Live entries must also resolve through rootCmd.Find; the immutable baseline
+// is intentionally a historical superset and may retain paths deleted later.
+func orphanAllowlistPathProblems(entries []orphanAllowlistEntry, requireRuntimeResolution bool) []string {
+	var bad []string
+	for _, e := range entries {
+		if !strings.Contains(e.Name, " ") || !strings.HasPrefix(e.Name, "aether ") {
+			bad = append(bad, fmt.Sprintf("%q (not a space-containing \"aether \"-prefixed path)", e.Name))
+			continue
+		}
+		if !requireRuntimeResolution {
+			continue
+		}
+		target, _, err := rootCmd.Find(strings.Fields(strings.TrimPrefix(e.Name, "aether ")))
+		if err != nil || target == nil || target == rootCmd {
+			bad = append(bad, fmt.Sprintf("%q (does not resolve via rootCmd.Find)", e.Name))
+			continue
+		}
+		if got := target.CommandPath(); got != e.Name {
+			bad = append(bad, fmt.Sprintf("%q (resolves to %q instead)", e.Name, got))
+		}
+	}
+	sort.Strings(bad)
+	return bad
+}
+
 func TestOrphanAllowlistIsPathKeyed(t *testing.T) {
-	check := func(t *testing.T, path, listPath string) {
+	check := func(t *testing.T, path, listPath string, requireRuntimeResolution bool) {
 		t.Helper()
 		entries := loadOrphanAllowlist(t, listPath)
-		var bad []string
-		for _, e := range entries {
-			if !strings.Contains(e.Name, " ") || !strings.HasPrefix(e.Name, "aether ") {
-				bad = append(bad, fmt.Sprintf("%q (not a space-containing \"aether \"-prefixed path)", e.Name))
-				continue
-			}
-			target, _, err := rootCmd.Find(strings.Fields(strings.TrimPrefix(e.Name, "aether ")))
-			if err != nil || target == nil || target == rootCmd {
-				bad = append(bad, fmt.Sprintf("%q (does not resolve via rootCmd.Find)", e.Name))
-				continue
-			}
-			if got := target.CommandPath(); got != e.Name {
-				bad = append(bad, fmt.Sprintf("%q (resolves to %q instead)", e.Name, got))
-			}
-		}
+		bad := orphanAllowlistPathProblems(entries, requireRuntimeResolution)
 		if len(bad) > 0 {
-			sort.Strings(bad)
 			t.Errorf("%s has %d entry name(s) that are not real, path-keyed command paths: %s", path, len(bad), strings.Join(bad, ", "))
 		}
 	}
-	t.Run("live", func(t *testing.T) { check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json") })
-	t.Run("baseline", func(t *testing.T) {
-		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json")
+	t.Run("live", func(t *testing.T) {
+		check(t, "testdata/orphan_allowlist.json", "testdata/orphan_allowlist.json", true)
 	})
+	t.Run("baseline", func(t *testing.T) {
+		check(t, "testdata/orphan_allowlist_baseline.json", "testdata/orphan_allowlist_baseline.json", false)
+	})
+	t.Run("historical_deleted_paths", assertHistoricalOrphanPathsNeedNoLiveResolution)
+}
+
+func assertHistoricalOrphanPathsNeedNoLiveResolution(t *testing.T) {
+	historical := []orphanAllowlistEntry{{Name: "aether command-deleted-after-baseline"}}
+	if problems := orphanAllowlistPathProblems(historical, false); len(problems) != 0 {
+		t.Fatalf("historical baseline entry was rejected: %v", problems)
+	}
+	if problems := orphanAllowlistPathProblems(historical, true); len(problems) == 0 {
+		t.Fatal("the same stale path was not rejected when live resolution was required")
+	}
+
+	malformed := []orphanAllowlistEntry{{Name: "bare-leaf"}}
+	if problems := orphanAllowlistPathProblems(malformed, false); len(problems) == 0 {
+		t.Fatal("historical validation accepted a non-path key")
+	}
 }
 
 // pathMigrationExpansion is the FROZEN, one-time record of what each of the
@@ -1883,12 +2519,18 @@ func TestDeletingACallerMakesTheRatchetNameIt(t *testing.T) {
 // which meant the one guard that could be t.Skip'd with nothing noticing
 // (ci_wiring_gate_test.go) was never scanned for exactly that.
 func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
-	// wiringGateGuardFiles is declared with five entries because that is the
-	// count of guard files this phase created; a future edit that empties or
-	// trims the shared inventory must fail loudly here rather than silently
-	// narrowing this scan.
-	if len(wiringGateGuardFiles) < 5 {
-		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 5 (the guard files phase 172 created); "+
+	// The inventory started at the five guard files phase 172 created, grew
+	// to ten across 173-10, reached eleven when phase 196 plan 02 registered
+	// the no-length-derivation ratchet, and reached fourteen when Phase 197
+	// plan 07 registered its coverage test and hardcode ratchet plus a third
+	// file, colony_state_atomicity_ratchet_test.go -- a pre-existing ratchet
+	// of the same class that TestEveryGuardFileIsInTheWiringInventory's
+	// derived shape found unregistered. The floor is raised to the live
+	// count each time a guard is added, so this is a ratchet in its own
+	// right: a future edit that empties or trims the shared inventory must
+	// fail loudly here rather than silently narrowing this scan.
+	if len(wiringGateGuardFiles) < 14 {
+		t.Fatalf("wiringGateGuardFiles has only %d entries — expected at least 14 (the guard files phases 172, 173, 196 and 197 registered); "+
 			"a shrunk inventory would silently narrow this escape-hatch scan", len(wiringGateGuardFiles))
 	}
 
@@ -1904,13 +2546,36 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 	// pattern when the scan below reaches this file.
 	forbiddenRe := regexp.MustCompile(`os\.Getenv|os\.LookupEnv|os\.Environ|syscall\.Getenv|t\.Skip|t\.SkipNow|testing\.Short|flag\.Bool|flag\.String|flag\.Int`)
 
+	// exemptedRegenerationFlagIdentifiers is the stated, reviewed set of
+	// regeneration switches this scan tolerates -- each is a Go identifier
+	// (never a bare word that could match unrelated prose) naming exactly
+	// one flag.Bool declaration, in exactly one guard file, that can rewrite
+	// its own file's LIVE data only and never its own frozen baseline.
+	// updateColonyStateWriteAllowlist has no separate baseline file at all
+	// (testdata/colony_state_write_allowlist.json is simultaneously its live
+	// and its canonical copy), so the "cannot write the baseline" property
+	// holds for it trivially. Widening this list is a reviewed action
+	// exactly like widening the orphan allowlist itself; it is not a place
+	// to hide an unreviewed skip path.
+	exemptedRegenerationFlagIdentifiers := []string{
+		"updateOrphanAllowlist",
+		"updateNextActionHardcodeBaseline",
+		"updateColonyStateWriteAllowlist",
+	}
+
 	// exemptedFlagLineCount counts, across every scanned guard file, how many
-	// lines were skipped by the single reviewed exemption below. WR-01's
-	// -update-orphan-allowlist flag is the one, deliberately reviewed
-	// regeneration switch this phase keeps (documented in
-	// .aether/docs/orphan-allowlist-policy.md); asserting the count is
-	// exactly 1 after the loop means a second flag can neither hide behind
-	// the exemption nor silently retire it without this test noticing.
+	// lines were skipped by the reviewed exemptions in
+	// exemptedRegenerationFlagIdentifiers below. WR-01's -update-orphan-allowlist
+	// flag is the original, deliberately reviewed regeneration switch this
+	// phase keeps (documented in .aether/docs/orphan-allowlist-policy.md);
+	// Phase 197 plan 07 registered a second, -update-next-action-hardcode,
+	// following the exact same shape (rewrites its own live file only, per
+	// TestNextActionHardcodeBaselineMatchesLive and the fact that
+	// writeNextActionHardcodeAllowlist's only os.WriteFile call names
+	// testdata/next_action_hardcode.json). Asserting the count equals
+	// len(exemptedRegenerationFlagIdentifiers) exactly means a THIRD flag can
+	// neither hide behind an exemption meant for one of the first two, nor can
+	// either of the first two silently retire without this test noticing.
 	exemptedFlagLineCount := 0
 
 	for _, f := range wiringGateGuardFiles {
@@ -1939,27 +2604,38 @@ func TestWiringGuardsHaveNoRuntimeEscapeHatch(t *testing.T) {
 			if !forbiddenRe.MatchString(line) {
 				continue
 			}
-			// The single reviewed exemption: the line declaring the
-			// updateOrphanAllowlist flag itself. See
-			// .aether/docs/orphan-allowlist-policy.md for why this one
-			// regeneration flag is tolerated — it can rewrite the live
-			// allowlist but (per the baselineWriteRe assertion below) can
-			// never write the baseline, so it cannot silently widen
+			// The reviewed exemptions: the line declaring one of
+			// exemptedRegenerationFlagIdentifiers itself. See
+			// .aether/docs/orphan-allowlist-policy.md for why the original of
+			// these regeneration flags is tolerated — each can rewrite its
+			// own live file but (per the baselineWriteRe assertion below, for
+			// updateOrphanAllowlist, and TestNextActionHardcodeBaselineMatchesLive
+			// plus writeNextActionHardcodeAllowlist's single, hardcoded
+			// live-file-only os.WriteFile call, for updateNextActionHardcodeBaseline)
+			// can never write its own baseline, so neither can silently widen
 			// tolerance. Scoped to lines that already match forbiddenRe (not
 			// every line mentioning the identifier) so this file's own later
 			// prose about the exemption — including this test's own error
 			// message — cannot inflate the count.
-			if strings.Contains(line, "updateOrphanAllowlist") {
-				exemptedFlagLineCount++
+			exempted := false
+			for _, name := range exemptedRegenerationFlagIdentifiers {
+				if strings.Contains(line, name) {
+					exemptedFlagLineCount++
+					exempted = true
+					break
+				}
+			}
+			if exempted {
 				continue
 			}
 			t.Errorf("%s:%d contains a runtime escape hatch (an environment-variable read, a test-skip call, or a flag declaration): %s", f, i+1, strings.TrimSpace(line))
 		}
 	}
 
-	if exemptedFlagLineCount != 1 {
-		t.Errorf("expected exactly 1 line exempted as the single reviewed regeneration flag's own declaration, found %d — "+
-			"either a second flag is hiding behind the exemption, or the exempted one was deleted without updating this guard", exemptedFlagLineCount)
+	if exemptedFlagLineCount != len(exemptedRegenerationFlagIdentifiers) {
+		t.Errorf("expected exactly %d line(s) exempted as the reviewed regeneration flags' own declarations, found %d — "+
+			"either an unreviewed flag is hiding behind an exemption, or one of the reviewed ones was deleted without updating this guard",
+			len(exemptedRegenerationFlagIdentifiers), exemptedFlagLineCount)
 	}
 
 	// The -update-orphan-allowlist flag must never be able to write the

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 // RecoveryBudget tracks per-wave recovery action consumption.
@@ -134,6 +135,12 @@ type RecoveryOutcome struct {
 //
 // Per D-01: Recovery sequence is classification-dependent.
 // Per D-06: The orchestrator is a pure function -- classify, decide, log, return.
+// 202-03 (CEC-05): "log" already meant recording the decision (the
+// LogEntries this function has always built); emitColonyLiveRecoveryChanged
+// below is the same recording, on the live stream, from the one funnel
+// point every classification branch now returns through -- it never
+// participates in the decision itself and a failed emission can never change
+// the outcome (emitColonyLive's own no-op-on-failure contract).
 func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 	classification, failType, rationale := classifyWorkerFailure(ctx.Status, ctx.ErrorMessage)
 
@@ -152,10 +159,11 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		RetryCount:     countRetries(ctx.RecoveryHistory),
 	}
 
+	var outcome RecoveryOutcome
 	switch classification {
 	case Blocking:
 		// Per D-04: immediate escalation, no retry, no reassignment, no budget consumed
-		return RecoveryOutcome{
+		outcome = RecoveryOutcome{
 			Classification: classification,
 			FailureType:    failType,
 			Rationale:      rationale,
@@ -180,23 +188,107 @@ func orchestrateRecovery(ctx RecoveryContext) RecoveryOutcome {
 		}
 
 	case RequiresAttempt:
-		return sequenceRequiresAttempt(ctx, classification, failType, rationale, failureRecord, now)
+		outcome = sequenceRequiresAttempt(ctx, classification, failType, rationale, failureRecord, now)
 
 	case Recoverable:
-		return sequenceRecoverable(ctx, classification, failType, rationale, failureRecord, now)
+		outcome = sequenceRecoverable(ctx, classification, failType, rationale, failureRecord, now)
+
+	default:
+		// Unknown classification -- escalate safely
+		outcome = RecoveryOutcome{
+			Classification: classification,
+			FailureType:    failType,
+			Rationale:      rationale,
+			Action: RecoveryAction{
+				Type:       "escalate",
+				WorkerName: ctx.WorkerName,
+				Detail:     rationale,
+			},
+			Exhausted: true,
+		}
 	}
 
-	// Unknown classification -- escalate safely
-	return RecoveryOutcome{
-		Classification: classification,
-		FailureType:    failType,
-		Rationale:      rationale,
-		Action: RecoveryAction{
-			Type:       "escalate",
-			WorkerName: ctx.WorkerName,
-			Detail:     rationale,
-		},
-		Exhausted: true,
+	// The recovery transition is recorded against the episode it actually
+	// happened inside -- the open build or check episode -- rather than a
+	// synthetic identifier of its own, so a recovery decision fired mid-run
+	// never hijacks `aether watch` away from the real episode and its
+	// active workers (CR-02). Only when no live episode is open at all
+	// (currentLiveRecoveryEpisode's phase-derived fallback) does recovery
+	// get an episode of its own, so a standalone decision is still
+	// recorded rather than dropped.
+	recoveryEpisodeID, recoveryEpisodeKind := currentLiveRecoveryEpisode(ctx.Phase)
+	// 204-13 (SC3b, D-06): recovery owns a durable episode boundary of its
+	// OWN only in the no-open-episode fallback case -- currentLiveRecovery
+	// Episode returns events.EpisodeKindRecovery ONLY when it found no open
+	// build or check episode to attribute this decision to (see that
+	// function's own doc comment). When the returned kind is
+	// events.EpisodeKindBuild or events.EpisodeKindContinue, the owning
+	// lane already opened and will close that episode itself -- opening a
+	// SECOND boundary here, inside it, is exactly the defect
+	// TestRecoveryDecisionKeepsTheBuildEpisodeLive and
+	// TestWatchFollowsTheMostRecentlyStartedOpenEpisode were written to
+	// prevent (a recovery decision must stay part of the run it happened
+	// inside, never jump the live view to a screen of its own). Do NOT
+	// "simplify" this branch to an unconditional pair -- the two rules
+	// above are both load-bearing.
+	recoveryOwnsItsOwnEpisode := recoveryEpisodeKind == events.EpisodeKindRecovery
+	if recoveryOwnsItsOwnEpisode {
+		// CR-02 (204-REVIEW.md): currentLiveRecoveryEpisode's phase-only
+		// fallback id ("recovery-phase-%d") is the SAME string for every
+		// standalone decision recorded against this phase. A single
+		// standalone decision is fine with that -- it opens and closes the
+		// one id itself -- but a caller that invokes orchestrateRecovery
+		// more than once for the same phase with no open build/continue
+		// episode (cmd/codex_build_finalize.go's
+		// buildExternalBuildRecoveryInstructions, which loops once per
+		// failed dispatch on the delegate/external build-finalize lane --
+		// the lane the interactive wrapper's documented primary path
+		// uses) re-opens the identical id on the second call, then hits
+		// recordEpisodeOutcome's "second close" refusal on ITS close,
+		// silently dropping that decision's durable record (a warning to
+		// stderr, never a hard failure). Disambiguate the id per
+		// standalone decision using facts unique to THIS call (worker name
+		// + task id, always present on a real dispatch) so each
+		// standalone recovery decision in a phase gets its own durable
+		// open/close pair. This discriminated id is used ONLY for this
+		// call's own open/changed/close triple -- it never needs to match
+		// what an unrelated caller of currentLiveRecoveryEpisode
+		// (forced_reviewer_waiver.go, handoff_decisions_cmd.go,
+		// rollback.go) computes for an unrelated fact recorded at a
+		// different moment, because none of those call sites ever open or
+		// close an episode themselves (recordEpisodeOutcome only refuses a
+		// CLOSE without a matching open; an intervention record carries no
+		// such requirement).
+		recoveryEpisodeID = standaloneRecoveryEpisodeID(recoveryEpisodeID, ctx.WorkerName, ctx.TaskID)
+		emitColonyLiveEpisodeStarted(recoveryEpisodeID, recoveryEpisodeKind)
+	}
+	emitColonyLiveRecoveryChanged(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
+	if recoveryOwnsItsOwnEpisode {
+		emitColonyLiveEpisodeEnded(recoveryEpisodeID, recoveryEpisodeKind, outcome.Action.Type)
+	}
+	return outcome
+}
+
+// standaloneRecoveryEpisodeID disambiguates base (currentLiveRecoveryEpisode's
+// phase-only fallback id) for one standalone recovery decision, so repeated
+// standalone decisions for the same phase -- with no open build/continue
+// episode to attach to -- never collide on the same durable episode id
+// (CR-02, 204-REVIEW.md). Prefers workerName (always present on a real
+// dispatch); falls back to taskID alone, then to base unchanged only when
+// neither is available (a case that cannot arise from a real dispatch, kept
+// only so this function never panics or produces an empty suffix).
+func standaloneRecoveryEpisodeID(base, workerName, taskID string) string {
+	workerName = strings.TrimSpace(workerName)
+	taskID = strings.TrimSpace(taskID)
+	switch {
+	case workerName != "" && taskID != "":
+		return fmt.Sprintf("%s-%s-%s", base, workerName, taskID)
+	case workerName != "":
+		return fmt.Sprintf("%s-%s", base, workerName)
+	case taskID != "":
+		return fmt.Sprintf("%s-%s", base, taskID)
+	default:
+		return base
 	}
 }
 

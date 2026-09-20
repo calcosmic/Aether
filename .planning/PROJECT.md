@@ -34,42 +34,48 @@ That means:
 
 ## Current State
 
-- **v1.25 Switch It On — IN PROGRESS** (started 2026-07-25)
-- **Product version: v1.0.42**
-- Phase 162 complete (2026-08-04) — switch on learning: `consolidation-phase-end` and `consolidation-seal` got their first-ever runtime callers (both continue paths + seal ceremony), Hive Brain flipped on by default behind the single `AETHER_HIVE_POLICY` switch (consent gate retired), promotion target relocated to the worker-readable `.aether/QUEEN.md`, eight curation ants render named beats with a CURATION-REPORT.md artifact, memory injection proven by permanent CI test plus recorded 958→615-char before/after exhibit (user-approved), learning-system authority decision record written and doc claims regression-guarded; 6/6 plans, verification 7/7 (one stale doc line closed post-verification); LEARN-01..05 complete
-- Phase 160 formally closed (2026-08-04) — fail loudly: work landed 2026-07-28 (seven broken CLI calls fixed, execution-based drift audit over 882 documented invocations, load-bearing stderr suppression removed, `control-ts/` retired with test-deletion ledger, worker failure debug artifacts on every failure mode, `/ant-unblock` wrappers on both platforms) but the proof artifact was missing until the v1.25 mid-milestone audit flagged it; verification now passed 13/13 by execution, all LOUD-01..09/RETIRE-01..04 ticked, security audit closed 28/28 threats (three regression tests added during remediation: `aether`+`|| true` swallow ban, documented-subcommand severity classification, unresolvable-command detection across all five corpora)
-- Phase 165 complete (2026-08-03) — core lifecycle commands: `init`/`plan`/`build`/`continue` wrappers rewritten to carry engineering method (stage purpose, files-to-read, spawn choreography, stop conditions) instead of manifest-parsing protocol, on both platforms plus flat mirrors, fenced by wrapper ceremony contract tests; gap closure moved shelf promotion inside the `aether init` transaction (atomic, consent-gated via `--promote-shelf`/`--dismiss-shelf`); 10/10 plans, re-verification passed 10/10; one pre-existing `init-ceremony` sealed-colony risk deferred to Phase 169 (SEE-11)
-- Phase 164 complete (2026-08-02) — research feeds planning: Queen decides research need per phase, research Scouts dispatch automatically through the kept `confidence-loop.ts`, dispatch field fidelity fixed (permission_profile + brief now survive the Go→TS boundary), `plan-research-escalate` works on fresh colonies and degrades to a warning on failure; 11/11 plans, verification passed 5/5
-- Phase 163.2 complete (2026-08-01) — ts-host preflight configurability: per-platform TTL preflight success cache (1h default, `AETHER_PREFLIGHT_CACHE_TTL`), one shared `AETHER_PREFLIGHT_TIMEOUT` knob across Go and TS hosts (hardcoded 20s gone), neutral temp-dir probes, loud `AETHER_SKIP_PREFLIGHT` notice, auth-failure cache invalidation; 7/7 decisions verified, code review Critical+5 Warnings fixed
-- Phase 163.1 complete (2026-08-01) — wrapper-runtime completion contract: schema-validated completion packets (submitted bytes, batch rejection), stage-time validation with digest rebinding, verification honesty, read-only artifact evidence on both continue paths, composed brief file channel, publish-order fix; 7/7 requirements verified
-- v1.24 shipped: Architecture boundary defined, 27 agent YAMLs + 28 prompt MDs + 9 phase YAMLs + 7 playbooks extracted, TypeScript control plane with 68 tests, NDJSON event stream, 80% Classic parity verified, end-to-end demo flow running
-- Focus: Deleting layers, restoring Queen judgement and colony richness
-- 27 caste YAMLs and 10 policy files live in `colony/`; the Queen's execution policy does not — it is compiled into `cmd/codex_dispatch_contract.go`
-- Four parallel execution paths currently coexist: markdown wrappers + playbooks (~13k lines), `.aether/ts-host` (40 files), `control-ts` (33 files, self-described as retired), and the Go runtime
-- `v5.4.0` tag remains available as the Classic behaviour baseline for Queen orchestration archaeology
+- **Phase 204.1 — Codex Ant Skill Surface complete (2026-09-16)**: all seven plans and the fresh-install review repair are merged. Nine canonical dollar skills have clean-install and normal legacy-update proof on fresh Codex CLI 0.154.0 sessions; immutable executable version metadata fixes unstamped Go-build installation. Eighteen positive live cases and four rejecting controls pass. The user delegated the three remaining guidance/scope reviews; the assistant passed them with provenance in 204.1-UAT.md. The full suite retains the same 17 historical failures. Qualification remains bounded to entrypoints/distribution; full workflows, native helpers, release qualification and Phase 205 owner acceptance remain pending.
+- **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
+- **Product version: v1.0.79** (last verified local release, recorded in Phase 205-13; Codex parity changes require a new qualified candidate)
+- **v1.28 Classic Colony Restoration is active**: approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
+- **Phase 199 — Front Door and Classic Contract is complete (2026-09-07)**: 34/34 plans and 12/12 owner UAT checks passed. The ordinary journey, shared lifecycle projection, safe pause/resume, honest seal/entomb split, expert maintenance boundary, and executable cross-platform Classic corpus are now delivered.
+- **Phase 204 -- Learning Governor is complete (2026-09-15)**: 16/16 plans including five gap-closure plans; re-verified 9/11 with two owner-accepted deferrals. The program's memory now carries versions and lineage, every run leaves a durable episode record, a real shadow grader and automatic canary pass run at the end of every check, and a source-improvement proposal can be drafted automatically but never merged, published or deployed by the program. Known open limits: the automatic hypothesis promoter cannot fire until the learning store and the guidance-application store share an identifier (WINDOWS.md entry 44); check-lane usage/cost recorded as absent (entry 48); 30 of 51 bank fixtures unguarded (entry 42).
+- The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
+- Phase 194's end-to-end proof reduced the measured one-task bug fix from 8 workers to exactly 1 Builder plus the program's free checks on both the proposed and automatic paths; an explicit heavy request still produces 4 workers, proving the review pipeline remains live. Broader owner-watched proof follows restoration rather than preceding it.
+- Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
+- `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `research/v1.27-milestone-brief.md`)
 
-## Current Milestone: v1.26 Intelligent Orchestration
+## Current Milestone: v1.28 Classic Colony Restoration — Active
 
-**Goal:** The colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost — so a non-technical operator gets good results on an inexpensive model without tuning anything.
+**Goal:** Reunite the modern Go safety kernel with the understandable, visible, Queen-led February-April colony experience.
 
-**Target features:**
-- The Queen decides the team by reading the phase, bounded by safety floors it cannot argue past, and shows its reasoning
-- Workers stop rediscovering what the colony already knows
-- Spend is measured, not asserted — per worker, including nested children
-- Workers can spawn workers, governed by an enforced depth AND a whole-tree budget
-- The operator can add their own agents and skills, on all three platforms
-- Proof on an inexpensive model: three real tasks, interventions counted
+**Approved delivery:** Phases 199-205, including Classic Visual Voice (202.1) and owner-requested Codex parity insertions (204.1-204.5). The remaining Phase 205 walkthrough and restoration seal follow the qualified Codex candidate. See the [2026-09-16 scope amendment](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md).
 
-**Supersedes v1.25 "Switch It On"** (reached 24%, 7 of 29 phases). Its live intent is absorbed; SEE, TYPED, RECLAIM and LOCK move to Future Requirements.
+**Approved planning contract:** 81 requirements (65 existing plus 16 Codex ANT requirements) in `.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
 
-**How this milestone was arrived at:** four parallel researchers (stack, features, architecture, pitfalls) verified findings by reading and *running* this repository's code. They converged independently on one organising insight: **most of this milestone already exists and was never wired to a caller.** The recursion policy engine (TypeScript, unreachable), the depth guard (`spawn-can-spawn` ignores its own `--depth`), the 27-caste roster (zero readers), the skill lifecycle (8 of 9 commands unreferenced), the selection rationale (composed, then discarded), and token measurement (parsed, never persisted) all exist and reach nobody. The correct framing is *switch on and prove*, not *build new* — which makes ordering load-bearing, and is why a wiring ratchet lands first.
+**Sequence:** Phases 199-204 restored the product; Phase 205 already completed plans 01-13 and plan 14 task 1. Owner direction on 2026-09-16 inserts Phases 204.1-204.5 before the remaining owner walkthrough, superseding the later-Codex deferral. Preserve completed evidence and the original before-inventory, then qualify a new candidate and separately record any new preparation before resuming acceptance.
 
-**What the research established:**
+## Previous Milestone: v1.27 The Queen Decides, the Program Checks — Shipped 2026-09-02
 
-1. **Recursive delegation is now a native platform feature.** Claude Code defaults to three subagent layers, configured in the `settings.json` Aether already syncs. Aether builds the *governor*, not the mechanism.
-2. **Depth is not a budget.** A 2-deep 8-wide tree is 72 workers. Claude Code's own default went 5 → 1 → 3 in three releases. Every serious system pairs depth with a second bound.
-3. **The documented depth guard cannot be called and would not enforce.** `workers.md` instructs workers to pass `--enforce`, a flag that was never registered; called correctly, the guard returns `can_spawn: true` unconditionally; and child spawns hardcode `--depth 0`, so any future cap would read a structurally-zero field.
-4. **Measurement must specify its arithmetic.** A token ledger written during this research undercounted by 186x by summing input+output while ignoring cache reads — and its unit test asserted the same wrong arithmetic, so it shipped green.
+**Goal:** Aether stops burning tokens on workers nobody needed — the model's judgement picks the team and says why, the program's free checks are the floor that never moves, each phase is verified once, the cost is printed, and the owner can see every decision — so a one-task bug fix costs one worker plus checks.
+
+**Delivered:** the program's checks became the unskippable safety floor; ordinary work shrank to one explained Builder; related tasks became coherent jobs; cost and next-step truth reached every lifecycle screen; runtime evidence and learning became visible and fed back into helpers; and a fail-closed six-phase unattended run completed.
+
+**Closeout:** 48/48 requirements satisfied; 8/8 integration seams and 4/4 end-to-end flows verified. The audit status is `tech_debt`, not `gaps_found`.
+
+**Governing rulings:** D11 (deterministic checks are the floor, reviewers are judgement) and D12 (order amendment) — `.planning/decisions/2026-08-21-owner-rulings-priority-spec-v3.md`; full brief `.planning/research/v1.27-milestone-brief.md`.
+
+## Previous Milestone: v1.26 Intelligent Orchestration — Shipped 2026-08-22
+
+**Goal (as roadmapped 2026-08-08):** the colony reads the work, sends only the workers that work needs, hands each one what it needs to know, and can prove what it cost. Rescoped to hardening on 2026-08-14 ("remove things until a small job costs a small amount") and extended by the 2026-08-17 truth audit.
+
+**Key accomplishments:** a wiring ratchet (no feature without a caller, release gate proven by execution); fail-closed delegation guards; token measurement with stated arithmetic (186× undercount fixed); Aether's internals no longer leak into other projects' workers; crash-safe worktrees; one truth for failures and phase advances; complete, non-duplicated worker briefs; 39 zero-reader configs and 8 dead commands deleted; field hardening from three downstream repos in one day; the owner in the loop (team check-in, decision routing, honest no-change results).
+
+**What it did not fix (and why v1.27 exists):** the default team is still decided by a keyword engine filling a budget of 6-8, a checker worker is mandatory on every build, and each phase is verified two or three times. 21/35 requirements satisfied; 7 carried into v1.27, 7 dropped or deferred by recorded rulings.
+
+**Stats:** 571 commits, 1,223 files changed, +171,000 / −39,221 lines, 2026-08-08 → 2026-08-22. Product v1.0.47 → v1.0.63.
+
+Full details: `.planning/milestones/v1.26-ROADMAP.md`, `.planning/MILESTONES.md`.
 
 ## Previous Milestone: v1.23 Daily Driver Reliability — Shipped 2026-05-21
 
@@ -181,7 +187,7 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 
 - **Go runtime is authoritative** for state mutations, verification, and CLI truth
 - **Wrappers are presentation-only** on Claude/OpenCode
-- **Codex is runtime-native**; no markdown wrapper ceremony
+- **Codex uses the Go runtime as authority**; inserted Phases 204.1-204.5 add canonical `$ant-*` orchestration skills with governed native workers
 - **YAML remains source-of-truth** for generated wrapper commands
 - **Runtime proof beats wrapper theater**
 - **Shared lifecycle truth matters**; `build`, `plan`, `colonize`, `watch`, `status`, and `continue` should agree on what a worker is doing
@@ -215,13 +221,16 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - [x] v1.22 Grounded Planning + Ceremony Restore -- Phases 141-144 (shipped 2026-05-19)
 - [x] v1.23 Daily Driver Reliability -- Phases 145-151 (shipped 2026-05-21)
 - [x] v1.24 Hybrid Architecture Salvage -- Phases 152-159 (shipped 2026-05-24)
-- [ ] v1.25 Switch It On -- Phases 160-171 (started 2026-07-25)
-- [ ] v1.26 Intelligent Orchestration -- Phases 172-179 (roadmapped 2026-08-08; supersedes v1.25)
+- [~] v1.25 Switch It On -- Phases 160-171 (superseded by v1.26)
+- [x] v1.26 Intelligent Orchestration -- Phases 172-191.1 (shipped 2026-08-22)
+- [x] v1.27 The Queen Decides, the Program Checks -- Phases 193-198.3 (shipped 2026-09-02)
+- [ ] v1.28 Classic Colony Restoration -- active; approved Phases 199-205
 
 ## Requirements
 
 ### Validated
 
+- ANT-01..03: nine canonical Codex skill entrypoints, safe distribution and consistent bounded guidance — Phase 204.1, 2026-09-16; scoped evidence and delegated review in 204.1-UAT.md.
 - Colony ceremony and runtime visibility -- v1.0
 - Context proof and skill routing -- v1.1
 - Worker dispatch honesty -- v1.2
@@ -262,81 +271,36 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 - Lifecycle Honesty (simulation gated behind --simulate, error on missing platforms) -- v1.20
 - Oracle Storage Pattern (atomic Go-owned storage, interrupt recovery) -- v1.20
 - Doc-CLI Alignment Smoke Test (YAML auto-discovery, release gate blocking) -- v1.20
+- Wiring ratchet: no registered subcommand without a caller; release gate proven by execution (WIRE-01..03) -- v1.26
+- Delegation guards fail closed: parent-derived depth, whole-run ceiling, cycle detection, tamper-refusing ledgers (SPAWN-01..08) -- v1.26
+- Token measurement with stated arithmetic incl. cache tokens; estimates separated from measurements (SPEND-01/03/04) -- v1.26
+- Orchestration visibility: who was sent, why, who was not, where the runtime overrode (SEEN-01..03) -- v1.26
+- Zero-reader config files deleted with reappearance ratchets; dead skill-lifecycle commands removed (ROSTER-01/02, SKILL-01/02) -- v1.26
+- Hardening H1-H5: no internals leak into other projects, task-first skill scoring, castes with nothing to do refused, the worker cap caps -- v1.26
+- Crash-safe worktrees, one canonical failure log, atomic phase advance, complete non-duplicated briefs, field hardening -- v1.26 (Phases 187-191.1)
+- Team check-in before spawning, owner decision routing, honest `completed_no_change` / `verified_existing` results -- v1.26 (2026-08-21)
+- Free checks are the floor: one `runDeterministicFloor` body for both continue lanes decides advancement; no flag, depth or proposal can skip a check; build-side reviewer only on an explicit Queen ask (Watcher verified once); reconciliation and program-re-run builder evidence count as proof; unprovable criteria wait for the owner; verification scoped per phase and full at the end; exactly one bounded automatic fix attempt (FLOOR-01..04) -- v1.27 (Phase 193)
+- The Queen decides the team: ordinary work gets one Builder, every worker carries a readable per-worker reason, five named risks can force one explained reviewer at continue, owner depth/team controls remain effective, and no caste is dispatched at both build and continue unless explicitly requested (TEAM-01..05) -- v1.27 (Phase 194)
+- Coherent jobs: dependency-safe grouping, per-task receipts, exact partial credit, append-only recovery, and one worktree per grouped job work on native and external lanes (JOBS-01..04) -- v1.27 (Phase 195)
+- Honest cost: provider-reported token rows survive both wrapper platforms, one cost block ends build/check, `aether spend` is read-only, and model choices carry reasons (COST-01..05) -- v1.27 (Phase 196)
+- One canonical next-action resolver supplies every lifecycle command and machine-readable lane, including session start and pause aliases (NEXT-01..06) -- v1.27 (Phase 197)
+- Runtime evidence is visible again: direct and wrapper ceremonies agree; checks stream progress; evidence, durations, findings, resume progress and plan confidence render; seal requires owner review (SHOW-01..05) -- v1.27 (Phase 198)
+- The learning loop is fed at the source: build and check worker outcomes become failure records and observations through one guarded boundary on both lanes (quick and swarm too); instinct use is a recorded fact so QUEEN.md promotion can actually happen; finished checks, answered questions and failure streaks leave notes; expiring notes reach eternal memory; strong instincts reach the hive at every check under the existing switch; the memory drill-down shows real content; every CLAUDE.md learning claim names a test (FEED-01..06) -- v1.27 (Phase 198.1)
+- Memory reaches every relevant helper: plan and colonize delegate manifests carry the runtime-built memory capsule; Oracle research files and registers itself; the greeting shows preferences, strongest habits and the last helper note; dead capsule sections are removed under a writer invariant; survey content and the previous phase's outcome reach later briefs within named budgets (WIRE-01..07) -- v1.27 (Phase 198.2; one real-world UAT carried as acknowledged debt)
+- Overnight stamina: owner-eye work queues, genuine danger stops, replans survive restarts, elapsed/cost reporting is durable, blocker truth fails closed, external swarm evidence is issuance-bound, and the six-phase fixture completes unattended (STAM-01..06) -- v1.27 (Phase 198.3)
+- Front door and Classic lifecycle contract: one grouped normal journey, automatic territory freshness, one authoritative orientation model, exactly-once pause/resume, retained honest seal plus verified optional entomb, transaction-backed expert maintenance, and a versioned cross-platform behavior corpus (SYNTH-01, CEC-01/02/04/08, LIFE-01..06, PROOF-01) -- v1.28 (Phase 199)
+- Queen-led work cycle: the Queen picks and explains the smallest capable team, ordinary work stays proportionate, related tasks form coherent jobs and waves, build/continue/autopilot tell one story with one verification boundary, complete result truth (verdict, checks, cost, elapsed time, changed files, knowledge deltas) binds to the exact attempt, recovery checkpoints and restores, goal-level autopilot advances with declared stops, and worker turnaround is measured (SYNTH-03, CEC-06, WORK-01..08) -- v1.28 (Phase 201; verified 101/101, UAT 74/74)
+- Learning governor: versioned, lineage-carrying memory records where a hypothesis is never shown as verified; every lifecycle lane (build, continue, plan, oracle, swarm, recovery) leaves a durable episode record with evidence, gate results, changed decisions and interventions; a real per-fixture shadow grader plus an automatic compare/admit/canary/rollback pass at the end of every check on both check lanes; a regression-fixture bank seeded from the project's own confirmed incidents with a two-sided unguarded-count ratchet; seven budgeted test gates that prove they ran everything; automatic source-improvement proposals that structurally cannot merge, publish or deploy (SYNTH-06, LEARN-01..04, LEARN-06..08) -- v1.28 (Phase 204; verified 9/11 with two owner-accepted deferrals: check-lane token usage/cost stay recorded as absent, 30 of 51 fixtures still unguarded so LEARN-05 stays open)
 
 ### Active
 
-- [ ] CATALOG-01: Build command reliability matrix from audit-catalog, current docs, and historical tags (v1.10-v1.21, v5.4.0)
-- [ ] CATALOG-02: Classify every command as public lifecycle, public utility, internal runtime, alias, or deprecated
-- [ ] TEST-01: Every public command has at least one smoke/fixture/e2e test with executable evidence
-- [ ] TEST-02: Test matrix documents which commands are covered and how
-- [x] WORKFLOW-01: Colonize workflow restored and verified end-to-end
-      Evidence: `TestColonizeWritesSurveyArtifactsAndUpdatesState` runs the real
-      colonize command against a fixture repo and fails when survey artifacts or
-      state updates are missing; the finalize contract suite
-      (`cmd/codex_colonize_test.go`) covers external-surveyor claims, stale
-      manifests, and artifact preservation.
-- [x] WORKFLOW-02: Iterative plan workflow restored and verified end-to-end
-      Evidence: `TestFullLifecycleInDownstreamRepo` executes the real plan
-      command in a downstream fixture repo; the iteration loop is locked by
-      `TestPlanningLoopOptionsClampAndEvaluateStopReasons` and revision
-      durability by `TestCLIVersionedPlanRevisionSurvivesRestartAndBindsNextBuild`.
-- [x] WORKFLOW-03: Iterative oracle/RALF workflow restored and verified end-to-end
-      Evidence: `aether oracle selftest` runs one real research round and exits
-      non-zero if the dispatcher, agent definition, artifacts or progress log
-      are broken. The loop itself was never removed; what was missing was a way
-      to see it (`--follow` over `progress.jsonl` — the old per-round render was
-      a guaranteed no-op in background mode), a scoping ritual with any runtime
-      existence (`oracle propose` / `oracle brief` / `oracle --from-brief`), and
-      anywhere for the findings to go (`.aether/research/` plus `--research` on
-      init and plan). Named tests in `cmd/oracle_brief_test.go`,
-      `cmd/oracle_progress_test.go`, `cmd/oracle_research_doc_test.go`,
-      `cmd/colony_research_test.go`, `cmd/oracle_loop_quality_test.go` and
-      `cmd/agent_doc_paths_test.go`.
-- [x] WORKFLOW-04: Build workflow restored and verified end-to-end
-      Evidence: `TestFullLifecycleInDownstreamRepo` (real build in a downstream
-      repo, manifest asserted) and `TestCLIInterruptedBuildResumesThroughForceRedispatch`
-      (interrupted build recovers).
-- [x] WORKFLOW-05: Continue workflow restored and verified end-to-end
-      Evidence: `TestFullLifecycleInDownstreamRepo` (real continue advances the
-      phase) and `TestCLIContinueEnforcesFreshCriterionEvidence` (stale evidence
-      is rejected, not silently accepted).
-- [x] WORKFLOW-06: Run (autopilot) workflow restored and verified end-to-end
-      Evidence: `TestRunAutopilotCompletesMultiPhase` completes a two-phase
-      colony through the real loop (build → continue → advance → completed);
-      `TestGoldenAutopilotPauseConditions` proves the pause engine fires inside
-      that same loop; `TestRunAutopilotReplanDue` locks the replan checkpoint;
-      `TestRunCompatibilityExecutesSinglePhase` covers the blocked path;
-      `TestRunCompatibilityDryRunPlansLifecycle` + `TestRunDryRunDoesNotMutateState`
-      lock the dry-run plan and its read-only guarantee.
-      (Re-evidenced 2026-08-16: the earlier evidence completed zero phases and
-      cited a pause suite wired to a path `aether run` never called.)
-- [x] WORKFLOW-07: Swarm workflow restored and verified end-to-end
-      Evidence: `TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult` runs
-      the real swarm command with worker waves and asserts the structured result;
-      blocked workers surfaced by `TestSwarmDestroySurfacesBlockedWorkers`.
-- [x] WORKFLOW-08: Seal workflow restored and verified end-to-end
-      Evidence: `TestFullLifecycleInDownstreamRepo` seals the fixture colony;
-      `TestCLICompiledInstallToSealJourney` proves install-to-seal against the
-      compiled binary.
-- [x] WORKFLOW-09: Entomb workflow restored and verified end-to-end
-      Evidence: `TestFullLifecycleInDownstreamRepo` entombs the sealed colony
-      and asserts the chamber archive exists.
-- [ ] QUEEN-01: Queen execution policy restored with 4 modes: direct, single-worker, focused-review, full-colony
-- [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents
-- [x] RUNTIME-01: Stale decision/session leakage between colonies eliminated
-      Evidence: `TestInitClearsPriorColonyDecisionResidue` (2026-08-16) seeds a
-      prior colony's pending-decisions.json, assumptions.json and worker
-      handoffs, re-inits, and fails if any survive. It failed before the fix:
-      init cleared only session.json, so new colonies briefed their workers
-      with the previous project's CLARIFIED INTENT and handoffs.
-- [x] RUNTIME-02: Worker artifact/result collection preserves completed work (no silent loss)
-      Evidence: `TestMergeExternalBuildResults_RejectsMissingResult` — a
-      dispatched worker with no reported result raises a blocking
-      worker.result_missing contract violation (finalize refuses rather than
-      proceeding); worker-written artifacts preserved per
-      `TestColonizePreservesWorkerWrittenSurveyArtifacts` and
-      `TestWriteSurveyArtifactsPreservesClaimedWorkerFile`.
-- [ ] PROOF-01: End-to-end smoke test in a separate downstream repo proves Aether works without modifying itself during the run
+The active scope is v1.28 Classic Colony Restoration: restore the February–April front door, iterative planning, Queen-led work, substantive Swarm/Oracle/live visibility, biological recruitment and information exchange, and governed learning around the modern safety kernel. The amended contract contains 81 requirements across Phases 199-205, including 204.1-204.5, and maps all 72 Classic capability rows. Every restoration phase treats its feature names as research headings, reconstructs the exact old causal mechanisms, audits the present Go architecture, and implements only the evidence-backed synthesis.
+
+Long-lived items not tied to a milestone:
+
+- [ ] QUEEN-02: Deterministic commands and small lifecycle steps do not spawn unnecessary agents — *re-expressed as v1.27 feature 2*
+- [ ] CATALOG-01/02, TEST-01/02: command/test truth is absorbed into LIFE-06, LEARN-05, and restoration proof rather than a separate pre-milestone gate
+- [ ] SKILL-03/04: skill validation on the Claude path remains outside the v1.28 Golden Path. Codex lifecycle skills now have their own ANT-01..16 requirements in Phases 204.1-204.5.
 
 ### Out of Scope
 
@@ -358,12 +322,43 @@ Full details: `.planning/milestones/v1.17-ROADMAP.md`
 | Zero new dependencies | Uses existing pkg/storage/, cobra, Go stdlib | Good |
 | Tracker gets bugs domain carve-out | Write for findings only, never for applying fixes | Good |
 | Colony-prime reads from cached summary | Performance over 7 direct ledger reads | Good |
+| Rescope v1.26 to hardening: cut 174 (plans 3-9), 176, 177, 178 (2026-08-14) | Removing things until a small job costs a small amount; shipped as 180-184 | Good |
+| Phase 192 "stop building when the benchmark passes" rule (2026-08-17) | Superseded 2026-08-21 when the owner ratified the priority spec as the backlog (D1) | — Superseded |
+| Automatic model routing approved, after the cost line, reasons always shown (D2, 2026-08-21) | Reverses the 2026-07-28 rejection | — Pending (v1.27 feature 4) |
+| Reviewer workers are the Queen's call; the floor is deterministic checks (D11, 2026-08-22) | Replaces "Watcher always required on build"; a 1-task bug fix now costs 1 Builder + checks, with reviewers forced only by five named risks | Good — floor and team judgement shipped (Phases 193-194) |
+| A forced-reviewer waiver is owner-only, one signal on one phase, and must be recorded before dispatch begins | The protected `decision-answer` path is capability-checked; generic resolution and late declines fail closed, and repeated card renders preserve commands already shown | Good — Phase 194 plus review fixes |
+| The floor is computed from the build-time reviewer value; a reviewer verdict can only ever add a block, never supply a pass (193-01, 2026-08-22) | `TestDeterministicFloorIsTheOnlySourceOfAPass`; both continue lanes share one body, parity table-tested | Good |
+| Build-side reviewer dispatch gated on the Queen's explicit proposal, not the required-caste floor (193-02, 2026-08-22) | Watcher no longer reviewed twice; Probe/Auditor/Gatekeeper double-dispatch recorded in `.planning/WINDOWS.md` #1 for Phase 194 | Good — gap deferred |
+| A criterion no machine can prove becomes `needs_owner_confirmation`: the phase advances, seal waits for the answer via `aether decision-answer` (193-04, D-05) | No reviewer is ever spawned to guess at it; `--force --reason` still overrides | Good |
+| Exactly one automatic builder fix attempt when a free check fails with no reviewer sent; append-only journal entry, then stop with one command (193-05, D-02/D-03) | Distinct from the declined 2026-08-21 recovery retry — one bounded repair, never a loop, never a reviewer first | Good |
+| v1.27 order amendment: team judgement, single verification, cost line, next-action card, Classic display restoration first (D12, 2026-08-22) | All nine scoped phases shipped and the milestone audit found no blocking gaps | Good |
+| One memory-feed boundary for both build lanes, guarded by AST; feeding memory can never fail a build or check (198.1-01, 2026-08-30) | `TestEveryBuildLaneFeedsMemoryThroughOneBoundary`, `TestFeedingMemoryNeverFailsABuild` | Good |
+| Worker-authored text is sanitised before every memory store because midden entries are replayed into later briefs; two writers missed it and were fixed at review (198.1, CR-02, 2026-08-30) | `TestCheckAndQuickFailureTextIsSanitisedBeforeMemory` | Good |
+| Instinct use is counted only when the text was genuinely in a worker's capsule on a passing phase; QUEEN.md promotion gated on recorded use (198.1-03, 2026-08-30) | `TestWorkerLessonBecomesQueenFileWisdom`, `TestQueenPromotionNeverHappensWithoutRecordedUse` | Good |
+| Hive promotion at every check, same policy switch and confidence gate as seal; `--no-learn` scope documented as legacy capture only (198.1-05, 2026-08-30) | `TestStrongInstinctReachesTheSharedStoreAtCheck`, `TestHivePromotionAtCheckHonoursThePolicySwitch` | Good |
+| The runtime assembles one memory capsule; delegate wrappers only pass it through, and plan/colonize wrapper triplets remain byte-identical (198.2-01, 2026-08-30) | Prevents the real Claude/OpenCode lane from silently receiving less context than the in-process lane | Good |
+| Oracle research uses one shared finish path to file, register and promote findings with origin labels, including useful partial runs (198.2-02, 2026-08-30) | Paid-for research reaches later helpers without follow-up commands while empty runs write nothing | Good |
+| Memory-pack parts without live writers are removed; an AST-driven writer invariant and zero-floor exception ratchet prevent new empty sections (198.2-04, 2026-08-30) | Prevents decorative headings that can never carry content | Good |
+| Survey-map content and previous-phase outcomes use two separate named brief budgets; neither adds a worker or owner check-in (198.2-06/07, 2026-08-30) | More grounding reaches helpers without crowding out the task or making small jobs heavier | Good |
+| Owner chose to advance from Phase 198.2 while its real-world WIRE-06 confirmation remains untested (2026-08-31) | Carry as verification debt; do not treat it as passed or as a known defect; revisit with `$gsd-verify-work 198.2` | Pending evidence |
+| v1.27 ends at Phase 198.3; Classic restoration is v1.28, not a Phase 198.4 questionnaire (2026-09-02) | The comprehensive report already records owner intent; the 72-row ledger is traceability and owner-watched proof follows restoration | Good |
+| Codex `$ant-*` parity precedes remaining Phase 205 owner acceptance (2026-09-16) | Owner requested GSD integration before the pending phase; insert 204.1-204.5, retain completed evidence, and qualify the changed candidate | ANT-01..03 verified within Phase 204.1 scope; ANT-04..16 pending |
+| Historical behavior is evidence, while the modern Go runtime remains state and safety authority | Restore outcomes and experience without reviving shell/wrapper state mutation | — Locked for v1.28 |
+| Classic feature names are investigation headings, not predetermined solutions (2026-09-02) | Every Phase 199-204 must reconstruct the exact historical mechanism and owner value, trace the current Go implementation, compare keep/restore/replace options, and plan from a written synthesis | — Locked for v1.28 |
+| One read-only lifecycle projection owns orientation and Next Up (Phase 199) | Help, status, phase, history, recovery, and closeouts agree; missing evidence remains explicitly unknown rather than being repaired or invented | Good — shipped and UAT-verified |
+| Pause/resume are the sole public interruption and recovery path (Phase 199) | Handoffs and recovery are transactional and replay-safe; retired names survive only as bounded hidden input compatibility | Good — shipped and UAT-verified |
+| Seal retains reviewable state; entomb separately verifies archive bytes before clearing (Phase 199) | Forced-incomplete closure remains owner-only and visibly unverified through status, archive, and replay | Good — shipped and UAT-verified |
+| Expert maintenance uses exact previewed targets and one rollback-capable transaction (Phase 199) | Read-only inspection stays mutation-free and Aether-managed cleanup preserves unmanaged/custom files | Good — shipped and UAT-verified |
+| Claude/OpenCode `/ant-*` surfaces and runtime-native Codex share Go-owned lifecycle truth (Phase 199) | A 73-row coverage ledger and executable public journeys prove behavior and state effects without claiming native Codex `$ant-*` support | Good — shipped and UAT-verified |
+| Truthful registers over ticked boxes (Phase 204, 2026-09-15) | A requirement is ticked only when its own wording is true of the running program and a named test fails when the wiring is removed; the two truths that remained partial were accepted as deferred by owner override with the exact remaining limit named (WINDOWS.md entries 42 and 48) rather than rounded up | Good -- the post-closure review still caught a green-tested feature that was dead in production (the automatic hypothesis promoter, WINDOWS.md entry 44), which is exactly the failure this rule exists to surface |
+| Fixture dates read by the compiled binary must move with the clock (2026-09-15) | Two families of planning fixtures with literal September dates crossed production's seven-day candidate window mid-phase and turned fifteen tests red with no code change; in-process fixtures now pin the candidate clock, binary-facing fixtures derive their instants from the wall clock | Good -- both detonations fixed; rule recorded in the fixture comments |
 
 ## Context
 
-Shipped v1.10 with 452 files changed, +53,409 / -562 lines across 204 commits.
-Tech stack: Go 1.24, Cobra CLI, pkg/storage file locking.
-34 plans across 14 phases (57-69). All verified.
+Shipped v1.27 on 2026-09-02: 9 phases, 84 plans, 195 recorded tasks, 48/48 requirements; the final normal and race suites each reported 8,566 passing Go tests across 20 packages, and the TypeScript host reported 540 passing tests. Phase 199 then completed the first v1.28 restoration slice with 34 plans, an exact normal/race completion receipt, and 12/12 owner UAT checks.
+Tech stack: Go 1.24 runtime (`cmd/`, `pkg/`), thin markdown wrappers for Claude Code and OpenCode, runtime-native Codex lane, a kept TypeScript host for autopilot dispatch. Full normal and race suites remain the release gate.
+Owner feedback themes (2026-08-21/22): builds feel heavy for small jobs; the next step after a command is often unclear; projects get stuck with an expensive way out; the display feels thin compared with v5.4.0.
+Known debt: Phase 172.1 (CI gate environment), Phase 173's one pending human check, the TS-host probe-timeout twin, Phase 198.2's carried real-world memory-pack UAT, and the acknowledged deferred items in STATE.md. Closed by Phase 194: `.planning/WINDOWS.md` #1 — Probe/Auditor/Gatekeeper no longer double-dispatch at build and continue — and the small-job pipeline now proves one Builder plus checks. Closed by Phase 195: a decision-free one-worker build now takes the visible fast path while genuine owner decisions and explicit `--checkin` still pause.
 
 ## Explicit Deferrals
 
@@ -376,15 +371,17 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Execute v1.15 with `/gsd-discuss-phase 100`.
+Plan Phase 204.2 — Codex Native Worker Lifecycle from its existing context. Phase 204.1 is verified and complete. Continue the inserted sequence through 204.5, then resume the remaining Phase 205 owner-only walkthrough and acceptance with the qualified candidate handoff.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
+*Last updated: 2026-09-16 after owner-requested Codex parity insertion before remaining Phase 205 acceptance*
+
 ## Historical Milestone Briefs (superseded)
 
-*The three sections below are archived milestone briefs from v1.11, v1.12, and v1.16. They are retained for context only and are NOT the current milestone. The current milestone is v1.25 Switch It On, defined near the top of this file.*
+*The three sections below are archived milestone briefs from v1.11, v1.12, and v1.16. They are retained for context only and are NOT the current milestone. The current milestone is v1.28 Classic Colony Restoration, defined near the top of this file.*
 
 ### v1.11 Aether Unification (shipped)
 
@@ -409,7 +406,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Curation ant pipeline (8-ant orchestrated pipeline)
 - Consolidation pipeline (phase-end knowledge compression)
 
-*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
+*Last updated: 2026-08-26 after Phase 194*
 
 ### v1.12 Safe Colony (shipped)
 
@@ -421,7 +418,7 @@ This document evolves at phase transitions and milestone boundaries.
 - Smart depth defaults — auto-select depth from phase position + code change risk signals
 - User depth override — tick-a-box UI at `/ant-plan` start to override either depth before plan creation
 
-*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
+*Last updated: 2026-08-22 — Phase 193 (Free Checks Are the Floor) complete: verification 4/4, FLOOR-01..04 done*
 
 ### v1.16 Hybrid Runtime Boundary and Orchestration Recovery (shipped)
 
@@ -450,4 +447,4 @@ This document evolves at phase transitions and milestone boundaries.
 - Do not move install/update/publish safety out of Go
 - Do not make visual output parsing authoritative
 
-*Last updated: 2026-08-04 — Phase 162 (switch on learning) complete: verification 7/7, LEARN-01..05 done*
+*Last updated: 2026-09-16 after Phase 204.1 verification and transition to Phase 204.2*

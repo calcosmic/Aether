@@ -8,6 +8,31 @@ codex_orchestration:
   skill: "aether-colony-build-cycle"
   guide: "aether command-guide swarm --platform codex"
   drift_guard: "Update this YAML, Claude/OpenCode wrappers, the Codex skill, and cmd/command_guide.go together."
+investigation_and_repair:
+  four_lenses: >
+    Wave 1 dispatches four genuinely distinct, evidence-producing
+    investigators, not four cosmetically different prompts: git-history
+    archaeology, working-code pattern search, error-trace analysis, and
+    external research. Each names its own confidence and its own evidence,
+    and each appears live in the dashboard like any other worker.
+  comparison_card: >
+    After the investigation wave, the runtime renders one comparison card:
+    where the four lenses agree and disagree, a confidence-ranked list of
+    candidate repairs, and the evidence naming why the top repair was
+    chosen over the alternatives.
+  checkpointed_repair: >
+    The top-ranked repair applies automatically through the same
+    checkpoint-save, verify, rollback-on-failure transaction every other
+    repair lane in the colony already uses. The checkpoint save is
+    announced; if re-verification fails, the rollback is announced too.
+    There is no mid-flight approval gate -- the owner gets the full story
+    after the repair, not a prompt during it.
+  three_strike_case: >
+    Three failed repairs on the same problem stop automatic repair and
+    raise a plain-language architectural case to the owner: what failed
+    three times, why patching is not working, and the structural change
+    Swarm believes is needed. The runtime then waits for the owner's
+    decision.
 wrapper_additions:
   watch: |
     Keep live visibility direct:

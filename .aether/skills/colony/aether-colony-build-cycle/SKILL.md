@@ -13,6 +13,15 @@ version: "1.0"
 
 # Aether Colony Build Cycle
 
+## Installed Codex entrypoints
+
+Use `$ant-colonize`, `$ant-plan`, `$ant-build`, `$ant-continue`, `$ant-swarm`, and `$ant-seal`. This document is installed as
+`support/aether-colony-build-cycle.md` beside the public skill directories;
+it is private support, not a separately discoverable helper skill. Public skills
+resolve its path relative to their installed `SKILL.md`, never the working directory.
+The executable commands and runtime-issued IDs remain `aether` identities.
+Full workflow coverage and native-worker parity remain pending.
+
 ## Purpose
 
 Give Codex the wrapper-equivalent behavior for the lifecycle commands where AI
@@ -33,6 +42,17 @@ aether command-guide <colonize|plan|build|continue|swarm|seal> --platform codex
 
 If this skill and `command-guide` disagree, follow `command-guide` and update
 the skill.
+
+## Phase 199 Front-Door Contract
+
+- Require automatic typed territory freshness from the runtime before planning;
+  do not inspect or infer it from files.
+- Offer an equal guided-build/Autopilot choice after an accepted plan, without
+  preselecting either route. Show displayed Autopilot bounds before it runs.
+- Keep concrete repair/debt receipts from runtime results, and allow independent safe-path continuation while only the unsafe or blocked path pauses.
+- Autopilot stops at explicit seal. Force flags pass only when directly supplied by the owner. A forced-incomplete closure is not verified success.
+- The nine installed public skills coordinate the existing runtime routes.
+  Full workflow coverage and native-worker parity remain pending.
 
 ## Raw Bypass
 
@@ -61,81 +81,130 @@ answer, or store boundary questions in Codex chat or wrapper state.
 
 ## Plan Flow
 
-1. If the colony already has completed phases and the user is revising future
-   work, keep the existing goal and pass `--refresh`, `--revision-type`, and a
-   concrete `--revision-reason` to every host-plan iteration. Research and
-   verification revisions also require one or more repository-relative
-   `--revision-evidence` files. Do not create a new colony just to replan.
-2. Select planning depth and decomposition depth unless arguments already make
-   them clear.
-3. Run `AETHER_OUTPUT_MODE=visual aether status`.
-4. Run the TS host manifest command for one planning iteration:
+If the user explicitly supplies `--repair-artifact`, run
+`AETHER_OUTPUT_MODE=json aether plan --repair-artifact` before these planning
+steps, render its scoped result, and stop this flow. No preset or worker is
+needed; conflicting generation/revision flags are refused. An accepted
+revision receives dependency validation only, preserving its plan and approval
+bindings. Otherwise only the legacy `.aether/data/planning/phase-plan.json`
+staging artifact may be repaired. Numeric and semantic task IDs share one
+dependency contract across phases. Never rewrite only the active projection,
+an accepted candidate or approval records; follow the runtime's next command.
+
+1. Run `AETHER_OUTPUT_MODE=visual aether status` and use the runtime's lifecycle
+   facts as context. Do not inspect or edit state files to infer authority.
+2. Inspect the owner contract first:
 
 ```bash
-aether host plan --depth <choice> --planning-depth <choice>
+AETHER_OUTPUT_MODE=json aether spec --inspect
 ```
 
-5. Save the full JSON envelope to a temporary manifest file outside
-   `.aether/data/`.
-6. Parse `result.plan_manifest` or `result.planning_manifest`. Never parse
-   visual output as state. Treat `planning_run_id`, `iteration`,
-   `target_confidence`, `max_iterations`, `previous_confidence`,
-   `selected_gaps`, `previous_plan_draft`, and `expected_workers` as
-   authoritative loop state.
-7. When the manifest includes `revision`, preserve it and the worker briefs
-   verbatim. Completed phases are immutable, and Route-Setter must output only
-   replacement unfinished phases; Go assigns their final phase and task IDs.
-8. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
-   planning workers.
-9. If runtime reports unresolved clarifications, route to `aether discuss`
-   unless the user explicitly approves continuing with assumptions.
-10. Render the runtime-owned spawn ceremony:
+   Continue only when Go reports the exact current Specification revision/hash
+   `APPROVED`, its readable projection synchronized, and affected scope
+   reconciled. Follow the returned exact approval, projection-repair, or
+   reconciliation action otherwise. Specification approval is not plan
+   acceptance.
+3. If no valid policy was supplied, run `aether host plan` without a preset and
+   render `preset_required` as exactly four equal choices: Fast 80/up to 4
+   passes, Balanced 90/up to 6, Deep 95/up to 8, and Exhaustive 99/up to 12.
+   Select nothing by default; invalid, cancelled, or interrupted input starts
+   no worker.
+4. After one exact choice, request the first staged manifest:
+
+```bash
+aether host plan --preset <fast|balanced|deep|exhaustive>
+```
+
+   Exact target/max flags may bypass only the card when Go maps them to one of
+   those policies. Routine read-only phase research is automatic inside the
+   selected preset; it has no separate approval checkpoint.
+5. If completed phases exist and the owner is revising future work, preserve
+   the goal and pass `--refresh`, `--revision-type`, and a concrete
+   `--revision-reason`. Research and verification revisions also require
+   repository-relative `--revision-evidence` files. Do not create a new colony
+   merely to replan.
+6. Save the structured response to an approved temporary file outside
+   `.aether/data/`. Read only `result.plan_manifest.stage_manifest` as worker
+   authority. It binds one authorization ID, run/pass/preset, approved
+   Specification, base plan, prior card, input frontier, expected caste/result
+   type, and the current caste's predecessor data. The only worker result types
+   are `planning-scout-result/v1` and `planning-route-setter-result/v1`.
+7. Apply the Guided Boundary Gate before any ceremony or dispatch. A fresh
+   post-discuss manifest is mandatory; never reuse the pre-discuss response.
+8. Render the runtime-owned spawn and wave ceremony for the current manifest:
 
 ```bash
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
+AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>
 ```
 
-11. Spawn every runtime-specified dispatch: the base Scout plus any
-   phase_research Scouts in wave 1 (parallel), then exactly one
-   runtime-specified Route-Setter in wave 2, using visible live Task/subagent panels with
-   caste-labelled descriptions, manifest names, castes, task IDs, briefs, and
-   `skill_section` values. Do not add extra planning workers.
-12. Before each manifest wave, render `aether ceremony wave-start` for that
-   workflow and execution wave.
-13. Pass each dispatch `brief` verbatim and enforce its read budget, no-repeat
-   loop guard, output contract, and stop condition. If a planning worker keeps
-   rereading the same file or command, mark it `blocked` with a concrete
-   blocker instead of manually reconciling it as completed.
-14. Include the Scout terminal result in the Route-Setter prompt so Route-Setter
-   consumes Scout findings directly instead of re-running the survey. If the
-   manifest includes `selected_gaps` or `previous_plan_draft`, require fresh
-   evidence or resolved gaps before confidence may rise.
-15. Call `aether spawn-log` before each planning worker and
-   `aether spawn-complete` after each terminal result.
-16. After each terminal result, render `aether ceremony worker-complete`.
-17. Build the completion packet with `planning_run_id`, `iteration`, Scout
-   `scout_report`, Route-Setter `phase_plan`, and a compact `source_summary`.
-   Never reuse a manifest or completion packet across iterations. Finalize
-   through:
+9. Dispatch exactly the one current stage as a visible live Task/subagent
+   panel. The first stage is Scout. Route-Setter exists only in a returned
+   `route_stage_manifest` bound to the exact Scout receipt. A later Scout exists
+   only in a returned `scout_stage_manifest` after a complete iteration card.
+   Never dispatch both castes together, predict a next stage, or reuse a
+   consumed manifest.
+10. Preserve every runtime-provided name, caste, brief, result contract,
+    `permission_profile`, evidence frontier, weakest gap, Scout receipt, and
+    candidate snapshot. Pass the brief verbatim and enforce its read budget,
+    no-repeat guard, output contract, and stop condition. Mark a genuinely
+    blocked worker `blocked`; never synthesize completion.
+11. Call `aether spawn-log` before the worker and `aether spawn-complete` after
+    its terminal result. Render `aether ceremony worker-complete`.
+12. Write the unchanged current `plan_manifest` plus exactly one strict
+    `scout_result` or `route_result` to an approved temporary completion file.
+    Never combine stages, submit legacy whole-chain worker arrays, or reuse the
+    packet. Finalize the one stage through:
 
 ```bash
 AETHER_OUTPUT_MODE=json aether plan-finalize --completion-file <worker completion JSON>
 ```
 
-Then render the wrapper closeout:
+13. After Scout finalization, render `stage_receipt`, admitted evidence, gaps,
+    and the exact next boundary. Dispatch Route-Setter only from the returned
+    `route_stage_manifest`.
+14. If `decision_cards` are present, pause. Render the complete evidence-first
+    batch, including decision, why now, evidence, Queen recommendation, choice
+    consequences, affected IDs, prior-answer/revalidation state, and resume
+    condition. Collect all exact owner choices and resubmit only the issued
+    resume binding.
+15. Go alone resolves the answer batch as `direct_resume` or
+    `successor_spec_required`. Direct resume returns the exact previously
+    authorized stage. A successor is a new DRAFT: follow the exact `aether spec`
+    approval action and affected-scope reconciliation before another Scout.
+    Never edit SPEC, choose the branch, or synthesize the receipt/state change.
+16. Route-Setter proposes plan content and five readiness assessments;
+    Go validates evidence and derives overall readiness, semantic delta,
+    weakest gap, materiality, and stop policy. After every Route finalization,
+    render the complete immutable `iteration_card` before doing anything else:
+    fresh evidence, all five before/after values, overall versus target,
+    weakest gap, semantic delta, reason, and `evidence_that_would_change`.
+17. Continue only from a returned `scout_stage_manifest` targeting the weakest
+    evidenced gap. A later material choice pauses only after the completed card.
+18. When Go returns `plan_candidate`, label it `NOT ACTIVE` and inspect it:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow plan --completion-file <worker completion JSON>
+AETHER_OUTPUT_MODE=json aether plan --candidate
 ```
 
-If the JSON finalizer returns `requires_next_iteration: true`, do not render
-final closeout and do not claim the colony plan is complete. Request a fresh
-`aether host plan` manifest with the same depth, planning depth, target, and
-max-iteration controls, then repeat Scout -> Route-Setter -> `plan-finalize`.
-Only `plan-finalize` may decide that the target was reached, the loop stalled,
-the max iteration cap was hit, or explicit `--accept` finalized below target.
-For a completed-prefix revision, report the accepted `plan_revision` and never
-dispatch a task from the superseded revision.
+    Render the full proposal, approved Specification/base/timeline bindings,
+    complete card history, five scores, residual gaps and evidence that would
+    change them, semantic delta, and Queen recommendation with
+    producer/rationale/evidence. Planning stop is not acceptance.
+19. Only after explicit owner confirmation execute the review result's entire
+    `acceptance_command` verbatim. The generic legacy acceptance flag is not a
+    shortcut. Stale or divergent acceptance leaves the active plan unchanged
+    and routes back to `aether plan --candidate`.
+20. Only a successful `acceptance_receipt` makes the PlanRevision READY. Then
+    render plan closeout and offer the equal Codex choices
+    `$ant-build 1` and `aether run`; preselect neither. For a revision, report
+    preserved/affected/superseded/replacement IDs and discard every stale
+    stage packet, answer token, candidate view, and acceptance command.
+
+At every step, exact replay retains the existing Go-issued artifact/receipt;
+divergent replay stops with state unchanged and the runtime's exact recovery
+command. Codex never authors a receipt, score, recommendation, candidate status,
+active revision, state transition, or next action.
 
 ## Colonize Flow
 
@@ -175,6 +244,22 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 ## Build Flow
 
+### Default Codex route: direct runtime build
+
+1. Run `AETHER_OUTPUT_MODE=visual aether status` and surface active REDIRECT,
+   FOCUS, and FEEDBACK signals compactly.
+2. Run `AETHER_OUTPUT_MODE=visual aether build <phase>` once, without
+   `--plan-only`. The Go runtime is the single launcher: it selects the team,
+   dispatches Codex workers itself, and finalizes the phase in one call.
+3. This route never stops for a blocking check-in; relay `blocker_advisory`
+   and `blocker_advisory_question` verbatim if the runtime returns them, and
+   never answer for the owner.
+4. Relay the runtime's visual output as-is; if `recovery_job` is set, relay
+   the exact `recovery_command`.
+5. Route first to `aether continue`.
+
+### Wrapper manifest route
+
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
 3. Run the Go runtime manifest command:
@@ -186,6 +271,41 @@ aether build <phase> --plan-only
 4. Save the full JSON envelope to a temporary manifest file outside
    `.aether/data/`.
 5. Parse `result.dispatch_manifest`.
+5a. Coherent jobs: several related tasks become one job for one worker.
+   Grouping is a proposal, never a decision.
+   Go owns accepted groups, completion credit, retry, worktree reconciliation, and check-in policy; the wrapper proposes, renders, spawns, and submits.
+   - `--job-proposal` is repeatable: one JSON object per group with `name`,
+     `task_ids`, `owner_caste`, `relationship`, `benefit`, and optional
+     `owner_reason`. A reason must name both the relationship and the
+     benefit; "these are related" is not a reason.
+
+```bash
+aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner_caste":"builder","relationship":"these tasks edit the same templates","benefit":"one worker avoids repeated setup and write conflicts"}' <phase> --plan-only
+```
+
+   - With no proposal the runtime still groups tasks joined by a dependency
+     chain or by meaningful shared implementation files. Incidental overlap
+     through a README, changelog, or dependency manifest joins nothing.
+   - Read `job_decisions` and relay it plainly. Each entry's `status` is
+     `accepted` or `refused`; a refusal names `offending_task_id`,
+     `dependency_id`, and the `replacement_job_names` the runtime
+     substituted. Only the refused group is repaired.
+   - Each dispatch carries `job_name`, `job_reason`, `job_source` (`queen`,
+     `automatic`, `single`, or `retry`) and `covered_task_ids` in order.
+     Render them; never edit them, and never re-propose a refused grouping
+     unchanged.
+   - A real dependency cycle blocks dispatch for the whole phase, names the
+     cycle, and names the plan repair. Surface it and stop.
+5b. Team check-in: `checkin_requested` is the runtime's decision and
+   `checkin_reason` says why. Never infer either from the flags passed.
+   `one_worker_fast_path` means one worker with nothing left for the owner to
+   decide -- render `checkin_summary` as a short non-blocking note and
+   continue. `non_interactive` (autopilot or `--no-checkin`) skips the stage.
+   `explicit_checkin`, `pending_owner_decision`, and `default_pause` all keep
+   the full blocking check-in, including the forced-reviewer waiver flow.
+   `--checkin` is the owner override that forces the pause on a decision-free
+   one-worker build; combining it with `--no-checkin` is refused by name.
+   For a blocking check-in only, before asking the owner to approve the team, run `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>`. Display `result.approval_card` verbatim in a fenced text block in the visible conversation immediately before the approval choices; a collapsed tool result or a generic sentence about the team is not enough. The card names each worker, its assignment and wave, and the required reviewers that run afterward. Keep the runtime roster unchanged. If an older runtime has no `approval_card`, render the visual team-checkin ceremony and relay its roster visibly before asking. Read `result.optional`, `result.waived`, and `result.waive_commands` for the existing trim/decline flow.
 6. Apply the Guided Boundary Gate before rendering spawn ceremonies or spawning
    build workers.
 7. Render the user-facing spawn ceremony:
@@ -194,35 +314,232 @@ aether build <phase> --plan-only
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
-8. Follow the installed build-wave playbook. Use runtime-provided agent names,
-   castes, task IDs, briefs, and skill sections.
-9. Before each manifest wave, render `aether ceremony wave-start` for the build
-   workflow and execution wave.
-10. Spawn parallel waves as visible live Task/subagent panels with caste-labelled
-   descriptions. Do not use background-only dispatch as the ceremony, and do not
-   replace the live stack with a markdown worker table.
-11. Enforce read cache discipline for every worker: pass runtime briefs verbatim.
-   `dispatch.brief_path` (a repo-display path to the file holding the composed
-   brief, byte for byte) is now the routine channel every dispatch carries --
-   the runtime writes the composed brief to disk and reports the path, so
-   inline JSON briefs of 6-22KB never hit Read-tool long-line truncation.
-   Inline `dispatch.brief` appears only in the rare case where the runtime
-   could not write the file for that dispatch; honor it verbatim when it is
-   the only one present. Whichever one a dispatch carries, use it verbatim,
-   never merge, summarize, or reconstruct. Treat "File unchanged since last
-   read" as an instruction to use earlier content, and mark workers `blocked`
-   if they keep re-reading the same unchanged file.
-12. Call `aether spawn-log` before each worker and `aether spawn-complete` after
-   each terminal result.
-13. After each terminal result, render `aether ceremony worker-complete`.
-14. Stage the accepted completion packet in the Go-owned attempt journal:
+### Experimental native bridge (only when AETHER_CODEX_NATIVE_BUILD=1)
+
+Phase 204.2 (the native Codex worker lifecycle below) is parked and
+unqualified. Steps 8-17 below apply only when the operator has explicitly
+set `AETHER_CODEX_NATIVE_BUILD=1`; without it, use the direct runtime build
+route above instead.
+
+8. For an opted-in Codex build, use the non-launching native bridge. The host's native
+   `spawn_agent` is the sole launcher; never invoke a provider subprocess or
+   `internal-worker-adapter` for the same assignment. Keep the runtime-selected
+   team and execution waves; a small job can use one Builder plus checks.
+9. Write requests as strict JSON in an absolute regular file under a new
+   `aether-worker-request-*` directory in the system temporary directory. All
+   operations require `schema_version: 1`, `phase`, and the exact manifest
+   `execution_binding`. Reserve also requires `worker_name`, `task_id`, actual
+   `host_session_id`, canonical `workspace`, and `host_permission: workspace_write`.
+
+   For a task dispatch use its nonempty `task_id`. Auxiliary jobs such as an
+   independent Watcher may omit that raw field. Use the runtime's
+   `normalizedDispatchTaskID` convention: trim `stage`, `caste`, and `name`,
+   join them with hyphens, lowercase, replace spaces with hyphens, then trim
+   outer hyphens. Keep the accepted manifest unchanged; after reservation use
+   the saved `worker.task_id` for all later operations.
 
 ```bash
-AETHER_OUTPUT_MODE=json aether build-completion-stage <phase> --completion-file <worker completion JSON>
+aether codex-native-worker reserve --request <absolute temporary request file>
 ```
 
-Parse `result.completion_path`. If the wrapper stops after this point, `aether resume`
-must offer this exact packet rather than redispatching workers.
+   Unsupported workspace/permission requests refuse before launch. Only a fresh
+   `launch_allowed: true` permits one native `spawn_agent`. Use the returned
+   dispatch's role and name; for `child-fetch/v1` use `fork_turns: none`.
+   Pass `worker.native.prompt` verbatim, including its
+   wait instruction. Go assembles it from the capsule, verified
+   `dispatch.brief_path` bytes (using inline `dispatch.brief` only when no path
+   exists), matched skills and current new answers. Do not reconstruct the prompt.
+   The child must wait without checks or edits. Never launch on replay.
+   Per-child read-only or narrow write restrictions, separate native worktrees,
+   and Aether-governed nesting are unsupported. A request that requires governed
+   nesting sets `require_governed_nesting: true` and is refused. Inherited
+   permissions do not prove separate child isolation. Never silently change lanes.
+10. Save the actual child ID returned by the host. Bind with the same identity
+    fields plus `launch_id` from `worker.provider_run_id`, `child_id`,
+    `dispatch_sha256` and `prompt_sha256` from `worker.native`:
+
+```bash
+aether codex-native-worker bind --request <absolute temporary request file>
+```
+
+    Only after successful binding, send `worker.native.release` verbatim to that
+    same child through the host native messaging tool. A stopped or uncertain
+    launch stays unresolved; elapsed time never permits a duplicate child.
+
+10a. New manifests pin `context_protocol: child-fetch/v1`. Keep that protocol
+    unchanged for the whole attempt. Before useful work, give the bound child
+    a metadata-only request file containing its exact bound fields and
+    `context_purpose: initial`. Create a separate copy; keep the original bound
+    request for parent question/observe/record operations. Purpose-specific
+    copies are used only for child context/context-ack calls and must remain
+    under the same permitted temporary request directory. Tell the child the absolute runtime executable
+    and request path; the pointer contains no instructions or answers.
+
+    The actual child runs these as two separate host tool calls, using the
+    canonical workspace and enough output capacity for the complete JSON:
+
+```bash
+<absolute aether executable> codex-native-worker context --request <bound request>
+<absolute aether executable> codex-native-worker context-ack --request <bound request> --delivery-id <fetched delivery_id> --payload-sha256 <fetched payload_sha256>
+```
+
+    Append one `--decision-id <id>` for each fetched decision ID, in order.
+    Use the values from the completed read; never prepare the child's ACK in
+    advance. Print each command result unchanged. A truncated, failed or missing
+    read cannot be acknowledged. The initial payload is the full saved prompt,
+    including capsule, skills, steering and handoff. After its successful ACK,
+    the child may work without waiting for a new parent handshake.
+
+10b. Before recording a successful terminal result, observe the actual read and
+    ACK. Retain the uniquely bound child's raw host rollout from the selected
+    `CODEX_HOME/sessions` or the exact raw path supplied by the host. Check its
+    child UUID, parent UUID, task path, role and workspace against the actual
+    spawn and binding. Inspect only that owned child. If those records are
+    unavailable, leave delivery unproved and report the missing source.
+
+    For each read and ACK, retain the literal exec call, successful matching
+    `CommandExecution` and complete tool result actually returned to the child.
+    Match the call ID, turn, command, workspace and unchanged output. Hash each
+    original JSONL line without its trailing newline. `context_fetch` has
+    `schema_version: 1`, `read` and `ack`; each source has `child_id`, `turn_id`,
+    `call_id`, `started_at`, `completed_at`, and `call`, `command`, `result`
+    references with actual `id` and bare 64-character hexadecimal `sha256`.
+    Call/result IDs are their raw
+    payload IDs; command ID is the actual command item ID. Never invent IDs.
+
+    Submit `observe` with the bound fields, `observation_status: context_fetched`,
+    the exact fetched `context_delivery`, `context_fetch`, and the ACK result's
+    actual timestamp, ID and raw hash as `observed_at`, `source_event_id` and
+    `source_event_sha256`. Read completion must precede the separate ACK call;
+    ACK completion must precede the relevant work/checks. Retain receipts in
+    source chronology. Parent observation may follow work, but must precede
+    acceptance of successful terminal results. Fetching, ACK and observation
+    award no completion credit.
+
+    An absent protocol on a saved historical attempt retains the legacy native
+    message workflow. Never switch an in-flight attempt or silently use that
+    legacy path for a `child-fetch/v1` manifest. A runtime that lacks the required
+    operation cannot complete the new protocol.
+11. Retain raw child tool events and the child's terminal response. Immediately
+    record that response before waiting on another child or staging:
+
+```bash
+aether codex-native-worker record --request <absolute temporary request file>
+```
+
+    Include all bound fields, `result` (the actual child's JSON terminal result),
+    `source_event_id` (the terminal AgentMessage item's actual host ID), and
+    `source_event_sha256` (SHA-256 of that exact raw JSONL line, excluding its
+    trailing newline). Preserve the source line without reserializing it.
+    The runtime accepts the installed Builder's `ant_name`, `tdd`, and
+    `code_written` result, normalizing name/status in Go while preserving raw
+    child JSON. If both `name` and `ant_name` appear they must agree. Every handoff's
+    `verification_status` must be `pass`, `fail`, `partial`, `not_run`, or
+    `unknown`. If the runtime rejects malformed output, ask the same child to
+    correct its response before recording; never rewrite or replace an accepted
+    terminal result.
+    Missing/empty or mismatched results refuse. Never supply provider usage from
+    worker prose. Unknown outcomes remain incomplete, never reported as success.
+    Raw child-attributed `token_usage_record` events exist, but native usage is
+    uncollected by Aether. Empty saved Usage means unreported, not zero cost.
+    Parent totals and worker text cannot supply child measurements. Encrypted
+    message exports show call/child linkage but cannot independently prove exact
+    plaintext delivery.
+    Keep `spawn-log`/`spawn-complete` and the visible native child panel truthful;
+    render `ceremony worker-complete` after a saved terminal result.
+
+11a. **Codex native material questions and answers.** While a bound child is
+    working, relay its actual question through the runtime before asking the
+    owner. Keep the same saved assignment/child fields and add
+    `question: {question_id: <stable actual host question/event key>,
+    question: <the child's exact question>}`:
+
+```bash
+aether codex-native-worker question --request <same bound worker request file>
+```
+
+    After saving a terminal result, call this operation without `question` to
+    admit its saved handoff `open_decisions`. The runtime derives their stable
+    keys from the saved terminal event and handoff location. Show each pending
+    `decision.description` verbatim. The returned `answer_request_path` has the
+    exact `native_binding` and question with an empty answer. Copy only the
+    owner's actual answer into that file, then execute the exact returned
+    `answer_command`:
+
+```bash
+aether decision-answer --native-request <runtime-returned answer_request_path>
+```
+
+    Never invent an answer, change its binding or use the generic text answer
+    route. Native material clarification cannot authorize a checkpoint or
+    reviewer waiver. Harness/predeclared answers are test authorization, never
+    owner testimony. A repeated identical answer returns its original receipt;
+    a conflicting or stale answer refuses without creating a replacement.
+
+11b. For an answered current `child-fetch/v1` child, create a fresh metadata-only
+    bound request with `context_purpose: answers`. Notify that same child of the
+    pointer, without including answer text. The child reads and separately ACKs
+    it as in 10a, including all fetched decision IDs, before answer-dependent
+    work. Observe those actual child sources as in 10b. A new unrelated answer
+    does not replace the exact acknowledged decision set; changed or stale
+    decisions refuse. This read does not confer approval or checkpoint authority.
+
+    For historical attempts with no delivery protocol, retain their existing
+    host-send procedure and obtain the runtime's exact message:
+
+```bash
+aether codex-native-worker context --request <same bound worker request file>
+```
+
+    `awaiting_delivery` returns `context_delivery.payload`, `payload_sha256`,
+    `decision_ids` and the exact `child_id`. Send those bytes unchanged to that
+    child using the host native message operation. A read never acknowledges
+    delivery. Only after observing the send complete, call `observe` with the
+    exact binding, `observation_status: context_delivered`, the returned
+    `context_delivery`, `context_send: {status: completed, child_id,
+    message_sha256: <payload_sha256>}`, and the actual `observed_at`,
+    `source_event_id` and `source_event_sha256`. Failed or queued sends remain
+    unacknowledged; delivery alone does not prove consultation or useful influence.
+
+    After public resume and inspection, run `question` for that same child.
+    `answered` means do not re-ask; `no_updates` means no message is needed,
+    and `delivered` is a historical receipt. A stale or paused refusal keeps the
+    choice pending: use the runtime recovery path, never relabel old text.
+    Terminal questions and answers remain attached to their saved handoff.
+    Do not reopen a terminal child or forward its answer to another worker;
+    surface the runtime-returned `next_command`.
+
+12. A fresh parent first runs public `aether resume`, then
+    `aether codex-native-worker inspect --phase <phase>`; the exact saved-binding
+    `inspect --request <file>` route remains available. Inspection is read-only.
+    Reuse saved terminal results without
+    repeating the helper's edits. If real host evidence is inaccessible, report
+    the missing capability; never invent it or respawn the finished helper.
+    Resume only saved never-started assignments that the runtime admits.
+    An unresolved launch stays unresolved; reconnect only to its actual child.
+    Record real observations with `aether codex-native-worker observe --request <file>`.
+    An interrupt request records `cancel_requested`, never `cancelled`.
+    Only an actual host cancellation acknowledgement permits `cancelled`;
+    idle, close, release, elapsed time and process loss are not that evidence.
+    Never copy native results to legacy subprocess result files. The existing
+    native journal and Go-owned stage remain the saved-result authority.
+13. Task receipts cover actual proved work. Assigned `covered_task_ids` are scope,
+    not credit. A worker that finishes only part of its job submits a
+    `task_receipts` array: one entry per proved task with `task_id`, `status`,
+    `summary`, `files_created`, `files_modified`, `tests_written`, and its own
+    `handoff`. A task with no receipt is unfinished; never infer completion from
+    a related file change.
+    An accepted task receipt is admission, not completion credit: only the runtime's root-backed finalization can grant `completed_task_ids`.
+    Never author `covered_task_ids` or `completed_task_ids` by hand in a manifest or in colony state; the runtime owns both.
+14. Once required terminal records exist, stage from the existing journal with
+    schema version, phase, and execution binding only:
+
+```bash
+AETHER_OUTPUT_MODE=json aether codex-native-worker stage --request <absolute temporary request file>
+```
+
+    Parse `result.completion_path`. The saved worker results already survive a
+    stopped chat before this aggregate exists. Staging never launches or credits.
 
 15. Finalize through the durable packet only:
 
@@ -236,7 +553,29 @@ Then render the wrapper closeout:
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
 
+16. Read the finalizer's own answer instead of assuming a job finished whole.
+   Each dispatch's `completed_task_ids` is what the runtime actually
+   credited. `recovery_job` set to true means part of the job was proven and
+   part was not: `unfinished_task_ids` lists what remains,
+   `parent_attempt_id` and `retry_attempt_id` link the appended recovery
+   attempt to the original one, and `recovery_command` is the exact command
+   that redispatches only the unfinished tasks. Relay `recovery_command`;
+   never ask a new worker to redo credited work.
+17. The separate direct/subprocess route's worktree mode takes one job, one worktree, one branch, and one
+   merge-back. The runtime admits receipts, syncs only what it admitted back
+   to the project root, then credits. Anything the worker touched but never
+   proved is neither synced nor destroyed -- it stays on a preserved branch
+   the runtime names. Report that plainly rather than as lost or as done.
+   Native build admission refuses worktree mode; the native route must not
+   apply these subprocess instructions or allocate replacement worktrees.
+
 ## Continue Flow
+
+The runtime defaults workers to the detected host: Codex to Codex, Claude Code
+to Claude Code, and OpenCode to OpenCode. If that runtime is unavailable, report
+the blocker; do not ask for credentials for another provider. Only an explicit
+`AETHER_WORKER_PLATFORM` override selects a different provider. This selection
+does not replace missing completion evidence or change the launch owner.
 
 Default path:
 
@@ -343,6 +682,11 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-
 
 15. Follow runtime Porter readiness output only after `seal-finalize` succeeds.
    Do not run delivery commands unless the user chooses them.
+16. Keep sealing explicit: the Go runtime owns final review, preflight,
+    confirmation, transaction, and rendering. After sealing, run
+    `AETHER_OUTPUT_MODE=visual aether status` first to review retained state;
+    `aether entomb` remains a separate optional owner-confirmed archive-and-clear
+    action. Never invoke entomb automatically.
 
 ## Guardrails
 

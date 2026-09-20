@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/calcosmic/Aether/pkg/codegraph"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -75,6 +77,81 @@ type skillScanRoot struct {
 	Path          string
 	Source        string
 	IsUserCreated bool
+}
+
+const (
+	maintenanceSkillsSchemaVersion     = "maintenance-skills/v1"
+	maintenanceSkillsDiffSchemaVersion = "maintenance-skills-diff/v1"
+)
+
+type maintenanceSkillInventoryEntry struct {
+	Identity       string           `json:"identity"`
+	SourceIdentity string           `json:"source_identity"`
+	Source         string           `json:"source"`
+	Path           string           `json:"path"`
+	RelativePath   string           `json:"relative_path"`
+	PathClass      string           `json:"path_class"`
+	Digest         string           `json:"digest"`
+	ParseStatus    string           `json:"parse_status"`
+	Metadata       skillFrontmatter `json:"metadata"`
+	Errors         []string         `json:"errors"`
+}
+
+type maintenanceSkillInvalidEntry struct {
+	Identity string   `json:"identity"`
+	Path     string   `json:"path"`
+	Digest   string   `json:"digest"`
+	Errors   []string `json:"errors"`
+}
+
+type maintenanceSkillInventoryReceipt struct {
+	SchemaVersion string                           `json:"schema_version"`
+	OperationID   string                           `json:"operation_id"`
+	Root          string                           `json:"root"`
+	Hub           string                           `json:"hub"`
+	Entries       []maintenanceSkillInventoryEntry `json:"entries"`
+	Invalid       []maintenanceSkillInvalidEntry   `json:"invalid"`
+	Verification  maintenanceSkillVerification     `json:"verification"`
+	StateEffect   colony.LifecycleStateEffect      `json:"state_effect"`
+	NextAction    string                           `json:"next_action"`
+}
+
+type maintenanceSkillVerification struct {
+	Status       string `json:"status"`
+	EntryCount   int    `json:"entry_count"`
+	InvalidCount int    `json:"invalid_count"`
+}
+
+type maintenanceSkillDelta struct {
+	Identity     string   `json:"identity"`
+	Name         string   `json:"name,omitempty"`
+	BeforePath   string   `json:"before_path,omitempty"`
+	AfterPath    string   `json:"after_path,omitempty"`
+	BeforeDigest string   `json:"before_digest,omitempty"`
+	AfterDigest  string   `json:"after_digest,omitempty"`
+	Errors       []string `json:"errors"`
+}
+
+type maintenanceSkillDiffResult struct {
+	SchemaVersion string                           `json:"schema_version"`
+	OperationID   string                           `json:"operation_id"`
+	Before        string                           `json:"before"`
+	After         string                           `json:"after"`
+	Added         []maintenanceSkillDelta          `json:"added"`
+	Removed       []maintenanceSkillDelta          `json:"removed"`
+	Changed       []maintenanceSkillDelta          `json:"changed"`
+	Invalid       []maintenanceSkillDelta          `json:"invalid"`
+	Verification  maintenanceSkillDiffVerification `json:"verification"`
+	StateEffect   colony.LifecycleStateEffect      `json:"state_effect"`
+	NextAction    string                           `json:"next_action"`
+}
+
+type maintenanceSkillDiffVerification struct {
+	Status       string `json:"status"`
+	AddedCount   int    `json:"added_count"`
+	RemovedCount int    `json:"removed_count"`
+	ChangedCount int    `json:"changed_count"`
+	InvalidCount int    `json:"invalid_count"`
 }
 
 type skillMatchReason struct {
@@ -398,9 +475,13 @@ func (fm *skillFrontmatter) normalize() {
 }
 
 func skillScanRoots(hub string) []skillScanRoot {
+	return skillScanRootsForWorkspace(hub, ".")
+}
+
+func skillScanRootsForWorkspace(hub, workspace string) []skillScanRoot {
 	roots := []skillScanRoot{
-		{Path: ".aether/skills", Source: "repo-aether", IsUserCreated: false},
-		{Path: ".aether/hive/skills", Source: "repo-learned", IsUserCreated: false},
+		{Path: filepath.Join(workspace, ".aether", "skills"), Source: "repo-aether", IsUserCreated: false},
+		{Path: filepath.Join(workspace, ".aether", "hive", "skills"), Source: "repo-learned", IsUserCreated: false},
 		{Path: filepath.Join(hub, "system", "skills"), Source: "hub-aether-shipped", IsUserCreated: false},
 		{Path: filepath.Join(hub, "skills", "domain"), Source: "hub-aether-domain", IsUserCreated: true},
 	}
@@ -1160,8 +1241,465 @@ func containsString(items []string, want string) bool {
 	return false
 }
 
+var maintenanceSkillsCmd = &cobra.Command{
+	Use:         "skills",
+	Short:       "Inspect live skill sources without rebuilding a cache",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Help()
+	},
+}
+
+var maintenanceSkillsInspectCmd = &cobra.Command{
+	Use:         "inspect",
+	Short:       "Create a read-only receipt from live skill sources",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		root, _ := cmd.Flags().GetString("root")
+		hub, _ := cmd.Flags().GetString("hub")
+		result := scanMaintenanceSkills(root, hub)
+		outputWorkflow(result, renderMaintenanceSkillInventory(result))
+		return nil
+	},
+}
+
+var maintenanceSkillsDiffCmd = &cobra.Command{
+	Use:         "diff",
+	Short:       "Compare live skill inventory receipts or a supplied manifest",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
+	RunE:        runMaintenanceSkillsDiff,
+}
+
+func scanMaintenanceSkills(root, hub string) maintenanceSkillInventoryReceipt {
+	root = resolveMaintenanceSkillRoot(root)
+	hub = resolveMaintenanceSkillHub(hub)
+	receipt := maintenanceSkillInventoryReceipt{
+		SchemaVersion: maintenanceSkillsSchemaVersion,
+		OperationID:   "skills.inspect",
+		Root:          root,
+		Hub:           hub,
+		Entries:       []maintenanceSkillInventoryEntry{},
+		Invalid:       []maintenanceSkillInvalidEntry{},
+		StateEffect:   colony.LifecycleStateEffectNone,
+		NextAction:    "aether maintenance skills diff --before <receipt> --after <receipt>",
+	}
+
+	for _, scanRoot := range skillScanRootsForWorkspace(hub, root) {
+		for _, dir := range findSkillDirs(scanRoot.Path) {
+			receipt.Entries = append(receipt.Entries, inspectMaintenanceSkill(scanRoot, dir))
+		}
+	}
+	sortMaintenanceSkillInventoryEntries(receipt.Entries)
+	for _, entry := range receipt.Entries {
+		if entry.ParseStatus != "invalid" {
+			continue
+		}
+		receipt.Invalid = append(receipt.Invalid, maintenanceSkillInvalidEntry{
+			Identity: entry.Identity,
+			Path:     entry.Path,
+			Digest:   entry.Digest,
+			Errors:   append([]string{}, entry.Errors...),
+		})
+	}
+	status := "pass"
+	if len(receipt.Invalid) > 0 {
+		status = "warning"
+	}
+	receipt.Verification = maintenanceSkillVerification{
+		Status:       status,
+		EntryCount:   len(receipt.Entries),
+		InvalidCount: len(receipt.Invalid),
+	}
+	return receipt
+}
+
+func resolveMaintenanceSkillRoot(root string) string {
+	if strings.TrimSpace(root) == "" {
+		root = skillWorkspaceRoot()
+	}
+	if absolute, err := filepath.Abs(root); err == nil {
+		return filepath.Clean(absolute)
+	}
+	return filepath.Clean(root)
+}
+
+func resolveMaintenanceSkillHub(hub string) string {
+	if strings.TrimSpace(hub) == "" {
+		hub = resolveHubPath()
+	}
+	if absolute, err := filepath.Abs(hub); err == nil {
+		return filepath.Clean(absolute)
+	}
+	return filepath.Clean(hub)
+}
+
+func inspectMaintenanceSkill(root skillScanRoot, dir string) maintenanceSkillInventoryEntry {
+	path := filepath.Join(dir, "SKILL.md")
+	relativePath, err := filepath.Rel(root.Path, path)
+	if err != nil {
+		relativePath = filepath.Base(dir) + "/SKILL.md"
+	}
+	relativePath = filepath.ToSlash(relativePath)
+	sourceIdentity := root.Source + ":" + relativePath
+	entry := maintenanceSkillInventoryEntry{
+		Identity:       sourceIdentity,
+		SourceIdentity: sourceIdentity,
+		Source:         root.Source,
+		Path:           filepath.Clean(path),
+		RelativePath:   relativePath,
+		PathClass:      maintenanceSkillPathClass(root.Source),
+		ParseStatus:    "invalid",
+		Errors:         []string{},
+	}
+	raw, readErr := os.ReadFile(path)
+	if readErr != nil {
+		entry.Errors = append(entry.Errors, fmt.Sprintf("read skill: %v", readErr))
+		return entry
+	}
+	digest := sha256.Sum256(raw)
+	entry.Digest = fmt.Sprintf("%x", digest[:])
+	entry.Metadata, entry.Errors = parseMaintenanceSkillMetadata(string(raw))
+	if len(entry.Errors) == 0 {
+		entry.ParseStatus = "valid"
+	}
+	return entry
+}
+
+func maintenanceSkillPathClass(source string) string {
+	switch source {
+	case "repo-aether":
+		return "repository"
+	case "repo-learned":
+		return "repository_learned"
+	case "hub-aether-shipped":
+		return "hub_shipped"
+	case "hub-aether-domain":
+		return "hub_custom"
+	default:
+		return "unknown"
+	}
+}
+
+func parseMaintenanceSkillMetadata(content string) (skillFrontmatter, []string) {
+	var metadata skillFrontmatter
+	var problems []string
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		problems = append(problems, "missing opening YAML frontmatter delimiter")
+	} else {
+		closing := -1
+		for i := 1; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "---" {
+				closing = i
+				break
+			}
+		}
+		if closing < 0 {
+			problems = append(problems, "missing closing YAML frontmatter delimiter")
+		} else if err := yaml.Unmarshal([]byte(strings.Join(lines[1:closing], "\n")), &metadata); err != nil {
+			problems = append(problems, "invalid YAML frontmatter: "+err.Error())
+		}
+	}
+	if fallback := parseSkillFrontmatter(content); fallback != nil {
+		if strings.TrimSpace(metadata.Name) == "" || len(problems) > 0 {
+			metadata = *fallback
+		}
+	}
+	metadata.normalize()
+	if strings.TrimSpace(metadata.Name) == "" {
+		problems = append(problems, "frontmatter field name is required")
+	}
+	return metadata, uniqueSortedSkillStrings(problems)
+}
+
+func runMaintenanceSkillsDiff(cmd *cobra.Command, _ []string) error {
+	beforePath, _ := cmd.Flags().GetString("before")
+	afterPath, _ := cmd.Flags().GetString("after")
+	if strings.TrimSpace(beforePath) == "" {
+		return fmt.Errorf("--before must name a live-scan receipt or skill manifest")
+	}
+	before, beforeManifest, err := readMaintenanceSkillInventory(beforePath)
+	if err != nil {
+		return fmt.Errorf("read --before %s: %w", beforePath, err)
+	}
+
+	var after maintenanceSkillInventoryReceipt
+	afterManifest := false
+	afterLabel := afterPath
+	if strings.TrimSpace(afterPath) == "" {
+		root, _ := cmd.Flags().GetString("root")
+		hub, _ := cmd.Flags().GetString("hub")
+		after = scanMaintenanceSkills(root, hub)
+		afterLabel = "live"
+	} else {
+		after, afterManifest, err = readMaintenanceSkillInventory(afterPath)
+		if err != nil {
+			return fmt.Errorf("read --after %s: %w", afterPath, err)
+		}
+	}
+	if beforeManifest && !afterManifest {
+		after = alignMaintenanceSkillsToManifest(after)
+	}
+	if afterManifest && !beforeManifest {
+		before = alignMaintenanceSkillsToManifest(before)
+	}
+
+	result := diffMaintenanceSkillInventories(before, after, beforePath, afterLabel)
+	outputWorkflow(result, renderMaintenanceSkillDiff(result))
+	return nil
+}
+
+func readMaintenanceSkillInventory(path string) (maintenanceSkillInventoryReceipt, bool, error) {
+	var receipt maintenanceSkillInventoryReceipt
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return receipt, false, err
+	}
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return receipt, false, err
+	}
+	if wrapped, ok := document["result"]; ok {
+		raw = wrapped
+		if err := json.Unmarshal(raw, &document); err != nil {
+			return receipt, false, err
+		}
+	}
+	if _, ok := document["entries"]; ok {
+		if err := json.Unmarshal(raw, &receipt); err != nil {
+			return receipt, false, err
+		}
+		if receipt.Entries == nil {
+			receipt.Entries = []maintenanceSkillInventoryEntry{}
+		}
+		if receipt.Invalid == nil {
+			receipt.Invalid = []maintenanceSkillInvalidEntry{}
+		}
+		return receipt, false, nil
+	}
+	if _, ok := document["skills"]; ok {
+		var manifest skillManifestData
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			return receipt, true, err
+		}
+		receipt = maintenanceSkillInventoryReceipt{
+			SchemaVersion: maintenanceSkillsSchemaVersion,
+			OperationID:   "skills.inspect",
+			Entries:       []maintenanceSkillInventoryEntry{},
+			Invalid:       []maintenanceSkillInvalidEntry{},
+			StateEffect:   colony.LifecycleStateEffectNone,
+		}
+		for _, skill := range manifest.Skills {
+			name := strings.TrimSpace(skill.Name)
+			identity := "manifest:" + strings.ToLower(name)
+			entry := maintenanceSkillInventoryEntry{
+				Identity:       identity,
+				SourceIdentity: identity,
+				Source:         "manifest",
+				Path:           path,
+				RelativePath:   name,
+				PathClass:      "manifest",
+				Digest:         skill.Checksum,
+				ParseStatus:    "valid",
+				Metadata:       skillFrontmatter{Name: name, Version: skill.Version},
+				Errors:         []string{},
+			}
+			if name == "" || strings.TrimSpace(skill.Checksum) == "" {
+				entry.ParseStatus = "invalid"
+				entry.Errors = append(entry.Errors, "manifest skill requires name and checksum")
+			}
+			receipt.Entries = append(receipt.Entries, entry)
+		}
+		sortMaintenanceSkillInventoryEntries(receipt.Entries)
+		return receipt, true, nil
+	}
+	return receipt, false, fmt.Errorf("unsupported document: expected entries or skills")
+}
+
+func alignMaintenanceSkillsToManifest(receipt maintenanceSkillInventoryReceipt) maintenanceSkillInventoryReceipt {
+	for i := range receipt.Entries {
+		name := strings.ToLower(strings.TrimSpace(receipt.Entries[i].Metadata.Name))
+		if name != "" {
+			receipt.Entries[i].Identity = "manifest:" + name
+		}
+	}
+	sortMaintenanceSkillInventoryEntries(receipt.Entries)
+	return receipt
+}
+
+func sortMaintenanceSkillInventoryEntries(entries []maintenanceSkillInventoryEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Identity != entries[j].Identity {
+			return entries[i].Identity < entries[j].Identity
+		}
+		if entries[i].Path != entries[j].Path {
+			return entries[i].Path < entries[j].Path
+		}
+		return entries[i].Digest < entries[j].Digest
+	})
+}
+
+func diffMaintenanceSkillInventories(before, after maintenanceSkillInventoryReceipt, beforeLabel, afterLabel string) maintenanceSkillDiffResult {
+	result := maintenanceSkillDiffResult{
+		SchemaVersion: maintenanceSkillsDiffSchemaVersion,
+		OperationID:   "skills.diff",
+		Before:        beforeLabel,
+		After:         afterLabel,
+		Added:         []maintenanceSkillDelta{},
+		Removed:       []maintenanceSkillDelta{},
+		Changed:       []maintenanceSkillDelta{},
+		Invalid:       []maintenanceSkillDelta{},
+		StateEffect:   colony.LifecycleStateEffectNone,
+		NextAction:    "aether maintenance skills inspect",
+	}
+	beforeEntries := maintenanceSkillEntriesByIdentity(before.Entries)
+	afterEntries := maintenanceSkillEntriesByIdentity(after.Entries)
+	for identity, entry := range afterEntries {
+		previous, exists := beforeEntries[identity]
+		if !exists {
+			result.Added = append(result.Added, maintenanceSkillDeltaFromEntries(identity, nil, &entry))
+			continue
+		}
+		if previous.Digest != entry.Digest {
+			result.Changed = append(result.Changed, maintenanceSkillDeltaFromEntries(identity, &previous, &entry))
+		}
+	}
+	for identity, entry := range beforeEntries {
+		if _, exists := afterEntries[identity]; !exists {
+			result.Removed = append(result.Removed, maintenanceSkillDeltaFromEntries(identity, &entry, nil))
+		}
+	}
+	for _, side := range []struct {
+		name    string
+		entries []maintenanceSkillInventoryEntry
+	}{
+		{name: "before", entries: before.Entries},
+		{name: "after", entries: after.Entries},
+	} {
+		for _, entry := range side.entries {
+			if entry.ParseStatus != "invalid" {
+				continue
+			}
+			delta := maintenanceSkillDeltaFromEntries(entry.Identity, nil, &entry)
+			if side.name == "before" {
+				delta = maintenanceSkillDeltaFromEntries(entry.Identity, &entry, nil)
+			}
+			delta.Identity = side.name + ":" + entry.Identity
+			result.Invalid = append(result.Invalid, delta)
+		}
+	}
+	for _, deltas := range [][]maintenanceSkillDelta{result.Added, result.Removed, result.Changed, result.Invalid} {
+		sort.Slice(deltas, func(i, j int) bool { return deltas[i].Identity < deltas[j].Identity })
+	}
+	status := "clean"
+	if len(result.Added)+len(result.Removed)+len(result.Changed)+len(result.Invalid) > 0 {
+		status = "drift"
+		result.NextAction = "aether maintenance"
+	}
+	result.Verification = maintenanceSkillDiffVerification{
+		Status:       status,
+		AddedCount:   len(result.Added),
+		RemovedCount: len(result.Removed),
+		ChangedCount: len(result.Changed),
+		InvalidCount: len(result.Invalid),
+	}
+	return result
+}
+
+func maintenanceSkillEntriesByIdentity(entries []maintenanceSkillInventoryEntry) map[string]maintenanceSkillInventoryEntry {
+	result := make(map[string]maintenanceSkillInventoryEntry, len(entries))
+	for _, entry := range entries {
+		if _, exists := result[entry.Identity]; !exists {
+			result[entry.Identity] = entry
+		}
+	}
+	return result
+}
+
+func maintenanceSkillDeltaFromEntries(identity string, before, after *maintenanceSkillInventoryEntry) maintenanceSkillDelta {
+	delta := maintenanceSkillDelta{Identity: identity, Errors: []string{}}
+	if before != nil {
+		delta.Name = before.Metadata.Name
+		delta.BeforePath = before.Path
+		delta.BeforeDigest = before.Digest
+		delta.Errors = append(delta.Errors, before.Errors...)
+	}
+	if after != nil {
+		if delta.Name == "" {
+			delta.Name = after.Metadata.Name
+		}
+		delta.AfterPath = after.Path
+		delta.AfterDigest = after.Digest
+		delta.Errors = append(delta.Errors, after.Errors...)
+	}
+	delta.Errors = uniqueSortedSkillStrings(delta.Errors)
+	return delta
+}
+
+func renderMaintenanceSkillInventory(result maintenanceSkillInventoryReceipt) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("maintenance"), "Live Skill Inventory"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "Repository: %s\nHub: %s\n", result.Root, result.Hub)
+	b.WriteString(renderStageMarker("Sources"))
+	for _, entry := range result.Entries {
+		name := entry.Metadata.Name
+		if strings.TrimSpace(name) == "" {
+			name = "invalid skill"
+		}
+		fmt.Fprintf(&b, "%s — %s [%s]\n", entry.Identity, name, entry.ParseStatus)
+		fmt.Fprintf(&b, "  %s  %s\n", entry.Digest, entry.Path)
+		for _, problem := range entry.Errors {
+			fmt.Fprintf(&b, "  Error: %s\n", problem)
+		}
+	}
+	fmt.Fprintf(&b, "\nState effect: none\nScanned: %d; invalid: %d\n", result.Verification.EntryCount, result.Verification.InvalidCount)
+	b.WriteString(renderNextUp(result.NextAction))
+	return b.String()
+}
+
+func renderMaintenanceSkillDiff(result maintenanceSkillDiffResult) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("maintenance"), "Live Skill Diff"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "Before: %s\nAfter: %s\n", result.Before, result.After)
+	for _, group := range []struct {
+		name   string
+		values []maintenanceSkillDelta
+	}{
+		{name: "Added", values: result.Added},
+		{name: "Removed", values: result.Removed},
+		{name: "Changed", values: result.Changed},
+		{name: "Invalid", values: result.Invalid},
+	} {
+		b.WriteString(renderStageMarker(group.name))
+		if len(group.values) == 0 {
+			b.WriteString("none\n")
+			continue
+		}
+		for _, delta := range group.values {
+			fmt.Fprintf(&b, "%s  %s -> %s\n", delta.Identity, emptyFallback(delta.BeforeDigest, "absent"), emptyFallback(delta.AfterDigest, "absent"))
+		}
+	}
+	b.WriteString("\nState effect: none\n")
+	b.WriteString(renderNextUp(result.NextAction))
+	return b.String()
+}
+
 func init() {
 	skillIsUserCreatedCmd.Flags().String("skill", "", "Skill name (required)")
+	maintenanceSkillsInspectCmd.Flags().String("root", "", "Repository root to scan (default: current workspace)")
+	maintenanceSkillsInspectCmd.Flags().String("hub", "", "Aether hub root to scan (default: active channel hub)")
+	maintenanceSkillsDiffCmd.Flags().String("before", "", "Earlier live-scan receipt or skill manifest")
+	maintenanceSkillsDiffCmd.Flags().String("after", "", "Later live-scan receipt or skill manifest (default: scan live)")
+	maintenanceSkillsDiffCmd.Flags().String("root", "", "Repository root for a live comparison")
+	maintenanceSkillsDiffCmd.Flags().String("hub", "", "Aether hub root for a live comparison")
+	maintenanceSkillsCmd.AddCommand(maintenanceSkillsInspectCmd, maintenanceSkillsDiffCmd)
+	maintenanceCmd.AddCommand(maintenanceSkillsCmd)
 
 	rootCmd.AddCommand(skillIndexReadCmd)
 	rootCmd.AddCommand(skillManifestReadCmd)

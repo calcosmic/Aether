@@ -142,3 +142,24 @@ export declare function createPlatformDispatcher(platform: Platform): {
  * @internal — exported for testing only
  */
 export declare function buildArgs(config: WorkerConfig): string[];
+/**
+ * Resolve the cheap auth-probe's budget.
+ *
+ * This deliberately does NOT introduce a new AETHER_PROBE_TIMEOUT
+ * environment variable, even though the folded todo
+ * (.planning/todos/pending/2026-08-01-ts-host-preflight-hardcoded-timeout.md)
+ * originally suggested that name: this project already ran two
+ * disagreeing readiness-timeout knobs (AETHER_PREFLIGHT_TIMEOUT and
+ * AETHER_PROBE_TIMEOUT) and consolidated them on the Go side onto the one
+ * shared setting -- locked by
+ * TestLiveReadinessSourceHasOneTimeoutEnvironmentVariable
+ * (pkg/codex/preflight_phase_198_3_test.go), which fails if
+ * platform_dispatch.go (the Go file) ever mentions AETHER_PROBE_TIMEOUT
+ * again. Declaring a second, TS-only AETHER_PROBE_TIMEOUT here would reopen
+ * exactly that defect on one host only. This probe answers the same
+ * "is the provider ready" question the model round-trip preflight answers,
+ * just more cheaply, so it shares that one setting -- mirroring the Go
+ * side's own resolvedAvailabilityProbeTimeout, which is literally
+ * `return resolvedPreflightTimeout()`.
+ */
+export declare function resolveProbeTimeoutMs(): number;

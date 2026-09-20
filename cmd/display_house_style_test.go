@@ -150,8 +150,8 @@ func TestStatusRendersHealthBreakdown(t *testing.T) {
 		"Build velocity: 2 phase(s)/day (steady)",
 		"Error rate:     0 error(s)/day (clean)",
 		"Signal health:  3 active (active)",
-		"Memory:         7 instinct(s) (normal)",
-		"Colony age:     3d",
+		"Memory:         7 instinct(s) — lessons learned (normal)",
+		"Colony age (how long this project has run): 3d",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("health breakdown missing %q in:\n%s", want, output)

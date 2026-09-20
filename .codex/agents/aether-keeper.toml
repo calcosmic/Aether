@@ -59,7 +59,7 @@ Links to related patterns
 {
   "ant_name": "{your name}",
   "caste": "keeper",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "patterns_archived": [],
   "patterns_updated": [],

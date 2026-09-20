@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +24,7 @@ func TestSourceCheckValidatesCurrentSourceSurfaces(t *testing.T) {
 		"canonical source surfaces",
 		"retired source mirrors",
 		"generated command wrappers",
+		"generated Codex skill surface",
 	} {
 		if !sourceCheckHasComponent(result, want) {
 			t.Fatalf("source check missing component %q", want)
@@ -149,6 +152,7 @@ func minimalSourceCheckRoot(t *testing.T) string {
 	t.Helper()
 
 	root := t.TempDir()
+	seedCodexSkillSupportFixture(t, root)
 	for _, dir := range []string{
 		".aether/commands",
 		".aether/skills",
@@ -218,4 +222,105 @@ func sourceCheckHasIssue(result sourceCheckResult, path, message string) bool {
 		}
 	}
 	return false
+}
+
+func TestCodexAntSkillSourceCheck(t *testing.T) {
+	for _, kind := range []string{"clean", "missing-name", "duplicate-name", "duplicate-directory", "unexpected-name", "bad-frontmatter", "wrong-guide", "route-drift", "missing-support-reference", "missing-support-file", "empty-support-file"} {
+		t.Run(kind, func(t *testing.T) {
+			antPayloadEnvironment(t)
+			root := minimalSourceCheckRoot(t)
+			original := sourceCheckCodexShims
+			t.Cleanup(func() { sourceCheckCodexShims = original })
+			shims := original()
+			index := -1
+			for i, shim := range shims {
+				if shim.Name == "ant-plan" {
+					index = i
+				}
+			}
+			if index < 0 {
+				t.Fatal("actual generator omitted ant-plan")
+			}
+			want := ""
+			switch kind {
+			case "missing-name":
+				shims = append(shims[:index], shims[index+1:]...)
+				want = "missing public skill"
+			case "duplicate-name":
+				shims[index].Name = "ant-init"
+				want = "duplicate public name"
+			case "duplicate-directory":
+				shims = append(shims, shims[index])
+				want = "duplicate public directory"
+			case "unexpected-name":
+				shims[index].Name, shims[index].Dir = "ant-pause", "ant-pause"
+				want = "unexpected public skill"
+			case "bad-frontmatter":
+				shims[index].Description = "[invalid YAML"
+				want = "frontmatter is invalid"
+			case "wrong-guide":
+				shims[index].Body = strings.Replace(shims[index].Body, "aether command-guide plan --platform codex", "aether command-guide build --platform codex", 1)
+				want = "guide route"
+			case "route-drift":
+				shims[index].Body = strings.Replace(shims[index].Body, "aether plan-finalize", "aether plan", 1)
+				want = "runtime route"
+			case "missing-support-reference":
+				shims[index].Body = strings.ReplaceAll(shims[index].Body, "../support/aether-colony-build-cycle.md", "../support/missing.md")
+				want = "private support reference"
+			case "missing-support-file", "empty-support-file":
+				path := filepath.Join(root, ".aether/skills/colony/aether-colony-build-cycle/SKILL.md")
+				if kind == "missing-support-file" {
+					if err := os.Remove(path); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err := os.WriteFile(path, nil, 0644); err != nil {
+						t.Fatal(err)
+					}
+				}
+				want = "private support source"
+			}
+			// Mutate the generator's subject, never the checker or its result.
+			sourceCheckCodexShims = func() []codexSkillShim { return shims }
+			before := antSnapshot(t, root)
+			resetFlags(rootCmd)
+			output, err := antPayloadCommand(t, "source-check", "--root", root, "--json")
+			var result sourceCheckResult
+			if decodeErr := json.Unmarshal([]byte(output), &result); decodeErr != nil {
+				t.Fatalf("registered checker output: %v", decodeErr)
+			}
+			antAssertSnapshot(t, root, before)
+			for _, component := range []string{"canonical source surfaces", "retired source mirrors", "generated command wrappers", "generated Codex skill surface"} {
+				if !sourceCheckHasComponent(result, component) {
+					t.Fatalf("registered checker omitted %s", component)
+				}
+			}
+			if kind == "clean" {
+				if err != nil || !result.OK {
+					t.Fatalf("valid surface refused: %v %+v", err, result.Issues)
+				}
+				for _, component := range result.Components {
+					if component.Name == "generated Codex skill surface" && component.Checked != 12 {
+						t.Fatalf("expected nine public + three support checks: %+v", component)
+					}
+					if component.Name == "generated command wrappers" && component.Checked != 2 {
+						t.Fatal("Claude/OpenCode wrappers no longer checked")
+					}
+				}
+				return
+			}
+			if err == nil || result.OK || result.Verification.Status != "fail" || len(result.Blockers) == 0 {
+				t.Fatalf("invalid %s accepted: %v %+v", kind, err, result)
+			}
+			found := false
+			for _, issue := range result.Issues {
+				if issue.Area == "codex_skills" && strings.Contains(issue.Message, want) && issue.Path != "" && issue.Expected != "" && issue.Actual != "" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("missing structured %s finding: %s", want, fmt.Sprint(result.Issues))
+			}
+		})
+	}
 }

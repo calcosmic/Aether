@@ -20,11 +20,20 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Display colony dashboard",
-	Args:  cobra.NoArgs,
+	Use:         "status",
+	Short:       "Show the complete authoritative colony snapshot.",
+	Args:        cobra.NoArgs,
+	Annotations: map[string]string{"aether.io/read-only": "true"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		state, err := loadActiveColonyState()
+		if store == nil {
+			if shouldRenderVisualOutput(stdout) {
+				writeVisualOutput(stdout, renderNoColonyStatusVisual())
+				return nil
+			}
+			renderRecoveryMenu("status", colonyStateLoadMessage(errNoColonyInitialized), nil)
+			return nil
+		}
+		state, err := loadActiveColonyStateReadOnly()
 		if err != nil {
 			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
 				writeVisualOutput(stdout, renderNoColonyStatusVisual())
@@ -33,19 +42,28 @@ var statusCmd = &cobra.Command{
 			renderRecoveryMenu("status", colonyStateLoadMessage(err), nil)
 			return nil
 		}
-
-		mode := strings.ToLower(strings.TrimSpace(os.Getenv("AETHER_OUTPUT_MODE")))
-		if mode == "json" {
-			outputOK(buildStatusResult(state, store))
-			return nil
+		root := resolveAetherRoot()
+		facts, factsErr := loadLifecycleFacts(root, store, time.Now().UTC())
+		if factsErr != nil {
+			facts = unavailableLifecycleFacts(root, time.Now().UTC(), factsErr.Error())
 		}
-		output := renderDashboard(state, store)
-		writeVisualOutput(stdout, output)
+
+		// Keep the mature dashboard as the authoritative status payload and
+		// visual, then add the shared resolver answer through buildStatusResult.
+		// That helper folds one next-action card and its projection into the same
+		// map, so neither JSON nor the terminal loses dashboard facts or decides
+		// the next action twice.
+		result := buildStatusResult(state, store)
+		projection := projectLifecycle(facts, LifecycleViewFull, detectPlatform())
+		projection.Command = "status"
+		result["lifecycle"] = projection
+		outputWorkflow(result, renderDashboard(state, store, result))
 		return nil
 	},
 }
 
 func init() {
+	statusCmd.Flags().Bool("compact", false, "Show the strict compact subset of the colony snapshot")
 	rootCmd.AddCommand(statusCmd)
 }
 
@@ -65,7 +83,7 @@ func renderColonyHealthLine(vitals map[string]interface{}) string {
 	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
 		instincts = intValue(section["instinct_count"])
 	}
-	return fmt.Sprintf("\nColony health: %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
+	return fmt.Sprintf("\nColony health (this project's health): %s (%d/100) — %d signal(s) active, %d instinct(s) learned\n", label, score, signals, instincts)
 }
 
 // renderColonyHealthBreakdown renders the five component signals beneath the
@@ -82,7 +100,7 @@ func renderColonyHealthBreakdown(vitals map[string]interface{}) string {
 		b.WriteString(fmt.Sprintf("   Signal health:  %d active (%s)\n", intValue(section["active_count"]), stringValue(section["status"])))
 	}
 	if section, ok := vitals["memory_pressure"].(map[string]interface{}); ok {
-		b.WriteString(fmt.Sprintf("   Memory:         %d instinct(s) (%s)\n", intValue(section["instinct_count"]), stringValue(section["status"])))
+		b.WriteString(fmt.Sprintf("   Memory:         %d instinct(s) — lessons learned (%s)\n", intValue(section["instinct_count"]), stringValue(section["status"])))
 	}
 	ageHours := 0.0
 	switch v := vitals["colony_age_hours"].(type) {
@@ -92,9 +110,9 @@ func renderColonyHealthBreakdown(vitals map[string]interface{}) string {
 		ageHours = float64(v)
 	}
 	if ageHours >= 48 {
-		b.WriteString(fmt.Sprintf("   Colony age:     %.0fd\n", ageHours/24))
+		b.WriteString(fmt.Sprintf("   Colony age (how long this project has run): %.0fd\n", ageHours/24))
 	} else if ageHours > 0 {
-		b.WriteString(fmt.Sprintf("   Colony age:     %.0fh\n", ageHours))
+		b.WriteString(fmt.Sprintf("   Colony age (how long this project has run): %.0fh\n", ageHours))
 	}
 	return b.String()
 }
@@ -129,10 +147,10 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 
 	// 1. Stale state warning
 	if state.InitializedAt != nil && time.Since(*state.InitializedAt) > 7*24*time.Hour {
-		warnings = append(warnings, "Stale: colony was last active more than 7 days ago. Recent work may not be reflected.")
+		warnings = append(warnings, "Stale: this project was last active more than 7 days ago. Recent work may not be reflected.")
 	}
 	if state.Plan.GeneratedAt != nil && time.Since(*state.Plan.GeneratedAt) > 7*24*time.Hour {
-		warnings = append(warnings, "Stale: colony plan was generated more than 7 days ago. Recent work may not be reflected.")
+		warnings = append(warnings, "Stale: this project's plan was generated more than 7 days ago. Recent work may not be reflected.")
 	}
 
 	// 2. Failed phases warning
@@ -359,7 +377,7 @@ func renderWarningsSection(warnings []string) string {
 	b.WriteString(renderBanner("\u26A0\uFE0F", "Warnings"))
 	b.WriteString(visualDividerStr())
 	for _, w := range warnings {
-		b.WriteString(w)
+		b.WriteString(voiceLine("warning", w))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
@@ -408,6 +426,61 @@ func renderLoopSafetySection(loopEvents []events.Event) string {
 		}
 	}
 	return b.String()
+}
+
+// loadMostRecentColonyEpisode returns the shared lineage's own newest entry
+// (loadColonyEpisodeIndex, cmd/episode_index.go, already ordered newest
+// first) -- never a second selection rule. ok is false only when the index
+// has no entries at all.
+func loadMostRecentColonyEpisode(root string, s *storage.Store) (colonyEpisodeEntry, bool) {
+	idx, err := loadColonyEpisodeIndex(root, s)
+	if err != nil || len(idx.Entries) == 0 {
+		return colonyEpisodeEntry{}, false
+	}
+	return idx.Entries[0], true
+}
+
+// renderMostRecentEpisodeSection renders status's "most recent episode"
+// section: what it was, how it ended, what it cost, and where to read it in
+// full (LIVE-05, LIVE-07, D-11). Returns empty string when there is nothing
+// to show, so the section is OMITTED entirely rather than rendered empty --
+// mirrors renderLoopSafetySection's identical loader+renderer shape.
+// Resolving and rendering this section performs no write of any kind: every
+// read behind it (loadColonyEpisodeIndex, loadSpendLedgersForPhase) is a
+// plain, already-proven read-only path.
+func renderMostRecentEpisodeSection(entry colonyEpisodeEntry, ok bool) string {
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(renderBanner("\U0001F4D6", "Most Recent Episode"))
+	b.WriteString(visualDividerStr())
+	fmt.Fprintf(&b, "%s: %s\n", colonyEpisodeKindLabel(entry.Kind), entry.Subject)
+
+	outcome := entry.Outcome
+	if !entry.OutcomeKnown {
+		outcome = "unknown"
+	}
+	fmt.Fprintf(&b, "Outcome: %s\n", outcome)
+	fmt.Fprintf(&b, "Standing: %s\n", workStandingLabel(entry.Standing, entry.StandingReason))
+
+	if !entry.StartedAt.IsZero() && !entry.EndedAt.IsZero() {
+		fmt.Fprintf(&b, "Elapsed: %s\n", entry.EndedAt.Sub(entry.StartedAt).Round(time.Second))
+	}
+	fmt.Fprintf(&b, "Read the full write-up: %s\n\n", emptyFallback(entry.Path, "not available"))
+
+	b.WriteString(renderSpendCostLineFromLedgers(colonyEpisodeLedgers(entry.Cost)))
+	return b.String()
+}
+
+// renderMostRecentEpisodeStatusSection resolves root through the same
+// resolveAetherRoot the watch and history commands already use (never
+// skillWorkspaceRoot's cwd-dependent guess, which a subagent's working
+// directory can silently defeat) so status, history and watch can never
+// disagree about which colony they are describing.
+func renderMostRecentEpisodeStatusSection(s *storage.Store) string {
+	entry, ok := loadMostRecentColonyEpisode(resolveAetherRoot(), s)
+	return renderMostRecentEpisodeSection(entry, ok)
 }
 
 // renderGateStatusSection renders the Gate Status dashboard section.
@@ -618,12 +691,12 @@ func renderGuidedActions(actions []guidedAction) string {
 		b.WriteString(action.Summary)
 		b.WriteString("\n")
 		if strings.TrimSpace(action.Command) != "" {
-			b.WriteString("      Next: `")
+			b.WriteString("      " + voiceGlyph("next") + " Next: `")
 			b.WriteString(action.Command)
 			b.WriteString("`\n")
 		}
 		if strings.TrimSpace(action.AlternativeCommand) != "" {
-			b.WriteString("      Swarm: `")
+			b.WriteString("      " + voiceGlyph("colony") + " Swarm: `")
 			b.WriteString(action.AlternativeCommand)
 			b.WriteString("`\n")
 		}
@@ -716,6 +789,20 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		"agent_delegate_session": codex.IsAgentDelegateSession(),
 		"plan_revision":          planRevisionSummary(state.Plan),
 	}
+	blockers, blockerErr := readBlockerSnapshot(s)
+	issues, notes := countStatusNonBlockerFlags(s)
+	result["blocker_snapshot_available"] = blockerErr == nil
+	if blockerErr != nil {
+		result["blocker_snapshot_error"] = blockerSnapshotErrorDetail(s, blockerErr)
+		result["blockers"] = nil
+		result["blocker_ids"] = nil
+		result["escalated_blockers"] = nil
+		result["escalated_blocker_ids"] = nil
+	} else {
+		addBlockerSnapshotFields(result, blockers)
+	}
+	result["issues"] = issues
+	result["notes"] = notes
 
 	if s != nil {
 		warnings := computeWarnings(state, s)
@@ -726,6 +813,12 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		result["build_attempt"] = buildAttemptSummary(attempt)
 	}
+	if report := loadAutopilotLastReport(s); report != nil {
+		result["last_report"] = report
+	}
+	if runningTotal := computeColonyRunningSpendTotal(state); runningTotal.hasAnyFacts() {
+		result["colony_running_total"] = runningTotal.jsonSummary()
+	}
 
 	// Reconciliation section (JSON mode)
 	recon := detectUnreconciledChanges(s, &state)
@@ -733,11 +826,93 @@ func buildStatusResult(state colony.ColonyState, s *storage.Store) map[string]in
 		result["reconciliation"] = recon
 	}
 
+	// Status knows two things the saved project alone does not: workers are
+	// still running, and a guided action (an open flag, active Oracle
+	// research, an unacknowledged failure) needs attention before anything
+	// else. Both enter the one decision as an override input here, so the
+	// JSON envelope and the dashboard screen -- built from this same result
+	// map -- cannot answer the question differently.
+	activeWorkers := statusActiveWorkers(s, state)
+	guidedActions := loadGuidedActions(s, skillWorkspaceRoot())
+	overrideCommand, overrideWhy := statusOverrideFacts(activeWorkers, guidedActions)
+	closeLifecycleCommand(result, "status", overrideCommand, overrideWhy)
+
 	return result
 }
 
-// renderDashboard produces the full colony status dashboard string.
-func renderDashboard(state colony.ColonyState, s *storage.Store) string {
+// statusLiveSpawnView is the one rule for "may this screen present workers as
+// live". A worker is live only while the colony is genuinely executing an
+// unpaused build. Every section that shows workers -- the Active Workers list,
+// the JSON envelope, and the BIO-06 governed family tree -- reads this single
+// function, so two sections can never disagree about whether a paused or
+// finished colony has anyone running. Phase 203 added the family tree without
+// consulting it, which put a previous session's worker on a paused colony's
+// status screen (TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers).
+func statusLiveSpawnView(state colony.ColonyState) bool {
+	return state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+}
+
+// statusActiveWorkers is the same "are workers genuinely still running"
+// check renderDashboard makes, factored out so both the JSON envelope and
+// the screen resolve their answer from the identical fact.
+func statusActiveWorkers(s *storage.Store, state colony.ColonyState) []agent.SpawnEntry {
+	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
+	liveSpawnView := statusLiveSpawnView(state)
+	if !liveSpawnView {
+		return nil
+	}
+	return spawnSummary.ActiveEntries
+}
+
+// statusOverrideFacts turns what status alone knows into an override for the
+// one decision. In-flight workers outrank a guided action, matching the
+// dashboard's own priority: there is no point steering the owner toward a
+// flag or a failure while a command is still running.
+func statusOverrideFacts(activeWorkers []agent.SpawnEntry, guidedActions []guidedAction) (string, string) {
+	if len(activeWorkers) > 0 {
+		return "aether status", fmt.Sprintf(
+			"Active workers are still running (%d). Wait for the in-flight command to finish, then check again -- "+
+				"this only refreshes the dashboard, it changes nothing.", len(activeWorkers))
+	}
+	if len(guidedActions) > 0 {
+		top := guidedActions[0]
+		if command := strings.TrimSpace(top.Command); command != "" {
+			return command, fmt.Sprintf("%s needs attention: %s", top.Title, top.Summary)
+		}
+	}
+	return "", ""
+}
+
+// renderDashboard produces the full colony status dashboard string. result is
+// the same map buildStatusResult produced for the JSON envelope, carrying the
+// one resolver's already-folded answer -- so the screen and the
+// machine-readable result can never disagree about what to do next.
+// skillSourceSentence turns the internal skill-source key into ordinary words
+// at the moment it becomes text.
+//
+// The raw key (e.g. "phase_plan") used to be printed straight onto the status
+// screen. TestVoicedScreensCarryNoRawStateToken forbids exactly that -- an
+// internal state name or a raw key=value pair is never shown to the owner
+// where a sentence belongs -- and it caught this the moment the real status
+// screen joined the voice corpus. An unrecognised key degrades to its own
+// underscores-to-spaces reading rather than being hidden, so a new source
+// shows up readable instead of silently blank.
+func skillSourceSentence(source string) string {
+	switch strings.TrimSpace(source) {
+	case "":
+		return "none recorded"
+	case "phase_plan":
+		return "the phase plan"
+	case "colony_prime":
+		return "the shared context pack"
+	case "worker_brief":
+		return "the worker brief"
+	default:
+		return strings.ReplaceAll(strings.TrimSpace(source), "_", " ")
+	}
+}
+
+func renderDashboard(state colony.ColonyState, s *storage.Store, result map[string]interface{}) string {
 	var b strings.Builder
 
 	// Banner
@@ -749,7 +924,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	if len(goal) > 60 {
 		goal = goal[:57] + "..."
 	}
-	fmt.Fprintf(&b, "Goal: %s\n\n", goal)
+	fmt.Fprintf(&b, "%s\n\n", voiceLine("goal", fmt.Sprintf("Goal: %s", goal)))
 
 	// Version line
 	renderVersionLine(&b)
@@ -792,7 +967,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		phasePosition = totalPhases
 	}
 	phaseBar := generateProgressBar(phasePosition, totalPhases, 20)
-	fmt.Fprintf(&b, "Progress\n")
+	fmt.Fprintf(&b, "%s\n", voiceLine("phase", "Progress"))
 	phasePercent := 0
 	if totalPhases > 0 {
 		cappedPhase := phasePosition
@@ -804,7 +979,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		}
 		phasePercent = cappedPhase * 100 / totalPhases
 	}
-	fmt.Fprintf(&b, "   Phase: [Phase %d/%d] %s %d%%\n", phasePosition, totalPhases, phaseBar, phasePercent)
+	fmt.Fprintf(&b, "   %s\n", voiceLine("phase", fmt.Sprintf("Phase: [Phase %d/%d] %s %d%%", phasePosition, totalPhases, phaseBar, phasePercent)))
 
 	// Task progress in current phase
 	var tasksCompleted, tasksTotal int
@@ -840,14 +1015,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		taskPercent = cappedTasks * 100 / tasksTotal
 	}
 	if phaseName != "" {
-		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)
+		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)))
 	} else {
-		fmt.Fprintf(&b, "   Tasks: [Tasks %d/%d] %s %d%% in Phase %d\n\n", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)
+		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)))
 	}
 
 	// Constraints
 	focusCount, avoidCount := countConstraints(s)
-	fmt.Fprintf(&b, "Focus: %d areas | Avoid: %d patterns\n", focusCount, avoidCount)
+	fmt.Fprintf(&b, "%s\n", voiceLine("focus", fmt.Sprintf("Focus: %d areas | Avoid: %d patterns", focusCount, avoidCount)))
 
 	// Instincts
 	instincts := loadRuntimeInstincts(s, &state)
@@ -858,15 +1033,29 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 			highConf++
 		}
 	}
-	fmt.Fprintf(&b, "Instincts: %d learned (%d strong)\n", totalInstincts, highConf)
+	fmt.Fprintf(&b, "%s\n", voiceLine("learning", fmt.Sprintf("Instincts: %d learned (%d strong)", totalInstincts, highConf)))
 
-	// Flags
-	blockers, issues, notes := countFlags(s)
-	fmt.Fprintf(&b, "Flags: %d blockers | %d issues | %d notes\n", blockers, issues, notes)
+	// Flags. These values were captured once when buildStatusResult assembled
+	// the JSON result, so visual and machine-readable status cannot disagree.
+	issues := intValue(result["issues"])
+	notes := intValue(result["notes"])
+	if available, _ := result["blocker_snapshot_available"].(bool); !available {
+		b.WriteString("Blocker truth: unavailable\n")
+	} else {
+		blockers := intValue(result["blockers"])
+		escalatedBlockers := intValue(result["escalated_blockers"])
+		fmt.Fprintf(&b, "%s\n", voiceLine("flag", fmt.Sprintf("Flags: %d blockers | %d issues | %d notes", blockers, issues, notes)))
+		fmt.Fprintf(&b, "%s\n", voiceLine("blocked", fmt.Sprintf("Existing blocker work: %d active (%d escalated)", blockers, escalatedBlockers)))
+	}
+	if report := renderAutopilotReportFromResult(result); report != "" {
+		b.WriteString("\n")
+		b.WriteString(report)
+		b.WriteString("\n")
+	}
 
 	// Scope
-	fmt.Fprintf(&b, "Scope: %s\n", state.EffectiveScope())
-	fmt.Fprintf(&b, "Colony Mode: %s\n", state.EffectiveColonyMode())
+	fmt.Fprintf(&b, "%s\n", voiceLine("status", fmt.Sprintf("Scope: %s", state.EffectiveScope())))
+	fmt.Fprintf(&b, "%s\n", voiceLine("colony", fmt.Sprintf("Colony Mode (how this project runs): %s", state.EffectiveColonyMode())))
 	if revision, ok := activePlanRevision(state.Plan); ok {
 		fmt.Fprintf(&b, "Plan Revision: r%d (%s) - %s\n", revision.Number, revision.ReasonType, revision.Reason)
 	} else if len(state.Plan.Phases) > 0 {
@@ -884,7 +1073,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		depth = "standard"
 	}
 	depthLbl := depthLabel(depth)
-	fmt.Fprintf(&b, "Depth: %s\n", depthLbl)
+	fmt.Fprintf(&b, "%s\n", voiceLine("decision", fmt.Sprintf("Depth: %s", depthLbl)))
 
 	// Granularity
 	granularity := string(state.PlanGranularity)
@@ -892,14 +1081,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		granularity = "not set"
 	}
 	granLbl := granularityLabel(granularity)
-	fmt.Fprintf(&b, "Granularity: %s\n", granLbl)
+	fmt.Fprintf(&b, "%s\n", voiceLine("decision", fmt.Sprintf("Granularity: %s", granLbl)))
 
 	// Parallel mode
 	parallelMode := string(state.ParallelMode)
 	if parallelMode == "" {
 		parallelMode = "in-repo"
 	}
-	fmt.Fprintf(&b, "Parallel: %s\n\n", parallelMode)
+	fmt.Fprintf(&b, "%s\n\n", voiceLine("colony", fmt.Sprintf("Parallel: %s", parallelMode)))
 
 	guidedActions := loadGuidedActions(s, skillWorkspaceRoot())
 	b.WriteString(renderGuidedActions(guidedActions))
@@ -908,8 +1097,8 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 
 	proof := buildProofOutput(skillWorkspaceRoot(), state)
-	b.WriteString("Proof\n")
-	fmt.Fprintf(&b, "   Context: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
+	b.WriteString(voiceLine("evidence", "Proof") + "\n")
+	fmt.Fprintf(&b, "   "+voiceGlyph("memory")+" Context assembled for this project: %s | %d included | %d preserved | %d trimmed | %d blocked\n",
 		proof.Summary.ContextSurface,
 		proof.Summary.ContextIncluded,
 		proof.Summary.ContextPreserved,
@@ -917,19 +1106,19 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		proof.Summary.ContextBlocked,
 	)
 	if proof.Summary.SkillDispatches > 0 {
-		fmt.Fprintf(&b, "   Skills: %s | %d dispatches | %d matched skills\n",
-			proof.Summary.SkillSource,
+		fmt.Fprintf(&b, "   "+voiceGlyph("artifact")+" Skills: %s | %d dispatches | %d matched skills\n",
+			skillSourceSentence(proof.Summary.SkillSource),
 			proof.Summary.SkillDispatches,
 			proof.Summary.SkillMatchedTotal,
 		)
 	} else {
 		b.WriteString("   Skills: no phase-aware skill proof yet\n")
 	}
-	b.WriteString("   Inspect: aether proof\n")
+	b.WriteString("   " + voiceLine("evidence", "Inspect: aether proof") + "\n")
 	b.WriteString("\n")
 
 	// Memory Health table
-	b.WriteString("Memory Health\n")
+	b.WriteString(voiceLine("memory", "Memory Health") + "\n")
 	renderMemoryHealthTable(&b, s)
 
 	// Review Findings (only if data exists)
@@ -939,11 +1128,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 
 	// Pheromone Summary
-	b.WriteString("\nActive Pheromones\n")
+	b.WriteString("\n" + voiceLine("focus", "Active Pheromones (steering notes in effect)") + "\n")
 	renderPheromoneSummary(&b, s)
 
 	spawnSummary := loadSpawnActivitySummaryForState(s, &state)
-	liveSpawnView := state.State == colony.StateEXECUTING && !state.Paused && state.BuildStartedAt != nil
+	liveSpawnView := statusLiveSpawnView(state)
 	if !liveSpawnView {
 		spawnSummary = withoutLiveSpawnEntries(spawnSummary)
 	}
@@ -964,9 +1153,22 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 		b.WriteString("\nRecent Outcomes\n")
 		renderRecentWorkerOutcomes(&b, spawnSummary.RecentOutcomeEntries)
 	}
+	// The governed family tree presents workers as live, so it is gated by the
+	// same statusLiveSpawnView rule the Active Workers list above uses rather
+	// than by a second rule of its own.
+	if liveSpawnView {
+		if subtreeSection := renderGovernedSubtreeStatusSection(state); subtreeSection != "" {
+			b.WriteString("\n")
+			b.WriteString(subtreeSection)
+		}
+	}
 	if _, attempt, ok := loadRelevantBuildAttempt(state); ok {
 		b.WriteString("\nBuild Attempt\n")
 		b.WriteString(renderBuildAttemptStatus(attempt))
+	}
+	if episodeSection := renderMostRecentEpisodeStatusSection(s); episodeSection != "" {
+		b.WriteString("\n")
+		b.WriteString(episodeSection)
 	}
 	if guidance := loadActiveRecoveryGuidance(state); guidance != nil {
 		b.WriteString("\nRecovery\n")
@@ -994,10 +1196,10 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 
 	if totalInstincts > 0 {
-		recentInstincts := loadRecentRuntimeInstincts(s, &state, 3)
-		if len(recentInstincts) > 0 {
-			b.WriteString("\nRecent Instincts\n")
-			renderRecentInstincts(&b, recentInstincts)
+		strongestInstincts := loadStrongestRuntimeInstincts(s, &state, 3)
+		if len(strongestInstincts) > 0 {
+			b.WriteString("\n" + voiceLine("learning", "Strongest Instincts (lessons learned)") + "\n")
+			renderStrongestInstincts(&b, strongestInstincts)
 		}
 	}
 
@@ -1007,6 +1209,17 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	vitals := computeColonyVitalSigns(s, state)
 	b.WriteString(renderColonyHealthLine(vitals))
 	b.WriteString(renderColonyHealthBreakdown(vitals))
+
+	// Running colony total (Phase 201, D-06): elapsed time and reported
+	// cost, summed across every planned phase's durable facts. Omitted
+	// entirely on a colony that has recorded nothing at all, so a freshly
+	// initialized colony is not shown a "not known" line about work it has
+	// never attempted.
+	runningTotal := computeColonyRunningSpendTotal(state)
+	if runningTotal.hasAnyFacts() {
+		b.WriteString("\n")
+		b.WriteString(renderColonyRunningSpendTotal(runningTotal))
+	}
 
 	// State
 	stateLabel := string(state.State)
@@ -1019,31 +1232,137 @@ func renderDashboard(state colony.ColonyState, s *storage.Store) string {
 	}
 	b.WriteString("\n")
 	if len(activeWorkers) > 0 {
-		b.WriteString(renderNextUp(
-			"Active workers are still running. Wait for the in-flight command to finish.",
-			`Run `+"`aether proof`"+` to inspect the active context and skill proof.`,
-			`Run `+"`aether status`"+` again to refresh the spawn view.`,
-			`Run `+"`tail -f .aether/data/spawn-tree.txt`"+` in another terminal to watch status changes.`,
-		))
-		return b.String()
+		// The "wait, and here is how to watch" tips are a report, not advice
+		// the resolver can offer as an aether command -- tailing a log file
+		// is not something the card can recommend. The card below still says
+		// to wait: statusOverrideFacts fed that fact into the one decision
+		// when this result was built.
+		b.WriteString("\n")
+		b.WriteString(renderStageMarker("Still running"))
+		b.WriteString("Watch progress with `tail -f .aether/data/spawn-tree.txt`, or run `aether proof` to inspect the active context and skill proof.\n")
 	}
-	primary, alternatives := workflowSuggestionsForState(state)
-	if len(guidedActions) > 0 {
-		workflowPrimary := primary
-		workflowAlternatives := append([]string{}, alternatives...)
-		primary = guidedActionNextUpPrimary(guidedActions[0])
-		alternatives = []string{}
-		if strings.TrimSpace(guidedActions[0].AlternativeCommand) != "" {
-			alternatives = append(alternatives, fmt.Sprintf("Run `%s` to investigate with the swarm.", guidedActions[0].AlternativeCommand))
-		}
-		if len(guidedActions) > 1 {
-			alternatives = append(alternatives, guidedActionNextUpAlternatives(guidedActions[1:])...)
-		}
-		alternatives = append(alternatives, workflowPrimary)
-		alternatives = append(alternatives, workflowAlternatives...)
+	b.WriteString(renderLifecycleClosing(result, "status"))
+
+	return b.String()
+}
+
+// colonyRunningSpendTotal is the colony-wide running total across every
+// planned phase's durable facts (Phase 201, D-06). ElapsedMeasured and
+// CostTokens are each the exact sum of the rows/attempts that answered --
+// an unreported or unmeasured row is counted in its own field and never
+// folded into either sum, matching the discipline cmd/spend_cost_line.go
+// already holds for one phase's own block.
+type colonyRunningSpendTotal struct {
+	ElapsedMeasured    time.Duration
+	ElapsedUnmeasured  int
+	CostTokens         int64
+	CostReportedRows   int
+	CostUnreportedRows int
+}
+
+// hasAnyFacts reports whether this total carries anything at all to show --
+// distinguishing "the colony has genuinely recorded nothing yet" (nothing
+// rendered) from "the colony has recorded something, some of it unreported
+// or unmeasured" (rendered, honestly).
+func (t colonyRunningSpendTotal) hasAnyFacts() bool {
+	return t.ElapsedMeasured > 0 || t.ElapsedUnmeasured > 0 ||
+		t.CostReportedRows > 0 || t.CostUnreportedRows > 0
+}
+
+// jsonSummary is the machine-readable shape for buildStatusResult's JSON
+// envelope, carrying the identical figures the visual dashboard renders so
+// neither surface can disagree with the other.
+func (t colonyRunningSpendTotal) jsonSummary() map[string]interface{} {
+	return map[string]interface{}{
+		"elapsed_seconds":      t.ElapsedMeasured.Seconds(),
+		"elapsed_unmeasured":   t.ElapsedUnmeasured,
+		"cost_tokens":          t.CostTokens,
+		"cost_reported_rows":   t.CostReportedRows,
+		"cost_unreported_rows": t.CostUnreportedRows,
 	}
-	alternatives = append(alternatives, `Run `+"`aether proof`"+` to inspect the current context and skill proof.`)
-	b.WriteString(renderNextUp(primary, alternatives...))
+}
+
+// computeColonyRunningSpendTotal sums the running colony total across every
+// phase in state's plan. It is a pure read -- loadSpendLedgersForPhase and
+// loadLatestBuildAttempt are both read-only, and nothing here saves
+// anything, so status stays a reader (D-06): no ledger file, no lock file
+// beyond the storage layer's own first-touch bookkeeping any read already
+// carries, no state mutation.
+//
+// Cost sums through loadSpendLedgersForPhase, the SAME loader
+// cmd/spend_cost_line.go's own per-phase block already reads -- one
+// accounting path, never a second one that could disagree with it. A row
+// with no reported usage (including a row carrying only a local estimate,
+// D-01 as amended) counts toward CostUnreportedRows, never toward
+// CostTokens.
+//
+// Elapsed sums each phase's own LATEST build attempt only, mirroring
+// renderSpendCostLine's own attempt-bound scope (Task 1): a phase with no
+// attempt recorded at all contributes nothing to either figure -- there is
+// nothing to say about it -- while a phase whose attempt is missing a
+// timestamp counts toward ElapsedUnmeasured and contributes no duration,
+// via the identical spendElapsedFigure sentinel Task 1 established.
+func computeColonyRunningSpendTotal(state colony.ColonyState) colonyRunningSpendTotal {
+	var total colonyRunningSpendTotal
+	for _, phase := range state.Plan.Phases {
+		if phase.ID <= 0 {
+			continue
+		}
+		if ledgers, ok := loadSpendLedgersForPhase(phase.ID); ok {
+			totals := computeSpendTotals(ledgers)
+			total.CostTokens += totals.MeasuredTokens
+			total.CostReportedRows += totals.MeasuredRows
+			rows := spendRowsAcross(ledgers)
+			total.CostUnreportedRows += len(rows) - totals.MeasuredRows
+		}
+		if _, attempt, ok := loadLatestBuildAttempt(phase.ID); ok {
+			figure := spendElapsedFigure(attempt.StartedAt, attempt.CompletedAt)
+			if figure == spendNotReportedFigure {
+				total.ElapsedUnmeasured++
+				continue
+			}
+			duration, err := time.ParseDuration(figure)
+			if err != nil {
+				total.ElapsedUnmeasured++
+				continue
+			}
+			total.ElapsedMeasured += duration
+		}
+	}
+	return total
+}
+
+// renderColonyRunningSpendTotal renders the colony-wide running total as one
+// small dashboard section: elapsed time and reported cost, each summed from
+// the same durable per-attempt/per-row facts every other screen in this
+// repository reads, plus how many attempts/rows were unreported or
+// unmeasured, named as such so the total is never mistaken for a complete
+// figure.
+func renderColonyRunningSpendTotal(total colonyRunningSpendTotal) string {
+	var b strings.Builder
+	b.WriteString("Colony Total\n")
+
+	switch {
+	case total.ElapsedMeasured == 0 && total.ElapsedUnmeasured == 0:
+		b.WriteString("   Elapsed: not known -- no attempt has recorded a start and end yet.\n")
+	case total.ElapsedUnmeasured > 0:
+		fmt.Fprintf(&b, "   Elapsed: %s (%d attempt(s) unmeasured -- missing a start or end timestamp)\n",
+			total.ElapsedMeasured.Round(time.Second), total.ElapsedUnmeasured)
+	default:
+		fmt.Fprintf(&b, "   Elapsed: %s\n", total.ElapsedMeasured.Round(time.Second))
+	}
+
+	switch {
+	case total.CostReportedRows == 0 && total.CostUnreportedRows == 0:
+		b.WriteString("   Cost: not known -- no worker has reported a token figure yet.\n")
+	case total.CostReportedRows == 0:
+		fmt.Fprintf(&b, "   Cost: not known -- %d worker run(s) unreported.\n", total.CostUnreportedRows)
+	case total.CostUnreportedRows > 0:
+		fmt.Fprintf(&b, "   Cost: %s tokens (%d worker run(s) unreported)\n",
+			spendCompactTokenFigure(total.CostTokens), total.CostUnreportedRows)
+	default:
+		fmt.Fprintf(&b, "   Cost: %s tokens\n", spendCompactTokenFigure(total.CostTokens))
+	}
 
 	return b.String()
 }
@@ -1087,6 +1406,30 @@ func renderBuildAttemptStatus(attempt buildAttemptRecord) string {
 	}
 	if attempt.RecoveryCommand != "" {
 		fmt.Fprintf(&b, "  Next: %s\n", attempt.RecoveryCommand)
+	}
+	b.WriteString(renderJobTelemetryDrillDown(attempt.ID))
+	return b.String()
+}
+
+// renderJobTelemetryDrillDown renders the full eight-segment timing
+// breakdown for one build attempt (Phase 201 plan 12, WORK-08), naming
+// unmeasured segments as such. It reads fresh from disk every call and
+// writes nothing -- status.go is a reader only, never a store initializer,
+// never a lock file, never a state mutation. Renders nothing at all when no
+// telemetry record exists for this attempt: a run that measured no segment
+// at all writes no record (writeJobTelemetryRecord), so "no record" and "a
+// record with nothing measured" are the same case here too, matching
+// renderJobTelemetryClosingLine's identical choice in
+// cmd/spend_cost_line.go.
+func renderJobTelemetryDrillDown(attemptID string) string {
+	record, ok := readJobTelemetryRecord(attemptID)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("  Timing breakdown:\n")
+	for _, named := range record.namedSegments() {
+		fmt.Fprintf(&b, "    %s: %s\n", jobTelemetrySegmentLabel(named.Name), named.Segment.RenderedDuration())
 	}
 	return b.String()
 }
@@ -1167,7 +1510,7 @@ func loadSpawnActivitySummaryForState(s *storage.Store, state *colony.ColonyStat
 		case agent.IsTerminalSpawnStatus(entry.Status):
 			summary.RecentOutcomeEntries = append(summary.RecentOutcomeEntries, entry)
 			switch entry.Status {
-			case "completed", "manually-reconciled":
+			case "completed", "completed_no_change", "manually-reconciled":
 				summary.CompletedCount++
 			case "blocked":
 				summary.BlockedCount++
@@ -1278,7 +1621,7 @@ func withoutLiveSpawnEntries(summary spawnActivitySummary) spawnActivitySummary 
 	}
 	for _, entry := range summary.Entries {
 		switch entry.Status {
-		case "completed", "manually-reconciled":
+		case "completed", "completed_no_change", "manually-reconciled":
 			filtered.CompletedCount++
 		case "blocked":
 			filtered.BlockedCount++
@@ -1332,11 +1675,21 @@ func countConstraints(s *storage.Store) (focus, avoid int) {
 	return 0, 0
 }
 
-// countFlags loads flags.json and counts by type.
+// countFlags preserves the existing status counting surface while delegating
+// blocker truth to the shared snapshot reader.
 func countFlags(s *storage.Store) (blockers, issues, notes int) {
+	snapshot, err := readBlockerSnapshot(s)
+	issues, notes = countStatusNonBlockerFlags(s)
+	if err != nil {
+		return 0, issues, notes
+	}
+	return snapshot.Count, issues, notes
+}
+
+func countStatusNonBlockerFlags(s *storage.Store) (issues, notes int) {
 	flags, ok := loadFlagsFile(s)
 	if !ok {
-		return 0, 0, 0
+		return 0, 0
 	}
 	for _, f := range flags.Decisions {
 		if f.Resolved {
@@ -1344,14 +1697,14 @@ func countFlags(s *storage.Store) (blockers, issues, notes int) {
 		}
 		switch f.Type {
 		case "blocker":
-			blockers++
+			continue
 		case "issue":
 			issues++
 		default:
 			notes++
 		}
 	}
-	return
+	return issues, notes
 }
 
 func loadFlagsFile(s *storage.Store) (colony.FlagsFile, bool) {
@@ -1430,7 +1783,7 @@ func renderMemoryHealthTable(b *strings.Builder, s *storage.Store) {
 	}
 	writeLine("🧠", "Wisdom entries", summary.WisdomTotal, summary.LastLearning)
 	writeLine("📤", "Pending promotions", summary.PendingPromotions, summary.LastLearning)
-	writeLine("🐜", "Applied instincts", summary.AppliedInstincts, summary.LastInstinctTouched)
+	writeLine("🐜", "Applied instincts (lessons learned)", summary.AppliedInstincts, summary.LastInstinctTouched)
 	writeLine("👀", "Needs review", summary.ReviewCandidates+summary.RereadCandidates, summary.LastInstinctTouched)
 	writeLine("🗑", "Recent failures", summary.RecentFailures, summary.LastFailure)
 }
@@ -1514,7 +1867,6 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 
 	// Classic house style: one emoji-prefixed line per signal, grouped by
 	// priority order — not a bordered machine table.
-	emojiFor := map[string]string{"FOCUS": "🎯", "REDIRECT": "🚫", "FEEDBACK": "💬"}
 	for _, row := range rows {
 		signal := row.Signal
 		if signal == "" {
@@ -1523,16 +1875,13 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 		if len(signal) > 60 {
 			signal = signal[:57] + "..."
 		}
-		emoji := emojiFor[row.Type]
-		if emoji == "" {
-			emoji = "🐜"
-		}
+		emoji := signalTypeGlyph(row.Type)
 		fmt.Fprintf(b, "   %s [%d%%] %q — %s\n", emoji, int(math.Round(row.Strength*100)), signal, row.Life)
 	}
 	b.WriteString("   Strength fades over time; run `aether pheromone-display` for the full view.\n")
 }
 
-func renderRecentInstincts(b *strings.Builder, instincts []colony.Instinct) {
+func renderStrongestInstincts(b *strings.Builder, instincts []colony.Instinct) {
 	for _, inst := range instincts {
 		domain := inst.Domain
 		if domain == "" {
@@ -1548,9 +1897,9 @@ func renderVersionLine(b *strings.Builder) {
 	hubVersion := readInstalledHubVersion()
 	if hubVersion != "" {
 		if binaryVersion != hubVersion {
-			fmt.Fprintf(b, "Runtime: %s | Hub: %s  MISMATCH\n\n", binaryVersion, hubVersion)
+			fmt.Fprintf(b, "%s\n\n", voiceLine("warning", fmt.Sprintf("Runtime: %s | Hub (the installed copy on this machine): %s  MISMATCH", binaryVersion, hubVersion)))
 		} else {
-			fmt.Fprintf(b, "Runtime: %s | Hub: %s\n\n", binaryVersion, hubVersion)
+			fmt.Fprintf(b, "%s\n\n", voiceLine("status", fmt.Sprintf("Runtime: %s | Hub (the installed copy on this machine): %s", binaryVersion, hubVersion)))
 		}
 	} else {
 		fmt.Fprintf(b, "Runtime: %s\n\n", binaryVersion)
@@ -1591,7 +1940,7 @@ func renderSignalSummaryLine(b *strings.Builder, s *storage.Store) {
 	if feedbackCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d FEEDBACK", feedbackCount))
 	}
-	fmt.Fprintf(b, "Signals: %d active (%s)\n", total, strings.Join(parts, ", "))
+	fmt.Fprintf(b, "%s\n", voiceLine("focus", fmt.Sprintf("Signals: %d active (%s)", total, strings.Join(parts, ", "))))
 }
 
 // extractContentText extracts the text field from a json.RawMessage content.

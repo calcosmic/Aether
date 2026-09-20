@@ -101,29 +101,14 @@ func TestProbeNotRequiredInARepositoryWithNoCode(t *testing.T) {
 	}
 }
 
-func TestProbeStillRequiredWhenTheRepositoryHasCode(t *testing.T) {
-	saveGlobals(t)
-	codeRepo(t)
-
-	phase := colony.Phase{
-		ID:              5,
-		Name:            "Add the spend subcommand",
-		Description:     "Implement a subcommand that reads the ledger and prints totals.",
-		SuccessCriteria: []string{"The subcommand prints a total."},
-		Tasks:           []colony.Task{{Goal: "Implement the subcommand and its parser."}},
-	}
-
-	required := queenBuildSafetyRequiredCastes(phase)
-	found := false
-	for _, caste := range required {
-		if caste == "probe" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("real code work lost its test-coverage specialist; this is a scoping fix, not a removal. required = %v", required)
-	}
-}
+// TestProbeStillRequiredWhenTheRepositoryHasCode is retired -- see
+// .aether/docs/retired-tests-ledger.md. Its "always required at standard
+// continue" claim was superseded by plan 194-05 (D-13): standard depth now
+// requires nothing unconditionally, Probe included. The code-detection gate
+// it protected survives as a REFUSAL rule instead
+// (TestProbeIsRequiredOnlyWhereItCanFindSomething's "produces testable code"
+// subtest, cmd/queen_probe_gating_test.go), and the full depth table is
+// pinned by TestContinueRequiredSetByDepth (cmd/owner_dials_test.go).
 
 func TestZeroRelevanceCasteIsRefused(t *testing.T) {
 	saveGlobals(t)
@@ -163,6 +148,10 @@ func TestSecurityCasteSurvivesWhenThePhaseNeedsIt(t *testing.T) {
 		[]string{"builder", "watcher", "gatekeeper"},
 		"this changes credentials",
 		phase, "build", colony.ColonyState{},
+		map[string]string{
+			"watcher":    "confirming the password/token change actually works",
+			"gatekeeper": "this changes credentials",
+		},
 	)
 
 	found := false
@@ -179,6 +168,13 @@ func TestSecurityCasteSurvivesWhenThePhaseNeedsIt(t *testing.T) {
 // The relevance floor must never be able to remove a caste the phase requires.
 // Cost control and the thing that checks the work are different decisions, and
 // this is the one that must not be traded away.
+//
+// Plan 194-02 (D-07) shrank the build floor to the builder alone, so this
+// phase's precondition (non-empty required-caste set) now holds on builder
+// rather than watcher -- watcher is no longer unconditionally required at
+// build, and asserting it specifically here would just reassert the deleted
+// rule. The claim this test protects is unchanged: whatever IS required must
+// survive judgement.
 func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 	saveGlobals(t)
 	notesOnlyRepo(t)
@@ -186,7 +182,7 @@ func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 	phase := calVaultPhase()
 	required := queenBuildSafetyRequiredCastes(phase)
 	if len(required) == 0 {
-		t.Fatal("precondition: expected this phase to require at least the watcher")
+		t.Fatal("precondition: expected this phase to require at least the builder")
 	}
 
 	judgement := queenApplyJudgement([]string{"builder"}, "", phase, "build", colony.ColonyState{})
@@ -199,9 +195,6 @@ func TestRequiredCasteIsNeverRefusedForRelevance(t *testing.T) {
 		if !finalSet[caste] {
 			t.Fatalf("required caste %q was lost; final = %v", caste, judgement.Final)
 		}
-	}
-	if !finalSet["watcher"] {
-		t.Fatalf("the watcher was lost -- a build with nothing checking it reports success by assertion; final = %v", judgement.Final)
 	}
 }
 

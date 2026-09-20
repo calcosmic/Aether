@@ -394,6 +394,14 @@ func closeOutOfBandCeremony(phaseNum int, state colony.ColonyState, report outOf
 	now := time.Now().UTC()
 	provenance := buildOutOfBandProvenance(now, phaseNum, report, acknowledgeLegacy)
 
+	// Freeze which historical reports this closure supersedes before the
+	// authoritative advance. A report written after advancement must invalidate
+	// this snapshot, never silently become part of the superseded history.
+	closure := outOfBandCarryForward{Phase: phaseNum, Provenance: provenance, Superseded: carryForwardReportDigests(phaseNum)}
+	if hasAttempt {
+		closure.AttemptID = attemptRecord.ID
+	}
+
 	advanceResult, err := advancePhase(advancePhaseParams{
 		PhaseID:                phaseNum,
 		ExpectedBuildStartedAt: state.BuildStartedAt,
@@ -416,6 +424,10 @@ func closeOutOfBandCeremony(phaseNum int, state colony.ColonyState, report outOf
 			return nil, fmt.Errorf("phase %d advanced, but recording the out-of-band provenance on its build attempt failed (the phase is NOT stuck; only the build attempt journal entry needs reconciling): %w", phaseNum, err)
 		}
 		attemptClosed = true
+	}
+
+	if err := store.SaveJSON(continuePlanArtifactsPath(phaseNum, "out-of-band-closure.json"), closure); err != nil {
+		return nil, fmt.Errorf("phase %d advanced, but recording its accepted closure for next-phase context failed: %w", phaseNum, err)
 	}
 
 	result := map[string]interface{}{

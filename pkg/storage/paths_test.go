@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -21,20 +21,35 @@ func TestResolveAetherRoot_EnvVar(t *testing.T) {
 func TestResolveAetherRoot_GitFallback(t *testing.T) {
 	t.Setenv("AETHER_ROOT", "")
 
-	root := ResolveAetherRoot(context.Background())
+	// t.TempDir embeds this test's name, which would mask an "Aether" name dependency.
+	repoDir, err := os.MkdirTemp("", "root-resolver-")
+	if err != nil {
+		t.Fatalf("create git fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(repoDir); err != nil {
+			t.Errorf("remove git fixture: %v", err)
+		}
+	})
+	cmd := exec.Command("git", "init", "--quiet", repoDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("initialize git fixture: %v\n%s", err, out)
+	}
 
-	// Should return the git root since we're in a git repo
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	out, err := cmd.Output()
-	if err == nil {
-		expected := strings.TrimSpace(string(out))
-		// The root should contain .aether (this repo)
-		if !strings.Contains(root, "Aether") {
-			t.Errorf("ResolveAetherRoot git fallback: got %q, expected a path containing 'Aether'", root)
-		}
-		if root != expected {
-			t.Errorf("ResolveAetherRoot git fallback: got %q, want %q", root, expected)
-		}
+	// Git reports the physical path, including macOS's /private temporary roots.
+	expected, err := filepath.EvalSymlinks(repoDir)
+	if err != nil {
+		t.Fatalf("resolve git fixture path: %v", err)
+	}
+	nested := filepath.Join(expected, "nested", "child")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatalf("create nested directory: %v", err)
+	}
+	t.Chdir(nested)
+
+	root := ResolveAetherRoot(context.Background())
+	if root != expected {
+		t.Errorf("ResolveAetherRoot git fallback: got %q, want %q", root, expected)
 	}
 }
 

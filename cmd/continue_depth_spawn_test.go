@@ -6,13 +6,21 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-func TestContinueLightDepthSpawnsWatcherOnly(t *testing.T) {
+// TestContinueLightDepthDoesNotRequireAnything pins D-13: light continue
+// requires NOTHING unconditionally (194-05 removed watcher's unconditional
+// membership, the last place the pre-D11 review floor survived at this
+// depth). Watcher still appears on THIS fixture, but only because its own
+// keyword ("test") matches "Test Phase" and clears the spawn threshold on
+// relevance score alone -- a coincidence of this fixture's name, not a
+// floor. TestContinueRequiredSetByDepth (cmd/owner_dials_test.go) is the
+// test that actually pins isAlwaysRequired's return value at every depth.
+func TestContinueLightDepthDoesNotRequireAnything(t *testing.T) {
 	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthLight)}
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 
 	dispatches := queenCandidateDispatches(phase, "continue", state)
 	if !HasCaste(dispatches, "watcher") {
-		t.Error("light continue should always require watcher")
+		t.Error("watcher should be selected via its own keyword match on this fixture, not via an always-required floor")
 	}
 
 	// Builder/weaver/tracker should be suppressed for continue
@@ -27,16 +35,22 @@ func TestContinueLightDepthSpawnsWatcherOnly(t *testing.T) {
 	}
 }
 
-func TestContinueStandardDepthSpawnsWatcherAndProbe(t *testing.T) {
+// TestContinueStandardDepthDoesNotRequireProbeOrReview pins D-13: standard
+// continue -- like light -- requires nothing unconditionally. Probe used to
+// be forced onto every continue at standard depth regardless of whether the
+// phase produced anything worth covering; this fixture ("Test Phase") has no
+// coverage-specific keyword hit, so probe's own relevance score (15) sits
+// below the spawn threshold (30) and it is not selected at all.
+func TestContinueStandardDepthDoesNotRequireProbeOrReview(t *testing.T) {
 	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthStandard)}
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 
 	dispatches := queenCandidateDispatches(phase, "continue", state)
 	if !HasCaste(dispatches, "watcher") {
-		t.Error("standard continue should always require watcher")
+		t.Error("watcher should be selected via its own keyword match on this fixture, not via an always-required floor")
 	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("standard continue should always require probe")
+	if HasCaste(dispatches, "probe") {
+		t.Error("standard continue should not force probe without a keyword hit or a named risk signal (D-13)")
 	}
 
 	// Gatekeeper/auditor should NOT be always-required at standard
@@ -48,13 +62,18 @@ func TestContinueStandardDepthSpawnsWatcherAndProbe(t *testing.T) {
 	}
 }
 
+// TestContinueHeavyDepthSpawnsFullReview pins D-13's other half: heavy is
+// the owner's explicit ask for the full review panel -- gatekeeper, auditor,
+// and probe where the phase produces testable code. Watcher is NOT part of
+// that unconditional set any more (it survives on this fixture only via its
+// own keyword match, same as the light/standard cases above).
 func TestContinueHeavyDepthSpawnsFullReview(t *testing.T) {
 	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)}
 	phase := colony.Phase{ID: 1, Name: "Test Phase"}
 
 	dispatches := queenCandidateDispatches(phase, "continue", state)
 	if !HasCaste(dispatches, "watcher") {
-		t.Error("heavy continue should always require watcher")
+		t.Error("watcher should be selected via its own keyword match on this fixture, not via an always-required floor")
 	}
 	if !HasCaste(dispatches, "gatekeeper") {
 		t.Error("heavy continue should always require gatekeeper")

@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent/curation"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/graph"
 	"github.com/calcosmic/Aether/pkg/learn"
@@ -15,7 +16,9 @@ import (
 
 func pipelineConfigForStore() learn.PipelineConfig {
 	colonyName := "unknown"
+	dataRoot := ""
 	if store != nil {
+		dataRoot = store.BasePath()
 		var state struct {
 			ColonyName string `json:"colony_name"`
 		}
@@ -25,24 +28,17 @@ func pipelineConfigForStore() learn.PipelineConfig {
 	}
 	return learn.PipelineConfig{
 		ColonyName: colonyName,
-		QueenPath:  consolidationQueenPath(),
+		QueenPath:  consolidationQueenStorePath,
+		QueenInstinctPromoter: func(ctx context.Context, instinct colony.InstinctEntry, colonyName string) error {
+			return writeConsolidationQueenPromotion(ctx, dataRoot, instinct, colonyName)
+		},
 	}
 }
 
-// consolidationQueenPath resolves the single promotion destination for the
-// consolidation pipeline: the same absolute <root>/.aether/QUEEN.md file
-// colony-prime actually reads (localQueenPath(), cmd/queen.go). It performs
-// no writes and no directory creation -- two of its four callers are
-// dry-run paths, and a resolver must not have side effects. Returns "" when
-// store == nil, matching localQueenPath()'s contract.
-//
-// Before this function existed, every consolidation call site passed the
-// bare relative literal "QUEEN.md", which storage.Store.resolvePath joined
-// onto the store base directory -- writing to .aether/data/QUEEN.md, a file
-// colony-prime never reads (cmd/colony_prime_context.go only reads
-// ~/.aether/QUEEN.md and .aether/QUEEN.md). Absolute paths pass straight
-// through resolvePath, so returning the absolute local path here makes the
-// promotion writer's output reachable.
+// consolidationQueenPath remains the side-effect-free inspection resolver for
+// the local file colony-prime reads. The consolidation data store is never
+// given this absolute sibling path; real writes go through the injected,
+// repository-authorized callback above.
 func consolidationQueenPath() string {
 	return localQueenPath()
 }
@@ -248,15 +244,9 @@ var consolidationPhaseEndCmd = &cobra.Command{
 			// archived instincts on every preview. Never self-heal the local
 			// QUEEN.md here -- creating a section header is a mutation, and
 			// consolidation-phase-end --dry-run must not mutate.
-			service := learn.NewDryRunConsolidationService(store, bus, consolidationQueenPath(), pipelineConfigForStore().ColonyName)
+			service := learn.NewDryRunConsolidationService(store, bus, consolidationQueenStorePath, pipelineConfigForStore().ColonyName)
 			result, err = service.Run(ctx)
 		} else {
-			// Self-heal a legacy local QUEEN.md that predates the Instincts
-			// section before promoting into it. Non-fatal: a missing section
-			// degrades to pkg/memory's existing silent no-op, not a crash.
-			if healErr := ensureQueenInstinctsSection(); healErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-			}
 			result, err = pipeline.RunConsolidation(ctx)
 		}
 		if err != nil {
@@ -337,12 +327,9 @@ var consolidationSealCmd = &cobra.Command{
 		var err2 error
 		if dryRun {
 			// Never self-heal here -- consolidation-seal --dry-run must not mutate.
-			service := learn.NewDryRunConsolidationService(store, bus, consolidationQueenPath(), pipelineConfigForStore().ColonyName)
+			service := learn.NewDryRunConsolidationService(store, bus, consolidationQueenStorePath, pipelineConfigForStore().ColonyName)
 			consResult, err2 = service.Run(ctx)
 		} else {
-			if healErr := ensureQueenInstinctsSection(); healErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to ensure QUEEN.md Instincts section: %v\n", healErr)
-			}
 			pipeline := learn.NewPipeline(store, bus, pipelineConfigForStore())
 			consResult, err2 = pipeline.RunConsolidation(ctx)
 		}

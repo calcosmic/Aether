@@ -192,13 +192,32 @@ func TestSuggestApprove_ApproveSuggestion(t *testing.T) {
 		t.Error("expected FOCUS signal with source 'aether-suggest' in pheromones.json")
 	}
 
-	// Verify suggestion was removed from pending
+	// Verify the suggestion is no longer ACTIVE (visible) after approval.
+	// 203-08 changed approval from deleting the item to marking it Dismissed
+	// with a recorded Action + ActionAt (Rule 1 fix, plan 203-08 Task 2):
+	// plan 203-11's immutable action history needs a first entry to build
+	// on rather than starting empty, so the record is kept rather than
+	// spliced out. filterActiveSuggestions already excludes it, so it is
+	// invisible to any subsequent list call exactly as it was before this
+	// change -- only the underlying storage decision (keep vs. delete)
+	// changed.
 	var reloaded colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &reloaded); err != nil {
 		t.Fatalf("failed to reload colony state: %v", err)
 	}
-	if reloaded.PendingSuggestions != nil && len(*reloaded.PendingSuggestions) > 0 {
-		t.Errorf("expected 0 pending suggestions after approval, got %d", len(*reloaded.PendingSuggestions))
+	active := filterActiveSuggestions(reloaded.PendingSuggestions)
+	if len(active) != 0 {
+		t.Errorf("expected 0 ACTIVE pending suggestions after approval, got %d", len(active))
+	}
+	if reloaded.PendingSuggestions == nil || len(*reloaded.PendingSuggestions) != 1 {
+		t.Fatalf("expected the approved item retained (dismissed, with an action record), got %v", reloaded.PendingSuggestions)
+	}
+	approved := (*reloaded.PendingSuggestions)[0]
+	if !approved.Dismissed {
+		t.Errorf("expected the approved item Dismissed=true, got false")
+	}
+	if approved.Action == nil || *approved.Action != colony.PendingActionAccepted {
+		t.Errorf("expected the approved item Action=%q, got %v", colony.PendingActionAccepted, approved.Action)
 	}
 }
 

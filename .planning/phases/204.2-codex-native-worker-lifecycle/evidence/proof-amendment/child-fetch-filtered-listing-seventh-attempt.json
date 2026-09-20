@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T16:57:36.473995+00:00",
+  "scope": "Plan25 readonly correction passing focused checks and seventh actual ordinary failure; no completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "tested_source_commit": "e8e8d62b27595914180a59cbec7d00edb4b43804",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/summary.json",
+    "sha256": "sha256:341d0d16d98e3ac3de3f8f9e2e6b8534cc9882da5f8bae2e4a188546f7cacb21"
+  },
+  "focused_snapshot_revision": "8258180d6a683040a8c0e9cd87541c301a4066fc",
+  "focused_runs": {
+    "normal-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 47.21180605888367,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/normal-cmd.stdout",
+        "sha256": "sha256:9ae8294699beeaf6f13a4cd37c51f503be28e91ebc64987127b97e515c33f6bc"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": null
+      },
+      "counts": {
+        "pass": 760,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    },
+    "race-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 74.59521198272705,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/race-cmd.stdout",
+        "sha256": "sha256:33836755fd6c34880845bcf54c55566cb3386c9e855ed3a017380d6699cfc757"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": null
+      },
+      "counts": {
+        "pass": 760,
+        "fail": 0,
+        "skip": 0
+      },
+      "families": 24
+    }
+  },
+  "failed_focused_predecessor": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-repair-lypxsjsa/summary.json",
+    "sha256": "sha256:54e930560cbd3d656cb9c82097c2ad2a7730abf4ed28a3955ad66ad23a6cd734"
+  },
+  "live_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/summary.json",
+    "sha256": "sha256:8a7f911943c3f7ee136c9d1b9f6454a61e504e698e76ec03cf886d21a212180d"
+  },
+  "activation_review": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/activation-review.json",
+    "sha256": "sha256:eed97b2cbe005d851996374d90754ddc45c48c257de812e0bf3981cbb7c041ac"
+  },
+  "live_runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 494.1466507920013,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/live.stdout",
+        "sha256": "sha256:42fe942e81e83ea5fc998a8b925d656452f3449e65094506bbf4d482501552f7"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof"
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-readonly-retry-x3la2hq2/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 7.251188624999486,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/replay.stdout",
+        "sha256": "sha256:81def35232323b329f76bc8d8a890dd06412524e7925f161d2047be8d840c831"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "cleanup": {
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof"
+      }
+    }
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/capture/native-ordinary-3681029888/receipt.json",
+    "sha256": "sha256:5f6eb98b83c93e75d481e1c83c23e85c2b8d7ae615215cc35dcb66890787b781"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-readonly-retry-65_djs2r/derived-ordinary.json",
+    "sha256": "sha256:d022e7c180bbb32fa183488ae1c72895d76270c381b1dadd8bed6699a2f047d0"
+  },
+  "receipts": {
+    "original_receipt": {
+      "outcome": "incomplete",
+      "reason": "parent writes or unclassified operations prevent child-only attribution: []",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": true,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": true,
+      "source_event_corroborated": true,
+      "runtime_credit_observed": true,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "rg --files -g '!*.sum'",
+        "/bin/zsh -lc rg --files -g '!*.sum'"
+      ],
+      "temporary_auth_removed": true
+    },
+    "derived_receipt": {
+      "outcome": "incomplete",
+      "reason": "parent writes or unclassified operations prevent child-only attribution: []",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": true,
+      "child_edit_observed": true,
+      "child_terminal_corroborated": true,
+      "source_event_corroborated": true,
+      "runtime_credit_observed": true,
+      "parent_substitution": false,
+      "parent_unclassified_commands": null,
+      "child_unclassified_operations": [
+        "rg --files -g '!*.sum'",
+        "/bin/zsh -lc rg --files -g '!*.sum'"
+      ],
+      "temporary_auth_removed": true
+    }
+  },
+  "diagnosis": "Runtime context observation, child work/checks, terminal and finalizer credit exist. Original and strict replay reject the single literal filtered listing rg --files -g !*.sum; its shell-normalized representation is not a second invocation. Parent-substitution is false. This independent attribution gap prevents Plan25 or downstream qualification; actual helper success cannot be declared from runtime credit alone.",
+  "prior_outcomes_unchanged": true,
+  "next_actions": [
+    "Narrowly repair demonstrated filtered-listing classification with rejecting controls.",
+    "Freeze and run exact24focusednormal/race then freshordinary and replay; require all3ordinary/review/questionactual passes.",
+    "Current-source Plan26refusal recapture beforePlan21recovery, then all11finalcases and4regressionruns."
+  ]
+}

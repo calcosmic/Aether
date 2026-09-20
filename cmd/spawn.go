@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/agent"
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/spf13/cobra"
 )
@@ -91,6 +92,7 @@ var spawnLogCmd = &cobra.Command{
 			return nil
 		}
 		claimedDepth, _ := cmd.Flags().GetInt("depth")
+		phase, _ := cmd.Flags().GetInt("phase")
 
 		st := agent.NewSpawnTree(store, "spawn-tree.txt")
 		depth, denyReason := deriveSpawnDepth(st, parent)
@@ -110,16 +112,32 @@ var spawnLogCmd = &cobra.Command{
 			DepthIsAuthoritative: true,
 			Caste:                caste,
 			Task:                 task,
+			Origin:               spawnOriginSpawnLog,
 		})
 		if !decision.Allowed {
 			outputError(1, decision.Detail, nil)
 			return nil
 		}
 
+		// CR-01 residual (194-REVIEW.md iteration 2): this is the earliest
+		// point in the runtime that fires after the owner has answered the
+		// check-in card (or chosen to proceed without answering) and before
+		// any worker this spawn describes could possibly run. --phase remains
+		// optional for callers outside the protected build ceremony. When it
+		// is present, the durable marker is a prerequisite: failing open here
+		// would leave the displayed owner capability usable during dispatch.
+		if phase > 0 {
+			if err := closeForcedReviewerWaiverWindowForPhase(phase, time.Now().UTC()); err != nil {
+				outputError(2, fmt.Sprintf("cannot safely begin dispatch: %v", err), nil)
+				return nil
+			}
+		}
+
 		if err := st.RecordSpawn(parent, caste, name, task, depth); err != nil {
 			outputError(2, fmt.Sprintf("failed to record spawn: %v", err), nil)
 			return nil
 		}
+
 		eventID := emitSpawnTreeCeremony(events.CeremonyPayload{
 			SpawnID: name,
 			Caste:   caste,
@@ -257,6 +275,33 @@ func latestSpawnEntryByName(st *agent.SpawnTree, name string) *agent.SpawnEntry 
 // refused, so the refusal test is prospectiveDepth > spawnMaxDelegationDepth.
 const spawnMaxDelegationDepth = 2
 
+// spawnDecisionOrigin names which call site produced a spawnDecisionInput,
+// so recruitmentAdmissionChecks (cmd/recruitment_admission.go) can declare
+// exactly which of BIO-02's five additional dimensions apply to that
+// caller, rather than a check silently skipping itself because a field
+// happens to be unpopulated. spawn-log and spawn-can-spawn never populate
+// the new fields below (Permission, Workspace, CostSlots, IntentID,
+// AttemptID) and are deliberately mapped to an EMPTY check set in
+// recruitmentAdmissionChecks -- only a real recruitment carries the data
+// those five checks need.
+type spawnDecisionOrigin string
+
+const (
+	spawnOriginSpawnLog      spawnDecisionOrigin = "spawn-log"
+	spawnOriginSpawnCanSpawn spawnDecisionOrigin = "spawn-can-spawn"
+	spawnOriginRecruit       spawnDecisionOrigin = "recruit"
+)
+
+// spawnDecisionOrigins returns every declared origin, mirroring
+// recruitmentAdapterKinds()'s/ColonyLiveTopics()'s completeness convention:
+// TestRecruitmentAdmissionChecksCoverEveryOrigin
+// (cmd/recruitment_admission_test.go) derives its inventory from this
+// function's RUNTIME output, so a new origin added here with no row in
+// recruitmentAdmissionChecks fails that test by name.
+func spawnDecisionOrigins() []spawnDecisionOrigin {
+	return []spawnDecisionOrigin{spawnOriginSpawnLog, spawnOriginSpawnCanSpawn, spawnOriginRecruit}
+}
+
 // spawnDecisionInput is what a caller (or the recorder itself) knows about a
 // prospective spawn at decision time. RequesterName/RequesterDepth describe
 // the WOULD-BE PARENT, not the child being proposed — the decision computes
@@ -275,24 +320,51 @@ type spawnDecisionInput struct {
 	DepthIsAuthoritative bool
 	Caste                string
 	Task                 string
+
+	// Origin declares which call site produced this input (spawnDecisionOrigin
+	// above). It decides which of BIO-02's five additional checks apply, via
+	// recruitmentAdmissionChecks. The zero value (empty string) matches no
+	// declared origin and applies none of the five new checks -- exactly
+	// what every pre-existing test and call site that never set Origin
+	// continues to get, unchanged.
+	Origin spawnDecisionOrigin
+	// Permission is the resolved (never caller-trusted) permission profile
+	// for the requested caste -- BIO-02's permission dimension.
+	Permission codex.PermissionProfile
+	// Workspace is the workspace lease this recruitment declares -- BIO-02's
+	// path-containment dimension.
+	Workspace string
+	// CostSlots is the number of whole-run helper-budget slots this request
+	// counts against -- BIO-02's cost dimension. D-12: read against the SAME
+	// spawnTreeBudgetState() ledger, never a second counter.
+	CostSlots int
+	// IntentID/AttemptID identify this specific recruitment request, so the
+	// duplicate-intent check can name the pending intent it matched and
+	// exclude the request being decided from matching itself.
+	IntentID  string
+	AttemptID string
 }
 
 // spawnDecisionResult is the outcome of a spawnCanSpawnDecision call. Reason
-// is one of the exact strings "depth", "budget", "ancestor-cycle",
-// "unresolved", or empty when Allowed is true. Detail is the human-readable
-// sentence D-10 requires — naming which helper, whose child, and why — and is
-// what reaches the operator through --enforce's error message.
+// is one of the exact strings "depth", "budget", "ancestor-cycle", "parent",
+// "permission", "path", "cost", "duplicate", "unresolved", or empty when
+// Allowed is true. Detail is the human-readable sentence D-10 requires —
+// naming which helper, whose child, and why — and is what reaches the
+// operator through --enforce's error message.
 type spawnDecisionResult struct {
 	Allowed bool
 	Reason  string
 	Detail  string
 }
 
-// spawnCanSpawnDecision is the single chokepoint SPAWN-01 makes real: depth,
-// then whole-run budget, then ancestor-cycle, each named and each denying on
-// the first hit. It is a package-level function variable (not a plain func)
-// specifically so a test can substitute a deny answer for the duration of a
-// single test case, driving --enforce's deny-to-non-zero-exit path.
+// spawnCanSpawnDecision is the single chokepoint SPAWN-01/BIO-02 makes real:
+// depth, then whole-run budget, then ancestor-cycle, then -- for a real
+// recruitment only, per recruitmentAdmissionChecks' declared table -- parent
+// authority, permission, path containment, cost, and duplicate intent, each
+// named and each denying on the first hit. It is a package-level function
+// variable (not a plain func) specifically so a test can substitute a deny
+// answer for the duration of a single test case, driving --enforce's
+// deny-to-non-zero-exit path.
 var spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
 	prospectiveDepth := in.RequesterDepth + 1
 	if prospectiveDepth > spawnMaxDelegationDepth {
@@ -316,6 +388,37 @@ var spawnCanSpawnDecision = func(in spawnDecisionInput) spawnDecisionResult {
 
 	if reason := spawnAncestorCycleReason(in); reason != "" {
 		return spawnDecisionResult{Allowed: false, Reason: "ancestor-cycle", Detail: reason}
+	}
+
+	// BIO-02's four* new dimensions, layered onto the same chokepoint rather
+	// than a parallel one (SYN-203-02). *Five: parent authority, permission,
+	// path, cost, duplicate -- applying only to the origin(s) declared in
+	// recruitmentAdmissionChecks (cmd/recruitment_admission.go), never
+	// implicitly to a caller whose input lacks the data a check needs.
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonParent) {
+		if reason := recruitmentParentAuthorityReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonParent, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonPermission) {
+		if reason := recruitmentPermissionReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonPermission, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonPath) {
+		if reason := recruitmentPathReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonPath, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonCost) {
+		if reason := recruitmentCostReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonCost, Detail: reason}
+		}
+	}
+	if recruitmentCheckApplies(in.Origin, recruitmentReasonDuplicate) {
+		if reason := recruitmentDuplicateReason(in); reason != "" {
+			return spawnDecisionResult{Allowed: false, Reason: recruitmentReasonDuplicate, Detail: reason}
+		}
 	}
 
 	return spawnDecisionResult{Allowed: true}
@@ -343,8 +446,13 @@ var spawnCanSpawnCmd = &cobra.Command{
 
 		enforce, _ := cmd.Flags().GetBool("enforce")
 		name, _ := cmd.Flags().GetString("name")
+		caste, _ := cmd.Flags().GetString("caste")
+		task, _ := cmd.Flags().GetString("task")
+		workspace, _ := cmd.Flags().GetString("workspace")
+		asRecruitment, _ := cmd.Flags().GetBool("recruitment")
+		costSlots, _ := cmd.Flags().GetInt("cost-slots")
 
-		in := spawnDecisionInput{RequesterDepth: depth}
+		in := spawnDecisionInput{RequesterDepth: depth, Origin: spawnOriginSpawnCanSpawn}
 		// Set RequesterName from --name whenever --name is non-empty,
 		// whether or not it resolves to a recorded entry: the ancestor
 		// check keys off RequesterName, so dropping it on a failed lookup
@@ -360,8 +468,46 @@ var spawnCanSpawnCmd = &cobra.Command{
 				}
 			}
 		}
+		// --caste/--task/--workspace are optional, additive advisory context
+		// (203-09/SYN-203-02) for an ORDINARY (non-recruitment) check: they
+		// let a caller ask this same chokepoint about a specific prospective
+		// child rather than a bare depth number, strengthening the
+		// ancestor-cycle check (which keys off Caste+Task) for that caller.
+		// Origin stays spawnOriginSpawnCanSpawn in that case, so none of
+		// BIO-02's five additional recruitment-only dimensions
+		// (permission/path/cost/duplicate/parent-authority) apply --
+		// unchanged from before these flags existed.
+		//
+		// --recruitment changes this (CR-01's fix, 203-REVIEW.md): when set,
+		// this command is asked about a REAL recruitment claim, not a bare
+		// advisory question, and --caste/--task become required in practice
+		// (recruitmentClaimAdmission's own validateRecruitmentIntent call
+		// denies a missing one by name). The decision is then made by
+		// recruitmentClaimAdmission under spawnOriginRecruit -- the exact
+		// same gate and the exact same five extra dimensions the in-repo
+		// build lane and `aether recruit` already apply -- instead of this
+		// command's own narrow default. spawnOriginSpawnCanSpawn's declared
+		// check table (recruitmentAdmissionChecks) is untouched either way:
+		// it stays empty for every caller that does not pass this flag.
+		if caste != "" {
+			in.Caste = caste
+		}
+		if task != "" {
+			in.Task = task
+		}
+		if workspace != "" {
+			in.Workspace = workspace
+		}
 
-		decision := spawnCanSpawnDecision(in)
+		var decision spawnDecisionResult
+		var recruitIntentID string
+		if asRecruitment {
+			var admitDecision recruitmentDecisionResult
+			recruitIntentID, admitDecision = recruitmentClaimAdmission(in.RequesterName, in.RequesterDepth, in.DepthIsAuthoritative, caste, task, workspace, costSlots)
+			decision = spawnDecisionResult{Allowed: admitDecision.Allowed, Reason: admitDecision.Reason, Detail: admitDecision.Detail}
+		} else {
+			decision = spawnCanSpawnDecision(in)
+		}
 
 		if enforce && !decision.Allowed {
 			msg := fmt.Sprintf("spawn denied at depth %d", depth)
@@ -376,6 +522,9 @@ var spawnCanSpawnCmd = &cobra.Command{
 			"can_spawn":     decision.Allowed,
 			"depth":         depth,
 			"authoritative": in.DepthIsAuthoritative,
+		}
+		if recruitIntentID != "" {
+			result["intent_id"] = recruitIntentID
 		}
 		if !decision.Allowed {
 			result["reason"] = decision.Reason
@@ -653,6 +802,7 @@ func init() {
 	spawnLogCmd.Flags().String("task", "", "Task description (required)")
 	spawnLogCmd.Flags().String("description", "", "Legacy alias for task description")
 	spawnLogCmd.Flags().Int("depth", 0, "Advisory only; the recorded depth is derived from --parent")
+	spawnLogCmd.Flags().Int("phase", 0, "Phase this worker is spawned for (optional); closes that phase's forced-reviewer decline window on first use")
 
 	spawnCompleteCmd.Flags().String("name", "", "Agent name to complete (required)")
 	spawnCompleteCmd.Flags().String("status", "", "Status: completed, failed, blocked (default: completed)")
@@ -661,6 +811,11 @@ func init() {
 	spawnCanSpawnCmd.Flags().Int("depth", 0, "Spawn depth to check (required)")
 	spawnCanSpawnCmd.Flags().Bool("enforce", false, "Exit non-zero when spawning is denied")
 	spawnCanSpawnCmd.Flags().String("name", "", "Requester's recorded agent name; when it resolves, the recorded depth overrides --depth")
+	spawnCanSpawnCmd.Flags().String("caste", "", "Requested helper caste for the prospective child (optional; strengthens the ancestor-cycle check)")
+	spawnCanSpawnCmd.Flags().String("task", "", "Bounded task/objective for the prospective child (optional; strengthens the ancestor-cycle check)")
+	spawnCanSpawnCmd.Flags().String("workspace", "", "Declared workspace for the prospective child (optional, advisory only for this origin)")
+	spawnCanSpawnCmd.Flags().Bool("recruitment", false, "Treat this as a real recruitment claim: decide under spawnOriginRecruit (the same gate and the same five extra admission dimensions `aether recruit` applies -- parent authority, permission, path, cost, duplicate) instead of this command's default narrow depth/budget/ancestor-cycle check. Requires --name, --caste, and --task. CR-01 fix, 203-REVIEW.md.")
+	spawnCanSpawnCmd.Flags().Int("cost-slots", 1, "Helper slots this recruitment counts against the whole-run budget; only consulted with --recruitment (mirrors `aether recruit`'s own --cost-slots default)")
 
 	validateWorkerResponseCmd.Flags().String("response", "", "Response to validate (required)")
 	validateWorkerResponseCmd.Flags().Bool("expect-json", false, "Check if response is valid JSON")

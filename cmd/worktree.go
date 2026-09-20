@@ -106,8 +106,7 @@ func isWorktreeOrphaned(commitAt time.Time, threshold time.Duration) bool {
 func getLastCommitTime(worktreePath string) (time.Time, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "git", "-C", worktreePath,
-		"log", "-1", "--format=%ct").Output()
+	out, err := readOnlyGitCommand(ctx, worktreePath, "log", "-1", "--format=%ct").Output()
 	if err != nil {
 		return time.Time{}, fmt.Errorf("git log: %w", err)
 	}
@@ -116,6 +115,13 @@ func getLastCommitTime(worktreePath string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("parse commit timestamp: %w", err)
 	}
 	return time.Unix(ts, 0), nil
+}
+
+func absoluteWorktreePath(root, path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(root, path)
 }
 
 // ---------------------------------------------------------------------------
@@ -173,12 +179,17 @@ var worktreeAllocateCmd = &cobra.Command{
 			}
 		}
 
-		// Create worktree directory path
+		// Keep the stored path relative to the colony root, but execute Git
+		// against an explicit root and absolute target. The process working
+		// directory is mutable by embedders and tests, and must never select
+		// the repository that receives an allocation.
+		aetherRoot := resolveAetherRoot()
 		sanitized := sanitizeBranchPath(branch)
-		worktreePath := worktreeBaseDir + "/" + sanitized
+		worktreePath := filepath.ToSlash(filepath.Join(worktreeBaseDir, sanitized))
+		worktreeAbsPath := filepath.Join(aetherRoot, worktreePath)
 
 		// Create parent directory
-		if err := os.MkdirAll(worktreeBaseDir, 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(worktreeAbsPath), 0755); err != nil {
 			outputError(2, fmt.Sprintf("failed to create worktree directory: %v", err), nil)
 			return nil
 		}
@@ -187,14 +198,14 @@ var worktreeAllocateCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
 
-		addCmd := exec.CommandContext(ctx, "git", "worktree", "add", "-b", branch, worktreePath, "HEAD")
+		addCmd := worktreeGitCommand(ctx, aetherRoot, false, "worktree", "add", "-b", branch, worktreeAbsPath, "HEAD")
 		if out, err := addCmd.CombinedOutput(); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				outputError(2, fmt.Sprintf("git worktree add timed out after %v", GitTimeout), nil)
 				return nil
 			}
 			// Branch may already exist; try reusing it
-			reuseCmd := exec.CommandContext(ctx, "git", "worktree", "add", worktreePath, branch)
+			reuseCmd := worktreeGitCommand(ctx, aetherRoot, false, "worktree", "add", worktreeAbsPath, branch)
 			if out2, err2 := reuseCmd.CombinedOutput(); err2 != nil {
 				outputError(2, fmt.Sprintf("failed to create worktree: %v: %s (also tried reusing branch: %v: %s)",
 					err, string(out), err2, string(out2)), nil)
@@ -221,8 +232,8 @@ var worktreeAllocateCmd = &cobra.Command{
 			// Rollback: remove the worktree
 			rollbackCtx, rollbackCancel := context.WithTimeout(context.Background(), GitTimeout)
 			defer rollbackCancel()
-			exec.CommandContext(rollbackCtx, "git", "worktree", "remove", worktreePath, "--force").Run()
-			exec.CommandContext(rollbackCtx, "git", "worktree", "prune").Run()
+			worktreeGitCommand(rollbackCtx, aetherRoot, false, "worktree", "remove", worktreeAbsPath, "--force").Run()
+			worktreeGitCommand(rollbackCtx, aetherRoot, false, "worktree", "prune").Run()
 			outputError(2, fmt.Sprintf("failed to save colony state: %v (worktree rolled back)", err), nil)
 			return nil
 		}
@@ -277,9 +288,10 @@ var worktreeListCmd = &cobra.Command{
 		}
 
 		// Get on-disk worktrees via git
+		aetherRoot := resolveAetherRoot()
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
-		gitOut, err := exec.CommandContext(ctx, "git", "worktree", "list", "--porcelain").Output()
+		gitOut, err := readOnlyGitCommand(ctx, aetherRoot, "worktree", "list", "--porcelain").Output()
 		onDiskPaths := map[string]bool{}
 		if err == nil {
 			for _, p := range parseWorktreePaths(string(gitOut)) {
@@ -302,9 +314,9 @@ var worktreeListCmd = &cobra.Command{
 
 			// Check if on disk (check both absolute and relative path)
 			onDisk := false
-			if _, err := os.Stat(wt.Path); err == nil {
+			if _, err := os.Stat(absoluteWorktreePath(aetherRoot, wt.Path)); err == nil {
 				onDisk = true
-			} else if onDiskPaths[wt.Path] {
+			} else if onDiskPaths[absoluteWorktreePath(aetherRoot, wt.Path)] {
 				onDisk = true
 			}
 
@@ -360,9 +372,10 @@ var worktreeOrphanScanCmd = &cobra.Command{
 		}
 
 		// Get on-disk worktrees
+		aetherRoot := resolveAetherRoot()
 		ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 		defer cancel()
-		gitOut, err := exec.CommandContext(ctx, "git", "worktree", "list", "--porcelain").Output()
+		gitOut, err := readOnlyGitCommand(ctx, aetherRoot, "worktree", "list", "--porcelain").Output()
 		onDiskPaths := map[string]bool{}
 		if err == nil {
 			for _, p := range parseWorktreePaths(string(gitOut)) {
@@ -384,7 +397,7 @@ var worktreeOrphanScanCmd = &cobra.Command{
 
 			// Check if on disk
 			onDisk := false
-			if _, err := os.Stat(wt.Path); err == nil {
+			if _, err := os.Stat(absoluteWorktreePath(aetherRoot, wt.Path)); err == nil {
 				onDisk = true
 			}
 
@@ -396,7 +409,7 @@ var worktreeOrphanScanCmd = &cobra.Command{
 
 			// Check last commit time
 			var lastCommit time.Time
-			commitTime, err := getLastCommitTime(wt.Path)
+			commitTime, err := getLastCommitTime(absoluteWorktreePath(aetherRoot, wt.Path))
 			if err != nil {
 				// No commits or git error; use creation time as fallback
 				createdAt, parseErr := time.Parse(time.RFC3339, wt.CreatedAt)
@@ -430,7 +443,7 @@ var worktreeOrphanScanCmd = &cobra.Command{
 		// Find untracked worktrees (on disk but not in state)
 		trackedPaths := map[string]bool{}
 		for _, wt := range state.Worktrees {
-			trackedPaths[wt.Path] = true
+			trackedPaths[absoluteWorktreePath(aetherRoot, wt.Path)] = true
 		}
 
 		var untracked []map[string]interface{}
@@ -491,13 +504,13 @@ func reportOrphanBranches() ([]map[string]interface{}, error) {
 	root := storage.ResolveAetherRoot(context.Background())
 
 	// List all branches
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-a", "--format=%(refname:short) %(committerdate:iso8601)").Output()
+	out, err := readOnlyGitCommand(ctx, root, "branch", "-a", "--format=%(refname:short) %(committerdate:iso8601)").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git branch: %w", err)
 	}
 
 	// Get on-disk worktrees
-	wtOut, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "list", "--porcelain").Output()
+	wtOut, err := readOnlyGitCommand(ctx, root, "worktree", "list", "--porcelain").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git worktree list: %w", err)
 	}
@@ -607,19 +620,70 @@ func createBlocker(store *storage.Store, description string, source string) erro
 // given worktree AND in at least one other worktree. It reuses parseWorktreePaths
 // from cmd/clash.go (same package).
 // entryPath must be an absolute path to the worktree directory.
+//
+// worktreeGitWaitDelay bounds cleanup after a Git child has been cancelled.
+const worktreeGitWaitDelay = 5 * time.Second
+
+// worktreeGitCommand runs Git from an explicit repository or worktree root.
+// It disables interactive prompting and ambient maintenance features, and
+// bounds pipe-draining after context cancellation so a hook's descendant
+// cannot keep an automated lifecycle command blocked indefinitely.
+func worktreeGitCommand(ctx context.Context, directory string, readOnly bool, args ...string) *exec.Cmd {
+	commandArgs := []string{
+		"-c", "core.fsmonitor=false",
+		"-c", "maintenance.auto=false",
+		"-c", "gc.auto=0",
+		"-C", directory,
+	}
+	commandArgs = append(commandArgs, args...)
+	command := exec.CommandContext(ctx, "git", commandArgs...)
+	command.WaitDelay = worktreeGitWaitDelay
+	replacements := map[string]string{
+		"GIT_PAGER":           "cat",
+		"GIT_TERMINAL_PROMPT": "0",
+	}
+	if readOnly {
+		replacements["GIT_OPTIONAL_LOCKS"] = "0"
+	}
+	command.Env = make([]string, 0, len(os.Environ())+len(replacements))
+	for _, entry := range os.Environ() {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, replaced := replacements[key]; replaced {
+				continue
+			}
+			if key == "GIT_OPTIONAL_LOCKS" && !readOnly {
+				continue
+			}
+		}
+		command.Env = append(command.Env, entry)
+	}
+	for _, key := range []string{"GIT_OPTIONAL_LOCKS", "GIT_PAGER", "GIT_TERMINAL_PROMPT"} {
+		if _, ok := replacements[key]; !ok {
+			continue
+		}
+		command.Env = append(command.Env, key+"="+replacements[key])
+	}
+	return command
+}
+
+func readOnlyGitCommand(ctx context.Context, directory string, args ...string) *exec.Cmd {
+	return worktreeGitCommand(ctx, directory, true, args...)
+}
+
 func checkClashesForWorktree(entryPath string, branch string) ([]string, error) {
 	// Derive repo root from the worktree path using git rev-parse
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	repoRootOut, err := exec.CommandContext(ctx, "git", "-C", entryPath, "rev-parse", "--show-toplevel").Output()
+	repoRootOut, err := readOnlyGitCommand(ctx, entryPath, "rev-parse", "--show-toplevel").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse --show-toplevel: %w", err)
 	}
 	repoRoot := strings.TrimSpace(string(repoRootOut))
 
 	// Get all worktree paths from the repo root
-	out, err := exec.CommandContext(ctx, "git", "-C", repoRoot, "worktree", "list", "--porcelain").Output()
+	out, err := readOnlyGitCommand(ctx, repoRoot, "worktree", "list", "--porcelain").Output()
 	if err != nil {
 		return nil, fmt.Errorf("git worktree list: %w", err)
 	}
@@ -627,14 +691,14 @@ func checkClashesForWorktree(entryPath string, branch string) ([]string, error) 
 
 	// Determine the base branch (main or master)
 	baseBranch := "main"
-	if err := exec.CommandContext(ctx, "git", "-C", repoRoot, "rev-parse", "--verify", baseBranch).Run(); err != nil {
+	if err := readOnlyGitCommand(ctx, repoRoot, "rev-parse", "--verify", baseBranch).Run(); err != nil {
 		baseBranch = "master"
 	}
 
 	// Get files modified in the target branch vs base branch
 	diffCtx, diffCancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer diffCancel()
-	diffOut, err := exec.CommandContext(diffCtx, "git", "-C", repoRoot, "diff", "--name-only", baseBranch+".."+branch).Output()
+	diffOut, err := readOnlyGitCommand(diffCtx, repoRoot, "diff", "--name-only", baseBranch+".."+branch).Output()
 	if err != nil {
 		// No diff or no commits -- nothing to clash with
 		return nil, nil
@@ -669,7 +733,7 @@ func checkClashesForWorktree(entryPath string, branch string) ([]string, error) 
 			checkCtx, checkCancel := context.WithTimeout(context.Background(), GitTimeout)
 			defer checkCancel()
 			// Check if the file differs from base in the other worktree
-			checkOut, checkErr := exec.CommandContext(checkCtx, "git", "-C", wtPath, "diff", "--name-only", baseBranch, "--", file).Output()
+			checkOut, checkErr := readOnlyGitCommand(checkCtx, wtPath, "diff", "--name-only", baseBranch, "--", file).Output()
 			if checkErr != nil {
 				continue // If we can't check, skip it
 			}
@@ -808,10 +872,10 @@ var worktreeMergeBackCmd = &cobra.Command{
 		defer gitCancel()
 
 		// Checkout main in the main worktree (run from aether root)
-		coOut, coErr := exec.CommandContext(gitCtx, "git", "-C", aetherRoot, "checkout", "main").CombinedOutput()
+		coOut, coErr := worktreeGitCommand(gitCtx, aetherRoot, false, "checkout", "main").CombinedOutput()
 		if coErr != nil {
 			// "main" may not exist; try "master" as fallback
-			coOut2, coErr2 := exec.CommandContext(gitCtx, "git", "-C", aetherRoot, "checkout", "master").CombinedOutput()
+			coOut2, coErr2 := worktreeGitCommand(gitCtx, aetherRoot, false, "checkout", "master").CombinedOutput()
 			if coErr2 != nil {
 				outputError(2, fmt.Sprintf("failed to checkout main branch: %v: %s (also tried master: %v: %s)",
 					coErr, string(coOut), coErr2, string(coOut2)), nil)
@@ -820,7 +884,7 @@ var worktreeMergeBackCmd = &cobra.Command{
 		}
 
 		// Merge the branch (run from aether root)
-		mergeOut, mergeErr := exec.CommandContext(gitCtx, "git", "-C", aetherRoot, "merge", entry.Branch).CombinedOutput()
+		mergeOut, mergeErr := worktreeGitCommand(gitCtx, aetherRoot, false, "merge", entry.Branch).CombinedOutput()
 		if mergeErr != nil {
 			blockerDesc := fmt.Sprintf("Merge failed for %s: %s", branch, string(mergeOut))
 			if createErr := createBlocker(store, blockerDesc, "worktree-merge-back"); createErr != nil {
@@ -848,7 +912,7 @@ var worktreeMergeBackCmd = &cobra.Command{
 
 			// The merge already succeeded and is durable on main -- only the
 			// destructive cleanup step is skipped. Leave the entry marked
-			// orphaned so `aether recover` / `worktree-reap` can find it,
+			// orphaned so maintenance recovery-inspect / worktree-reap can find it,
 			// rather than merged (which would suggest nothing is left to
 			// look at).
 			preservedNow := time.Now().UTC().Format(time.RFC3339)
@@ -879,13 +943,13 @@ var worktreeMergeBackCmd = &cobra.Command{
 		defer pruneCancel()
 
 		// 5a: Remove worktree directory (use absolute path)
-		exec.CommandContext(pruneCtx, "git", "-C", aetherRoot, "worktree", "remove", wtAbsPath, "--force").CombinedOutput()
+		worktreeGitCommand(pruneCtx, aetherRoot, false, "worktree", "remove", wtAbsPath, "--force").CombinedOutput()
 
 		// 5b: Prune stale references
-		exec.CommandContext(pruneCtx, "git", "-C", aetherRoot, "worktree", "prune").Run()
+		worktreeGitCommand(pruneCtx, aetherRoot, false, "worktree", "prune").Run()
 
 		// 5c: Delete branch (tolerate "not found" -- fast-forward merges may auto-delete)
-		branchDelErr := exec.CommandContext(gitCtx, "git", "-C", aetherRoot, "branch", "-d", entry.Branch).Run()
+		branchDelErr := worktreeGitCommand(gitCtx, aetherRoot, false, "branch", "-d", entry.Branch).Run()
 		if branchDelErr != nil {
 			// Log warning but don't fail -- branch cleanup is best-effort
 			// A "not found" error after fast-forward is expected

@@ -1,0 +1,13 @@
+🔨 PHASE {id} {status_icon}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 {name}
+📊 {status} | 📁 {files_created count} created, {files_modified count} modified
+🐜 {spawn_count} workers | 🧪 {tests_total} tests {if all_passing}passing{else}{passed}/{total}{end if}
+{if learning.patterns_observed.length > 0:}🧠 +{patterns_observed.length} patterns{end if}
+
+{if synthesis.status == "failed" OR verification.recommendation == "fix_required":}
+⚠️  BLOCKERS: {first 2 issues, comma-separated}
+{end if}
+
+➡️  Next: {primary_command}
+    --verbose for spawn tree, TDD details, patterns

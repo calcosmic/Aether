@@ -78,15 +78,10 @@ func TestBuildForceRedispatchesActiveExecutingPhase(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Force redispatch active phase"
-	startedAt := time.Now().UTC().Add(-20 * time.Minute)
+	startedAt := time.Now().UTC().Add(-20 * time.Minute).Truncate(time.Second)
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:        "3.0",
 		Goal:           &goal,
 		State:          colony.StateEXECUTING,
@@ -103,6 +98,21 @@ func TestBuildForceRedispatchesActiveExecutingPhase(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	activeDispatches := []codexBuildDispatch{{
+		Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-force-active",
+		Task: "Finish after timeout", TaskID: taskID, Status: "spawned",
+	}}
+	active := commitTestBuildStartAt(t, root, 1, startedAt, testBuildStartOptions{
+		Variant: buildStartDirect, Phase: 1, GeneratedAt: startedAt, ProcessState: testBuildProcessDead,
+		SelectedTasks: []string{taskID}, Dispatches: activeDispatches,
+		ExecutionOwner: "runtime-worker-dispatch", DispatchMode: "direct",
+	})
+	if err := transitionBuildAttempt(active.AttemptPath, buildAttemptDispatching, "fixture worker is active", activeDispatches, nil, "direct", nil); err != nil {
+		t.Fatalf("mark canonical force-redispatch fixture active: %v", err)
+	}
 
 	rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--force"})
 	if err := rootCmd.Execute(); err != nil {

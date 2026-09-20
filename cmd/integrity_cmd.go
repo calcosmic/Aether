@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
+
+const integrityInspectionSchemaVersion = "integrity-result/v1"
 
 type integrityCheck struct {
 	Name            string                 `json:"name"`
@@ -31,11 +35,28 @@ type integrityResult struct {
 	RecoveryCommands []string         `json:"recovery_commands,omitempty"`
 }
 
+type integrityInspectionResult struct {
+	SchemaVersion    string                            `json:"schema_version"`
+	OperationID      string                            `json:"operation_id"`
+	Context          string                            `json:"context"`
+	Channel          string                            `json:"channel"`
+	Checks           []integrityCheck                  `json:"checks"`
+	Overall          string                            `json:"overall"`
+	Findings         []maintenanceInspectionFinding    `json:"findings"`
+	Evidence         []maintenanceInspectionEvidence   `json:"evidence"`
+	Verification     maintenanceInspectionVerification `json:"verification"`
+	StateEffect      colony.LifecycleStateEffect       `json:"state_effect"`
+	Blockers         []maintenanceInspectionFinding    `json:"blockers"`
+	NextAction       string                            `json:"next_action"`
+	RecoveryCommands []string                          `json:"recovery_commands,omitempty"`
+}
+
 var integrityCmd = &cobra.Command{
-	Use:   "integrity",
-	Short: "Validate the full release pipeline chain",
-	Long:  "Checks source version, binary version, hub version, companion files, and downstream update result. Auto-detects source repo vs consumer repo context.",
-	RunE:  runIntegrity,
+	Use:         "integrity",
+	Short:       "Validate the full release pipeline chain",
+	Long:        "Checks source version, binary version, hub version, companion files, and downstream update result. Auto-detects source repo vs consumer repo context.",
+	Annotations: map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true"},
+	RunE:        runIntegrity,
 }
 
 func init() {
@@ -47,107 +68,267 @@ func init() {
 }
 
 func runIntegrity(cmd *cobra.Command, args []string) error {
-	// 1. Determine channel
 	channel := runtimeChannelFromFlag(cmd.Flags())
 	if explicitChannel, _ := cmd.Flags().GetString("channel"); explicitChannel != "" {
 		if normalizeRuntimeChannel(explicitChannel) != channelDev && normalizeRuntimeChannel(explicitChannel) != channelStable {
+			result := finalizeIntegrityInspection(
+				detectIntegrityContext(),
+				explicitChannel,
+				"",
+				[]integrityCheck{{
+					Name:            "Channel",
+					Status:          "fail",
+					Message:         fmt.Sprintf("invalid channel %q: must be stable or dev", explicitChannel),
+					RecoveryCommand: "aether integrity --channel stable",
+				}},
+			)
+			if err := renderIntegrityResult(cmd, result); err != nil {
+				return err
+			}
 			return fmt.Errorf("invalid channel %q: must be stable or dev", explicitChannel)
 		}
 	}
 
-	// 2. Determine context
 	ctx := detectIntegrityContext()
 	if forceSource, _ := cmd.Flags().GetBool("source"); forceSource {
 		ctx = "source"
 	}
 
-	// 3. Resolve hub directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
+		result := finalizeIntegrityInspection(ctx, string(channel), "", []integrityCheck{{
+			Name:            "Hub location",
+			Status:          "fail",
+			Message:         fmt.Sprintf("cannot determine home directory: %v", err),
+			RecoveryCommand: "Set HOME or AETHER_HUB_DIR, then rerun aether integrity",
+		}})
+		if renderErr := renderIntegrityResult(cmd, result); renderErr != nil {
+			return renderErr
+		}
 		return fmt.Errorf("cannot determine home directory: %w", err)
 	}
 	hubDir := resolveHubPathForHome(homeDir, channel)
-	hubVersion := readHubVersionAtPath(hubDir)
-	if hubVersion == "" {
-		result := integrityResult{
-			Context: ctx,
-			Channel: string(channel),
-			Checks: []integrityCheck{
-				{Name: "Hub installed", Status: "fail", Message: fmt.Sprintf("hub not installed at %s", hubDir)},
-			},
-			Overall: "critical",
-		}
-		if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
-			data, _ := json.MarshalIndent(result, "", "  ")
-			fmt.Fprintln(stdout, string(data))
-		} else {
-			outputError(2, fmt.Sprintf("hub not installed at %s", hubDir), nil)
-		}
+	result := buildIntegrityInspection(ctx, channel, hubDir)
+	if err := renderIntegrityResult(cmd, result); err != nil {
+		return err
+	}
+	if result.Overall == "ok" {
+		return nil
+	}
+	if readHubVersionAtPath(hubDir) == "" {
 		return fmt.Errorf("hub not installed at %s", hubDir)
 	}
+	return fmt.Errorf("integrity checks failed")
+}
 
-	// 4. Collect versions
-	binaryVersion := resolveVersion()
-
-	// 5. Run checks based on context
-	var checks []integrityCheck
-	if ctx == "source" {
-		checks = []integrityCheck{
-			checkSourceVersion(),
-			checkBinaryVersion(),
-			checkHubVersion(hubDir),
-			checkHubCompanionFiles(hubDir),
-			checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
-		}
-	} else {
-		checks = []integrityCheck{
-			checkBinaryVersion(),
-			checkHubVersion(hubDir),
-			checkHubCompanionFiles(hubDir),
-			checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
-		}
+func buildIntegrityInspection(ctx string, channel runtimeChannel, hubDir string) integrityInspectionResult {
+	hubVersion := readHubVersionAtPath(hubDir)
+	if hubVersion == "" {
+		return finalizeIntegrityInspection(ctx, string(channel), hubDir, []integrityCheck{{
+			Name:            "Hub installed",
+			Status:          "fail",
+			Message:         fmt.Sprintf("hub not installed at %s", hubDir),
+			RecoveryCommand: "aether install",
+		}})
 	}
 
-	// 6. Aggregate results
-	overall := "ok"
-	var recoveryCommands []string
-	for _, c := range checks {
-		if c.Status == "fail" {
-			overall = "critical"
-			if c.RecoveryCommand != "" {
-				recoveryCommands = append(recoveryCommands, c.RecoveryCommand)
+	binaryVersion := resolveVersion()
+	checks := []integrityCheck{}
+	if ctx == "source" {
+		checks = append(checks, checkSourceVersion())
+	}
+	checks = append(checks,
+		checkBinaryVersion(),
+		checkHubVersion(hubDir),
+		checkHubCompanionFiles(hubDir),
+		checkDownstreamSimulation(hubDir, hubVersion, binaryVersion, channel),
+	)
+	if archiveInspection, ok := inspectCurrentArchiveForIntegrity(); ok {
+		checks = append(checks, integrityCheckForArchiveInspection(archiveInspection))
+	}
+	return finalizeIntegrityInspection(ctx, string(channel), hubDir, checks)
+}
+
+// integrityCheckForArchiveInspection keeps the expert integrity view on the
+// same typed digest result used by chamber verification and repair preflight.
+// No archive fact is reconstructed from directory presence here.
+func integrityCheckForArchiveInspection(inspection archiveMaintenanceInspectionResult) integrityCheck {
+	status := "fail"
+	recovery := "aether maintenance archive-inspect"
+	if inspection.Valid {
+		status = "pass"
+		recovery = ""
+	}
+	return integrityCheck{
+		Name:            "Chamber/context integrity",
+		Status:          status,
+		Message:         inspection.IntegrityLine,
+		RecoveryCommand: recovery,
+		Details: map[string]interface{}{
+			"chamber_path":              inspection.ChamberPath,
+			"manifest_digest":           inspection.ManifestDigest,
+			"baseline_digest":           inspection.BaselineDigest,
+			"manifest_verified":         inspection.ManifestVerified,
+			"content_digests_verified":  inspection.ContentVerified,
+			"cross_references_verified": inspection.CrossReferencesVerified,
+			"context_verified":          inspection.ContextVerified,
+			"seal_disposition":          inspection.SealDisposition,
+			"entries_checked":           inspection.EntriesChecked,
+			"references_checked":        inspection.ReferencesChecked,
+			"findings":                  inspection.Findings,
+		},
+	}
+}
+
+// inspectCurrentArchiveForIntegrity discovers only an explicit active archive
+// reference. A repository with no entombed colony simply has no archive line;
+// a malformed reference becomes a failing typed line rather than being
+// silently treated as a directory.
+func inspectCurrentArchiveForIntegrity() (archiveMaintenanceInspectionResult, bool) {
+	root := filepath.Clean(resolveAetherRootPath())
+	dataRoot := filepath.Join(root, ".aether", "data")
+	if configured := strings.TrimSpace(os.Getenv("COLONY_DATA_DIR")); configured != "" {
+		dataRoot = filepath.Clean(configured)
+	}
+	stateBytes, err := readLifecycleEvidenceFile(filepath.Join(dataRoot, "COLONY_STATE.json"))
+	if err != nil {
+		return archiveMaintenanceInspectionResult{}, false
+	}
+	var state colony.ColonyState
+	if err := decodeLifecycleJSON(stateBytes, &state); err != nil || state.ArchiveReference == nil || strings.TrimSpace(state.ArchiveReference.Path) == "" {
+		return archiveMaintenanceInspectionResult{}, false
+	}
+	manifestPath := filepath.Join(root, filepath.FromSlash(state.ArchiveReference.Path))
+	inspection, inspectErr := inspectArchiveMaintenance(archiveMaintenanceInspectRequest{
+		RepositoryRoot: root,
+		DataRoot:       dataRoot,
+		ChamberPath:    filepath.Dir(manifestPath),
+	})
+	if inspectErr != nil {
+		inspection = archiveMaintenanceInspectionResult{
+			SchemaVersion: archiveMaintenanceInspectionSchemaVersion,
+			OperationID:   "archive.inspect",
+			ChamberPath:   filepath.Dir(manifestPath),
+			ManifestPath:  manifestPath,
+			Findings: []maintenanceInspectionFinding{{
+				Code: "archive_reference", Summary: inspectErr.Error(),
+				SourcePath:      filepath.Join(dataRoot, "COLONY_STATE.json"),
+				EvidencePaths:   []string{filepath.Join(dataRoot, "COLONY_STATE.json"), manifestPath},
+				RecoveryCommand: "aether maintenance archive-inspect",
+			}},
+			StateEffect: colony.LifecycleStateEffectNone,
+		}
+		inspection = finalizeArchiveMaintenanceInspection(inspection, []string{filepath.Join(dataRoot, "COLONY_STATE.json") + "=" + lifecycleDigest(stateBytes)})
+	}
+	return inspection, true
+}
+
+func finalizeIntegrityInspection(ctx, channel, hubDir string, checks []integrityCheck) integrityInspectionResult {
+	result := integrityInspectionResult{
+		SchemaVersion: integrityInspectionSchemaVersion,
+		OperationID:   "integrity.inspect",
+		Context:       ctx,
+		Channel:       channel,
+		Checks:        append([]integrityCheck(nil), checks...),
+		Overall:       "ok",
+		Findings:      []maintenanceInspectionFinding{},
+		Evidence:      []maintenanceInspectionEvidence{},
+		StateEffect:   colony.LifecycleStateEffectNone,
+		Blockers:      []maintenanceInspectionFinding{},
+		NextAction:    "aether maintenance",
+	}
+	if result.Checks == nil {
+		result.Checks = []integrityCheck{}
+	}
+	for _, check := range result.Checks {
+		paths := integrityEvidencePaths(check.Name, ctx, hubDir)
+		result.Evidence = append(result.Evidence, maintenanceInspectionEvidence{
+			Scope:   check.Name,
+			Paths:   paths,
+			Checked: 1,
+			Status:  check.Status,
+		})
+		if check.Status != "fail" {
+			continue
+		}
+		result.Overall = "critical"
+		finding := maintenanceInspectionFinding{
+			Code:            "integrity." + strings.ReplaceAll(strings.ToLower(check.Name), " ", "_"),
+			Summary:         check.Message,
+			EvidencePaths:   append([]string(nil), paths...),
+			RecoveryCommand: check.RecoveryCommand,
+		}
+		if len(paths) > 0 {
+			finding.SourcePath = paths[0]
+		}
+		result.Findings = append(result.Findings, finding)
+		result.Blockers = append(result.Blockers, finding)
+		if check.RecoveryCommand != "" && !containsString(result.RecoveryCommands, check.RecoveryCommand) {
+			result.RecoveryCommands = append(result.RecoveryCommands, check.RecoveryCommand)
+		}
+	}
+	if len(result.RecoveryCommands) > 0 {
+		result.NextAction = result.RecoveryCommands[0]
+	}
+	status := "pass"
+	if result.Overall != "ok" {
+		status = "fail"
+	}
+	result.Verification = maintenanceInspectionVerification{
+		Status:        status,
+		EvidenceCount: len(result.Evidence),
+		FindingCount:  len(result.Findings),
+	}
+	return result
+}
+
+func integrityEvidencePaths(name, ctx, hubDir string) []string {
+	var paths []string
+	switch name {
+	case "Hub installed", "Hub version", "Downstream simulation":
+		if hubDir != "" {
+			paths = append(paths, hubDir)
+		}
+	case "Hub companion files":
+		if hubDir != "" {
+			paths = append(paths, filepath.Join(hubDir, "system"))
+		}
+	case "Source version":
+		if cwd, err := os.Getwd(); err == nil {
+			if root := findAetherModuleRoot(cwd); root != "" {
+				paths = append(paths, filepath.Join(root, ".aether", "version.json"))
+			}
+		}
+	case "Binary version":
+		if executable, err := os.Executable(); err == nil {
+			paths = append(paths, executable)
+		}
+	}
+	if ctx == "source" && name == "Hub installed" {
+		if cwd, err := os.Getwd(); err == nil {
+			if root := findAetherModuleRoot(cwd); root != "" {
+				paths = append(paths, filepath.Join(root, ".aether", "version.json"))
 			}
 		}
 	}
+	sort.Strings(paths)
+	return paths
+}
 
-	result := integrityResult{
-		Context:          ctx,
-		Channel:          string(channel),
-		Checks:           checks,
-		Overall:          overall,
-		RecoveryCommands: recoveryCommands,
-	}
-
-	// 7. Render output
+func renderIntegrityResult(cmd *cobra.Command, result integrityInspectionResult) error {
 	if jsonOut, _ := cmd.Flags().GetBool("json"); jsonOut {
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
 		}
 		fmt.Fprintln(stdout, string(data))
-	} else {
-		visual := buildIntegrityVisual(result)
-		visualFprint(stdout, visual)
-	}
-
-	// 8. Return
-	if overall == "ok" {
 		return nil
 	}
-	return fmt.Errorf("integrity checks failed")
+	visualFprint(stdout, buildIntegrityVisual(result))
+	return nil
 }
 
-func buildIntegrityVisual(result integrityResult) string {
+func buildIntegrityVisual(result integrityInspectionResult) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("integrity"), "Release Integrity"))
 	b.WriteString(fmt.Sprintf("Context: %s repo\n", result.Context))
@@ -175,12 +356,16 @@ func buildIntegrityVisual(result integrityResult) string {
 	b.WriteString("\n")
 	b.WriteString(renderStageMarker("Summary"))
 	b.WriteString(fmt.Sprintf("%d/%d checks passed\n", passCount, len(result.Checks)))
+	b.WriteString("State effect: none\n")
 
 	if len(result.RecoveryCommands) > 0 {
 		b.WriteString("\nRecovery Commands\n")
 		for _, rc := range result.RecoveryCommands {
 			b.WriteString(fmt.Sprintf("  %s\n", rc))
 		}
+	}
+	if strings.TrimSpace(result.NextAction) != "" {
+		b.WriteString(fmt.Sprintf("\nNext command: %s\n", result.NextAction))
 	}
 
 	return b.String()

@@ -30,7 +30,12 @@ func setupSanitizationTest(t *testing.T) (string, *bytes.Buffer, *bytes.Buffer) 
 	}
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
+	// t.Setenv, not os.Setenv: t.TempDir() is deleted when this test ends, so an
+	// unrestored AETHER_ROOT leaves every later test in the same process resolving
+	// the repository root to a path that no longer exists. That surfaced as four
+	// unrelated failures (skill-index-read, skill-is-user-created x2, visuals-dump)
+	// in the full-suite run, whose lane ordering happened to put them after this one.
+	t.Setenv("AETHER_ROOT", tmpDir)
 
 	var outBuf, errBuf bytes.Buffer
 	stdout = &outBuf

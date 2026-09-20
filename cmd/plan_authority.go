@@ -1,0 +1,619 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
+// planAuthorityClassification names the only two plan lineages that may
+// execute. A current plan has exact owner acceptance; a legacy plan is usable
+// only because migration explicitly classified its older, unbound authority.
+type planAuthorityClassification string
+
+const (
+	planAuthorityCurrentAccepted planAuthorityClassification = "current_accepted"
+	planAuthorityLegacyUnbound   planAuthorityClassification = "legacy_unbound"
+)
+
+// planAuthorityRefusalCode is stable machine-readable recovery data shared by
+// build and run. Renderers may explain these values but must not infer them
+// from error prose.
+type planAuthorityRefusalCode string
+
+const (
+	planAuthorityRefusalStateUnavailable         planAuthorityRefusalCode = "plan_authority_state_unavailable"
+	planAuthorityRefusalMissingPolicy            planAuthorityRefusalCode = "plan_authority_policy_missing"
+	planAuthorityRefusalNoActivePlan             planAuthorityRefusalCode = "plan_authority_no_active_plan"
+	planAuthorityRefusalLegacyInvalid            planAuthorityRefusalCode = "plan_authority_legacy_invalid"
+	planAuthorityRefusalSpecificationNotApproved planAuthorityRefusalCode = "plan_authority_specification_not_approved"
+	planAuthorityRefusalStaleSpecification       planAuthorityRefusalCode = "plan_authority_stale_specification"
+	planAuthorityRefusalCandidateNotAccepted     planAuthorityRefusalCode = "plan_authority_candidate_not_accepted"
+	planAuthorityRefusalCandidateInvalid         planAuthorityRefusalCode = "plan_authority_candidate_invalid"
+	planAuthorityRefusalStaleBase                planAuthorityRefusalCode = "plan_authority_stale_base"
+	planAuthorityRefusalBrokenTimeline           planAuthorityRefusalCode = "plan_authority_broken_timeline"
+	planAuthorityRefusalAcceptanceInvalid        planAuthorityRefusalCode = "plan_authority_acceptance_invalid"
+	planAuthorityRefusalAffectedScope            planAuthorityRefusalCode = "plan_authority_affected_scope"
+)
+
+// planAuthorityBinding is a compact ID plus immutable hash attribution. Hash
+// means content hash for revisions/specs/candidates/receipts and timeline
+// digest for timelines.
+type planAuthorityBinding struct {
+	ID   string `json:"id,omitempty"`
+	Hash string `json:"hash,omitempty"`
+}
+
+// planAuthorityDecision is the complete, side-effect-free result consumed by
+// both execution surfaces.
+type planAuthorityDecision struct {
+	Eligible            bool                        `json:"eligible"`
+	Classification      planAuthorityClassification `json:"classification,omitempty"`
+	ActiveRevision      planAuthorityBinding        `json:"active_revision,omitempty"`
+	Specification       planAuthorityBinding        `json:"specification,omitempty"`
+	Candidate           planAuthorityBinding        `json:"candidate,omitempty"`
+	Timeline            planAuthorityBinding        `json:"timeline,omitempty"`
+	Acceptance          planAuthorityBinding        `json:"acceptance,omitempty"`
+	RefusalCode         planAuthorityRefusalCode    `json:"refusal_code,omitempty"`
+	AffectedSemanticIDs []string                    `json:"affected_semantic_ids,omitempty"`
+	RecoveryCommand     string                      `json:"recovery_command,omitempty"`
+	Diagnostic          string                      `json:"diagnostic,omitempty"`
+}
+
+// planAuthorityVerifiedBindings carries artifact bytes already verified by
+// repository loaders. Error fields preserve which verification boundary
+// failed without making the pure policy perform I/O.
+type planAuthorityVerifiedBindings struct {
+	Candidate          *colony.PlanCandidate
+	Acceptance         *colony.PlanAcceptanceReceipt
+	Timeline           *colony.PlanningTimelineBinding
+	Cards              []colony.PlanningIterationCard
+	SpecificationError string
+	CandidateError     string
+	TimelineError      string
+	AcceptanceError    string
+}
+
+// validateAcceptedPlanAuthority is the single pure execution-authority policy.
+// It reads immutable lifecycle facts and verified artifacts, never state stores.
+func validateAcceptedPlanAuthority(facts LifecycleFacts, bindings planAuthorityVerifiedBindings) planAuthorityDecision {
+	decision := planAuthorityDecision{}
+	if len(facts.Planning.Value.AffectedUnresolvedSemanticIDs) > 0 {
+		decision.AffectedSemanticIDs = uniqueSortedStrings(facts.Planning.Value.AffectedUnresolvedSemanticIDs)
+	}
+	if facts.State.Source.Provenance != LifecycleFactConfirmed {
+		return refusePlanAuthority(decision, planAuthorityRefusalStateUnavailable, "aether status", emptyFallback(strings.TrimSpace(facts.State.Source.Diagnostic), "authoritative colony state is unavailable"))
+	}
+
+	state := facts.State.Value
+	plan := state.Plan
+	if strings.TrimSpace(bindings.SpecificationError) != "" {
+		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "specification integrity: "+strings.TrimSpace(bindings.SpecificationError))
+	}
+	if bindings.Candidate != nil && bindings.Candidate.Status != colony.PlanCandidateAccepted {
+		decision.Candidate = planAuthorityBinding{ID: bindings.Candidate.ID, Hash: bindings.Candidate.ContentHash}
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateNotAccepted, "aether plan --candidate", "a reviewable plan candidate has not been explicitly accepted")
+	}
+	if len(plan.Phases) == 0 {
+		return refusePlanAuthority(decision, planAuthorityRefusalNoActivePlan, "aether plan", "no active plan phases are present")
+	}
+
+	switch plan.AcceptancePolicy {
+	case colony.PlanAcceptanceLegacyUnbound:
+		return validateLegacyPlanAuthority(state, decision)
+	case colony.PlanAcceptanceExplicitOwner:
+		return validateCurrentPlanAuthority(state, facts.Planning.Value, bindings, decision, facts.CapturedAt)
+	case "":
+		return refusePlanAuthority(decision, planAuthorityRefusalMissingPolicy, "aether plan", "the plan has no explicit acceptance or migration policy")
+	default:
+		return refusePlanAuthority(decision, planAuthorityRefusalMissingPolicy, "aether plan", fmt.Sprintf("unsupported plan acceptance policy %q", plan.AcceptancePolicy))
+	}
+}
+
+func validateLegacyPlanAuthority(state colony.ColonyState, decision planAuthorityDecision) planAuthorityDecision {
+	plan := state.Plan
+	if state.Specification != nil || planHasCurrentAuthority(plan) {
+		return refusePlanAuthority(decision, planAuthorityRefusalLegacyInvalid, "aether plan", "legacy_unbound authority contains current specification, candidate, or binding data")
+	}
+	if !orderedPlanAuthorityPhases(plan.Phases) || firstBuildablePhase(plan.Phases) == 0 {
+		return refusePlanAuthority(decision, planAuthorityRefusalNoActivePlan, "aether plan", "legacy_unbound authority has no valid active phase")
+	}
+	hash, err := planDefinitionHash(plan.Phases)
+	if err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalLegacyInvalid, "aether plan", fmt.Sprintf("hash legacy plan: %v", err))
+	}
+	decision.Eligible = true
+	decision.Classification = planAuthorityLegacyUnbound
+	decision.ActiveRevision = planAuthorityBinding{ID: activePlanRevisionID(plan), Hash: hash}
+	return decision
+}
+
+func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePlanningFacts, bindings planAuthorityVerifiedBindings, decision planAuthorityDecision, observedAt time.Time) planAuthorityDecision {
+	if state.Specification == nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "current plan authority requires an approved specification")
+	}
+	currentSpec, ok := currentSpecificationRevision(*state.Specification)
+	if !ok || currentSpec.Status != colony.SpecStatusApproved || currentSpec.Approval == nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "the current specification revision is not explicitly approved")
+	}
+	if err := currentSpec.Approval.Validate(); err != nil ||
+		currentSpec.Approval.SpecificationID != state.Specification.ID ||
+		currentSpec.Approval.RevisionID != currentSpec.ID ||
+		currentSpec.Approval.RevisionContentHash != currentSpec.ContentHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalSpecificationNotApproved, "aether spec", "the current specification approval receipt does not bind the exact revision")
+	}
+	decision.Specification = planAuthorityBinding{ID: currentSpec.ID, Hash: currentSpec.ContentHash}
+
+	active, ok := activePlanRevision(state.Plan)
+	if !ok {
+		return refusePlanAuthority(decision, planAuthorityRefusalNoActivePlan, "aether plan", "active_revision_id does not name a retained immutable revision")
+	}
+	decision.ActiveRevision = planAuthorityBinding{ID: active.ID, Hash: active.PlanHash}
+	if len(decision.AffectedSemanticIDs) > 0 || planning.AcceptanceBindingStatus == LifecyclePlanBindingAffected {
+		return refusePlanAuthority(decision, planAuthorityRefusalAffectedScope, "aether plan", "the accepted plan has specification-affected scope that is not reconciled")
+	}
+	if active.SpecificationRevisionID != currentSpec.ID || active.SpecificationRevisionHash != currentSpec.ContentHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalStaleSpecification, "aether plan", "the active revision does not bind the current approved specification")
+	}
+
+	retained, ok := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID)
+	if !ok || retained.Status != colony.PlanCandidateAccepted || retained.Acceptance == nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateNotAccepted, "aether plan --candidate", "the active revision has no explicitly accepted candidate")
+	}
+	decision.Candidate = planAuthorityBinding{ID: retained.ID, Hash: retained.ContentHash}
+	if bindings.Candidate == nil {
+		detail := emptyFallback(strings.TrimSpace(bindings.CandidateError), "the accepted candidate artifact was not verified")
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", detail)
+	}
+	candidate := *bindings.Candidate
+	if candidate.Status != colony.PlanCandidateAccepted || candidate.Acceptance == nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateNotAccepted, "aether plan --candidate", "candidate status is not accepted")
+	}
+	if !reflect.DeepEqual(retained, candidate) {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", "the verified candidate artifact diverges from retained state")
+	}
+	base := colony.PlanRevision{ID: candidate.BasePlanRevisionID, PlanHash: candidate.BasePlanRevisionHash}
+	if candidate.Acceptance.BasePlanRevisionID != candidate.BasePlanRevisionID || candidate.Acceptance.BasePlanRevisionHash != candidate.BasePlanRevisionHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "the accepted candidate and receipt disagree about the exact base")
+	}
+	if candidate.BasePlanRevisionID == "plan-unbound" {
+		if active.Number != 1 || active.ParentID != "" {
+			return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "a genesis candidate cannot activate over an existing revision")
+		}
+	} else {
+		var found bool
+		base, found = planAuthorityRevisionByID(state.Plan.Revisions, candidate.BasePlanRevisionID)
+		if !found || base.PlanHash != candidate.BasePlanRevisionHash || active.ParentID != base.ID {
+			return refusePlanAuthority(decision, planAuthorityRefusalStaleBase, "aether plan", "the accepted candidate does not bind the active revision's exact base")
+		}
+	}
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", fmt.Sprintf("candidate binding: %v", err))
+	}
+	if err := candidate.Validate(); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", fmt.Sprintf("candidate: %v", err))
+	}
+	candidateProposalHash, proposalHashErr := canonicalPlanCandidateProposalHash(candidate.Proposal)
+	if proposalHashErr != nil || candidateProposalHash != candidate.ProposalHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", "candidate proposal hash does not match its canonical stripped proposal")
+	}
+	if candidate.SpecificationRevisionID != currentSpec.ID || candidate.SpecificationRevisionHash != currentSpec.ContentHash ||
+		candidate.Proposal.ID != active.ID || candidate.ProposalHash != active.PlanHash ||
+		active.CandidateContentHash != candidate.ContentHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalStaleSpecification, "aether plan", "candidate, active revision, and specification bindings are not exact")
+	}
+	activeView := active
+	activeView.Phases = state.Plan.Phases
+	activeViewHash, hashErr := canonicalPlanCandidateProposalHash(activeView)
+	if err := validateStandalonePlanRevision(active); err != nil || hashErr != nil || activeViewHash != active.PlanHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", "the active plan does not match the accepted immutable proposal")
+	}
+	if err := validateStandalonePlanRevision(candidate.Proposal); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", fmt.Sprintf("candidate proposal: %v", err))
+	}
+
+	decision.Timeline = planAuthorityBinding{ID: candidate.Timeline.ID, Hash: candidate.Timeline.TimelineDigest}
+	if bindings.Timeline == nil {
+		detail := emptyFallback(strings.TrimSpace(bindings.TimelineError), "the accepted candidate timeline was not verified")
+		return refusePlanAuthority(decision, planAuthorityRefusalBrokenTimeline, "aether plan", detail)
+	}
+	if !reflect.DeepEqual(*bindings.Timeline, candidate.Timeline) ||
+		candidate.Timeline.ID != active.PlanningTimelineID || candidate.Timeline.TimelineDigest != active.PlanningTimelineDigest {
+		return refusePlanAuthority(decision, planAuthorityRefusalBrokenTimeline, "aether plan", "the verified timeline binding diverges from candidate or active revision")
+	}
+	if err := validatePlanningTimelineBindingContent(*bindings.Timeline, bindings.Cards); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalBrokenTimeline, "aether plan", fmt.Sprintf("timeline: %v", err))
+	}
+	if err := validateDerivedAcceptedPlanAuthority(state, active, candidate, base, bindings.Cards); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan --candidate", fmt.Sprintf("derived authority: %v", err))
+	}
+
+	receipt := candidate.Acceptance
+	decision.Acceptance = planAuthorityBinding{ID: receipt.ID, Hash: receipt.ContentHash}
+	if bindings.Acceptance == nil {
+		detail := emptyFallback(strings.TrimSpace(bindings.AcceptanceError), "the acceptance receipt artifact was not verified")
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", detail)
+	}
+	if !reflect.DeepEqual(*bindings.Acceptance, *receipt) || !reflect.DeepEqual(*retained.Acceptance, *receipt) {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", "the acceptance receipt artifact diverges from candidate or retained state")
+	}
+	if err := receipt.Validate(); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", fmt.Sprintf("acceptance receipt: %v", err))
+	}
+	if err := validatePlanCandidateAcceptanceReceiptHash(*receipt); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", err.Error())
+	}
+	expectedTokenHash := strings.TrimPrefix(lifecycleDigest([]byte(planCandidateAcceptanceToken(candidate))), "sha256:")
+	if receipt.CandidateID != candidate.ID || receipt.CandidateContentHash != candidate.ContentHash ||
+		receipt.SpecificationRevisionID != currentSpec.ID || receipt.SpecificationRevisionHash != currentSpec.ContentHash ||
+		receipt.BasePlanRevisionID != base.ID || receipt.BasePlanRevisionHash != base.PlanHash ||
+		receipt.TimelineID != candidate.Timeline.ID || receipt.TimelineDigest != candidate.Timeline.TimelineDigest ||
+		receipt.ProposalHash != active.PlanHash || receipt.AcceptanceTokenHash != expectedTokenHash ||
+		receipt.ActivatedPlanRevisionID != active.ID || receipt.ActivatedPlanRevisionHash != active.PlanHash {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, "aether plan --candidate", "the acceptance receipt does not bind every exact authority field")
+	}
+	// Reuse the same injected-time standing policy used by review and
+	// acceptance. A timely accepted candidate remains accepted after its
+	// former deadline, but a forged receipt at or beyond that deadline never
+	// acquires build or run authority.
+	standing := assessPlanCandidateStanding(candidate, planCandidateCurrentAuthority{
+		SpecificationRevisionID:   currentSpec.ID,
+		SpecificationRevisionHash: currentSpec.ContentHash,
+		BasePlanRevisionID:        base.ID,
+		BasePlanRevisionHash:      base.PlanHash,
+		ProposalHash:              active.PlanHash,
+		Timeline:                  *bindings.Timeline,
+		StageBasePlanRevisionID:   base.ID,
+		StageBasePlanRevisionHash: base.PlanHash,
+		Stage: planningStageState{
+			Stage:                 planningStageAccepted,
+			RunID:                 candidate.Timeline.RunID,
+			Specification:         planningStageSpecificationBinding{RevisionID: currentSpec.ID, ContentHash: currentSpec.ContentHash},
+			BasePlanRevisionID:    base.ID,
+			BasePlanRevisionHash:  base.PlanHash,
+			AcceptanceReceiptID:   receipt.ID,
+			AcceptanceReceiptHash: receipt.ContentHash,
+		},
+	}, observedAt)
+	if standing.Standing != planCandidateStandingAccepted {
+		return refusePlanAuthority(decision, planAuthorityRefusalAcceptanceInvalid, standing.RecoveryCommand,
+			fmt.Sprintf("accepted candidate standing: %s (%s)", standing.Standing, standing.WhyUnavailable))
+	}
+	if _, err := validatePlanRevisionChain(state.Plan.Revisions, true); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("plan revision chain: %v", err))
+	}
+	if err := validateCurrentPlanNodes(state.Plan.Phases, active, currentSpec); err != nil {
+		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("active plan bindings: %v", err))
+	}
+
+	decision.Eligible = true
+	decision.Classification = planAuthorityCurrentAccepted
+	return decision
+}
+
+// validateDerivedAcceptedPlanAuthority repeats the acceptance-time semantic
+// derivation for every execution attempt. Candidate delta, authority impacts,
+// and affected/preserved markers are assertions to compare, never inputs that
+// may grant build or run authority.
+func validateDerivedAcceptedPlanAuthority(state colony.ColonyState, active colony.PlanRevision, candidate colony.PlanCandidate, base colony.PlanRevision, cards []colony.PlanningIterationCard) error {
+	if state.Specification == nil {
+		return fmt.Errorf("canonical specification is unavailable")
+	}
+	if len(cards) == 0 {
+		return fmt.Errorf("verified timeline has no final iteration")
+	}
+	derived, err := derivePlanCandidateAuthority(base, *state.Specification, candidate.Proposal)
+	if err != nil {
+		return err
+	}
+	finalCard := cards[len(cards)-1]
+	if err := validateDerivedPlanCandidateAuthority(candidate, finalCard, derived); err != nil {
+		return err
+	}
+	affected, preserved := derivedPlanCandidateScope(finalCard.SemanticDelta, derived)
+	if !reflect.DeepEqual(canonicalPlanImpactIDs(active.AffectedSemanticIDs), affected) ||
+		!reflect.DeepEqual(canonicalPlanImpactIDs(active.PreservedSemanticIDs), preserved) {
+		return fmt.Errorf("active revision affected/preserved scope does not match independent closure")
+	}
+	if err := validateDerivedPlanNodeScopes(candidate.Proposal.Phases, affected, preserved, derived.Impact); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateDerivedPlanNodeScopes(phases []colony.Phase, affected, preserved []string, impact planImpactClosure) error {
+	affectedSet := planImpactIDSet(affected)
+	preservedSet := planImpactIDSet(preserved)
+	closureSet := planImpactIDSet(impact.AffectedSemanticIDs)
+	validate := func(label, semanticID string, gotAffected, gotPreserved []string, allowCoverage bool) error {
+		semanticID = strings.TrimSpace(semanticID)
+		nodeAffected := canonicalPlanImpactIDs(gotAffected)
+		nodePreserved := canonicalPlanImpactIDs(gotPreserved)
+		_, wantAffected := affectedSet[semanticID]
+		_, wantPreserved := preservedSet[semanticID]
+		if wantAffected {
+			if _, found := planImpactIDSet(nodeAffected)[semanticID]; !found {
+				return fmt.Errorf("%s omits independently affected semantic ID %q", label, semanticID)
+			}
+		} else if len(nodeAffected) != 0 {
+			return fmt.Errorf("%s claims affected scope for independently unaffected semantic ID %q", label, semanticID)
+		}
+		if wantPreserved {
+			if !reflect.DeepEqual(nodePreserved, []string{semanticID}) {
+				return fmt.Errorf("%s preserved scope does not match independent classification for %q", label, semanticID)
+			}
+		} else if len(nodePreserved) != 0 {
+			return fmt.Errorf("%s claims preserved scope for independently unpreserved semantic ID %q", label, semanticID)
+		}
+		if !allowCoverage && len(nodeAffected) > 1 {
+			return fmt.Errorf("%s has overbroad affected scope", label)
+		}
+		for _, id := range nodeAffected {
+			if id == semanticID {
+				continue
+			}
+			if _, ok := closureSet[id]; !ok {
+				return fmt.Errorf("%s claims affected ID %q outside independent closure", label, id)
+			}
+		}
+		return nil
+	}
+	for phaseIndex := range phases {
+		phase := phases[phaseIndex]
+		if err := validate(fmt.Sprintf("phases[%d]", phaseIndex), phase.SemanticID, phase.AffectedSemanticIDs, phase.PreservedSemanticIDs, true); err != nil {
+			return err
+		}
+		for taskIndex := range phase.Tasks {
+			task := phase.Tasks[taskIndex]
+			if err := validate(fmt.Sprintf("phases[%d].tasks[%d]", phaseIndex, taskIndex), task.SemanticID, task.AffectedSemanticIDs, task.PreservedSemanticIDs, false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// loadPlanAuthorityVerifiedBindings performs the read-only artifact checks
+// needed before the pure validator is called by an execution entry point.
+func loadPlanAuthorityVerifiedBindings(root string, facts LifecycleFacts) planAuthorityVerifiedBindings {
+	state := facts.State.Value
+	root = strings.TrimSpace(root)
+	if state.Specification != nil {
+		if err := validateCanonicalSpecificationState(*state.Specification); err != nil {
+			return planAuthorityVerifiedBindings{SpecificationError: err.Error()}
+		}
+	}
+	active, ok := activePlanRevision(state.Plan)
+	if ok && strings.TrimSpace(active.CandidateID) != "" {
+		if retained, found := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID); found {
+			if retained.Status != colony.PlanCandidateAccepted || retained.Acceptance == nil {
+				candidate := retained
+				return planAuthorityVerifiedBindings{Candidate: &candidate}
+			}
+			return loadAcceptedPlanAuthorityBindings(root, retained)
+		}
+	}
+
+	// Candidate readiness is useful refusal context only when no accepted
+	// current lineage is active. A newer pending candidate deliberately does
+	// not revoke an already accepted plan (see lifecycleAcceptedPlanValid).
+	if root != "" {
+		pending, found, pendingErr := loadPendingPlanAuthorityCandidate(root)
+		if pendingErr != nil {
+			return planAuthorityVerifiedBindings{CandidateError: pendingErr.Error()}
+		}
+		if found {
+			candidate := pending
+			return planAuthorityVerifiedBindings{Candidate: &candidate}
+		}
+	}
+	return planAuthorityVerifiedBindings{}
+}
+
+func loadAcceptedPlanAuthorityBindings(root string, retained colony.PlanCandidate) planAuthorityVerifiedBindings {
+	if root == "" {
+		return planAuthorityVerifiedBindings{CandidateError: "repository root is unavailable for accepted candidate verification"}
+	}
+
+	artifact, err := loadAcceptedPlanAuthorityCandidate(root, retained)
+	if err != nil {
+		return planAuthorityVerifiedBindings{CandidateError: err.Error()}
+	}
+	bindings := planAuthorityVerifiedBindings{Candidate: &artifact}
+	timeline, err := verifiedPlanCandidateTimeline(root, artifact)
+	if err != nil {
+		bindings.TimelineError = err.Error()
+		return bindings
+	}
+	bindings.Timeline = timeline.Binding
+	bindings.Cards = append([]colony.PlanningIterationCard(nil), timeline.Cards...)
+
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		bindings.AcceptanceError = err.Error()
+		return bindings
+	}
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteAcceptanceRepositoryPath(artifact.Timeline.RunID))
+	if err != nil {
+		bindings.AcceptanceError = err.Error()
+		return bindings
+	}
+	if !exists {
+		bindings.AcceptanceError = "accepted plan receipt artifact is missing"
+		return bindings
+	}
+	var receipt colony.PlanAcceptanceReceipt
+	if err := decodePlanningStageJSON(content, &receipt); err != nil {
+		bindings.AcceptanceError = fmt.Sprintf("decode accepted plan receipt: %v", err)
+		return bindings
+	}
+	if err := receipt.Validate(); err != nil {
+		bindings.AcceptanceError = fmt.Sprintf("validate accepted plan receipt: %v", err)
+		return bindings
+	}
+	if err := validatePlanCandidateAcceptanceReceiptHash(receipt); err != nil {
+		bindings.AcceptanceError = err.Error()
+		return bindings
+	}
+	wantTokenHash := strings.TrimPrefix(lifecycleDigest([]byte(planCandidateAcceptanceToken(artifact))), "sha256:")
+	if receipt.CandidateID != artifact.ID || receipt.CandidateContentHash != artifact.ContentHash ||
+		receipt.SpecificationRevisionID != artifact.SpecificationRevisionID || receipt.SpecificationRevisionHash != artifact.SpecificationRevisionHash ||
+		receipt.BasePlanRevisionID != artifact.BasePlanRevisionID || receipt.BasePlanRevisionHash != artifact.BasePlanRevisionHash ||
+		receipt.TimelineID != artifact.Timeline.ID || receipt.TimelineDigest != artifact.Timeline.TimelineDigest ||
+		receipt.ProposalHash != artifact.ProposalHash || receipt.AcceptanceTokenHash != wantTokenHash {
+		bindings.AcceptanceError = "accepted plan receipt does not bind the exact canonically verified candidate and token"
+		return bindings
+	}
+	bindings.Acceptance = &receipt
+	return bindings
+}
+
+func loadPendingPlanAuthorityCandidate(root string) (colony.PlanCandidate, bool, error) {
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return colony.PlanCandidate{}, false, err
+	}
+	planningRoot := filepath.Join(repositoryRoot, ".aether", "data", "planning")
+	entries, err := os.ReadDir(planningRoot)
+	if os.IsNotExist(err) {
+		return colony.PlanCandidate{}, false, nil
+	}
+	if err != nil {
+		return colony.PlanCandidate{}, false, fmt.Errorf("read planning candidates: %w", err)
+	}
+	var found *colony.PlanCandidate
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return colony.PlanCandidate{}, false, fmt.Errorf("planning run %q must not be a symlink", entry.Name())
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		runID := entry.Name()
+		if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteCandidateRepositoryPath(runID))
+		if err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		if !exists {
+			continue
+		}
+		var candidate colony.PlanCandidate
+		if err := decodePlanningStageJSON(content, &candidate); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("decode candidate for run %q: %w", runID, err)
+		}
+		if candidate.Status != colony.PlanCandidatePendingReview {
+			continue
+		}
+		if candidate.Timeline.RunID != runID {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s path does not match timeline run", candidate.ID)
+		}
+		if err := validatePlanningRecordHashes(candidate); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		if err := candidate.Validate(); err != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("candidate %s: %w", candidate.ID, err)
+		}
+		stage, err := loadPlanningStageState(repositoryRoot, runID)
+		if err != nil {
+			return colony.PlanCandidate{}, false, err
+		}
+		if stage.Stage != planningStageCandidateReady {
+			return colony.PlanCandidate{}, false, fmt.Errorf("pending candidate %s is at stage %s, not candidate_ready", candidate.ID, stage.Stage)
+		}
+		if found != nil {
+			return colony.PlanCandidate{}, false, fmt.Errorf("multiple pending plan candidates are present (%s, %s)", found.ID, candidate.ID)
+		}
+		copy := candidate
+		found = &copy
+	}
+	if found == nil {
+		return colony.PlanCandidate{}, false, nil
+	}
+	return *found, true, nil
+}
+
+func loadAcceptedPlanAuthorityCandidate(root string, retained colony.PlanCandidate) (colony.PlanCandidate, error) {
+	repositoryRoot, err := canonicalPlanningTimelineRoot(root)
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	runID := strings.TrimSpace(retained.Timeline.RunID)
+	if err := validatePlanningTimelineSegment("run_id", runID); err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	content, exists, err := readOptionalPlanningStageFile(repositoryRoot, planningRouteCandidateRepositoryPath(runID))
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	if !exists {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %q artifact is missing", retained.ID)
+	}
+	var candidate colony.PlanCandidate
+	if err := decodePlanningStageJSON(content, &candidate); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("decode accepted candidate: %w", err)
+	}
+	if candidate.ID != retained.ID || candidate.Timeline.RunID != runID {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate artifact does not match retained candidate %q", retained.ID)
+	}
+	if err := validatePlanningRecordHashes(candidate); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s: %w", candidate.ID, err)
+	}
+	if err := candidate.Validate(); err != nil {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s: %w", candidate.ID, err)
+	}
+	stage, err := loadPlanningStageState(repositoryRoot, runID)
+	if err != nil {
+		return colony.PlanCandidate{}, err
+	}
+	if stage.Stage != planningStageAccepted || candidate.Acceptance == nil ||
+		stage.AcceptanceReceiptID != candidate.Acceptance.ID || stage.AcceptanceReceiptHash != candidate.Acceptance.ContentHash {
+		return colony.PlanCandidate{}, fmt.Errorf("accepted candidate %s stage does not bind its exact receipt", candidate.ID)
+	}
+	return candidate, nil
+}
+
+func refusePlanAuthority(decision planAuthorityDecision, code planAuthorityRefusalCode, recovery, diagnostic string) planAuthorityDecision {
+	decision.Eligible = false
+	decision.Classification = ""
+	decision.RefusalCode = code
+	decision.RecoveryCommand = recovery
+	decision.Diagnostic = strings.TrimSpace(diagnostic)
+	return decision
+}
+
+func planAuthorityCandidateByID(candidates []colony.PlanCandidate, id string) (colony.PlanCandidate, bool) {
+	for i := range candidates {
+		if candidates[i].ID == id {
+			return candidates[i], true
+		}
+	}
+	return colony.PlanCandidate{}, false
+}
+
+func planAuthorityRevisionByID(revisions []colony.PlanRevision, id string) (colony.PlanRevision, bool) {
+	for i := range revisions {
+		if revisions[i].ID == id {
+			return revisions[i], true
+		}
+	}
+	return colony.PlanRevision{}, false
+}
+
+func orderedPlanAuthorityPhases(phases []colony.Phase) bool {
+	previous := 0
+	for _, phase := range phases {
+		if phase.ID <= previous {
+			return false
+		}
+		previous = phase.ID
+	}
+	return len(phases) > 0
+}

@@ -846,9 +846,13 @@ describe("spawn orchestrator initialization (SPAWN-03, SPAWN-05)", () => {
     const opts = capturedDispatchOpts as Record<string, unknown>;
     assert.ok(opts.spawnOrchestrator, "Dispatch opts should include spawnOrchestrator");
 
-    const orchestrator = opts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
-    assert.equal(orchestrator.totalBudget, 10, "Total budget should match manifest max_workers");
-    assert.equal(orchestrator.consumedBudget, 2, "Consumed budget should equal manifest dispatch count");
+    // 203-09: the orchestrator no longer carries its own budget/consumed
+    // fields (SYN-203-02) -- every admission decision now asks the Go
+    // binary's spawn-can-spawn command instead. Verify the orchestrator
+    // was genuinely constructed (has processClaims), not that it holds
+    // deleted local arithmetic.
+    const orchestrator = opts.spawnOrchestrator as { processClaims?: unknown };
+    assert.equal(typeof orchestrator.processClaims, "function", "spawnOrchestrator must expose processClaims");
   });
 
   it("spawn-log calls include correct parent for manifest workers (SPAWN-05)", async () => {
@@ -1647,9 +1651,8 @@ describe("cross-phase integration (spawn + iteration)", () => {
     assert.ok(capturedDispatchOpts.length >= 1, "Should have captured dispatch opts");
     const firstOpts = capturedDispatchOpts[0] as Record<string, unknown>;
     assert.ok(firstOpts.spawnOrchestrator, "Dispatch opts should include spawnOrchestrator");
-    const orchestrator = firstOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
-    assert.equal(orchestrator.totalBudget, 10, "Total budget should match manifest max_workers");
-    assert.equal(orchestrator.consumedBudget, 2, "Consumed budget should equal manifest dispatch count");
+    const orchestrator = firstOpts.spawnOrchestrator as { processClaims?: unknown };
+    assert.equal(typeof orchestrator.processClaims, "function", "spawnOrchestrator must expose processClaims");
 
     // 3. Two dispatch iterations produce one lifecycle finalization.
     const finalizeCount = countGoCommandCalls(goCalls, "build-finalize");
@@ -1886,15 +1889,14 @@ describe("cross-phase integration (spawn + iteration)", () => {
     assert.ok(capturedDispatchOpts.length >= 2, "Should have captured dispatch opts for both iterations");
     const firstOpts = capturedDispatchOpts[0] as Record<string, unknown>;
     assert.ok(firstOpts.spawnOrchestrator, "First dispatch opts should include spawnOrchestrator");
-    const firstOrchestrator = firstOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
-    assert.equal(firstOrchestrator.totalBudget, 5, "First iteration totalBudget should be 5");
-    assert.equal(firstOrchestrator.consumedBudget, 3, "First iteration consumedBudget should be 3 (manifest dispatch count)");
+    const firstOrchestrator = firstOpts.spawnOrchestrator as { processClaims?: unknown };
+    assert.equal(typeof firstOrchestrator.processClaims, "function", "spawnOrchestrator must expose processClaims");
 
     // Second dispatch opts should also have spawnOrchestrator
     const secondOpts = capturedDispatchOpts[1] as Record<string, unknown>;
     assert.ok(secondOpts.spawnOrchestrator, "Second dispatch opts should include spawnOrchestrator");
-    const secondOrchestrator = secondOpts.spawnOrchestrator as { totalBudget: number; consumedBudget: number };
-    assert.equal(secondOrchestrator.totalBudget, 5, "Second iteration totalBudget should be 5");
+    const secondOrchestrator = secondOpts.spawnOrchestrator as { processClaims?: unknown };
+    assert.equal(typeof secondOrchestrator.processClaims, "function", "spawnOrchestrator must expose processClaims");
 
     // Budget allows second iteration: 5 total - 3 consumed from first = 2 remaining, and 3 new dispatches
     // The host re-fetches manifest for iteration 2 which returns 3 dispatches, but the confidence loop

@@ -231,6 +231,7 @@ var printNextUpCmd = &cobra.Command{
 			return nil
 		}
 
+		answer := resolveNextAction(nextActionInputForState(state, ""))
 		suggestions := nextUpSuggestionsForState(state)
 
 		result := map[string]interface{}{
@@ -238,40 +239,30 @@ var printNextUpCmd = &cobra.Command{
 			"current_phase": state.CurrentPhase,
 			"state":         string(state.State),
 		}
+		applyNextActionToResult(result, answer)
 		outputWorkflow(result, renderNextUpVisual(suggestions))
 		return nil
 	},
 }
 
+// nextUpSuggestionsForState is the Next Up line for a state the caller already
+// holds. Phase 197 plan 02: it used to switch on the raw state string and call
+// nextCommandFromState for two of its branches, so it could and did answer
+// differently from the other deciders. It now returns the one answer.
 func nextUpSuggestionsForState(state colony.ColonyState) []string {
-	var suggestions []string
-	switch string(state.State) {
-	case "READY":
-		if nextPhase := recoveryPhase(&state); nextPhase != nil && nextPhase.Status != colony.PhaseCompleted {
-			suggestions = append(suggestions, fmt.Sprintf("Run `aether build %d` to start the next phase", nextPhase.ID))
-		} else {
-			suggestions = append(suggestions, "Colony ready. Run `aether seal` to finalize.")
+	answer := resolveNextAction(nextActionInputForState(state, ""))
+	if answer.Projection != nil && len(answer.Projection.NextAction.Choices) > 0 {
+		suggestions := make([]string, 0, len(answer.Projection.NextAction.Choices))
+		for _, choice := range answer.Projection.NextAction.Choices {
+			if line := nextActionSuggestionLine(choice.RuntimeCommand, choice.Reason); line != "" {
+				suggestions = append(suggestions, line)
+			}
 		}
-	case "EXECUTING":
-		next := nextCommandFromState(state)
-		if next == "aether continue" {
-			suggestions = append(suggestions, "Run `aether continue` to verify work and advance")
-		} else {
-			suggestions = append(suggestions, fmt.Sprintf("Run `%s` to recover the blocked work", next))
+		if len(suggestions) > 0 {
+			return suggestions
 		}
-	case "BUILT":
-		next := nextCommandFromState(state)
-		if next == "aether continue" {
-			suggestions = append(suggestions, "Run `aether continue` to verify and advance")
-		} else {
-			suggestions = append(suggestions, fmt.Sprintf("Run `%s` to recover the blocked work", next))
-		}
-	case "COMPLETED":
-		suggestions = append(suggestions, "Colony complete. Run `aether seal` to finalize.")
-	default:
-		suggestions = append(suggestions, "Run `aether status` to check colony state")
 	}
-	return suggestions
+	return []string{nextActionPrimarySuggestion(answer)}
 }
 
 var dataSafetyStatsCmd = &cobra.Command{

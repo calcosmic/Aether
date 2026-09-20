@@ -17,6 +17,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 )
 
 type codexBuildDispatch struct {
@@ -25,29 +26,105 @@ type codexBuildDispatch struct {
 	ExecutionWave int    `json:"execution_wave,omitempty"`
 	Caste         string `json:"caste"`
 	AgentName     string `json:"agent_name,omitempty"`
-	// Model is the DISPLAY name of the model this caste's agent runs on
-	// (resolved from agent frontmatter slot + ANTHROPIC_DEFAULT_*_MODEL env),
-	// so wrapper-rendered spawn descriptions can show it. Nothing reads it
-	// to choose a model — routing stays with the platform's agent
-	// frontmatter, and automatic model selection stays rejected.
-	Model     string `json:"model,omitempty"`
-	Name      string `json:"name"`
-	Task      string `json:"task"`
-	Status    string `json:"status"`
-	Summary   string `json:"summary,omitempty"`
-	TaskID    string `json:"task_id,omitempty"`
-	TaskIndex int    `json:"task_index,omitempty"`
+	// Model is the DISPLAY name of the model this caste's agent runs on.
+	// Phase 201 plan 14 (D-15c, owner-ratified after the per-worker cost
+	// line shipped): a stated routing policy (resolveCasteModelRoute,
+	// cmd/caste_model_routing.go) chooses the model for the castes it names
+	// -- every choice carries a stated reason (ModelRoutingReason below) --
+	// and every other caste keeps the platform's agent-frontmatter
+	// resolution (resolveCasteModel, cmd/codex_visuals.go), exactly as
+	// before. The cost line (cmd/spend_cost_line.go) shows what each
+	// worker actually cost regardless of which path resolved its model.
+	Model string `json:"model,omitempty"`
+	// ModelRoutingReason is the stated reason resolveCasteModelRoute
+	// recorded for routing this dispatch's caste to a faster model. Empty
+	// for every dispatch whose caste has no routing entry -- there is
+	// nothing to justify when nothing was routed.
+	ModelRoutingReason string `json:"model_routing_reason,omitempty"`
+	Name               string `json:"name"`
+	Task               string `json:"task"`
+	Status             string `json:"status"`
+	Summary            string `json:"summary,omitempty"`
+	// Disposition qualifies a completed_no_change status: "verified_existing"
+	// means the worker proved the required behavior already exists (ruling
+	// D6). Empty for every other status.
+	Disposition string `json:"disposition,omitempty"`
+	TaskID      string `json:"task_id,omitempty"`
+	TaskIndex   int    `json:"task_index,omitempty"`
+	// Job metadata is the durable explanation for why this worker owns one or
+	// more tasks. TaskID remains the primary compatibility key, while
+	// CoveredTaskIDs preserves the full ordered task-credit set.
+	JobName   string `json:"job_name,omitempty"`
+	JobReason string `json:"job_reason,omitempty"`
+	JobSource string `json:"job_source,omitempty"`
+	// AttemptID is the build attempt this dispatch belongs to, stamped onto
+	// every dispatch once a real attempt exists (stampDispatchAttemptIdentity,
+	// called right after commitBuildStart's receipt makes the attempt
+	// identifier known). Empty on a dispatch that was only ever planned --
+	// never dispatched against a persisted attempt (a --plan-only preview
+	// halted by an orchestrator boundary, for example). Carrying the attempt
+	// identifier on the dispatch itself, not only on the enclosing manifest,
+	// is what lets the Queen card, workspace leases, task receipts, reviewer
+	// findings and fan-in rows each be verified in isolation as naming the
+	// same job in the same attempt (SYN-201-02, WORK-01/WORK-03,
+	// cmd/work_identity_test.go).
+	AttemptID string `json:"attempt_id,omitempty"`
 	// CoveredTaskIDs lists every task this one worker took on. It holds more
-	// than one entry when a chain of dependent steps was merged into a single
-	// dispatch (see coalesceSequentialDispatches). TaskID stays the first of
+	// than one entry when a chain of dependent steps was grouped into a single
+	// dispatch (see planCoherentJobs). TaskID stays the first of
 	// them so result matching and evidence keep working unchanged; this field
 	// exists so nothing downstream can believe the later steps were unassigned.
 	CoveredTaskIDs []string `json:"covered_task_ids,omitempty"`
-	DependsOn      []string `json:"depends_on,omitempty"`
-	DeclaredPaths  []string `json:"declared_paths,omitempty"`
-	Outputs        []string `json:"outputs,omitempty"`
-	Blockers       []string `json:"blockers,omitempty"`
-	Duration       float64  `json:"duration,omitempty"`
+	// TaskReceipts carries this dispatch's own worker-submitted, task-specific
+	// completion evidence, threaded through unchanged from the native/external
+	// terminal result. It is untrusted input: only
+	// admitCoherentJobTaskReceipts/finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go) may ever turn it into credit (D-08, D-09).
+	TaskReceipts []codex.TaskReceipt `json:"task_receipts,omitempty"`
+	// CompletedTaskIDs is populated ONLY by finalizeCoherentJobTaskReceiptEvidence,
+	// and only for a dispatch whose own Status is not itself already a
+	// whole-success status: a failed/blocked/timeout/interrupted grouped job
+	// may still have honestly finished some of the tasks it covered.
+	// completedBuildTaskIDs is the only reader of this field for such a
+	// dispatch; nothing may synthesize it from touched files or from
+	// CoveredTaskIDs membership alone.
+	//
+	// CR-03 (195-REVIEW.md): it is in-process runtime state, NEVER wire
+	// contract -- `json:"-"` like ReceiptsResolved. A completion packet
+	// carries the wrapper's own copy of the dispatch manifest, and on the
+	// legacy (unbound) finalize path that copy is entirely externally shaped.
+	// While this field was serialized, a manifest that simply asserted "these
+	// tasks are done" credited them with zero receipts and zero evidence.
+	CompletedTaskIDs []string `json:"-"`
+	// TaskClaims mirrors CompletedTaskIDs: one root-evidenced claim per
+	// credited task, keyed by that task's own ID rather than this dispatch's
+	// primary TaskID (Pitfall 4, 195-RESEARCH.md). Runtime-owned and
+	// unserialized for the same reason (CR-03).
+	TaskClaims []codexBuildTaskClaim `json:"-"`
+	// Usage is what this worker's own tool reported the run cost, read by the
+	// Go runtime from the worker's raw output at the dispatch boundary
+	// (codex.AttachWorkerUsage). It is the input the spend ledger accounts a
+	// directly-spawned worker from.
+	//
+	// It is runtime-owned and NEVER serialized, for the same reason as
+	// CompletedTaskIDs above (CR-03): a completion packet is externally
+	// shaped, and a serialized usage field would let an outside caller simply
+	// ASSERT what a run cost. Every figure in the ledger must be one the Go
+	// runtime read for itself; a number relayed by an orchestrating model is
+	// an assertion, not a measurement.
+	Usage codex.WorkerUsage `json:"-"`
+	// ReceiptsResolved marks a dispatch whose receipts already passed through
+	// the shared two-stage boundary on a lane that had to insert a sync step
+	// between the stages (worktree mode). It is in-process only -- never
+	// serialized, never part of the completion-packet contract -- and exists
+	// so no later caller re-runs admission against a root that this build
+	// itself just populated.
+	ReceiptsResolved bool     `json:"-"`
+	DependsOn        []string `json:"depends_on,omitempty"`
+	DeclaredPaths    []string `json:"declared_paths,omitempty"`
+	Outputs          []string `json:"outputs,omitempty"`
+	Blockers         []string `json:"blockers,omitempty"`
+	Duration         float64  `json:"duration,omitempty"`
 	// Brief is the fully rendered worker prompt for wrapper-spawned workers.
 	// Build was the only workflow whose plan-only manifest carried no brief —
 	// colonize, plan, and heavy-continue all do — so everything the runtime
@@ -58,6 +135,7 @@ type codexBuildDispatch struct {
 	// BriefPath is the repo-display path to the file holding the verbatim
 	// composed brief (the same bytes as Brief above); the wrapper may read
 	// this instead of the inline Brief field.
+	BriefSHA256       string                  `json:"brief_sha256,omitempty"`
 	BriefPath         string                  `json:"brief_path,omitempty"`
 	SkillSection      string                  `json:"skill_section,omitempty"`
 	SkillCount        int                     `json:"skill_count,omitempty"`
@@ -77,6 +155,7 @@ type codexBuildTaskPlan struct {
 }
 
 type codexBuildManifest struct {
+	ContextProtocol     string                    `json:"context_protocol,omitempty"`
 	Phase               int                       `json:"phase"`
 	PhaseName           string                    `json:"phase_name"`
 	PhaseMode           colony.PhaseMode          `json:"phase_mode,omitempty"`
@@ -93,6 +172,7 @@ type codexBuildManifest struct {
 	ExecutionOwner      string                    `json:"execution_owner,omitempty"`
 	WorkerDispatchOptIn bool                      `json:"worker_dispatch_opt_in,omitempty"`
 	GeneratedAt         string                    `json:"generated_at"`
+	PlanAuthority       planAuthorityDecision     `json:"plan_authority"`
 	PlanRevisionID      string                    `json:"plan_revision_id,omitempty"`
 	PlanStateHash       string                    `json:"plan_state_hash,omitempty"`
 	AttemptID           string                    `json:"attempt_id,omitempty"`
@@ -111,8 +191,11 @@ type codexBuildManifest struct {
 	// the hosted/subprocess path already computes and shares its own capsule
 	// (see executeCodexBuildDispatches), and the finalize record does not
 	// deliver prompts.
+	ContextScope              *codexNativeContextScope              `json:"context_scope,omitempty"`
+	ContextDecisionIDs        []string                              `json:"context_decision_ids,omitempty"`
 	ContextCapsule            string                                `json:"context_capsule,omitempty"`
 	Dispatches                []codexBuildDispatch                  `json:"dispatches"`
+	JobDecisions              []coherentJobDecision                 `json:"job_decisions,omitempty"`
 	SelectedTasks             []string                              `json:"selected_tasks,omitempty"`
 	Tasks                     []codexBuildTaskPlan                  `json:"tasks"`
 	SuccessCriteria           []string                              `json:"success_criteria"`
@@ -138,6 +221,73 @@ type codexBuildManifest struct {
 	// what actually spawns, and every override the runtime applied. A Queen
 	// that proposes badly must produce a visible correction, not a silent one.
 	CasteDecision map[string]interface{} `json:"caste_decision,omitempty"`
+	// ForcedReviewers is the D-01..D-05 named-risk-signal derivation, computed
+	// once here at build and read back by both continue lanes
+	// (queenForcedContinueReviewers) so a reviewer is forced from exactly one
+	// derivation at exactly one boundary — closing .planning/WINDOWS.md #1's
+	// "build and continue each require the same caste independently" gap.
+	// The build ANNOUNCES this record; it never dispatches the reviewer
+	// itself (D-05) — that happens at the checking step (continue).
+	ForcedReviewers []codexForcedReviewerRecord `json:"forced_reviewers,omitempty"`
+	// ForcedReviewerAnnouncement is the owner-facing sentence(s) composed from
+	// ForcedReviewers (one line per forced caste) — "a security reviewer will
+	// check this at the verification step — this touches logins (the plan
+	// mentions "password reset")". The build never dispatches a forced
+	// reviewer (D-05); this field is how the build ANNOUNCES one before any
+	// worker spawns. Empty when no reviewer is forced.
+	ForcedReviewerAnnouncement string `json:"forced_reviewer_announcement,omitempty"`
+}
+
+// codexForcedReviewerRecord is the durable, JSON form of a forcedReviewer
+// (cmd/queen_risk_signals.go), written onto the build manifest so continue
+// reads the exact same derivation instead of re-deriving it independently.
+type codexForcedReviewerRecord struct {
+	Caste   string   `json:"caste"`
+	Signals []string `json:"signals"`
+	Matches []string `json:"matches"`
+	Sources []string `json:"sources"`
+	Reason  string   `json:"reason"`
+}
+
+// composeForcedReviewerAnnouncement turns the build's recorded forced-reviewer
+// set into the owner-facing sentences the check-in card and manifest both
+// render (D-05): one sentence per forced caste, in the exact shape the ruling
+// gives — "a security reviewer will check this at the verification step —
+// this touches logins (the plan mentions "password reset")". Uses the plain
+// human name (forcedReviewerPlainLabel), never the registry identifier
+// (CLAUDE.md's plain-English mandate). Empty input renders nothing — no
+// announcement, no empty heading.
+func composeForcedReviewerAnnouncement(records []codexForcedReviewerRecord) string {
+	if len(records) == 0 {
+		return ""
+	}
+	sentences := make([]string, 0, len(records))
+	for _, record := range records {
+		reason := strings.TrimSpace(record.Reason)
+		if reason == "" {
+			continue
+		}
+		sentences = append(sentences, fmt.Sprintf(
+			"a %s will check this at the verification step — %s",
+			forcedReviewerPlainLabel(record.Caste), reason,
+		))
+	}
+	return strings.Join(sentences, "\n")
+}
+
+// forcedReviewerPlainLabel names a forced-reviewer caste the way the owner
+// reads it, never the registry identifier — "security reviewer", not
+// "gatekeeper"; "quality reviewer", not "auditor" (D-04's two reviewer
+// castes are the only ones this table can force).
+func forcedReviewerPlainLabel(caste string) string {
+	switch strings.TrimSpace(caste) {
+	case "gatekeeper":
+		return "security reviewer"
+	case "auditor":
+		return "quality reviewer"
+	default:
+		return strings.ToLower(casteLabel(caste)) + " reviewer"
+	}
 }
 
 type codexWaveExecutionPlan struct {
@@ -162,6 +312,11 @@ type codexBuildTaskClaim struct {
 	FilesCreated  []string `json:"files_created,omitempty"`
 	FilesModified []string `json:"files_modified,omitempty"`
 	TestsWritten  []string `json:"tests_written,omitempty"`
+	// ArtifactEvidence is root-computed evidence for exactly this task's own
+	// claimed paths. It is populated only by finalizeCoherentJobTaskReceiptEvidence
+	// (cmd/coherent_job_receipts.go); a worker-submitted receipt carries no
+	// hash concept and cannot set it.
+	ArtifactEvidence []codexBuildArtifactEvidence `json:"artifact_evidence,omitempty"`
 }
 
 type codexBuildClaims struct {
@@ -188,6 +343,10 @@ type codexBuildOptions struct {
 	DispatchWorkers         bool
 	CircuitBreakerThreshold int
 	Verbose                 bool
+	// NonInteractive suppresses only the blocker advisory's owner question.
+	// The typed advisory and its named signals remain in the result so headless
+	// callers do not lose blocker truth.
+	NonInteractive bool
 	// Full gates the raw-prompt path of --print-brief. It has no effect on any
 	// mutating build path — only printWorkerBriefs reads it.
 	Full bool
@@ -196,8 +355,282 @@ type codexBuildOptions struct {
 	// engine decides — the behaviour of every caller before this existed.
 	QueenCastes []string
 	// QueenCasteReason is the Queen's stated reasoning, surfaced to the
-	// operator so a team choice is never unexplained.
+	// operator so a team choice is never unexplained. This is the TEAM
+	// summary (D-08) -- it does not, by itself, satisfy the per-worker reason
+	// requirement below.
 	QueenCasteReason string
+	// QueenCasteWhy is one reason per proposed caste, as "caste=reason"
+	// (D-08, D-09). A caste named in QueenCastes with no matching entry here,
+	// and not required by the phase, is refused by name rather than sent
+	// unexplained (parseAndMergeCasteWhy, queenApplyJudgement).
+	QueenCasteWhy []string
+	// QueenVerificationBoundary is the Queen's proposed choice for where
+	// reviewer judgement lands: "check_step" or "build_end". Empty means no
+	// judgement was offered and the check-step default applies (D-01, D-02)
+	// -- the behaviour of every caller before this field existed.
+	// queenApplyVerificationBoundary is the only function permitted to judge
+	// this value; it is carried verbatim from the CLI flag layer.
+	QueenVerificationBoundary string
+	// QueenVerificationBoundaryWhy is the plain-English reason a build-end
+	// proposal requires (D-02). A build-end proposal with no reason is
+	// refused by name inside queenApplyVerificationBoundary and falls back
+	// to the check-step default -- this field is never validated here.
+	QueenVerificationBoundaryWhy string
+	// JobProposals are structured Queen suggestions. The coherent-job planner
+	// validates them before any attempt, checkpoint, worktree, or lifecycle
+	// mutation is allowed to begin.
+	JobProposals []coherentJobProposal
+	// BuildStartVariant is an internal route selector used by the Queen-led
+	// wrapper. The public plan-only path leaves it empty and receives the
+	// plan-only variant; Queen-led preparation sets the closed Queen variant so
+	// both paths share one preparation without creating and then rewriting a
+	// second attempt.
+	BuildStartVariant buildStartVariant
+	// BuildStartOptions is a test seam for transaction faults and post-receipt
+	// observation. Production callers leave it empty.
+	BuildStartOptions buildStartOptions
+	// BuildStartBeforeCommit is a test-only scheduling seam. It runs after a
+	// public caller has prepared the complete authority-bound request but before
+	// commitBuildStart acquires the repository session, allowing process tests
+	// to deterministically prove that a newly accepted revision makes the
+	// prepared request stale. Production callers leave it nil.
+	BuildStartBeforeCommit func() error
+}
+
+const partialBuildRecoveryResultKey = "partial_recovery"
+
+const buildAdvisoryResultKey = "build_advisory"
+
+// codexBuildAdvisoryProjection is the one machine-readable blocker fact shared
+// by plan-only and direct builds. Legacy top-level fields remain projections for
+// wrapper compatibility; terminal rendering consumes this typed value only.
+type codexBuildAdvisoryProjection struct {
+	Signals  []buildBlockerSignal `json:"signals"`
+	Ask      bool                 `json:"ask"`
+	Question string               `json:"question,omitempty"`
+}
+
+func addBuildAdvisoryResult(result map[string]interface{}, advisory buildBlockerAdvisory) {
+	if result == nil || len(advisory.Signals) == 0 {
+		return
+	}
+	signals := append([]buildBlockerSignal(nil), advisory.Signals...)
+	projection := codexBuildAdvisoryProjection{Signals: signals, Ask: advisory.Ask}
+	if projection.Ask {
+		projection.Question = buildBlockerAdvisoryQuestion
+	}
+	result[buildAdvisoryResultKey] = projection
+	result["blocker_advisory"] = append([]buildBlockerSignal(nil), signals...)
+	if projection.Question != "" {
+		result["blocker_advisory_question"] = projection.Question
+	} else {
+		delete(result, "blocker_advisory_question")
+	}
+}
+
+func buildAdvisoryFromResult(result map[string]interface{}) (buildBlockerAdvisory, bool) {
+	if result == nil {
+		return buildBlockerAdvisory{}, false
+	}
+	projection, ok := result[buildAdvisoryResultKey].(codexBuildAdvisoryProjection)
+	if !ok || len(projection.Signals) == 0 {
+		return buildBlockerAdvisory{}, false
+	}
+	return buildBlockerAdvisory{
+		Signals: append([]buildBlockerSignal(nil), projection.Signals...),
+		Ask:     projection.Ask,
+	}, true
+}
+
+// addPartialBuildRecoveryResult keeps the receipt-backed Plan 48 recovery
+// outcome intact while preserving the established top-level JSON fields used
+// by wrappers. The nested value is the single typed source consumed by the
+// terminal renderer; the compatibility fields are projections of it, never a
+// second recovery decision.
+func addPartialBuildRecoveryResult(result map[string]interface{}, recovery partialBuildRetryOutcome) {
+	recovery.UnfinishedTaskIDs = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	result[partialBuildRecoveryResultKey] = recovery
+	result["recovery_job"] = true
+	result["parent_attempt_id"] = recovery.ParentAttemptID
+	result["retry_attempt_id"] = recovery.RetryAttemptID
+	result["retry_attempt_path"] = recovery.RetryAttemptPath
+	result["unfinished_task_ids"] = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	result["recovery_command"] = recovery.RedispatchCommand
+	result["next"] = recovery.RedispatchCommand
+}
+
+// partialBuildRecoveryFromResult deliberately accepts only the typed runtime
+// projection. Rendering must not rebuild a command from task IDs or infer a
+// partial outcome from prose/legacy map keys.
+func partialBuildRecoveryFromResult(result map[string]interface{}) (partialBuildRetryOutcome, bool) {
+	if result == nil {
+		return partialBuildRetryOutcome{}, false
+	}
+	recovery, ok := result[partialBuildRecoveryResultKey].(partialBuildRetryOutcome)
+	if !ok || len(recovery.UnfinishedTaskIDs) == 0 || strings.TrimSpace(recovery.RedispatchCommand) == "" {
+		return partialBuildRetryOutcome{}, false
+	}
+	recovery.UnfinishedTaskIDs = append([]string(nil), recovery.UnfinishedTaskIDs...)
+	return recovery, true
+}
+
+// directCodexBuildPreparation is the read-only result of validating and
+// planning a direct build. The same preparation runs before provider readiness
+// and again after compatibility repairs are authorized, so the two validation
+// passes cannot drift apart as the build contract evolves.
+type directCodexBuildPreparation struct {
+	State         colony.ColonyState
+	Phase         colony.Phase
+	PlanAuthority planAuthorityDecision
+	Policy        codexQueenExecutionPolicy
+	ReviewDepth   colony.VerificationDepth
+	Dispatches    []codexBuildDispatch
+	JobDecisions  []coherentJobDecision
+	CasteDecision map[string]interface{}
+	// VerificationBoundary is the reconciled decision (queenApplyVerificationBoundary)
+	// for where reviewer judgement lands on this exact preparation -- the same
+	// value this preparation's own Dispatches were planned against (D-01).
+	VerificationBoundary verificationBoundaryDecision
+}
+
+// codexBuildPlanAuthorityError preserves the typed refusal through build's
+// existing error channel. Its text is for people; Decision is for callers.
+type codexBuildPlanAuthorityError struct {
+	Decision planAuthorityDecision
+}
+
+func (e *codexBuildPlanAuthorityError) Error() string {
+	if e == nil {
+		return "build refused because accepted plan authority is unavailable"
+	}
+	detail := emptyFallback(strings.TrimSpace(e.Decision.Diagnostic), "accepted plan authority is unavailable")
+	return fmt.Sprintf("build refused (%s): %s; recover with `%s`", e.Decision.RefusalCode, detail, e.Decision.RecoveryCommand)
+}
+
+// preflightCodexBuildPlanAuthority is deliberately pure so build and run can
+// be parity-tested against the same facts without creating attempts, briefs,
+// checkpoints, or dispatch records.
+func preflightCodexBuildPlanAuthority(facts LifecycleFacts, bindings planAuthorityVerifiedBindings) (planAuthorityDecision, error) {
+	decision := validateAcceptedPlanAuthority(facts, bindings)
+	if decision.Eligible {
+		return decision, nil
+	}
+	return decision, &codexBuildPlanAuthorityError{Decision: decision}
+}
+
+// resolveCodexBuildPlanAuthority performs compatibility classification and
+// read-only artifact loading before the pure gate. The returned state is the
+// locally classified copy; callers decide whether a later successful build
+// persists it through their ordinary lifecycle transaction.
+func resolveCodexBuildPlanAuthority(root string, state colony.ColonyState) (colony.ColonyState, planAuthorityDecision, error) {
+	migration, err := migratePlanningState(root, state)
+	if err != nil {
+		decision := refusePlanAuthority(planAuthorityDecision{}, planAuthorityRefusalLegacyInvalid, "aether plan", err.Error())
+		return state, decision, &codexBuildPlanAuthorityError{Decision: decision}
+	}
+	state = migration.State
+	facts := lifecycleFactsFromStateSnapshot(state, false, time.Now().UTC())
+	facts.Root = root
+	bindings := loadPlanAuthorityVerifiedBindings(root, facts)
+	decision, err := preflightCodexBuildPlanAuthority(facts, bindings)
+	return state, decision, err
+}
+
+func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (directCodexBuildPreparation, error) {
+	state, authority, err := resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if len(state.Plan.Phases) == 0 {
+		return directCodexBuildPreparation{}, fmt.Errorf("No project plan. Run `aether plan` first.")
+	}
+	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
+		return directCodexBuildPreparation{}, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
+	}
+
+	phase := state.Plan.Phases[phaseNum-1]
+	if err := validatePhaseCriterionEvidence(phase); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   true,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	// D-01/D-02: reconciled exactly once per preparation, before dispatches are
+	// planned, so the decision this preparation returns is the SAME one its own
+	// Dispatches were planned against -- not a later, possibly different, read.
+	boundaryDecision := queenApplyVerificationBoundary(options.QueenVerificationBoundary, options.QueenVerificationBoundaryWhy, phase, state)
+	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals, boundaryDecision,
+	)
+	if err != nil {
+		return directCodexBuildPreparation{}, err
+	}
+
+	orphans := detectOrphanedWorktrees(phaseNum)
+	if len(orphans) > 0 && !options.Force {
+		orphanBranches := make([]string, 0, len(orphans))
+		for _, orphan := range orphans {
+			orphanBranches = append(orphanBranches, fmt.Sprintf("%s (phase %d)", orphan.Branch, orphan.Phase))
+		}
+		return directCodexBuildPreparation{}, fmt.Errorf("orphaned worktree branches detected: %s. Run with --force to proceed anyway, or run `aether worktree-merge-back` to recover", strings.Join(orphanBranches, ", "))
+	}
+
+	return directCodexBuildPreparation{
+		State:                state,
+		Phase:                phase,
+		PlanAuthority:        authority,
+		Policy:               policy,
+		ReviewDepth:          reviewDepth,
+		Dispatches:           dispatches,
+		JobDecisions:         jobDecisions,
+		CasteDecision:        queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons),
+		VerificationBoundary: boundaryDecision,
+	}, nil
+}
+
+func directCodexBuildReadinessDispatches(root string, phaseNum int, dispatches []codexBuildDispatch) []codex.WorkerDispatch {
+	projected := make([]codex.WorkerDispatch, 0, len(dispatches))
+	for idx, dispatch := range dispatches {
+		workerName := strings.TrimSpace(dispatch.Name)
+		if workerName == "" {
+			workerName = fmt.Sprintf("direct-build-readiness-%d", idx+1)
+		}
+		projected = append(projected, codex.WorkerDispatch{
+			ID:         fmt.Sprintf("direct-build-readiness-%d", idx+1),
+			WorkerName: workerName,
+			Caste:      dispatch.Caste,
+			TaskID:     dispatch.TaskID,
+			Root:       root,
+			Workflow:   "build",
+			Phase:      phaseNum,
+		})
+	}
+	if len(projected) == 0 {
+		projected = append(projected, codex.WorkerDispatch{
+			ID:         "direct-build-readiness",
+			WorkerName: "direct-build-readiness",
+			Root:       root,
+			Workflow:   "build",
+			Phase:      phaseNum,
+		})
+	}
+	return projected
 }
 
 func runCodexBuildPlanOnly(root string, phaseNum int, selectedTaskIDs []string) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
@@ -208,10 +641,33 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if store == nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("no store initialized")
 	}
+	startVariant := options.BuildStartVariant
+	if startVariant == "" {
+		startVariant = buildStartPlanOnly
+	}
+	dispatchMode := "plan-only"
+	if startVariant == buildStartQueenLed {
+		dispatchMode = "queen-led"
+	} else if startVariant != buildStartPlanOnly {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("unsupported host build-start variant %q", startVariant)
+	}
+	executionOwner := buildExecutionOwner(dispatchMode, true)
 
 	state, err := loadActiveColonyState()
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
+	}
+	state, authority, err := resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
+	// Plan-only may repair trusted completion evidence in its in-memory view so
+	// dependency planning sees prior work, but it deliberately never persists
+	// those repairs. The canonical start transaction must therefore bind the
+	// exact on-disk state and plan hash, not that read-only projection.
+	canonicalStartState, err := cloneColonyState(state)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("clone canonical plan-only start state: %w", err)
 	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
@@ -243,12 +699,42 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, forceStateValidation); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
+	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
+		LightFlag:         options.LightFlag,
+		HeavyFlag:         options.HeavyFlag,
+		VerificationDepth: options.VerificationDepth,
+		WorkerTimeout:     options.WorkerTimeout,
+		DispatchWorkers:   options.DispatchWorkers,
+	})
+	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
+	// Decode happens in the CLI before this function is entered. The pure
+	// planner runs here, before an idle attempt can be superseded, so invalid
+	// proposals and dependency cycles have a strict zero-side-effect boundary.
+	mergedQueenCastes, queenCasteWhyReasons := parseAndMergeCasteWhy(options.QueenCastes, options.QueenCasteWhy)
+	// D-01/D-02: reconciled exactly once per plan-only invocation, before
+	// dispatches are planned, so this build's own dispatch list and its
+	// persisted attempt record (attachVerificationBoundary, below) agree.
+	boundaryDecision := queenApplyVerificationBoundary(options.QueenVerificationBoundary, options.QueenVerificationBoundaryWhy, phase, state)
+	dispatches, jobDecisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons, options.JobProposals, boundaryDecision,
+	)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+	}
 	if activePriorAttempt {
+		// Once any worker has been dispatched, a public plan-only re-entry must
+		// not supersede the attempt or reopen its owner-only reviewer-decline
+		// channel. A legitimate retry first reaches a terminal attempt state;
+		// only then may the next check-in create a fresh capability.
+		if _, dispatchStarted := phaseDispatchStartedAt(phaseNum); dispatchStarted {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d already has workers in flight for build attempt %s; finalize or fail that attempt before requesting a fresh plan", phaseNum, priorAttempt.ID)
+		}
 		// A dangling plan-only attempt still awaiting external workers holds
 		// no worker output, and the wrapper needs a fresh manifest anyway. Let
 		// re-entry supersede it automatically instead of demanding --force;
 		// blocking here made an aborted /ant-build jam every following one.
-		priorIsIdlePlanOnly := priorAttempt.Status == buildAttemptAwaiting && strings.TrimSpace(priorAttempt.DispatchMode) == "plan-only"
+		priorMode := strings.TrimSpace(priorAttempt.DispatchMode)
+		priorIsIdlePlanOnly := priorAttempt.Status == buildAttemptAwaiting && (priorMode == "plan-only" || priorMode == "queen-led")
 		if !options.Force && !priorIsIdlePlanOnly {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("phase %d already has active build attempt %s (%s); finalize its completion packet or rerun with --force to supersede it", phaseNum, priorAttempt.ID, priorAttempt.Status)
 		}
@@ -262,15 +748,16 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 
 	generatedAt := time.Now().UTC()
-	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-		LightFlag:         options.LightFlag,
-		HeavyFlag:         options.HeavyFlag,
-		VerificationDepth: options.VerificationDepth,
-		WorkerTimeout:     options.WorkerTimeout,
-		DispatchWorkers:   options.DispatchWorkers,
-	})
-	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, options.QueenCastes, options.QueenCasteReason)
+	// judgementReasonsForBudget mirrors queenCasteDecisionSummary's own
+	// judgement derivation (queenApplyJudgement is pure/deterministic, so
+	// recomputing here costs nothing) so the spawn-budget contract's
+	// selected_reasons can prefer the SAME per-worker sentence the manifest's
+	// caste_decision shows, rather than a separately-derived one.
+	judgementReasonsForBudget := func() map[string]string {
+		judgementState := state
+		judgementState.VerificationDepth = string(reviewDepth)
+		return queenApplyJudgement(mergedQueenCastes, options.QueenCasteReason, phase, "build", judgementState, queenCasteWhyReasons).Reasons
+	}()
 	for i := range dispatches {
 		dispatches[i].Status = "planned"
 	}
@@ -280,32 +767,32 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 	attachBuildDispatchContext(root, phase, dispatches, generatedAt)
 	buildDirRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
-	// Write every dispatch's composed brief to disk and blank the inline copy
-	// once the write succeeds (clearInlineBrief=true) -- the ONLY dispatch
+	// Derive every dispatch's composed brief and blank the inline copy. The
+	// files are persisted only after the canonical start receipt exists -- the ONLY dispatch
 	// path the interactive wrapper is allowed to call must never ship the
-	// same composed brief twice in one JSON response. A dispatch whose write
-	// fails keeps its inline Brief populated (see writeBuildWorkerBriefFiles).
-	// Clear the previous manifest's brief files first (190-190/WR-01) --
+	// same composed brief twice in one JSON response. The transaction clears
+	// the previous manifest's brief files first (190-190/WR-01) --
 	// this path writes {dispatch.Name}.md into a directory nothing else ever
 	// prunes, and dispatch names change whenever task wording, task selection
 	// or caste coalescing does.
-	cleanupStaleWorkerBriefs(phaseNum)
-	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
-	if err != nil {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-	}
-	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
+	briefPaths, dispatches, preparedBriefs := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, generatedAt, true)
+	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches, judgementReasonsForBudget)
 
 	parallelMode := effectiveParallelMode(state)
 	waveExecution := buildWaveExecutionPlans(dispatches, parallelMode)
 	executionPlan := buildExecutionPlans(dispatches, parallelMode)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 	providerDiagnostics := dispatchProviderDiagnostics(newCodexWorkerInvoker())
-	checkpointRel := filepath.ToSlash(filepath.Join("checkpoints", fmt.Sprintf("pre-build-phase-%d.json", phaseNum)))
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
-	claimsRel := "last-build-claims.json"
-	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, "plan-only", selectedTaskIDs, briefPaths, true, reviewDepth)
+	manifest := buildCodexBuildManifest(root, state, phase, "", "", dispatches, generatedAt, dispatchMode, selectedTaskIDs, briefPaths, true, reviewDepth)
+	canonicalPlanSHA, err := planStateHash(canonicalStartState.Plan)
+	if err != nil {
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("hash canonical plan-only start state: %w", err)
+	}
+	manifest.PlanStateHash = canonicalPlanSHA
+	manifest.PlanAuthority = authority
 	manifest.Phase = phaseNum
+	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	manifest.DispatchContract = dispatchContract
 	manifest.ProviderDiagnostics = providerDiagnostics
 	profileContract := workflowProfileContract(reviewDepth)
@@ -315,7 +802,12 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	// instead of from memory; the decision is the audit trail for what it chose
 	// and what the runtime overrode.
 	manifest.CasteRoster = queenCasteRoster()
-	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, options.QueenCastes, options.QueenCasteReason)
+	manifest.CasteDecision = queenCasteDecisionSummary(phase, state, reviewDepth, mergedQueenCastes, options.QueenCasteReason, queenCasteWhyReasons)
+	// The forced-reviewer set is derived from the phase's own wording exactly
+	// once, here, and recorded — never dispatched at build (D-05). Continue
+	// reads this record via queenForcedContinueReviewers.
+	manifest.ForcedReviewers = forcedReviewerRecords(queenForcedReviewersForPhase(phase))
+	manifest.ForcedReviewerAnnouncement = composeForcedReviewerAnnouncement(manifest.ForcedReviewers)
 	boundary, err := materializeOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -336,6 +828,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"currentTask":              phase.Tasks,
 		"dispatches":               codexBuildDispatchMaps(dispatches),
 		"dispatch_manifest":        manifest,
+		"job_decisions":            append([]coherentJobDecision{}, jobDecisions...),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               len(waveExecution),
 		"parallel_waves":           countParallelWaveExecutionPlans(waveExecution),
@@ -344,14 +837,15 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		"execution_plan":           executionPlan,
 		"execution_wave_count":     len(executionPlan),
 		"parallel_execution_waves": countParallelBuildExecutionPlans(executionPlan),
-		"dispatch_mode":            "plan-only",
+		"dispatch_mode":            dispatchMode,
 		"dispatch_contract":        dispatchContract,
 		"provider_diagnostics":     providerDiagnostics,
 		"host_platform":            string(codex.DetectActivePlatform()),
-		"execution_owner":          buildExecutionOwner("plan-only", true),
+		"execution_owner":          executionOwner,
 		"profile_contract":         profileContract,
 		"queen_recommendation":     queenRecommendation,
 		"queen_execution_policy":   policy,
+		"plan_authority":           authority,
 		"selected_tasks":           selectedTaskIDs,
 		"wrapper_contract": map[string]interface{}{
 			"source_command":          "aether build <phase> --plan-only",
@@ -366,35 +860,61 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 		result["dispatch_manifest"] = manifest
 	}
 	if manifest.OrchestratorGuidance == nil || !manifest.OrchestratorGuidance.Active {
-		attemptRel, err := beginBuildAttempt(state, phaseNum, phase, generatedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, manifest.ExecutionOwner, dispatches)
+		request, err := newBuildStartRequest(root, startVariant, canonicalStartState, authority, phaseNum, selectedTaskIDs, executionOwner, dispatchMode, generatedAt, dispatches, buildStartEffects{
+			ManifestPath:   manifestRel,
+			Manifest:       &manifest,
+			MakeLatest:     true,
+			ReviewerWindow: buildStartReviewerReopen,
+			StalePaths:     buildStartStaleArtifactPaths(phaseNum, false),
+		})
 		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
-		_, attempt, ok := loadLatestBuildAttempt(phaseNum)
-		if !ok || attemptRel == "" {
-			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to reload prepared build attempt for phase %d", phaseNum)
+		if options.BuildStartBeforeCommit != nil {
+			if err := options.BuildStartBeforeCommit(); err != nil {
+				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
+			}
 		}
-		manifest.AttemptID = attempt.ID
-		manifest.AttemptPath = displayDataPath(attemptRel)
-		if err := prepareBuildAttemptManifestBinding(attemptRel, &manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to prepare plan-only execution binding", nil, nil, "plan-only", err)
+		receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
+		if err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
-		if err := store.SaveJSON(manifestRel, manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to persist plan-only manifest", nil, nil, "plan-only", err)
-			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to persist plan-only build manifest: %w", err)
+		// D-01: persist the SAME decision this build's own dispatches were
+		// planned against, immediately, onto the attempt it belongs to. An
+		// unrecorded boundary would leave the check step unable to tell
+		// whether review already happened at build end, so a write failure
+		// here fails the build start exactly like any other evidentiary
+		// write failure on this path.
+		if err := attachVerificationBoundary(receipt.AttemptPath, boundaryDecision); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to record verification boundary decision: %w", err)
 		}
-		if err := bindBuildAttemptManifest(attemptRel, manifest); err != nil {
-			_ = transitionBuildAttempt(attemptRel, buildAttemptFailed, "failed to bind plan-only manifest", nil, nil, "plan-only", err)
+		if err := persistBuildWorkerBriefFiles(preparedBriefs); err != nil {
 			return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 		}
+		if err := store.LoadJSON(manifestRel, &manifest); err != nil {
+			return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to reload committed %s build manifest: %w", dispatchMode, err)
+		}
+		// SYN-201-02/WORK-01/WORK-03: the attempt now exists (commitBuildStart
+		// succeeded), so this lane's OWN returned dispatches can carry the
+		// attempt identifier. Deliberately NOT written back onto manifest.json
+		// or result["dispatch_manifest"]: that manifest's bytes are already
+		// bound to attempt.ManifestSHA256 (validateBuildAttemptManifestBinding),
+		// and a wrapper resubmitting a completion packet built from an
+		// attempt-stamped copy of it would fail that digest check. The
+		// attempt-bound identity for this lane reaches its surfaces once real
+		// dispatches are recorded against the attempt (recordCodexBuildDispatches /
+		// transitionBuildAttempt), not through this plan-only preview.
+		dispatches = stampDispatchAttemptIdentity(manifest.Dispatches, receipt.AttemptID)
 		result["dispatch_manifest"] = manifest
-		result["attempt"] = displayDataPath(attemptRel)
+		result["attempt"] = displayDataPath(receipt.AttemptPath)
 	}
+	addBuildAdvisoryResult(result, decideBuildBlockerAdvisory(buildStartBlockerSignals(manifest), options.NonInteractive))
+	closeLifecycleRun(result, state, "build")
 	return result, state, phase, dispatches, nil
 }
 
 func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, options codexBuildOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, []codexBuildDispatch, error) {
+	options.BuildStartVariant = buildStartQueenLed
 	result, state, phase, dispatches, err := runCodexBuildPlanOnlyWithOptions(root, phaseNum, selectedTaskIDs, options)
 	if err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
@@ -414,27 +934,6 @@ func runCodexBuildQueenLed(root string, phaseNum int, selectedTaskIDs []string, 
 	})
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 
-	if manifest, ok := result["dispatch_manifest"].(codexBuildManifest); ok {
-		manifest.DispatchMode = "queen-led"
-		manifest.ExecutionOwner = buildExecutionOwner("queen-led", true)
-		manifest.ProfileContract = profileContract
-		manifest.QueenRecommendation = queenRecommendation
-		manifest.QueenExecutionPolicy = policy
-		if strings.TrimSpace(manifest.AttemptPath) != "" {
-			attemptRel := strings.TrimPrefix(filepath.ToSlash(manifest.AttemptPath), ".aether/data/")
-			manifestRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "manifest.json"))
-			if err := prepareBuildAttemptManifestBinding(attemptRel, &manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-			}
-			if err := store.SaveJSON(manifestRel, manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("failed to persist queen-led build manifest: %w", err)
-			}
-			if err := bindBuildAttemptManifest(attemptRel, manifest); err != nil {
-				return nil, colony.ColonyState{}, colony.Phase{}, nil, err
-			}
-		}
-		result["dispatch_manifest"] = manifest
-	}
 	result["queen_led"] = true
 	result["dispatch_mode"] = "queen-led"
 	result["execution_owner"] = buildExecutionOwner("queen-led", true)
@@ -461,45 +960,81 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, fmt.Errorf("no store initialized")
 	}
 
-	state, err := loadActiveColonyState()
+	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
+	state, err := loadActiveColonyStateReadOnly()
 	if err != nil {
 		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
-	if len(state.Plan.Phases) == 0 {
-		return nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+	state, _, err = resolveCodexBuildPlanAuthority(root, state)
+	if err != nil {
+		return nil, err
 	}
-	if phaseNum < 1 || phaseNum > len(state.Plan.Phases) {
-		return nil, fmt.Errorf("phase %d not found (plan has %d phases)", phaseNum, len(state.Plan.Phases))
+	if _, err := applyPriorCompletedPhaseTaskRepairs(root, &state, phaseNum); err != nil {
+		return nil, err
+	}
+	rehearsal, err := prepareDirectCodexBuild(root, state, phaseNum, selectedTaskIDs, options)
+	if err != nil {
+		return nil, err
+	}
+
+	parentCtx := options.ParentContext
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	var buildInvoker codex.WorkerInvoker
+	if synthetic {
+		buildInvoker = &codex.FakeInvoker{}
+	} else {
+		buildInvoker = newCodexWorkerInvoker()
+	}
+	if err := preflightWorkerProvider(ctx, buildInvoker, directCodexBuildReadinessDispatches(root, phaseNum, rehearsal.Dispatches)); err != nil {
+		return nil, err
+	}
+
+	state, err = loadActiveColonyState()
+	if err != nil {
+		return nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	state, _, err = reconcilePriorCompletedPhaseTasksFromTrustedManifests(root, state, phaseNum)
 	if err != nil {
 		return nil, err
 	}
-	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
-	phase := state.Plan.Phases[phaseNum-1]
-	if err := validatePhaseCriterionEvidence(phase); err != nil {
+	prepared, err := prepareDirectCodexBuild(root, state, phaseNum, selectedTaskIDs, options)
+	if err != nil {
 		return nil, err
 	}
-	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
-		return nil, err
+	state = prepared.State
+	phase := prepared.Phase
+	policy := prepared.Policy
+	reviewDepth := prepared.ReviewDepth
+	dispatches := prepared.Dispatches
+	jobDecisions := prepared.JobDecisions
+	casteDecision := prepared.CasteDecision
+	authority := prepared.PlanAuthority
+	// Phase 201 plan 12 (WORK-08, CEC-06): job planning is complete the
+	// instant prepareDirectCodexBuild returns dispatches -- this is the
+	// queue segment's start boundary (job planning complete to worker
+	// dispatch). See the queue/context/work capture block near this
+	// function's success return for where this is used.
+	jobTelemetryPlanningDoneAt := time.Now()
+	// Compute the direct lane's blocker fact while the accepted pre-build
+	// state is still current. The previous command-layer check ran only after
+	// dispatch had transitioned the phase, which made this lane depend on a
+	// different snapshot than plan-only. This is read-only and does not alter
+	// the accepted plan, dispatch manifest, or start transaction.
+	directBoundary, err := checkOrchestratorBoundaryQuestions("build", state, phase, buildBoundaryQuestionCandidates(phase, selectedTaskIDs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to check boundary questions: %w", err)
 	}
-	// Run pre-build gates (critical flags, phase buildability)
-	if err := runPreBuildGates(store.BasePath(), phaseNum); err != nil {
-		return nil, err
+	directAdvisoryManifest := codexBuildManifest{
+		Phase:                 phaseNum,
+		ForcedReviewers:       forcedReviewerRecords(queenForcedReviewersForPhase(phase)),
+		BoundaryQuestionCount: len(directBoundary.Questions),
 	}
-	if err := validateCodexBuildState(state, phaseNum, selectedTaskIDs, options.Force); err != nil {
-		return nil, err
-	}
-
-	// Detect orphaned worktrees from prior interrupted builds
-	orphans := detectOrphanedWorktrees(phaseNum)
-	if len(orphans) > 0 && !options.Force {
-		var orphanBranches []string
-		for _, o := range orphans {
-			orphanBranches = append(orphanBranches, fmt.Sprintf("%s (phase %d)", o.Branch, o.Phase))
-		}
-		return nil, fmt.Errorf("orphaned worktree branches detected: %s. Run with --force to proceed anyway, or run `aether worktree-merge-back` to recover", strings.Join(orphanBranches, ", "))
-	}
+	directBuildAdvisory := decideBuildBlockerAdvisory(buildStartBlockerSignals(directAdvisoryManifest), options.NonInteractive)
 
 	originalState, err := cloneColonyState(state)
 	if err != nil {
@@ -521,15 +1056,49 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	policy := recommendQueenExecutionPolicy(state, phase, len(state.Plan.Phases), codexQueenExecutionPolicyInput{
-		LightFlag:         options.LightFlag,
-		HeavyFlag:         options.HeavyFlag,
-		VerificationDepth: options.VerificationDepth,
-		WorkerTimeout:     options.WorkerTimeout,
-		DispatchWorkers:   true,
-	})
-	reviewDepth := colony.NormalizeVerificationDepth(policy.VerificationDepth)
-	dispatches := plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
+	// 202-03 (CEC-05): the direct build lane's live episode. buildEpisodeID
+	// reuses the same run identifier finishRuntimeSpawnRun above persists,
+	// so the cockpit and the durable spawn-run record name the same
+	// episode. runHandle is nil when store == nil (beginRuntimeSpawnRun's
+	// own no-op contract) -- emitColonyLiveEpisodeStarted degrades to an
+	// empty episode ID in that case, matching emitColonyLive's own nil-store
+	// no-op.
+	buildEpisodeID := ""
+	if runHandle != nil {
+		buildEpisodeID = runHandle.Run.ID
+	}
+	emitColonyLiveEpisodeStarted(buildEpisodeID, events.EpisodeKindBuild)
+	restoreLiveBuildEpisode := setActiveLiveBuildEpisode(buildEpisodeID)
+	defer restoreLiveBuildEpisode()
+	// 204-15 (SC3a): the direct build lane's episode close now assembles a
+	// fuller episodeLedgerRecord and records it through
+	// emitColonyLiveOutcomeRecorded -- the emitter built for exactly this
+	// (cmd/live_events.go's own doc comment) and never called before this
+	// plan -- then still publishes the live episode-ended event, so the
+	// cockpit is unchanged. dispatches and directBuildAdvisory are both
+	// already in scope here (declared before this defer registers) and are
+	// read at DEFER-EXECUTION time, after every later reassignment in this
+	// function's body -- the same closure-over-a-mutated-variable pattern
+	// runStatus itself already relies on below.
+	defer func() {
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.HardGateResults = buildEpisodeGateResults(directBuildAdvisory)
+		facts := &episodeCloseFacts{}
+		for _, d := range dispatches {
+			facts.addUsage(d.Usage)
+		}
+		record.Usage = facts.Usage
+		record.ReportedCostUSD = facts.ReportedCostUSD
+		if evidenceIDs, changedDecisionIDs, revision, ok := buildEpisodeApplicationFacts(phaseNum); ok {
+			record.EvidenceIDs = evidenceIDs
+			record.ChangedDecisionIDs = changedDecisionIDs
+			record.EpisodeRevision = revision
+		}
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(buildEpisodeID, runStatus)
+		emitColonyLiveOutcomeRecorded(buildEpisodeID, events.EpisodeKindBuild, record)
+		emitColonyLiveEpisodeEndedEventOnly(buildEpisodeID, events.EpisodeKindBuild, runStatus)
+	}()
+
 	dispatches, err = ensureUniqueBuildDispatchNames(dispatches, phaseNum)
 	if err != nil {
 		return nil, err
@@ -553,13 +1122,6 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	parallelExecutionWaves := countParallelBuildExecutionPlans(executionPlan)
 	dispatchContract := buildDispatchContractForDispatches(dispatches, parallelMode, options.WorkerTimeout)
 
-	parentCtx := options.ParentContext
-	if parentCtx == nil {
-		parentCtx = context.Background()
-	}
-	ctx, cancel := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
 	ceremony := newBuildCeremonyEmitter(ctx, root, phase)
 	restoreCeremony := setActiveBuildCeremony(ceremony)
 	defer restoreCeremony()
@@ -582,15 +1144,55 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		plannedDispatchMode = "simulated"
 	}
 
-	cleanupStaleBuildAttemptArtifacts(phaseNum)
-
-	if err := store.SaveJSON(checkpointRel, state); err != nil {
-		return nil, fmt.Errorf("failed to checkpoint colony state: %w", err)
+	// Phase 201 plan 12 (WORK-08): context segment -- brief assembly is
+	// fully synchronous and inside this process, so it is genuinely
+	// measurable, unlike almost everything else in this function (worker
+	// dispatch and execution happen outside this process on the plan-only/
+	// wrapper-driven lane, and even on this direct lane the actual work
+	// segment is captured separately below, around executeCodexBuildDispatches).
+	jobTelemetryContextStartedAt := time.Now()
+	briefPaths, dispatches, preparedBriefs := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
+	jobTelemetryContextEndedAt := time.Now()
+	for i := range dispatches {
+		if dispatches[i].BriefPath != "" {
+			dispatches[i].Outputs = []string{dispatches[i].BriefPath}
+		}
 	}
-	attemptRel, err := beginBuildAttempt(state, phaseNum, phase, startedAt, selectedTaskIDs, checkpointRel, manifestRel, claimsRel, buildExecutionOwner(plannedDispatchMode, false), dispatches)
+	dispatchManifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	dispatchManifest.CasteDecision = casteDecision
+	dispatchManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
+	dispatchManifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
+	dispatchManifest.PlanAuthority = authority
+	executionOwner := buildExecutionOwner(plannedDispatchMode, false)
+	request, err := newBuildStartRequest(root, buildStartDirect, state, authority, phaseNum, selectedTaskIDs, executionOwner, plannedDispatchMode, startedAt, dispatches, buildStartEffects{
+		CheckpointPath: checkpointRel,
+		ManifestPath:   manifestRel,
+		Manifest:       &dispatchManifest,
+		PromoteState:   true,
+		MakeLatest:     true,
+		ReviewerWindow: buildStartReviewerClose,
+		StalePaths:     buildStartStaleArtifactPaths(phaseNum, true),
+	})
 	if err != nil {
 		return nil, err
 	}
+	if options.BuildStartBeforeCommit != nil {
+		if err := options.BuildStartBeforeCommit(); err != nil {
+			return nil, err
+		}
+	}
+	receipt, err := commitBuildStart(root, request, options.BuildStartOptions)
+	if err != nil {
+		return nil, err
+	}
+	attemptRel := receipt.AttemptPath
+	// SYN-201-02/WORK-01/WORK-03: the attempt now exists, so every dispatch
+	// this direct build lane carries from here on names the same attempt
+	// identifier as the job identity it already carries (JobName) -- the
+	// Queen card, task receipts, and reviewer findings this pipeline
+	// produces are each verifiable in isolation as belonging to this one
+	// attempt (cmd/work_identity_test.go).
+	dispatches = stampDispatchAttemptIdentity(dispatches, receipt.AttemptID)
 	attemptFinished := false
 	finishAttempt := func(status, summary string, transitionErr error) {
 		if attemptFinished {
@@ -605,20 +1207,29 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 			_ = transitionBuildAttempt(attemptRel, buildAttemptInterrupted, "build command ended before durable finalization", nil, nil, "", fmt.Errorf("build command ended before durable finalization"))
 		}
 	}()
-
-	updatedState := state
-	applyCodexBuildState(&updatedState, phaseNum, startedAt, selectedTaskIDs, reviewDepth)
-	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
-	if err := store.SaveJSON("COLONY_STATE.json", updatedState); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to project executing lifecycle state", err)
-		return nil, fmt.Errorf("failed to save colony state: %w", err)
+	// D-01: persist the SAME decision this build's own dispatches (prepared.
+	// Dispatches, planned against prepared.VerificationBoundary) were planned
+	// against, immediately, onto the attempt it belongs to. A write failure
+	// here fails the build start, exactly like any other evidentiary write
+	// failure on this path -- an unrecorded boundary would leave the check
+	// step unable to tell whether review already happened at build end.
+	if err := attachVerificationBoundary(attemptRel, prepared.VerificationBoundary); err != nil {
+		wrapped := fmt.Errorf("failed to record verification boundary decision: %w", err)
+		finishAttempt(buildAttemptFailed, "failed to record verification boundary decision", wrapped)
+		return nil, wrapped
 	}
+
+	updatedState, err := loadActiveColonyState()
+	if err != nil {
+		finishAttempt(buildAttemptFailed, "failed to reload committed executing lifecycle state", err)
+		return nil, fmt.Errorf("failed to reload committed colony state: %w", err)
+	}
+	updatedPhase := updatedState.Plan.Phases[phaseNum-1]
 	if progress != nil {
 		progress.Advance("Prepare")
 	}
 
-	briefPaths, dispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, plannedDispatchMode, selectedTaskIDs, reviewDepth, policy)
-	if err != nil {
+	if err := persistBuildWorkerBriefFiles(preparedBriefs); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to prepare worker artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
@@ -628,28 +1239,10 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
-	var dispatchManifest codexBuildManifest
 	if err := store.LoadJSON(manifestRel, &dispatchManifest); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to reload direct build manifest", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, fmt.Errorf("failed to reload direct build manifest: %w", err)
-	}
-	dispatchManifest.AttemptID = strings.TrimSpace(strings.TrimSuffix(filepath.Base(attemptRel), filepath.Ext(attemptRel)))
-	dispatchManifest.AttemptPath = displayDataPath(attemptRel)
-	if err := prepareBuildAttemptManifestBinding(attemptRel, &dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to prepare direct build execution binding", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, err
-	}
-	if err := store.SaveJSON(manifestRel, dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to persist bound direct build manifest", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, fmt.Errorf("failed to persist bound direct build manifest: %w", err)
-	}
-	if err := bindBuildAttemptManifest(attemptRel, dispatchManifest); err != nil {
-		finishAttempt(buildAttemptFailed, "failed to bind direct build manifest", err)
-		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
-		return nil, err
 	}
 	if err := transitionBuildAttempt(attemptRel, buildAttemptDispatching, "worker dispatch started", dispatches, nil, "", nil); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist dispatch start", err)
@@ -661,14 +1254,16 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		progress.Advance("Context")
 	}
 
-	buildInvoker := newCodexWorkerInvoker()
-	if synthetic {
-		buildInvoker = &codex.FakeInvoker{}
-	}
 	if progress != nil {
 		progress.Advance("Dispatch")
 	}
+	// Phase 201 plan 12 (WORK-08): work segment -- this call IS the worker's
+	// own execution on the direct/native build lane (queenWaveLifecycle
+	// dispatches every wave and blocks until they all resolve), so wrapping
+	// it with real timestamps is a genuine measurement, not an estimate.
+	jobTelemetryWorkStartedAt := time.Now()
 	dispatches, claims, mode, err := executeCodexBuildDispatches(ctx, root, updatedPhase, dispatches, startedAt, buildInvoker, parallelMode, options.WorkerTimeout, options.CircuitBreakerThreshold, options.Verbose, dispatchManifest.ExecutionBinding)
+	jobTelemetryWorkEndedAt := time.Now()
 	terminalClaims, attemptErr := recordBuildAttemptTerminal(root, attemptRel, phaseNum, startedAt, dispatches, claims, mode, err)
 	if attemptErr != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist terminal worker results", attemptErr)
@@ -676,14 +1271,71 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		return nil, attemptErr
 	}
 	if err != nil {
+		// D-10: a dispatch error is not automatically all-or-nothing. Before
+		// wholesale rollback, check whether ANY dispatch carries validated
+		// partial proof (root-evidenced receipts already resolved onto
+		// dispatches by executeCodexBuildDispatches's own call to
+		// resolveCoherentJobDispatchReceipts). Only genuine partial credit
+		// bypasses rollback -- a total failure with zero receipts still takes
+		// the unchanged rollback path below (retryOutcome stays nil).
+		//
+		// WR-10 (195-REVIEW.md): the recovery job is PLANNED first (a pure
+		// computation that writes nothing), then the credit is committed, and
+		// only then is the recovery attempt record created from the committed
+		// state. Creating the record first left an orphan recovery attempt
+		// behind whenever the commit was refused -- pointing at unfinished
+		// tasks whose credit had just been rolled back.
+		retryPlan, retryErr := planPartialBuildRetry(phaseNum, updatedPhase, dispatches)
+		if retryErr != nil {
+			visualFprintf(stderr, "warning: could not plan a D-10 recovery job for phase %d's partial credit: %v\n", phaseNum, retryErr)
+		}
+		if retryPlan != nil {
+			partialState, commitErr := commitPartialBuildCredit(phaseNum, startedAt, dispatches)
+			if commitErr != nil {
+				finishAttempt(buildAttemptFailed, "partial credit could not be committed", commitErr)
+				rollbackCodexBuildFailure(originalState, phaseNum, startedAt, commitErr)
+				return nil, commitErr
+			}
+			// WR-04: record the attempt as `partial`, not `failed`. The direct
+			// lane used to leave the journal reading `failed` -- whose
+			// documented meaning is "nothing of this attempt was credited" --
+			// while real task credit sat in colony state, so the two build
+			// lanes described the same outcome differently.
+			finishAttempt(buildAttemptPartial, "partial credit committed; a D-10 recovery job covers the unfinished tasks", nil)
+			attemptFinished = true
+			partialPhase := updatedPhase
+			if phaseNum >= 1 && phaseNum <= len(partialState.Plan.Phases) {
+				partialPhase = partialState.Plan.Phases[phaseNum-1]
+			}
+			retryOutcome, persistErr := commitPartialBuildRetryPlan(partialState, phaseNum, partialPhase, dispatchManifest.AttemptID, time.Now().UTC(), retryPlan)
+			if persistErr != nil {
+				return nil, fmt.Errorf("phase %d partial credit was recorded but its recovery attempt was not committed: %w", phaseNum, persistErr)
+			}
+			if retryOutcome == nil {
+				return nil, fmt.Errorf("phase %d partial credit did not produce the required durable recovery attempt", phaseNum)
+			}
+			result := map[string]interface{}{
+				"phase":      phaseNum,
+				"phase_name": updatedPhase.Name,
+				"state":      string(partialState.State),
+			}
+			addPartialBuildRecoveryResult(result, *retryOutcome)
+			addBuildAdvisoryResult(result, directBuildAdvisory)
+			emitVisualProgress(renderDecisionBlock("⚠", "Partial Credit — Recovery Job Created",
+				fmt.Sprintf("Phase %d: %d task(s) unfinished: %s", phaseNum, len(retryOutcome.UnfinishedTaskIDs), strings.Join(retryOutcome.UnfinishedTaskIDs, ", ")),
+				"The credited tasks' proof was kept; nothing proven was rolled back or redone.",
+				retryOutcome.RedispatchCommand))
+			closeLifecycleRun(result, partialState, "build")
+			return result, nil
+		}
 		attemptFinished = true
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		// Classic failure theatre: a halted build is announced as a framed
 		// operator moment, never a silent error return.
 		emitVisualProgress(renderDecisionBlock("⚠", "Wave Failure — Build Halted",
 			fmt.Sprintf("Phase %d dispatch failed: %v", phaseNum, err),
-			"The phase's state was rolled back; nothing half-done was kept.",
-			"Fix the cause, then rerun the build for this phase."))
+			"The phase state rollback does not undo working-tree edits.",
+			"Inspect and reconcile surviving drafts before rerunning the build for this phase."))
 		return nil, err
 	}
 	if err := store.SaveJSON(claimsRel, terminalClaims); err != nil {
@@ -691,16 +1343,37 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	}
+	// CAP-071/SYN-201-09: additionally persist this attempt's own claims at
+	// its attempt-bound path (attempts/<id>/claims.json), alongside --
+	// never in place of -- the legacy shared claimsRel write above. This is
+	// purely additive new evidence, not a gate: a failure here never blocks
+	// or rolls back an otherwise-successful build.
+	if err := writeAttemptBoundArtifact(receipt.AttemptID, attemptArtifactKindClaims, terminalClaims); err != nil {
+		visualFprintf(stderr, "warning: could not persist attempt-bound claims artifact for build attempt %s: %v\n", receipt.AttemptID, err)
+	}
 	updatedState.State = colony.StateBUILT
 	reconcileCompletedBuildTasks(&updatedState, phaseNum, dispatches)
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
-	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy); err != nil {
+	if _, finalDispatches, err := writeCodexBuildArtifacts(root, updatedState, updatedPhase, buildDirRel, checkpointRel, claimsRel, dispatches, startedAt, mode, selectedTaskIDs, reviewDepth, policy, jobDecisions); err != nil {
 		finishAttempt(buildAttemptFailed, "failed to persist final build artifacts", err)
 		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
 		return nil, err
 	} else {
 		dispatches = finalDispatches
+	}
+	var finalManifest codexBuildManifest
+	if err := store.LoadJSON(manifestRel, &finalManifest); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to reload final build manifest", err)
+		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		return nil, fmt.Errorf("failed to reload final build manifest: %w", err)
+	}
+	finalManifest.CasteDecision = casteDecision
+	finalManifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
+	if err := store.SaveJSON(manifestRel, finalManifest); err != nil {
+		finishAttempt(buildAttemptFailed, "failed to persist final caste decision", err)
+		rollbackCodexBuildFailure(originalState, phaseNum, startedAt, err)
+		return nil, fmt.Errorf("failed to persist final caste decision: %w", err)
 	}
 
 	var committedState colony.ColonyState
@@ -725,6 +1398,22 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	attemptFinished = true
 	updatedState = committedState
 	updatedPhase = updatedState.Plan.Phases[phaseNum-1]
+	// D-08/CAP-066: computed and attached AFTER the attempt is durably
+	// sealed immediately above, from the exact same fully-resolved
+	// `dispatches` the sealing transition just wrote -- never a second,
+	// separate decision about what counts as done. Both are reporting-only:
+	// a failure to record either is warned, never fatal to a build that
+	// otherwise completed. Mirrors the external/wrapper finalize lane's own
+	// attachResultFilePrecision/attachBuildKnowledgeDeltas discipline
+	// (cmd/codex_build_finalize.go), which this lane never used to share.
+	nativePlanRealityEntries := buildPlanRealityForDispatches(root, updatedPhase, dispatches)
+	nativeCreditedFiles, nativeUncreditedFiles := deriveResultFilePrecision(dispatches, updatedState.Worktrees, blockedPlanRealityTasks(nativePlanRealityEntries))
+	if err := attachResultFilePrecision(attemptRel, nativeCreditedFiles, nativeUncreditedFiles); err != nil {
+		visualFprintf(stderr, "warning: could not record the credited/uncredited file split for phase %d: %v\n", phaseNum, err)
+	}
+	if err := attachBuildKnowledgeDeltas(attemptRel, deriveBuildKnowledgeDeltas(phaseNum, dispatches)); err != nil {
+		visualFprintf(stderr, "warning: could not record the decision/learning knowledge deltas for phase %d: %v\n", phaseNum, err)
+	}
 	policy = enrichQueenExecutionPolicyWithSpawnBudget(policy, updatedState, updatedPhase, "build", reviewDepth, dispatches)
 	if progress != nil {
 		progress.Advance("Verify")
@@ -758,9 +1447,76 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 	// never generated steering recommendations at all.
 	suggestAnalyzeRan, pendingSuggestionCount := collectPendingSuggestions(root)
 
+	// File this run's per-worker token record on the direct in-process lane.
+	//
+	// The platform-driven lane has filed rows since plan 196-05, through
+	// build-finalize. This lane -- `aether build <n>`, which runs its workers
+	// inside the runtime rather than handing a manifest to a chat wrapper --
+	// filed nothing, so the cost block at the end of it could only ever say
+	// "no token use was recorded". That was the more painful half of the gap,
+	// because this is the ONLY lane where a provider's own measurement exists:
+	// codex.ParseUsage runs at the dispatch boundary here and nowhere else.
+	//
+	// Platform is deliberately left empty. These workers were spawned as
+	// subprocesses by the runtime, not as subagents inside somebody's chat
+	// session, so there is no session transcript or session store belonging to
+	// them; naming a chat platform here would send the resolver looking for
+	// somebody else's sessions. The provider figures carried on the dispatches
+	// are the whole source.
+	//
+	// Accounting is a record OF the build, never a gate ON it: a write that
+	// fails is reported and the build still completes.
+	directSpendNote := ""
+	directSpendOutcome, directSpendErr := writeSpendRowsForRun(spendWriteRequest{
+		Phase:      phaseNum,
+		PhaseName:  updatedPhase.Name,
+		Workflow:   spendWorkflowBuild,
+		RepoRoot:   root,
+		Platform:   "",
+		RunID:      spendRunIDFromAttempt(attemptRel),
+		StartedAt:  startedAt,
+		EndedAt:    time.Now().UTC(),
+		Dispatches: dispatches,
+	})
+	if directSpendErr != nil {
+		directSpendNote = fmt.Sprintf("this build's per-worker token record could not be filed: %v", directSpendErr)
+		visualFprintf(stderr, "warning: %s\n", directSpendNote)
+	} else if len(directSpendOutcome.Notes) > 0 {
+		directSpendNote = strings.Join(directSpendOutcome.Notes, "; ")
+	}
+
+	// Phase 201 plan 12 (WORK-08, CEC-06): record this build's own timing
+	// segments, bound to the same attempt identifier the evidence and cost
+	// figures above already use. Genuinely observable within one direct/
+	// native build invocation: how long job planning sat before brief
+	// assembly began (queue), how long brief assembly itself took
+	// (context), and how long the synchronous worker dispatch loop
+	// actually ran (work). Everything else this record names -- preflight
+	// (dispatch to a worker's first response), model/tool-call duration
+	// (the platform reports total tokens per worker but never a call
+	// duration), and wait (an interval blocked on something outside this
+	// run) -- is not observable from inside this process today, and is
+	// recorded as such rather than guessed at (D-13). Like the spend-row
+	// write just above, this is accounting OF the build, never a gate ON
+	// it: a failure to write is reported and swallowed.
+	jobTelemetryCapture := newJobTelemetryCapture()
+	jobTelemetryCapture.measure(jobTelemetrySegmentQueue, jobTelemetryContextStartedAt.Sub(jobTelemetryPlanningDoneAt), "codex_build.go: job planning complete to brief assembly start")
+	jobTelemetryCapture.measure(jobTelemetrySegmentContext, jobTelemetryContextEndedAt.Sub(jobTelemetryContextStartedAt), "codex_build.go: prepareBuildWorkerBriefFiles")
+	jobTelemetryCapture.measure(jobTelemetrySegmentWork, jobTelemetryWorkEndedAt.Sub(jobTelemetryWorkStartedAt), "codex_build.go: executeCodexBuildDispatches")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentPreflight, "this build lane observes no first-response boundary distinct from a worker's own completion")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentModel, "the platform reports total tokens per worker but no per-call duration")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentToolCall, "the platform reports total tokens per worker but no per-call duration")
+	jobTelemetryCapture.markUnmeasured(jobTelemetrySegmentWait, "this run recorded no interval blocked on something outside itself")
+	jobTelemetryRecordForRun := newJobTelemetryRecord(receipt.AttemptID, jobTelemetryOneJobName(dispatches), jobTelemetryCapture, time.Now())
+	if err := writeJobTelemetryRecord(jobTelemetryRecordForRun); err != nil {
+		visualFprintf(stderr, "note: could not record job timing for build attempt %s: %v\n", receipt.AttemptID, err)
+	}
+
 	result := map[string]interface{}{
 		"phase":                    phaseNum,
 		"colony_mode":              string(updatedState.EffectiveColonyMode()),
+		"spend_rows_written":       directSpendOutcome.RowsWritten,
+		"spend_rows_measured":      directSpendOutcome.Reported,
 		"suggest_analyze_ran":      suggestAnalyzeRan,
 		"pending_suggestions":      pendingSuggestionCount,
 		"review_depth":             string(reviewDepth),
@@ -769,6 +1525,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"next":                     "aether continue",
 		"currentTask":              updatedPhase.Tasks,
 		"dispatches":               dispatchMaps,
+		"job_decisions":            append([]coherentJobDecision{}, jobDecisions...),
 		"dispatch_count":           len(dispatches),
 		"wave_count":               waveCount,
 		"parallel_waves":           parallelWaves,
@@ -780,6 +1537,7 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"dispatch_mode":            mode,
 		"dispatch_contract":        dispatchContract,
 		"queen_execution_policy":   policy,
+		"plan_authority":           authority,
 		"force":                    options.Force,
 		"selected_tasks":           selectedTaskIDs,
 		"checkpoint":               displayDataPath(checkpointRel),
@@ -789,7 +1547,13 @@ func runCodexBuildWithOptions(root string, phaseNum int, selectedTaskIDs []strin
 		"claims_path":              displayDataPath(claimsRel),
 		"attempt":                  displayDataPath(attemptRel),
 	}
+	if directSpendNote != "" {
+		result["spend_ledger_note"] = directSpendNote
+	}
+	addBuildAdvisoryResult(result, directBuildAdvisory)
 	runStatus = dispatchRunStatus(dispatches)
+	// One closing answer for the screen and the wrapper (Phase 197 plan 04).
+	closeLifecycleRun(result, updatedState, "build")
 	return result, nil
 }
 
@@ -935,11 +1699,20 @@ func applyCodexBuildState(state *colony.ColonyState, phaseNum int, startedAt tim
 			state.Plan.Phases[i].Status = colony.PhasePending
 		}
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 
 	phase := state.Plan.Phases[phaseNum-1]
+	// This planner call only ever runs after the SAME plan already succeeded in
+	// the caller, so a refusal here is impossible in practice -- but it is
+	// reported rather than swallowed (WR-06), never rendered as a zero count
+	// with no explanation.
+	plannedForEvent, planErr := plannedBuildDispatchesForSelectionWithState(phase, *state, selectedTaskIDs, reviewDepth)
+	if planErr != nil {
+		visualFprintf(stderr, "warning: could not restate phase %d's planned team for the event log: %v\n", phaseNum, planErr)
+	}
 	state.Events = append(trimmedEvents(state.Events),
 		fmt.Sprintf("%s|phase_started|build|Phase %d: %s", startedAt.Format(time.RFC3339), phaseNum, phase.Name),
-		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedBuildDispatchesForSelectionWithState(phase, *state, selectedTaskIDs, reviewDepth)), phaseNum),
+		fmt.Sprintf("%s|build_dispatched|build|Dispatched %d workers for phase %d", startedAt.Format(time.RFC3339), len(plannedForEvent), phaseNum),
 	)
 
 	if tracer != nil && state.RunID != nil {
@@ -990,102 +1763,59 @@ func applyBuildTaskStatuses(phase *colony.Phase, selectedTaskIDs []string) {
 	}
 }
 
-func plannedBuildDispatches(phase colony.Phase, depth string) []codexBuildDispatch {
+// stampDispatchAttemptIdentity returns a copy of dispatches with AttemptID
+// set to attemptID on every entry. It is a pure projection -- it never
+// touches JobName, Wave, TaskReceipts, or any other field -- called exactly
+// once per build lane, right after commitBuildStart's receipt makes the
+// attempt identifier known (SYN-201-02, WORK-01/WORK-03). A blank attemptID
+// is a no-op copy: nothing downstream should ever see an attempt identifier
+// fabricated for a dispatch that was never actually bound to one.
+func stampDispatchAttemptIdentity(dispatches []codexBuildDispatch, attemptID string) []codexBuildDispatch {
+	attemptID = strings.TrimSpace(attemptID)
+	stamped := make([]codexBuildDispatch, len(dispatches))
+	copy(stamped, dispatches)
+	if attemptID == "" {
+		return stamped
+	}
+	for i := range stamped {
+		stamped[i].AttemptID = attemptID
+	}
+	return stamped
+}
+
+// jobTelemetryOneJobName names the job this build's telemetry record
+// belongs to. jobTelemetryRecord is written once per attempt (not once per
+// job) -- see cmd/job_telemetry.go's own doc comment -- so a build with
+// exactly one distinct job name uses it; a build with zero or more than one
+// (an ungrouped fixture, or several independent jobs in one wave plan)
+// leaves JobName empty rather than guessing which job the recorded
+// build-level segments belong to.
+func jobTelemetryOneJobName(dispatches []codexBuildDispatch) string {
+	names := map[string]bool{}
+	for _, dispatch := range dispatches {
+		if name := strings.TrimSpace(dispatch.JobName); name != "" {
+			names[name] = true
+		}
+	}
+	if len(names) != 1 {
+		return ""
+	}
+	for name := range names {
+		return name
+	}
+	return ""
+}
+
+func plannedBuildDispatches(phase colony.Phase, depth string) ([]codexBuildDispatch, error) {
 	return plannedBuildDispatchesForSelection(phase, depth, nil, colony.VerificationDepthLight)
 }
 
-func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+func plannedBuildDispatchesForSelection(phase colony.Phase, depth string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]codexBuildDispatch, error) {
 	state := colony.ColonyState{
 		ColonyDepth:       normalizedBuildDepth(depth),
 		VerificationDepth: string(reviewDepth),
 	}
 	return plannedBuildDispatchesForSelectionWithState(phase, state, selectedTaskIDs, reviewDepth)
-}
-
-// coalesceSequentialDispatches merges a chain of dependent single-task steps
-// into one worker.
-//
-// This is the one place the rule lives, so it can be read in full:
-//
-//	Two consecutive wave dispatches merge when the second is the only task in
-//	its wave, the first was the only task in its wave, they share a caste, and
-//	the second depends on the first and on nothing else.
-//
-// Everything else stays as it is. A wave holding more than one task is genuine
-// parallel work and is never touched; a chain that changes caste part way
-// through is two kinds of job and is left as two.
-//
-// The cost this removes is not theoretical. A phase of six dependent copy steps
-// became six workers -- "waves 11-16 each contain exactly one builder, reason:
-// single task in this wave" -- and each was a fresh agent that re-read the same
-// source list from scratch before doing its share. One of those pairs was
-// literally "copy the first six categories" and "copy the remaining six".
-func coalesceSequentialDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
-	if len(dispatches) < 2 {
-		return dispatches
-	}
-
-	// A wave is eligible only if it holds exactly one dispatch. Count first.
-	perWave := map[int]int{}
-	for _, d := range dispatches {
-		if d.Stage == "wave" {
-			perWave[d.Wave]++
-		}
-	}
-
-	out := make([]codexBuildDispatch, 0, len(dispatches))
-	// chainEnd is the wave of the last step folded into the dispatch currently
-	// at the end of out. Read from the struct instead, a three-step chain would
-	// merge steps 1 and 2 and then reject step 3, because the merged dispatch
-	// still reports wave 1.
-	chainEnd := -1
-	for _, d := range dispatches {
-		if d.Stage != "wave" || len(out) == 0 {
-			out = append(out, d)
-			chainEnd = d.Wave
-			continue
-		}
-		prev := &out[len(out)-1]
-		if !dispatchesFormOneJob(*prev, d, perWave, chainEnd) {
-			out = append(out, d)
-			chainEnd = d.Wave
-			continue
-		}
-		mergeDispatchInto(prev, d)
-		chainEnd = d.Wave
-	}
-	return out
-}
-
-func dispatchesFormOneJob(prev, next codexBuildDispatch, perWave map[int]int, chainEnd int) bool {
-	if prev.Stage != "wave" || next.Stage != "wave" {
-		return false
-	}
-	if prev.Caste != next.Caste {
-		return false
-	}
-	if next.Wave != chainEnd+1 {
-		return false
-	}
-	if perWave[next.Wave] != 1 || perWave[chainEnd] != 1 {
-		return false
-	}
-	// The chain must be explicit. A task that declares no dependency may simply
-	// have been listed in order, and merging it would serialise work that was
-	// free to run alongside something else.
-	if len(next.DependsOn) != 1 {
-		return false
-	}
-	prevIDs := prev.CoveredTaskIDs
-	if len(prevIDs) == 0 {
-		prevIDs = []string{prev.TaskID}
-	}
-	for _, id := range prevIDs {
-		if next.DependsOn[0] == id {
-			return true
-		}
-	}
-	return false
 }
 
 func mergeDispatchInto(target *codexBuildDispatch, next codexBuildDispatch) {
@@ -1107,69 +1837,135 @@ func mergeDispatchInto(target *codexBuildDispatch, next codexBuildDispatch) {
 // plannedBuildDispatchesForSelectionWithState plans with no Queen proposal, so
 // the deterministic keyword engine decides. Callers that have the Queen's
 // judgement use the ...WithJudgement variant.
-func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) []codexBuildDispatch {
+func plannedBuildDispatchesForSelectionWithState(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth) ([]codexBuildDispatch, error) {
 	return plannedBuildDispatchesWithJudgement(phase, state, selectedTaskIDs, reviewDepth, nil, "")
 }
 
-func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string) []codexBuildDispatch {
+// plannedBuildDispatchesWithJudgement returns the planner's refusal instead of
+// swallowing it (WR-06, 195-REVIEW.md). It used to do `if err != nil { return
+// nil }`, so a phase whose steps depend on each other in a loop -- or one whose
+// step names a step that does not exist -- rendered everywhere as a phase with
+// no work to do, instead of the named, actionable error coherentJobGraphPreflight
+// had already produced.
+func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.ColonyState, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, proposedCastes []string, casteReason string, reasons ...map[string]string) ([]codexBuildDispatch, error) {
+	var reasonMap map[string]string
+	if len(reasons) > 0 {
+		reasonMap = reasons[0]
+	}
+	dispatches, _, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, selectedTaskIDs, reviewDepth, proposedCastes, casteReason, reasonMap, nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return dispatches, nil
+}
+
+// plannedBuildDispatchesWithJobProposals is the single production bridge from
+// Queen judgement to the pure coherent-job planner. It resolves exactly one
+// owner seed per selected task, plans jobs before assigning dispatch waves,
+// and returns proposal decisions so callers can persist the full audit trail.
+//
+// boundary is a trailing variadic seam: a caller that has already reconciled
+// a verification-boundary decision for this exact build (queenApplyVerificationBoundary)
+// supplies it here so the SAME decision governs this build's own post-wave
+// reviewer dispatches (D-01). Omitting it preserves every existing caller's
+// behaviour unchanged -- queenBuildPostWaveDispatches falls back to its
+// existing recorded-attempt read.
+func plannedBuildDispatchesWithJobProposals(
+	phase colony.Phase,
+	state colony.ColonyState,
+	selectedTaskIDs []string,
+	reviewDepth colony.VerificationDepth,
+	proposedCastes []string,
+	casteReason string,
+	reasons map[string]string,
+	proposals []coherentJobProposal,
+	boundary ...verificationBoundaryDecision,
+) ([]codexBuildDispatch, []coherentJobDecision, error) {
 	depth := normalizedBuildDepth(state.ColonyDepth)
 	selected := make(map[string]struct{}, len(selectedTaskIDs))
 	for _, taskID := range selectedTaskIDs {
 		selected[taskID] = struct{}{}
 	}
-	waves := taskWaves(phase.Tasks)
-	taskWaveBase := 10
-	lastTaskExecutionWave := taskWaveBase + max(len(waves), 1)
-	dispatches := make([]codexBuildDispatch, 0, len(phase.Tasks)+8)
 	queenState := state
 	queenState.ColonyDepth = depth
 	queenState.VerificationDepth = string(reviewDepth)
-	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState)
+	var reasonMaps []map[string]string
+	if reasons != nil {
+		reasonMaps = append(reasonMaps, reasons)
+	}
+	queenJudgement := queenApplyJudgement(proposedCastes, casteReason, phase, "build", queenState, reasonMaps...)
 	queenCastes := stringSet(queenJudgement.Final)
-	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, stringSet(queenJudgement.Proposed))
+	// queenAskedFor is the Queen's explicit proposal, not the effective team
+	// after the required-caste floor unions itself in. D-08 (deterministic
+	// checks are the floor, reviewers are judgement) and ruling D11 rule 4
+	// (a phase is verified once) both rest on this distinction: the build's
+	// verification-stage watcher below is gated on queenAskedFor, not
+	// queenCastes, so the required-caste floor still guarantees a checker
+	// somewhere in the pipeline (continue's deterministic floor) without
+	// forcing a second, redundant reviewer dispatch at the build boundary.
+	queenAskedFor := stringSet(queenJudgement.Proposed)
+	applyBuildDispatchPolicyCastes(queenCastes, phase, depth, reviewDepth, queenAskedFor)
+
+	seeds := make([]coherentJobTask, 0, len(phase.Tasks))
+	for taskIdx, task := range phase.Tasks {
+		taskID := buildTaskID(task, taskIdx)
+		if len(selected) > 0 {
+			if _, ok := selected[taskID]; !ok {
+				continue
+			}
+		}
+		seeds = append(seeds, coherentJobTask{
+			Task:          task,
+			ID:            taskID,
+			TaskIndex:     taskIdx,
+			Caste:         queenBuildTaskCaste(task, queenCastes),
+			DeclaredPaths: declaredPathsForTask(task),
+		})
+	}
+	jobPlan, err := planCoherentJobs(phase, seeds, proposals, state.Plan.Phases)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	taskWaveBase := 10
+	lastTaskExecutionWave := taskWaveBase + max(len(jobPlan.Waves), 1)
+	dispatches := make([]codexBuildDispatch, 0, len(jobPlan.Jobs)+8)
 
 	if len(selected) == 0 {
 		dispatches = append(dispatches, queenBuildPreWaveDispatches(phase, queenCastes)...)
 	}
 
-	for waveIdx, wave := range waves {
-		for _, taskIdx := range wave {
-			task := phase.Tasks[taskIdx]
-			taskID := buildTaskID(task, taskIdx)
-			if len(selected) > 0 {
-				if _, ok := selected[taskID]; !ok {
-					continue
-				}
-			}
-			caste := queenBuildTaskCaste(task, queenCastes)
-			dispatches = append(dispatches, codexBuildDispatch{
-				Stage:         "wave",
-				Wave:          waveIdx + 1,
-				ExecutionWave: taskWaveBase + waveIdx + 1,
-				Caste:         caste,
-				Name:          deterministicAntName(caste, fmt.Sprintf("phase:%d:task:%d:%s", phase.ID, taskIdx, task.Goal)),
-				Task:          strings.TrimSpace(task.Goal),
-				Status:        "spawned",
-				TaskID:        taskID,
-				TaskIndex:     taskIdx,
-				DependsOn:     append([]string{}, task.DependsOn...),
-				DeclaredPaths: declaredPathsForTask(task),
-			})
+	for _, job := range jobPlan.Jobs {
+		if len(job.Tasks) == 0 {
+			continue
 		}
+		primary := job.Tasks[0]
+		coveredTaskIDs := append([]string{}, job.TaskIDs...)
+		if len(coveredTaskIDs) == 1 {
+			coveredTaskIDs = nil
+		}
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:          "wave",
+			Wave:           job.Wave,
+			ExecutionWave:  taskWaveBase + job.Wave,
+			Caste:          job.OwnerCaste,
+			Name:           coherentJobDispatchName(phase.ID, job),
+			Task:           coherentJobDispatchTask(job.Tasks),
+			Status:         "spawned",
+			TaskID:         primary.ID,
+			TaskIndex:      primary.TaskIndex,
+			JobName:        job.Name,
+			JobReason:      job.JobReason,
+			JobSource:      job.Source,
+			CoveredTaskIDs: coveredTaskIDs,
+			DependsOn:      append([]string{}, job.DependsOn...),
+			DeclaredPaths:  coherentJobDeclaredPaths(job.Tasks),
+		})
 	}
 
-	// Worktree mode is deliberately excluded. There each worker gets its own
-	// copy of the repository and its changes are reconciled back per worker,
-	// with conflict detection keyed to the paths a task declared. Folding
-	// several tasks into one worker changes what "this worker produced this
-	// file" means, and the isolation model is the thing that makes worktree mode
-	// worth having. The saving this phase exists for lands in the default
-	// in-repo mode, which is what the CalVault run used.
-	if effectiveParallelMode(state) != colony.ModeWorktree {
-		dispatches = coalesceSequentialDispatches(dispatches)
-	}
-
-	if len(waves) == 0 && len(selected) == 0 {
+	if len(jobPlan.Jobs) == 0 && len(selected) == 0 {
 		caste := "builder"
 		if !queenCastes[caste] {
 			caste = queenBuildFallbackTaskCaste(queenCastes)
@@ -1197,7 +1993,7 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		reviewersSpawned = true
 	}
 	if len(selected) == 0 {
-		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave)
+		postWaveDispatches := queenBuildPostWaveDispatches(phase, queenCastes, reviewWave, boundary...)
 		dispatches = append(dispatches, postWaveDispatches...)
 		reviewersSpawned = reviewersSpawned || len(postWaveDispatches) > 0
 	}
@@ -1205,7 +2001,16 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		nextVerificationWave = reviewWave + 1
 	}
 
-	if queenCastes["watcher"] {
+	// D-08 / ruling D11 rule 4: each phase is verified once. The program's
+	// free checks (build, types, lint, tests, claimed-files-exist, criterion
+	// evidence) are the deterministic floor and run on every phase regardless
+	// -- agent review lives in `continue`, not here. The build side dispatches
+	// a watcher into its own "verification" stage only when the Queen's
+	// proposal explicitly named one; the required-caste floor restoring
+	// "watcher" into queenCastes no longer forces a build-time dispatch, so
+	// the same caste is not summoned at both the build and continue
+	// boundaries unless the Queen asks.
+	if queenAskedFor["watcher"] {
 		dispatches = append(dispatches, codexBuildDispatch{
 			Stage:         "verification",
 			ExecutionWave: nextVerificationWave,
@@ -1216,7 +2021,37 @@ func plannedBuildDispatchesWithJudgement(phase colony.Phase, state colony.Colony
 		})
 	}
 
-	return dispatches
+	return dispatches, append([]coherentJobDecision{}, jobPlan.Decisions...), nil
+}
+
+func coherentJobDispatchTask(tasks []coherentJobTask) string {
+	if len(tasks) == 0 {
+		return ""
+	}
+	if len(tasks) == 1 {
+		return strings.TrimSpace(tasks[0].Task.Goal)
+	}
+	items := make([]string, 0, len(tasks))
+	for index, task := range tasks {
+		items = append(items, fmt.Sprintf("%d. %s", index+1, strings.TrimSpace(task.Task.Goal)))
+	}
+	return strings.Join(items, "\n")
+}
+
+func coherentJobDeclaredPaths(tasks []coherentJobTask) []string {
+	var paths []string
+	for _, task := range tasks {
+		paths = append(paths, task.DeclaredPaths...)
+	}
+	return uniqueSortedStrings(paths)
+}
+
+func coherentJobDispatchName(phaseID int, job coherentJob) string {
+	if len(job.Tasks) == 1 {
+		task := job.Tasks[0]
+		return deterministicAntName(job.OwnerCaste, fmt.Sprintf("phase:%d:task:%d:%s", phaseID, task.TaskIndex, task.Task.Goal))
+	}
+	return deterministicAntName(job.OwnerCaste, fmt.Sprintf("phase:%d:job:%s:%s", phaseID, job.OwnerCaste, strings.Join(job.TaskIDs, ",")))
 }
 
 func queenBuildCasteSet(dispatches []CasteDispatch) map[string]bool {
@@ -1263,42 +2098,59 @@ func applyBuildDispatchPolicyCastes(queenCastes map[string]bool, phase colony.Ph
 	}
 }
 
-func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool) []codexBuildDispatch {
-	plans := []struct {
-		caste string
-		stage string
-		wave  int
-		task  string
-	}{
-		// Wave 1 — evidence gatherers. These two write artifacts (git history
-		// findings, phase research) that a planner may consult, so they go first.
-		{"archaeologist", "prep", 1, "Git history analysis before implementation"},
-		{"oracle", "research", 1, "Phase research and implementation risks"},
+// queenBuildPreWavePlans and queenBuildPostWavePlans are the only routes by
+// which a selected specialist caste becomes a build dispatch. They are
+// package-level so TestEveryBuildSelectableCasteCanDispatch can prove that
+// every caste the Queen may select for a build appears in some dispatch
+// path — a caste selectable but absent here consumes a budget slot and
+// silently displaces a specialist that would actually have run.
+var queenBuildPreWavePlans = []struct {
+	caste string
+	stage string
+	wave  int
+	task  string
+}{
+	// Wave 1 — evidence gatherers. These two write artifacts (git history
+	// findings, phase research) that a planner may consult, so they go first.
+	{"archaeologist", "prep", 1, "Git history analysis before implementation"},
+	{"oracle", "research", 1, "Phase research and implementation risks"},
 
-		// Wave 2 — planners. Every one of these reads the same phase brief and
-		// produces an independent plan; none consumes another's output.
-		// findingsInjectionForCaste only appends a *write* instruction for four
-		// castes, so there is no read dependency between any pair here.
-		//
-		// They previously occupied waves 3-8, one or two per wave, which made a
-		// build serial before a line of code was written: a real phase spawned
-		// eleven dispatches across nine waves and took an hour, mostly waiting.
-		// Same workers, same coverage — concurrent instead of queued.
-		{"architect", "design", 2, "Design boundaries before coding"},
-		{"ambassador", "integration", 2, "External integration design before implementation"},
-		{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
-		{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
-		{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
-		{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
-		{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
-		{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
-		{"medic", "health", 2, "Runtime health and repair risk review"},
-		{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
-		{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
-		{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
-	}
-	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	for _, plan := range plans {
+	// Wave 2 — planners. Every one of these reads the same phase brief and
+	// produces an independent plan; none consumes another's output.
+	// findingsInjectionForCaste only appends a *write* instruction for four
+	// castes, so there is no read dependency between any pair here.
+	//
+	// They previously occupied waves 3-8, one or two per wave, which made a
+	// build serial before a line of code was written: a real phase spawned
+	// eleven dispatches across nine waves and took an hour, mostly waiting.
+	// Same workers, same coverage — concurrent instead of queued.
+	{"architect", "design", 2, "Design boundaries before coding"},
+	{"ambassador", "integration", 2, "External integration design before implementation"},
+	{"gatekeeper", "security", 2, "Security boundaries and auth risk review before implementation"},
+	{"includer", "accessibility", 2, "Accessibility requirements and inclusive interaction review"},
+	{"weaver", "refactor", 2, "Refactoring seams and simplification plan before implementation"},
+	{"tracker", "diagnosis", 2, "Root-cause investigation and regression context before implementation"},
+	{"keeper", "knowledge", 2, "Knowledge preservation plan for reusable patterns"},
+	{"chronicler", "documentation", 2, "Documentation surface and changelog planning"},
+	{"medic", "health", 2, "Runtime health and repair risk review"},
+	{"fixer", "repair", 2, "Repair strategy and remediation boundaries"},
+	{"porter", "delivery", 2, "Delivery, packaging, and release handling review"},
+	{"sage", "wisdom", 2, "Learning synthesis and reusable pattern capture"},
+}
+
+var queenBuildPostWavePlans = []struct {
+	caste string
+	stage string
+	task  string
+}{
+	{"auditor", "audit", "Quality and compliance review after implementation"},
+	{"measurer", "measurement", "Performance and cost surface review after implementation"},
+	{"chaos", "resilience", "Resilience probing after specialist verification"},
+}
+
+func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool) []codexBuildDispatch {
+	dispatches := make([]codexBuildDispatch, 0, len(queenBuildPreWavePlans))
+	for _, plan := range queenBuildPreWavePlans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
@@ -1307,22 +2159,41 @@ func queenBuildPreWaveDispatches(phase colony.Phase, queenCastes map[string]bool
 	return dispatches
 }
 
-func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int) []codexBuildDispatch {
-	plans := []struct {
-		caste string
-		stage string
-		task  string
-	}{
-		{"auditor", "audit", "Quality and compliance review after implementation"},
-		{"measurer", "measurement", "Performance and cost surface review after implementation"},
-		{"chaos", "resilience", "Resilience probing after specialist verification"},
+// queenBuildPostWaveDispatches is the build-time half of D-05's single
+// boundary. When a caller supplies a boundary decision (a build already
+// reconciling its own proposal via queenApplyVerificationBoundary, before an
+// attempt exists to read back), that supplied decision governs -- this is
+// what lets a build-end choice reach the same build's own dispatch list
+// instead of only the following one. With none supplied, it falls back to
+// its original behaviour: read (never re-derive) the verification-boundary
+// decision recorded on the phase's current build attempt
+// (verificationBoundaryForAttempt, cmd/verification_boundary.go). Either way,
+// a post-wave reviewer dispatches only when the effective decision names
+// build-end. Absent any decision -- the common case until a caller actually
+// proposes and records one -- the check-step default applies (D-01) and this
+// function dispatches nothing: judgement lands at `aether continue` instead,
+// closing the doubled build-plus-check review CONCERNS.md named.
+func queenBuildPostWaveDispatches(phase colony.Phase, queenCastes map[string]bool, startExecutionWave int, boundary ...verificationBoundaryDecision) []codexBuildDispatch {
+	var decision verificationBoundaryDecision
+	if len(boundary) > 0 {
+		decision = boundary[0]
+	} else {
+		attemptRel, _, hasAttempt := loadLatestBuildAttempt(phase.ID)
+		recorded, hasDecision := verificationBoundaryForAttempt(attemptRel)
+		if !hasAttempt || !hasDecision {
+			return nil
+		}
+		decision = recorded
+	}
+	if decision.Choice != verificationBoundaryChoiceBuildEnd {
+		return nil
 	}
 	// All post-wave reviewers examine the same finished code and share no
 	// inputs, so they occupy one wave. Each previously took its own
 	// incrementing wave, which serialised the review phase for no reason: an
 	// Auditor cannot learn anything from waiting for a Measurer.
-	dispatches := make([]codexBuildDispatch, 0, len(plans))
-	for _, plan := range plans {
+	dispatches := make([]codexBuildDispatch, 0, len(queenBuildPostWavePlans))
+	for _, plan := range queenBuildPostWavePlans {
 		if !queenCastes[plan.caste] {
 			continue
 		}
@@ -1339,8 +2210,13 @@ func queenBuildTaskCaste(task colony.Task, queenCastes map[string]bool) string {
 	return queenBuildFallbackTaskCaste(queenCastes)
 }
 
+// queenBuildTaskFallbackCastes is the ordered chain of castes a phase task can
+// be assigned to when its suggested caste was not selected. Package-level for
+// the same dispatchability invariant as the wave plan tables above.
+var queenBuildTaskFallbackCastes = []string{"builder", "scout", "oracle", "weaver", "tracker", "fixer"}
+
 func queenBuildFallbackTaskCaste(queenCastes map[string]bool) string {
-	for _, caste := range []string{"builder", "scout", "oracle", "weaver", "tracker", "fixer"} {
+	for _, caste := range queenBuildTaskFallbackCastes {
 		if queenCastes[caste] {
 			return caste
 		}
@@ -1684,6 +2560,73 @@ func buildTaskID(task colony.Task, idx int) string {
 	return fmt.Sprintf("task-%d", idx+1)
 }
 
+// buildCodexWorkerDispatches converts the planned build dispatches into the
+// executable worker dispatch list every lane runs from. It is the single
+// place a planned coherent job becomes an execution owner, which is why
+// worktree ownership (validateDeclaredWorktreeOwnership) reads its output
+// rather than the pre-grouping plan: one grouped job must arrive here as ONE
+// dispatch carrying every covered task ID and the unique sorted union of its
+// tasks' declared paths, so its intentional internal overlap has exactly one
+// owner and one checkout (JOBS-04).
+func buildCodexWorkerDispatches(
+	root string,
+	phase colony.Phase,
+	dispatches []codexBuildDispatch,
+	startedAt time.Time,
+	invoker codex.WorkerInvoker,
+	capsule string,
+	workerTimeout time.Duration,
+	executionBinding *codex.ExecutionBinding,
+) ([]codex.WorkerDispatch, error) {
+	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
+	for i, dispatch := range dispatches {
+		agentName := codexAgentNameForCaste(dispatch.Caste)
+		providerRunID, err := codex.NewExecutionRunID()
+		if err != nil {
+			return nil, err
+		}
+		workerDispatches = append(workerDispatches, codex.WorkerDispatch{
+			ID:            fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
+			WorkerName:    dispatch.Name,
+			AgentName:     agentName,
+			AgentTOMLPath: dispatchAgentPath(root, invoker, agentName),
+			Caste:         dispatch.Caste,
+			TaskID:        normalizedDispatchTaskID(dispatch),
+			// CR-05/203-REVIEW.md: renderCodexBuildWorkerBrief alone never told
+			// this lane's workers the recruit invitation -- only the
+			// plan-only/wrapper lane's composeBuildManifestBrief did, so every
+			// autopilot (`aether run`) and direct `aether build <phase>` worker
+			// was dispatched without it. Appended here rather than folded into
+			// renderCodexBuildWorkerBrief itself so TestBuildWorkerBriefIsMostlyTask
+			// keeps measuring that renderer's own task-vs-scaffolding ratio
+			// unchanged; this is a second, named call site for the one shared
+			// renderRecruitmentInvitation source (TestTheRecruitInstructionHasOneSource).
+			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt) + renderRecruitmentInvitation(),
+			ContextCapsule:    capsule,
+			HandoffSection:    dispatch.HandoffSection,
+			Workflow:          "build",
+			Phase:             phase.ID,
+			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
+			Root:              root,
+			TrackingRoot:      root,
+			Timeout:           workerTimeout,
+			Wave:              normalizedDispatchWave(dispatch),
+			PermissionProfile: dispatch.PermissionProfile,
+			ExecutionBinding:  executionBinding,
+			ProviderRunID:     providerRunID,
+			// The unique sorted union, resolved here and never re-derived
+			// downstream: a grouped job's tasks may legitimately declare the
+			// same path, and the same-wave ownership guard must see one owner
+			// for that union rather than N competing task-level claims.
+			DeclaredPaths:  uniqueSortedStrings(dispatch.DeclaredPaths),
+			CoveredTaskIDs: dispatchCoveredTaskIDs(dispatch),
+			JobName:        strings.TrimSpace(dispatch.JobName),
+			JobReason:      strings.TrimSpace(dispatch.JobReason),
+		})
+	}
+	return workerDispatches, nil
+}
+
 func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.Phase, dispatches []codexBuildDispatch, startedAt time.Time, invoker codex.WorkerInvoker, parallelMode colony.ParallelMode, workerTimeout time.Duration, circuitBreakerThreshold int, verbose bool, executionBinding *codex.ExecutionBinding) ([]codexBuildDispatch, *codex.ClaimsSummary, string, error) {
 	if invoker == nil {
 		invoker = &codex.FakeInvoker{}
@@ -1710,40 +2653,18 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	// The capsule is this path's sole steering channel now, mirroring the
 	// "one home" decision 190-03 already made for the wrapper plan-only flow.
 	// See resolvePheromoneSection's doc comment for which callers still need it.
-	workerDispatches := make([]codex.WorkerDispatch, 0, len(dispatches))
+	workerDispatches, err := buildCodexWorkerDispatches(root, phase, dispatches, startedAt, invoker, capsule, workerTimeout, executionBinding)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if err := preflightWorkerProvider(ctx, invoker, workerDispatches); err != nil {
+		return nil, nil, "", err
+	}
 	indexByName := make(map[string]int, len(dispatches))
 	dispatchByName := make(map[string]codex.WorkerDispatch, len(dispatches))
 	for i, dispatch := range dispatches {
-		agentName := codexAgentNameForCaste(dispatch.Caste)
-		providerRunID, err := codex.NewExecutionRunID()
-		if err != nil {
-			return nil, nil, "", err
-		}
-		workerDispatch := codex.WorkerDispatch{
-			ID:                fmt.Sprintf("phase-%d-dispatch-%d", phase.ID, i+1),
-			WorkerName:        dispatch.Name,
-			AgentName:         agentName,
-			AgentTOMLPath:     dispatchAgentPath(root, invoker, agentName),
-			Caste:             dispatch.Caste,
-			TaskID:            normalizedDispatchTaskID(dispatch),
-			TaskBrief:         renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt),
-			ContextCapsule:    capsule,
-			HandoffSection:    dispatch.HandoffSection,
-			Workflow:          "build",
-			Phase:             phase.ID,
-			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
-			Root:              root,
-			TrackingRoot:      root,
-			Timeout:           workerTimeout,
-			Wave:              normalizedDispatchWave(dispatch),
-			PermissionProfile: dispatch.PermissionProfile,
-			ExecutionBinding:  executionBinding,
-			ProviderRunID:     providerRunID,
-			DeclaredPaths:     append([]string{}, dispatch.DeclaredPaths...),
-		}
-		workerDispatches = append(workerDispatches, workerDispatch)
 		indexByName[dispatch.Name] = i
-		dispatchByName[dispatch.Name] = workerDispatch
+		dispatchByName[dispatch.Name] = workerDispatches[i]
 	}
 
 	if parallelMode == colony.ModeWorktree {
@@ -1757,8 +2678,29 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	setBuildVerbose(verbose)
 
 	// Per D-09/D-12: queen owns the wave loop. Build calls queen once.
+	// Worktree mode resolves a partially-successful grouped worker's receipts
+	// while that worker's checkout still exists (the files are not in root
+	// yet). The ledger carries that already-resolved credit back here, where
+	// the codexBuildDispatch list lives.
+	receiptLedger := newWorktreeReceiptLedger()
+	dependencyCredit := buildDependencyCredit(phase)
+	requireWaveFileEvidence := codex.PlatformFromInvoker(invoker) == codex.PlatformCodex || codex.PlatformFromInvoker(invoker) == codex.PlatformClaude || codex.PlatformFromInvoker(invoker) == codex.PlatformOpenCode
 	waveDispatchFn := func(ctx context.Context, waveDispatches []codex.WorkerDispatch, waveNum int) ([]codex.DispatchResult, error) {
-		return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, waveDispatches, invoker, startedAt, parallelMode, cb)
+		ready, blocked := partitionReadyBuildDispatches(phase, waveDispatches, dependencyCredit)
+		for _, result := range blocked {
+			// These entries were reserved before dispatch. Retire that reservation
+			// as blocked without a start/finish observer or invented invocation.
+			if err := updateCodexBuildDispatchRuntimeStatus(result.WorkerName, "blocked", result.Error.Error()); err != nil {
+				return blocked, fmt.Errorf("record prerequisite-blocked job %s: %w", result.WorkerName, err)
+			}
+		}
+		var results []codex.DispatchResult
+		var err error
+		if len(ready) > 0 {
+			results, err = dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, ready, invoker, startedAt, parallelMode, cb, receiptLedger)
+		}
+		acceptBuildWaveCredit(root, phase, dispatches, results, receiptLedger, dependencyCredit, requireWaveFileEvidence)
+		return append(results, blocked...), err
 	}
 	summary, results, err := queenWaveLifecycle(ctx, workerDispatches, waveDispatchFn, phase, cb, phase.ID)
 	// Persist wave summary JSON for Phase 99 consumption (D-07)
@@ -1786,7 +2728,19 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	}
 	for _, result := range results {
 		if dispatch, ok := dispatchByName[result.WorkerName]; ok {
-			_ = persistDispatchWorkerHandoff(dispatch, result)
+			// recordDispatchWorkerOutcome (cmd/memory_feed.go) is the one
+			// boundary both build lanes call: persists this handoff exactly
+			// as persistDispatchWorkerHandoff always did, then feeds the
+			// failure log and the observation log from the same facts.
+			_ = recordDispatchWorkerOutcome(dispatch, result)
+			// 203-09 Task 2 (SYN-203-02 ruling (b)): a worker's spawn claims
+			// on this lane no longer go unread. routeInRepoSpawnClaims
+			// (cmd/recruitment_lane.go) is a no-op when the worker returned
+			// no claims, so a plain build that never asks for help reaches
+			// no new code here.
+			if result.WorkerResult != nil && len(result.WorkerResult.Spawns) > 0 {
+				routeInRepoSpawnClaims(root, parallelMode, dispatch, *result.WorkerResult)
+			}
 		}
 	}
 	if err != nil {
@@ -1811,6 +2765,19 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 			dispatches[idx].Blockers = append([]string{}, result.WorkerResult.Blockers...)
 			dispatches[idx].Duration = result.WorkerResult.Duration.Seconds()
 			dispatches[idx].Outputs = buildDispatchClaimOutputs(*result.WorkerResult)
+			// Threaded through unchanged (D-08/D-09): a failed/interrupted
+			// worker's task-specific receipts are still real candidate
+			// evidence, never discarded just because the dispatch as a whole
+			// did not reach a whole-success status.
+			dispatches[idx].TaskReceipts = append([]codex.TaskReceipt{}, result.WorkerResult.TaskReceipts...)
+			// What this worker's own tool reported it cost, carried from the
+			// one boundary every real dispatch passes through
+			// (codex.AttachWorkerUsage, which runs codex.ParseUsage over the
+			// worker's raw stdout). Before this, the direct in-process lane
+			// read the provider's own measurement and then threw it away, so
+			// the only lane where a provider figure exists at all was the one
+			// lane that filed nothing.
+			dispatches[idx].Usage = result.WorkerResult.Usage
 		}
 		// Per D-02/D-04: print raw worker output only in verbose mode
 		if result.WorkerResult != nil && result.WorkerResult.RawOutput != "" {
@@ -1822,7 +2789,33 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 		}
 	}
 
+	// Worktree mode already ran the shared two-stage boundary with its own
+	// sync step in between, at the only moment the worker's checkout still
+	// existed (cmd/codex_build_worktree.go). Its verdict is authoritative and
+	// must not be recomputed from root here: re-running admission now would
+	// re-derive credit from files this build itself just copied in, which is
+	// exactly the circular reasoning the two-stage split exists to prevent.
+	for i := range dispatches {
+		resolved, ok := receiptLedger.lookup(dispatches[i].Name)
+		if !ok {
+			continue
+		}
+		dispatches[i].TaskClaims = resolved.Claims
+		dispatches[i].CompletedTaskIDs = resolved.CompletedTaskIDs
+		dispatches[i].ReceiptsResolved = true
+	}
+
+	// D-08/D-09: this is the native/in-repo lane -- files a receipt claims
+	// already live in root, so admission and root-evidence finalization run
+	// back to back here, before any success/failure classification below.
+	// Whole-success dispatches pass through unchanged (they already credit
+	// every covered task via completedBuildTaskIDs' existing branch).
+	dispatches = resolveCoherentJobDispatchReceipts(root, phase, dispatches)
+
 	claims := codex.ExtractClaims(results)
+	if err := validateRuntimeNoChangeEvidence(results); err != nil {
+		return dispatches, claims, mode, err
+	}
 	requireFileEvidence := false
 	switch codex.PlatformFromInvoker(invoker) {
 	case codex.PlatformCodex, codex.PlatformClaude, codex.PlatformOpenCode:
@@ -1834,15 +2827,46 @@ func executeCodexBuildDispatches(ctx context.Context, root string, phase colony.
 	return dispatches, claims, mode, nil
 }
 
+// validateRuntimeNoChangeEvidence applies the no-change evidence rule on the
+// in-process dispatch lane. A completed_no_change claim buys an exemption
+// from the file-changes requirement, so it must pay for it with the same
+// evidence the external lane demands: a summary saying why, a passing
+// handoff verification, and the commands actually run.
+func validateRuntimeNoChangeEvidence(results []codex.DispatchResult) error {
+	for _, result := range results {
+		if !isNoChangeExternalBuildStatus(normalizeExternalBuildStatus(result.Status)) {
+			continue
+		}
+		if result.WorkerResult == nil {
+			return fmt.Errorf("worker %s claims completed_no_change with no result payload -- an honest no-change needs the verification it ran", result.WorkerName)
+		}
+		missing := noChangeEvidenceMissingFrom(
+			result.WorkerResult.Summary,
+			result.WorkerResult.Handoff.VerificationStatus,
+			result.WorkerResult.Handoff.CommandsRun,
+		)
+		if len(missing) > 0 {
+			return fmt.Errorf("worker %s claims completed_no_change without evidence -- missing: %s", result.WorkerName, strings.Join(missing, "; "))
+		}
+	}
+	return nil
+}
+
 func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexBuildDispatch, claims *codex.ClaimsSummary, requireFileEvidence bool) error {
 	if len(dispatches) == 0 {
 		return fmt.Errorf("build dispatch produced no worker results")
 	}
 
 	failed := make([]string, 0)
+	noChangeCount := 0
+	successCount := 0
 	for _, dispatch := range dispatches {
 		status := strings.ToLower(strings.TrimSpace(dispatch.Status))
-		if status == "completed" {
+		if isSuccessfulExternalBuildStatus(status) {
+			successCount++
+			if isNoChangeExternalBuildStatus(status) {
+				noChangeCount++
+			}
 			continue
 		}
 		if status == "" {
@@ -1867,6 +2891,15 @@ func validateRuntimeBuildDispatchResults(phase colony.Phase, dispatches []codexB
 		return nil
 	}
 	if phase.Mode == colony.PhaseModeDiscovery && hasDurableDiscoveryDispatchEvidence(dispatches) {
+		return nil
+	}
+	// Every successful dispatch honestly reported completed_no_change
+	// (ruling D6): the phase's work was to verify existing behavior, so
+	// demanding file changes here would force the fake edit the accounting
+	// contract exists to forbid. This exemption is only safe because the
+	// evidence rule ran first -- validateRuntimeNoChangeEvidence on this
+	// lane, the merge path's no_change_evidence gate on the external one.
+	if successCount > 0 && noChangeCount == successCount {
 		return nil
 	}
 	if claims == nil || len(claims.FilesCreated)+len(claims.FilesModified)+len(claims.TestsWritten) == 0 {
@@ -1928,8 +2961,18 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	// never be computed inside a per-dispatch loop (that would reintroduce
 	// the duplication CONTEXT-03 exists to prevent).
 	contextCapsule := ""
+	var contextDecisionIDs []string
+	var contextScope *codexNativeContextScope
+	contextProtocol := ""
+	if codexNativeBuildOptedIn() && planOnly && buildHostPlatform() == "codex" && buildExecutionOwner(dispatchMode, planOnly) == "host-queen" {
+		// The native Codex worker bridge (Phase 204.2) is parked behind this
+		// opt-in. An empty protocol here keeps generic provider dispatch
+		// available (see validateBuildWorkerProviderLane, cmd/build_worker_run.go:45-50).
+		contextProtocol = codexNativeContextProtocolChildFetch
+	}
 	if planOnly {
-		contextCapsule = resolveCodexWorkerContext()
+		contextCapsule, _, contextDecisionIDs = resolveCodexWorkerContextSnapshot()
+		contextScope = codexNativeContextScopeFromState(state)
 	}
 
 	return codexBuildManifest{
@@ -1949,6 +2992,7 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		ExecutionOwner:          buildExecutionOwner(dispatchMode, planOnly),
 		WorkerDispatchOptIn:     buildWorkerDispatchOptIn(dispatchMode),
 		GeneratedAt:             startedAt.Format(time.RFC3339),
+		PlanAuthority:           codexBuildPlanAuthorityAttribution(state),
 		PlanRevisionID:          activePlanRevisionID(state.Plan),
 		PlanStateHash:           planHash,
 		State:                   string(state.State),
@@ -1956,6 +3000,9 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		ClaimsPath:              claimsPath,
 		WorkerBriefs:            briefs,
 		ContextCapsule:          contextCapsule,
+		ContextDecisionIDs:      contextDecisionIDs,
+		ContextScope:            contextScope,
+		ContextProtocol:         contextProtocol,
 		Dispatches:              append([]codexBuildDispatch{}, dispatches...),
 		SelectedTasks:           append([]string{}, selectedTaskIDs...),
 		Tasks:                   codexBuildTaskPlans(phase),
@@ -1968,6 +3015,37 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 		QueenRecommendation:     recommendQueenWorkflowProfile(state, phase, len(state.Plan.Phases)),
 		QueenExecutionPolicy:    policy,
 	}
+}
+
+// codexBuildPlanAuthorityAttribution projects only identifiers already in the
+// accepted state. Eligibility was decided before preparation; this helper
+// keeps that lineage attached after ordinary phase/task status mutations.
+func codexBuildPlanAuthorityAttribution(state colony.ColonyState) planAuthorityDecision {
+	decision := planAuthorityDecision{}
+	switch state.Plan.AcceptancePolicy {
+	case colony.PlanAcceptanceLegacyUnbound:
+		decision.Eligible = true
+		decision.Classification = planAuthorityLegacyUnbound
+		if hash, err := planDefinitionHash(state.Plan.Phases); err == nil {
+			decision.ActiveRevision = planAuthorityBinding{ID: activePlanRevisionID(state.Plan), Hash: hash}
+		}
+		return decision
+	case colony.PlanAcceptanceExplicitOwner:
+		active, ok := activePlanRevision(state.Plan)
+		if !ok {
+			return decision
+		}
+		decision.Eligible = true
+		decision.Classification = planAuthorityCurrentAccepted
+		decision.ActiveRevision = planAuthorityBinding{ID: active.ID, Hash: active.PlanHash}
+		decision.Specification = planAuthorityBinding{ID: active.SpecificationRevisionID, Hash: active.SpecificationRevisionHash}
+		decision.Candidate = planAuthorityBinding{ID: active.CandidateID, Hash: active.CandidateContentHash}
+		decision.Timeline = planAuthorityBinding{ID: active.PlanningTimelineID, Hash: active.PlanningTimelineDigest}
+		if candidate, found := planAuthorityCandidateByID(state.Plan.Candidates, active.CandidateID); found && candidate.Acceptance != nil {
+			decision.Acceptance = planAuthorityBinding{ID: candidate.Acceptance.ID, Hash: candidate.Acceptance.ContentHash}
+		}
+	}
+	return decision
 }
 
 func hasDurableDiscoveryDispatchEvidence(dispatches []codexBuildDispatch) bool {
@@ -2008,6 +3086,45 @@ func buildExecutionOwner(dispatchMode string, planOnly bool) string {
 	return ""
 }
 
+// newBuildStartRequest captures every identity input before entering the
+// canonical transaction. commitBuildStart reloads the same state, authority,
+// and workspace fingerprint under the repository session and refuses the
+// request if any of them changed in the meantime.
+func newBuildStartRequest(root string, variant buildStartVariant, state colony.ColonyState, authority planAuthorityDecision, phaseNum int, selectedTaskIDs []string, executionOwner, dispatchMode string, generatedAt time.Time, dispatches []codexBuildDispatch, effects buildStartEffects) (buildStartRequest, error) {
+	stateSHA, err := jsonSHA256(state)
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("hash build-start state: %w", err)
+	}
+	workspaceSHA, err := codex.WorkspaceFingerprint(root)
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("fingerprint build workspace: %w", err)
+	}
+	runID, err := codex.NewExecutionRunID()
+	if err != nil {
+		return buildStartRequest{}, fmt.Errorf("create build-start run id: %w", err)
+	}
+	generatedAt = generatedAt.UTC()
+	processID := os.Getpid()
+	return buildStartRequest{
+		SchemaVersion:   buildStartSchemaVersion,
+		Variant:         variant,
+		StateSHA256:     stateSHA,
+		PlanAuthority:   authority,
+		Phase:           phaseNum,
+		SelectedTasks:   uniqueSortedStrings(selectedTaskIDs),
+		ExecutionOwner:  strings.TrimSpace(executionOwner),
+		DispatchMode:    strings.TrimSpace(dispatchMode),
+		GeneratedAt:     generatedAt,
+		AttemptID:       deriveBuildAttemptID(generatedAt, processID),
+		RunID:           runID,
+		ProcessID:       processID,
+		HostPlatform:    buildHostPlatform(),
+		WorkspaceSHA256: workspaceSHA,
+		Dispatches:      append([]codexBuildDispatch(nil), dispatches...),
+		Effects:         effects,
+	}, nil
+}
+
 func buildWorkerDispatchOptIn(dispatchMode string) bool {
 	switch strings.ToLower(strings.TrimSpace(dispatchMode)) {
 	case "real", "simulated":
@@ -2036,8 +3153,34 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 		if dispatch.TaskID != "" {
 			entry["task_id"] = dispatch.TaskID
 		}
+		if len(dispatch.CoveredTaskIDs) > 0 {
+			entry["covered_task_ids"] = append([]string{}, dispatch.CoveredTaskIDs...)
+		}
+		// CR-03 (195-REVIEW.md): this map is runtime-AUTHORED output, written
+		// after the receipt boundary has already decided the verdict, and is
+		// never decoded back into a dispatch -- so reporting the credited task
+		// list here is safe in a way carrying it on the dispatch struct's own
+		// wire format was not. Three build wrapper copies, the command guide
+		// and the build-cycle skill all tell the wrapper to read this field to
+		// learn what the runtime actually credited; without it those five
+		// surfaces describe a field the wrapper never receives.
+		if len(dispatch.CompletedTaskIDs) > 0 {
+			entry["completed_task_ids"] = append([]string{}, dispatch.CompletedTaskIDs...)
+		}
+		if dispatch.JobName != "" {
+			entry["job_name"] = dispatch.JobName
+		}
+		if dispatch.JobReason != "" {
+			entry["job_reason"] = dispatch.JobReason
+		}
+		if dispatch.JobSource != "" {
+			entry["job_source"] = dispatch.JobSource
+		}
 		if len(dispatch.DependsOn) > 0 {
 			entry["depends_on"] = dispatch.DependsOn
+		}
+		if len(dispatch.DeclaredPaths) > 0 {
+			entry["declared_paths"] = append([]string{}, dispatch.DeclaredPaths...)
 		}
 		if len(dispatch.Outputs) > 0 {
 			entry["outputs"] = dispatch.Outputs
@@ -2110,8 +3253,17 @@ func codexBuildDispatchMaps(dispatches []codexBuildDispatch) []map[string]interf
 // empty, which is not what the code does.) The no-silent-drop guarantee is
 // still real and is what matters: the inline Brief is only ever cleared after
 // its file write has succeeded, so no path can lose a worker's prompt.
-func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
+type preparedBuildWorkerBriefFile struct {
+	RelativePath string
+	Content      string
+}
+
+// prepareBuildWorkerBriefFiles derives brief paths and bytes without touching
+// the repository. Build-start callers use this before commitBuildStart so a
+// stale authority refusal cannot leave a new brief or erase an old one.
+func prepareBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, []preparedBuildWorkerBriefFile) {
 	briefPaths := make([]string, 0, len(dispatches))
+	prepared := make([]preparedBuildWorkerBriefFile, 0, len(dispatches))
 
 	for i := range dispatches {
 		briefRel := filepath.ToSlash(filepath.Join(buildDirRel, "worker-briefs", fmt.Sprintf("%s.md", dispatches[i].Name)))
@@ -2120,26 +3272,40 @@ func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel str
 			content = composeBuildManifestBrief(root, phase, dispatches[i], startedAt, true)
 			dispatches[i].Brief = content
 		}
-		if err := store.AtomicWrite(briefRel, []byte(content)); err != nil {
-			return nil, nil, fmt.Errorf("failed to write worker brief for %s: %w", dispatches[i].Name, err)
-		}
 		displayPath := displayDataPath(briefRel)
 		briefPaths = append(briefPaths, displayPath)
+		prepared = append(prepared, preparedBuildWorkerBriefFile{RelativePath: briefRel, Content: content})
 		dispatches[i].BriefPath = displayPath
+		dispatches[i].BriefSHA256 = lifecycleDigest([]byte(content))
 		if clearInlineBrief {
-			// The file on disk is now the single source of truth for this
-			// dispatch's brief -- nothing downstream (codexBuildDispatchMaps or
-			// the manifest's own Dispatches value copy) may ship the same bytes
-			// a second time under the inline "brief" key.
+			// The prepared file becomes the single source of truth once the
+			// durable start receipt exists and persistBuildWorkerBriefFiles runs.
 			dispatches[i].Brief = ""
 		}
 	}
 	sort.Strings(briefPaths)
 
+	return briefPaths, dispatches, prepared
+}
+
+func persistBuildWorkerBriefFiles(files []preparedBuildWorkerBriefFile) error {
+	for _, file := range files {
+		if err := store.AtomicWrite(file.RelativePath, []byte(file.Content)); err != nil {
+			return fmt.Errorf("failed to write worker brief %s: %w", file.RelativePath, err)
+		}
+	}
+	return nil
+}
+
+func writeBuildWorkerBriefFiles(root string, phase colony.Phase, buildDirRel string, dispatches []codexBuildDispatch, startedAt time.Time, clearInlineBrief bool) ([]string, []codexBuildDispatch, error) {
+	briefPaths, dispatches, prepared := prepareBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, clearInlineBrief)
+	if err := persistBuildWorkerBriefFiles(prepared); err != nil {
+		return nil, nil, err
+	}
 	return briefPaths, dispatches, nil
 }
 
-func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy) ([]string, []codexBuildDispatch, error) {
+func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colony.Phase, buildDirRel, checkpointRel, claimsRel string, dispatches []codexBuildDispatch, startedAt time.Time, dispatchMode string, selectedTaskIDs []string, reviewDepth colony.VerificationDepth, policy codexQueenExecutionPolicy, jobDecisions []coherentJobDecision) ([]string, []codexBuildDispatch, error) {
 	briefPaths, dispatches, err := writeBuildWorkerBriefFiles(root, phase, buildDirRel, dispatches, startedAt, false)
 	if err != nil {
 		return nil, nil, err
@@ -2169,6 +3335,7 @@ func writeCodexBuildArtifacts(root string, state colony.ColonyState, phase colon
 	}
 
 	manifest := buildCodexBuildManifest(root, state, phase, checkpointRel, claimsRel, dispatches, startedAt, dispatchMode, selectedTaskIDs, briefPaths, false, reviewDepth)
+	manifest.JobDecisions = append([]coherentJobDecision{}, jobDecisions...)
 	manifest.QueenExecutionPolicy = enrichQueenExecutionPolicyWithSpawnBudget(policy, state, phase, "build", reviewDepth, dispatches)
 	manifestRel := filepath.ToSlash(filepath.Join(buildDirRel, "manifest.json"))
 	if err := store.SaveJSON(manifestRel, manifest); err != nil {
@@ -2204,6 +3371,7 @@ func reconcileCompletedBuildTasks(state *colony.ColonyState, phaseNum int, dispa
 		phase.Tasks[idx].Status = colony.TaskCompleted
 		taskIDs = append(taskIDs, taskID)
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 	return uniqueSortedStrings(taskIDs)
 }
 
@@ -2220,15 +3388,37 @@ func reconcilePriorCompletedPhaseTasksForPlanOnly(root string, state colony.Colo
 func completedBuildTaskIDs(dispatches []codexBuildDispatch) map[string]struct{} {
 	completed := map[string]struct{}{}
 	for _, dispatch := range dispatches {
-		if strings.TrimSpace(dispatch.Status) != "completed" {
+		// completed_no_change completes its tasks too (ruling D6): the task
+		// was to make the behavior true, and the worker proved it already
+		// is. Skipping it here would leave the task unfinished forever and
+		// block phase advance — the same trap the merged-chain fix below
+		// closed for coverage. interrupted stays excluded: terminal, not
+		// success.
+		status := strings.TrimSpace(dispatch.Status)
+		if status == "completed" || isNoChangeExternalBuildStatus(status) {
+			// A worker that owns a merged chain finishes every step in it, so
+			// every step it covered is complete. Reading TaskID alone left
+			// the later steps marked unfinished forever: the phase could
+			// never advance, and the one worker that did the work looked
+			// like it had only done the first bit.
+			for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
+				completed[taskID] = struct{}{}
+			}
 			continue
 		}
-		// A worker that owns a merged chain finishes every step in it, so every
-		// step it covered is complete. Reading TaskID alone left the later steps
-		// marked unfinished forever: the phase could never advance, and the one
-		// worker that did the work looked like it had only done the first bit.
-		for _, taskID := range dispatchCoveredTaskIDs(dispatch) {
-			completed[taskID] = struct{}{}
+		// D-08/D-09: a failed/blocked/timeout/interrupted dispatch is NEVER
+		// all-or-nothing and never inferred from touched files or from
+		// CoveredTaskIDs membership. The only thing that may credit any of
+		// its covered tasks is finalizeCoherentJobTaskReceiptEvidence's own
+		// CompletedTaskIDs output, already resolved onto the dispatch by
+		// resolveCoherentJobDispatchReceipts (cmd/coherent_job_receipts.go)
+		// before this function runs. A dispatch nobody resolved receipts for
+		// simply has an empty CompletedTaskIDs and credits nothing here,
+		// exactly like before this field existed.
+		for _, taskID := range dispatch.CompletedTaskIDs {
+			if trimmed := strings.TrimSpace(taskID); trimmed != "" {
+				completed[trimmed] = struct{}{}
+			}
 		}
 	}
 	return completed
@@ -2312,6 +3502,7 @@ func applyPriorCompletedPhaseTaskRepairs(root string, state *colony.ColonyState,
 			)
 		}
 	}
+	syncActivePlanRevisionExecutionFacts(&state.Plan)
 	return uniqueSortedStrings(repaired), nil
 }
 
@@ -2630,6 +3821,7 @@ func rollbackCodexBuildFailure(previous colony.ColonyState, phaseNum int, starte
 	}); err != nil {
 		return
 	}
+	visualFprintf(stderr, "Phase state restored; working-tree edits were not rolled back. %s\n", retainedBuildDraftReport(resolveAetherRoot()))
 	_, _ = syncColonyArtifacts(rollback, colonyArtifactOptions{
 		CommandName:   "build",
 		SuggestedNext: nextCommandFromState(rollback),
@@ -2779,6 +3971,7 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	renderDispatchTaskItemsSection(&b, "Task Constraints", relatedTasks, func(t *colony.Task) []string { return t.Constraints })
 	renderDispatchTaskItemsSection(&b, "Hints", relatedTasks, func(t *colony.Task) []string { return t.Hints })
 	renderDispatchTaskItemsSection(&b, "Task Success Criteria", relatedTasks, func(t *colony.Task) []string { return t.SuccessCriteria })
+	renderGroupedDispatchTaskContracts(&b, relatedTasks)
 	b.WriteString(renderUnresolvedDispatchTaskNotice(relatedTasks))
 
 	if len(phase.SuccessCriteria) > 0 {
@@ -2821,8 +4014,40 @@ func renderCodexBuildWorkerBrief(root string, phase colony.Phase, dispatch codex
 	// command-playbook docs remain as reference material only.
 
 	if surveySection := resolveSurveySection(); surveySection != "" {
+		// The age line now lives with the digest immediately below (its
+		// home per D-02) -- strip it from the filename list here so a
+		// build brief never carries it twice
+		// (TestTheAgeLineAppearsOncePerBrief).
+		if notice := surveyStalenessNotice(); notice != "" {
+			surveySection = strings.Replace(surveySection, notice, "", 1)
+		}
 		b.WriteString("\n")
 		b.WriteString(surveySection)
+		b.WriteString("\n")
+	}
+
+	// The condensed map digest (WIRE-03): the same content the planning and
+	// research briefs get, from the one shared resolveSurveyDigestSection
+	// call site per brief (cmd/helpers.go). Guarded by its own empty-string
+	// check so a colony with no survey reports produces a byte-identical
+	// build brief to before this digest existed
+	// (TestBriefsAreUnchangedWithoutASurvey).
+	if digestSection := resolveSurveyDigestSection(); digestSection != "" {
+		b.WriteString("\n")
+		b.WriteString(digestSection)
+		b.WriteString("\n")
+	}
+
+	// The previous phase's carry-forward (WIRE-07, D-09..D-11): what failed
+	// or was flagged last time, and the closing summary the owner read.
+	// Placed before the phase-research section deliberately -- what went
+	// wrong last time frames how the current research should be read.
+	// Guarded by its own empty-string check so a colony on its first phase,
+	// or whose preceding phase left no persisted records, produces a
+	// byte-identical build brief to before this section existed.
+	if carryForward := resolvePreviousPhaseCarryForward(phase.ID); carryForward != "" {
+		b.WriteString("\n")
+		b.WriteString(carryForward)
 		b.WriteString("\n")
 	}
 
@@ -2859,6 +4084,41 @@ func cleanupStaleBuildAttemptArtifacts(phaseNum int) {
 	}
 	_ = os.RemoveAll(filepath.Join(buildDir, "worker-reports"))
 	cleanupStaleWorkerBriefs(phaseNum)
+}
+
+// buildStartStaleArtifactPaths returns the concrete stale files that the
+// canonical transaction must remove. Direct starts include old outcome data;
+// host-prepared starts include only obsolete worker briefs, preserving the
+// evidence contract of cleanupStaleWorkerBriefs.
+func buildStartStaleArtifactPaths(phaseNum int, includeOutcome bool) []string {
+	if store == nil || phaseNum < 1 {
+		return nil
+	}
+	baseRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum)))
+	paths := make([]string, 0)
+	if includeOutcome {
+		for _, name := range []string{"verification.json", "gates.json", "continue.json", "review.json"} {
+			paths = append(paths, baseRel+"/"+name)
+		}
+	}
+	directories := []string{"worker-briefs"}
+	if includeOutcome {
+		directories = append(directories, "worker-reports")
+	}
+	for _, directory := range directories {
+		root := filepath.Join(store.BasePath(), filepath.FromSlash(baseRel), directory)
+		_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return nil
+			}
+			rel, relErr := filepath.Rel(store.BasePath(), path)
+			if relErr == nil {
+				paths = append(paths, filepath.ToSlash(rel))
+			}
+			return nil
+		})
+	}
+	return uniqueSortedStrings(paths)
 }
 
 // cleanupStaleWorkerBriefs removes a phase's worker-brief directory so the
@@ -3017,6 +4277,78 @@ func renderDispatchTaskItemsSection(b *strings.Builder, heading string, tasks []
 	b.WriteString(heading)
 	b.WriteString("\n\n")
 	b.WriteString(body.String())
+}
+
+// renderGroupedDispatchTaskContracts adds the contract details that do not
+// have a legacy single-task section: evidence requirements and any declared
+// paths not already shown under Hints. Goals, constraints, hints, and success
+// criteria remain in their existing sections, so every task-owned value is
+// rendered once and single-task briefs stay byte-for-byte unchanged.
+func renderGroupedDispatchTaskContracts(b *strings.Builder, tasks []coveredDispatchTask) {
+	if len(tasks) < 2 {
+		return
+	}
+
+	b.WriteString("\n## Covered Task Contracts\n\n")
+	for _, covered := range tasks {
+		b.WriteString(fmt.Sprintf("**Task %d (id %q):**\n", covered.Position, covered.ID))
+		if covered.Task == nil {
+			b.WriteString("- Contract unavailable because this task could not be resolved.\n")
+			continue
+		}
+
+		declaredPaths := declaredPathsForTask(*covered.Task)
+		hintedPaths := map[string]bool{}
+		for _, hint := range covered.Task.Hints {
+			hint = strings.TrimSpace(hint)
+			for _, declaredPath := range declaredPaths {
+				if hint == declaredPath {
+					hintedPaths[declaredPath] = true
+				}
+			}
+		}
+		var additionalPaths []string
+		for _, declaredPath := range declaredPaths {
+			if !hintedPaths[declaredPath] {
+				additionalPaths = append(additionalPaths, declaredPath)
+			}
+		}
+		if len(additionalPaths) > 0 {
+			b.WriteString("- Additional relevant paths:\n")
+			for _, declaredPath := range additionalPaths {
+				b.WriteString("  - ")
+				b.WriteString(declaredPath)
+				b.WriteString("\n")
+			}
+		}
+
+		if len(covered.Task.EvidenceRequirements) == 0 {
+			b.WriteString("- Evidence requirements: none declared.\n")
+			continue
+		}
+		b.WriteString("- Evidence requirements:\n")
+		for _, requirement := range covered.Task.EvidenceRequirements {
+			criterion := strings.TrimSpace(requirement.Criterion)
+			if criterion == "" {
+				criterion = "unnamed criterion"
+			}
+			b.WriteString("  - Criterion: ")
+			b.WriteString(criterion)
+			b.WriteString("\n")
+			if len(requirement.Artifacts) > 0 {
+				b.WriteString("    - Artifacts: use this task's relevant paths listed once above or under Hints.\n")
+			}
+			for _, check := range requirement.Checks {
+				check = strings.TrimSpace(check)
+				if check == "" {
+					continue
+				}
+				b.WriteString("    - Check: ")
+				b.WriteString(check)
+				b.WriteString("\n")
+			}
+		}
+	}
 }
 
 // renderUnresolvedDispatchTaskNotice returns a "## Task Resolution Notice"
@@ -3302,7 +4634,18 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 		// type; the TS host used to enrich this and the direct plan-only
 		// path must carry it too.
 		dispatches[i].AgentName = codexAgentNameForCaste(dispatches[i].Caste)
-		dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
+		// D-15c: the routing policy resolves the model FIRST, and only
+		// falls back to the platform's own agent-frontmatter resolution
+		// when the caste carries no routing entry -- see
+		// resolveCasteModelRoute's own doc comment (cmd/caste_model_routing.go)
+		// for why a quality-sensitive caste can never reach the routed
+		// branch.
+		if routedModel, reason, routed := resolveCasteModelRoute(dispatches[i].Caste); routed {
+			dispatches[i].Model = routedModel
+			dispatches[i].ModelRoutingReason = reason
+		} else {
+			dispatches[i].Model = resolveCasteModel(dispatches[i].Caste)
+		}
 		dispatches[i].PermissionProfile = codex.PermissionProfileForCaste(dispatches[i].Caste)
 		assignment := resolveWorkerSkillAssignmentForWorkflow("build", dispatches[i].Caste, dispatches[i].Task)
 		dispatches[i].SkillSection = assignment.Section
@@ -3393,7 +4736,7 @@ func attachBuildDispatchContext(root string, phase colony.Phase, dispatches []co
 func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBuildDispatch, startedAt time.Time, includeSteeringSections bool) string {
 	var b strings.Builder
 	b.WriteString(renderCodexBuildWorkerBrief(root, phase, dispatch, startedAt))
-	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected.\n", codex.HandoffFieldsSummary))
+	b.WriteString(fmt.Sprintf("\nYour final result's handoff object must include %s. An empty handoff is rejected. %s\n", codex.HandoffFieldsSummary, codex.HandoffOpenDecisionsGuidance))
 
 	if includeSteeringSections {
 		if pheromoneSection := resolvePheromoneSection(); pheromoneSection != "" {
@@ -3406,6 +4749,18 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 				b.WriteString(content)
 				b.WriteString("\n")
 			}
+		}
+		// Recent build failures are the other steering content this
+		// self-contained composition has no other channel for (the
+		// wrapper/plan-only lane carries them via manifest.ContextCapsule =
+		// resolveCodexWorkerContext() instead; see composeBuildManifestBrief's
+		// doc comment). cmd/memory_feed.go feeds midden.json; this reads it
+		// back, mirroring the colony-prime capsule's own "## Recent Failures"
+		// section (cmd/colony_prime_context.go).
+		if failuresSection := resolveRecentFailuresSection(); failuresSection != "" {
+			b.WriteString("\n")
+			b.WriteString(failuresSection)
+			b.WriteString("\n")
 		}
 	}
 
@@ -3429,6 +4784,48 @@ func composeBuildManifestBrief(root string, phase colony.Phase, dispatch codexBu
 		}
 	}
 
+	// Every dispatched worker is told, in its own brief, how to ask for help.
+	//
+	// This is the wiring that makes `aether recruit` reachable on the
+	// plan-only/wrapper build lane. Phase 203 built the whole mechanism
+	// across five plans and nothing invoked it: TestNoRegisteredSubcommandIsUnreferenced
+	// reported it as an orphan for four waves, correctly. Documenting it in
+	// .aether/workers.md does not fix that -- no agent definition instructs a
+	// worker to read that file and no runtime code loads it into a prompt, so
+	// a command named there is the "a doc mention is not an execution" case
+	// the reachability rules (D-02/D-06) already exclude playbooks for.
+	//
+	// CR-05 (203-REVIEW.md) found this call site alone was not enough: the
+	// native/direct build lane (buildCodexWorkerDispatches) and the continue
+	// lane (renderCodexContinueReviewBrief, renderCodexContinueWatcherBrief)
+	// each compose their own brief independently and never reached this one.
+	// Those three now call the same renderRecruitmentInvitation directly --
+	// still one TEXT source, several named callers -- and
+	// TestTheRecruitInstructionHasOneSource enumerates the full set by name so
+	// a lane silently losing this call fails there.
+	//
+	// A brief section IS execution: this text lands in the prompt of every
+	// worker the program dispatches. Proven by
+	// TestEveryDispatchedWorkerIsToldHowToAskForHelp, which asserts on the
+	// composed brief rather than on this source line.
+	b.WriteString(renderRecruitmentInvitation())
+
+	return b.String()
+}
+
+// renderRecruitmentInvitation is the one place the invitation TEXT is
+// written -- kept as its own function so every lane's brief composer has a
+// single seam to call and so no second, drifting copy of the instruction
+// appears. Multiple lanes each call it directly (composeBuildManifestBrief,
+// buildCodexWorkerDispatches, renderCodexContinueReviewBrief,
+// renderCodexContinueWatcherBrief); TestTheRecruitInstructionHasOneSource
+// enumerates that exact set by name.
+func renderRecruitmentInvitation() string {
+	var b strings.Builder
+	b.WriteString("\n## Asking For Help\n\n")
+	b.WriteString("If this task needs a capability you do not have, or is too large to finish alone, you may ask the program for a helper instead of guessing or giving up. Run:\n\n")
+	b.WriteString("    aether recruit --parent \"<your worker name>\" --caste \"<the kind of helper you need>\" --objective \"<what it should do>\" --reason \"<why you need it>\"\n\n")
+	b.WriteString("The program decides. A refusal is a normal answer, not an error: it exits cleanly, tells you which limit was reached, and you carry on and finish the work alone. Do not retry a refusal, and do not try to start a helper any other way.\n")
 	return b.String()
 }
 
@@ -3512,4 +4909,80 @@ func resolvePheromoneSection() string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// buildDeterministicCheckEvidence turns the exact deterministic check
+// commands that ran for a build (in the order they ran) into the closeout's
+// evidence list. Every entry here is reported as passed -- a caller must
+// never reach an unverified-build closeout with a failed check; a build
+// whose own checks failed is a failure, not an honest "not verified yet"
+// result.
+func buildDeterministicCheckEvidence(checkCommands []string) []colony.LifecycleEvidence {
+	evidence := make([]colony.LifecycleEvidence, 0, len(checkCommands))
+	for i, command := range checkCommands {
+		command = strings.TrimSpace(command)
+		if command == "" {
+			continue
+		}
+		evidence = append(evidence, colony.LifecycleEvidence{
+			ID:      fmt.Sprintf("build-check-%d", i+1),
+			Kind:    "command",
+			Source:  command,
+			Summary: fmt.Sprintf("`%s` passed", command),
+		})
+	}
+	return evidence
+}
+
+// buildUnverifiedCloseoutDetails builds the LifecycleCloseoutDetails for a
+// build finishing under the check-step verification boundary (D-01, the
+// default landing -- and equally the outcome when no boundary decision was
+// recorded at all, verificationBoundaryForAttempt): the program's own
+// deterministic checks ran and passed, but no reviewer has judged this work
+// yet. The verdict is colony.WorkOutcomePartial (work genuinely done, not
+// yet confirmed) -- never colony.WorkOutcomeSuccess, which the equal-
+// ceremony guarantee (pkg/colony/work_outcome.go, plan 201-04) reserves for
+// a result that has actually been verified. The rendered card still gets
+// the identical full ceremony a success card gets (every canonical slot,
+// D-05) -- it just tells the truth in that slot instead of a passing one.
+//
+// checkCommands names the exact commands that ran, in the order they ran.
+// The projection's own Next Up slot (owned by the ONE lifecycle projection,
+// never by an individual command -- see this file's own doc comment)
+// supplies the single command the owner runs next; this function never
+// invents one.
+func buildUnverifiedCloseoutDetails(checkCommands []string) LifecycleCloseoutDetails {
+	return LifecycleCloseoutDetails{
+		WorkOutcome: colony.WorkOutcomePartial,
+		Summary:     "The work is built and the program's own checks passed. It has not been verified yet.",
+		Evidence:    buildDeterministicCheckEvidence(checkCommands),
+	}
+}
+
+// buildVerifiedCloseoutDetails builds the LifecycleCloseoutDetails for a
+// build whose recorded verification-boundary decision named build-end AND
+// whose build-end reviewers actually passed -- the only case in which a
+// build closeout may carry the success verdict. reviewerNames lists which
+// reviewers ran, purely for the evidence trail; their pass/fail decision
+// itself is the caller's to have already checked before reaching here.
+func buildVerifiedCloseoutDetails(checkCommands []string, reviewerNames []string) LifecycleCloseoutDetails {
+	summary := "The work is built, the program's own checks passed, and it has been reviewed."
+	evidence := buildDeterministicCheckEvidence(checkCommands)
+	for i, name := range reviewerNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		evidence = append(evidence, colony.LifecycleEvidence{
+			ID:      fmt.Sprintf("build-review-%d", i+1),
+			Kind:    "review",
+			Source:  name,
+			Summary: fmt.Sprintf("%s reviewed and passed", name),
+		})
+	}
+	return LifecycleCloseoutDetails{
+		WorkOutcome: colony.WorkOutcomeSuccess,
+		Summary:     summary,
+		Evidence:    evidence,
+	}
 }

@@ -1,7 +1,7 @@
 <!-- Aether-managed: runtime spec at .aether/commands/init.yaml. Synced by aether update. -->
 ---
 name: ant-init
-description: "🥚 Initialize Aether colony through the Aether CLI runtime"
+description: "Start a guided colony for one goal."
 ---
 
 Use the Go `aether` CLI as the source of truth, but do not skip the init
@@ -18,12 +18,45 @@ build.md, plan.md, and continue.md.
 - Treat `init-research` as a deterministic scan only. Do not present its charter
   or pheromones as the final colony intent without AI synthesis.
 
+The public journey has five ordered stages. The wrapper may clarify intent and
+present the result, but it never becomes a second state machine:
+
+**Stage 1 — Queen opening** names the requested goal and repository before any
+mutation.
+
+**Stage 2 — Setup** is performed automatically by `aether init`; do not require
+a separate setup command.
+
+**Stage 3 — Accepted intent** uses the compact interview below, then delegates
+the approved charter and colony mode to `aether init` for persistence.
+
+**Stage 4 — Territory** reports the typed freshness result returned by the
+runtime. The wrapper never infers freshness or asks the owner to choose an
+internal survey command.
+
+**Stage 5 — Closeout** repeats the accepted colony and goal, summarizes what
+the runtime created, and ends with the exact guided next step. It does not run
+that step automatically or create, approve, or accept later authority.
+
+Go owns setup, registry updates, accepted-charter persistence, colony state creation, territory evidence, and init result truth.
+Persist the owner-approved goal and material constraints as accepted-charter/v1 through aether init.
+Territory result is exactly one of Fresh, Refreshed, Stale—refresh required, or Unavailable.
+An existing active colony is refused before storage opens; the refusal changes no files.
+
+The post-init authority journey is deliberately sequential:
+
+1. Init accepts the owner-approved charter, renders the runtime result, and offers `/ant-discuss` without invoking it automatically.
+2. After `/ant-discuss`, Go creates and immediately renders one DRAFT specification revision.
+3. `/ant-spec` owns review, revision, and exact specification approval.
+4. Only an exactly approved specification may proceed to `/ant-plan`; init never calls it directly.
+
 <success_criteria>
 Command is complete when:
 - a colony exists with the user-approved `refined_goal` and charter
 - the chosen colony mode (`colony` or `orchestrator`) is recorded
 - every approved synthesized pheromone was written through `aether pheromone-write`, never by hand
-- the next-step routing (`/ant-colonize`, `/ant-discuss`, `/ant-plan`) is shown
+- the successful closeout ends with exact `Next Up: /ant-discuss`
+- no specification or plan is created, approved, or accepted by the wrapper
 </success_criteria>
 
 <failure_modes>
@@ -38,10 +71,10 @@ If the user chooses cancel at `## Approval`:
 - Shelf choices collected earlier are discarded; the backlog is left exactly as it was
 - Stop the command
 
-### Previous Colony Was Sealed
-If the runtime reports a previous colony was sealed:
-- Say so plainly to the user
-- Start fresh rather than silently overwriting the sealed colony's state
+### Active Colony Exists
+If the runtime reports an active or sealed colony:
+- Relay its identity, accepted goal, and safe runtime guidance plainly
+- Stop with no writes; do not replace, abandon, or reconstruct the colony
 
 ### Setup Missing
 If `aether init-research` or `aether init` reports the runtime or hub is unavailable:
@@ -66,7 +99,7 @@ Carry these values forward once produced, in current vocabulary only:
 - `synthesized_pheromones` — at most 3 goal-specific steering signals from Intent Refinement
 - `selected_colony_mode` — `colony` or `orchestrator`, from Colony Mode
 - `approved_pheromones` — the subset of `synthesized_pheromones` the user approved at Approval
-- `next_action` — the next-step command the user should run after init completes
+- `next_action` — exact `/ant-discuss` after init completes successfully
 - `promoted_shelf_ids` — the shelf entry IDs the user chose to promote, spent only in the Approval init call
 - `dismissed_shelf_ids` — the shelf entry IDs the user chose to dismiss, spent only in the Approval init call
 
@@ -325,12 +358,11 @@ mark the moment the colony's intention becomes real.
 with nothing persisted — no charter, no pheromones, no shelf promotion or
 dismissal.
 
-**Next moves (the user's choice, never yours):** after a successful init, the
-runtime's result carries ranked `proposals` — the sensible next moves computed
-from what this repo actually contains, each with a plain-English reason (its
-"Next Moves" section shows the same list). Present them as a real
-multiple-choice question (the AskUserQuestion tool): one option per proposal
-in the runtime's order, each stating the runtime's reason, the top one marked
-recommended, plus "I'll decide later". Route to the picked command
-(`/ant-colonize`, `/ant-discuss`, or `/ant-plan`); run nothing until the user
-picks, and if they pick "later", stop cleanly.
+After a successful init, use the runtime result as the only truth for setup,
+accepted charter, registry, state, and territory. Ranked `proposals` may be
+summarized as context, but they do not replace the runtime-backed
+`/ant-discuss` handoff. Offer that command to the owner; do not invoke it
+automatically. Do not call `/ant-spec` or `/ant-plan`, create `SPEC.md`, edit
+colony state, or claim specification approval or plan acceptance during init.
+
+Next Up: /ant-discuss

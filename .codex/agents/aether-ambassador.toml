@@ -66,7 +66,7 @@ When implementing external integrations, follow test-driven practices:
 {
   "ant_name": "{your name}",
   "caste": "ambassador",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "endpoints_integrated": [],
   "authentication_method": "",

@@ -9,6 +9,9 @@
     "security_enforcement": false,
     "ai_integration_phase": false,
     "plan_checker": true,
-    "context_window": 1000000
+    "context_window": 1000000,
+    "test_gate_timeout": 3600,
+    "use_worktrees": false,
+    "test_command": "go test ./... -count=1 -timeout 90m"
   }
 }

@@ -34,6 +34,12 @@ Exactly one launch mode is active for a manifest:
 | Claude/OpenCode/Codex wrapper using a dry-run manifest and native Task/subagent panels | The selected host platform | Go |
 | Explicit simulation in tests | Named deterministic fake only | Isolated fixture Go state |
 
+A detected Codex, Claude Code, or OpenCode session selects the same platform
+for its workers by default. An unavailable matching runtime stops dispatch;
+there is no automatic cross-provider fallback. Standalone shells without a
+detected host retain the existing availability-based selection. An explicit
+user override may intentionally select a different provider.
+
 `AETHER_WORKER_PLATFORM` is a hard pin. A valid but unavailable pin fails with a
 structured diagnostic. It never falls through to another installed provider.
 

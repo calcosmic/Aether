@@ -1,0 +1,370 @@
+{
+  "date": "2026-09-18T10:29:45.188338+00:00",
+  "source": "audit-uat",
+  "max_fixes": 5,
+  "severity": "medium",
+  "revision": "9dc590d2db6dec343965fa7722cf9f43ecda9a09",
+  "sdk_audit": {
+    "results": [
+      {
+        "phase": "202",
+        "phase_dir": "202-swarm-oracle-and-live-colony",
+        "file": "202-UAT.md",
+        "file_path": ".planning/phases/202-swarm-oracle-and-live-colony/202-UAT.md",
+        "type": "uat",
+        "status": "complete",
+        "items": [
+          {
+            "test": 1,
+            "name": "Recovery mid-build keeps the live view on the build",
+            "expected": "Open `aether watch` during a live build/continue run, then trigger a recovery decision (e.g. force a worker failure). The build/continue episode and its active workers remain visible, with recovery state layered on top \u2014 not replaced by it.",
+            "result": "skipped",
+            "category": "skipped_unresolved",
+            "reason": "Owner does not use the second-terminal watch dashboard; wants colony visibility inline in the working terminal. Reported: \"I never cared to have a second terminal window to view the colony stuff ... view within the one terminal that you're working\""
+          },
+          {
+            "test": 2,
+            "name": "A running Oracle round shows live in the watch dashboard",
+            "expected": "Start a long-running Oracle round (`aether oracle iterate` or equivalent) and, from a second terminal, run `aether watch` while it is in progress. The dashboard shows the Oracle round live (current question, confidence, contradictions) rather than falling back to a replay-labelled summary.",
+            "result": "skipped",
+            "category": "skipped_unresolved",
+            "reason": "Same as test 1 - owner does not use the second-terminal watch dashboard."
+          },
+          {
+            "test": 3,
+            "name": "Screens carry the Classic colony voice",
+            "expected": "The rendered `aether watch` live dashboard, Swarm's end-of-investigation comparison card, and Oracle's synthesis document read as the Classic colony's own voice (caste emoji, ant glyphs, ceremony framing, Queen voice per D-04), not a generic status printout.",
+            "result": "skipped",
+            "category": "skipped_unresolved",
+            "reason": "Owner deferred - will test later; asked to mark the phase done."
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "total_files": 1,
+      "total_items": 3,
+      "by_category": {
+        "skipped_unresolved": 3
+      },
+      "by_phase": {
+        "202": 3
+      }
+    }
+  },
+  "reviewed_files": {
+    ".planning/phases/199-front-door-and-classic-contract/199-UAT.md": "8d9c95d6f5134af33c66f291ea3a97da1b2cda2fe77025b8be8f640a80bdc782",
+    ".planning/phases/200-iterative-planning/200-VERIFICATION.md": "81c933732914532a1f916b640c589116127b0d639040a519f9ebfda6e5a7c41b",
+    ".planning/phases/201-queen-led-work-cycle/201-UAT.md": "b9743f1cb0b05d15be423a3d827e41968ccffa4936650035304dd8bba42a0e00",
+    ".planning/phases/201-queen-led-work-cycle/201-VERIFICATION.md": "c69c5e41955495b4026b85a2db3d4dc4f4b32633339d21cc402d4ff8393ae930",
+    ".planning/phases/202-swarm-oracle-and-live-colony/202-UAT.md": "460d7fe32a4fee6b27bac91ddef58f01cc3d5c61c94d0d6e1f7a5988ca54d340",
+    ".planning/phases/202-swarm-oracle-and-live-colony/202-VERIFICATION.md": "7ee22fc24677edf33d9bce42a3dcfd732802a09ee1e2b771aa5bdb337d5d59cb",
+    ".planning/phases/202.1-classic-visual-voice/202.1-VERIFICATION.md": "01e8db2eeebc6c6da71462a8942a407dc4216e6fc85d6c7d98e62cab018b5996",
+    ".planning/phases/203-biological-runtime/203-VERIFICATION.md": "f58a38bff0424899a73d92347a280a6e7235fdc2b16f1eed1b6ee698dbffe3d8",
+    ".planning/phases/204-learning-governor/204-VERIFICATION.md": "5eafa7591a9923196ea78e202be0e963b22696140663d5e92511441e22bc614f",
+    ".planning/phases/204.1-codex-ant-skill-surface/204.1-UAT.md": "e01f3250750fe00fac8a7dbce12a2e3cc2f3953477833159566e95eca305cc6e",
+    ".planning/phases/204.1-codex-ant-skill-surface/204.1-VERIFICATION.md": "1a1fb97a9f325f2f0d5d19a7f8f36feae368babc55516dfd0f2d2e8d03a01086",
+    ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md": "ad169af328572e1a23c031c7e4d7d35c871d778adf3ac26a27b5372a7355c9e4"
+  },
+  "findings": [
+    {
+      "id": "F-01",
+      "description": "Recovery remains visible during a live build",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Deferred owner observation, not a demonstrated code defect; owner prefers inline visibility.",
+      "file_refs": [
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-UAT.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-02",
+      "description": "Running Oracle round visible in watch",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Deferred second-terminal observation; changing the UX needs scope decisions.",
+      "file_refs": [
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-UAT.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-03",
+      "description": "Classic voice on watch, Swarm and Oracle screens",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Owner explicitly deferred experiential review; automated edits cannot provide that review.",
+      "file_refs": [
+        ".planning/phases/202-swarm-oracle-and-live-colony/202-UAT.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-04",
+      "description": "Specification body can retain forged stored digests",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plan 200-29 repair is present: validateCanonicalSpecificationState invokes Specification.ValidateCanonical. Historical report is not a fresh failing reproduction.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/planning_state.go",
+        "pkg/colony/specification.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-05",
+      "description": "Candidate semantic delta excluded from acceptance identity",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plans 200-30/31 implement complete addressing and independent acceptance derivation; no duplicate repair or fresh qualification claimed.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/plan_revision.go",
+        "pkg/colony/planning.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-06",
+      "description": "Planning writes can escape through intermediate symlinks",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later repository-root authority is acquired before mutation in withPlanningMutationSession; current writers use the session. Historical report predates that repair.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/planning_repository_session.go",
+        "cmd/specification.go",
+        "cmd/planning_timeline.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-07",
+      "description": "Concurrent planning writers can overwrite committed updates",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plans 200-31/32/33/34 introduce locked mutation sessions and atomic build starts; current specification/timeline/acceptance writers use them.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/planning_repository_session.go",
+        "cmd/plan_revision.go",
+        "cmd/planning_timeline.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-08",
+      "description": "Candidate expiry not enforced or rendered",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plans 200-37/38 implement atomic expiry and presentation; expirePlanCandidateInSession and ExpiresAt projection/rendering exist with boundary tests.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/plan_revision.go",
+        "cmd/planning_visuals.go",
+        "cmd/plan_candidate_expiry_200_test.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-09",
+      "description": "Repository-wide normal/race gate not green",
+      "severity": "high",
+      "classification": "manual-only",
+      "reason": "Broad historical failures need current isolated, fully-accounted diagnosis; no single demonstrated repair is identified by this finding.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md",
+        "cmd/current_vocabulary_199_test.go",
+        "cmd/phase199_gate_receipt_test.go"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-10",
+      "description": "Real Claude/OpenCode planning journey needs observation",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Historical verification requests actual host interaction; no new owner evidence supplied by this audit.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-11",
+      "description": "Terminal readability and expiry clarity needs observation",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Human readability judgment remains separate from width and golden tests.",
+      "file_refs": [
+        ".planning/phases/200-iterative-planning/200-VERIFICATION.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-12",
+      "description": "CEC-09 requirement checkbox left unticked",
+      "severity": "low",
+      "classification": "skip",
+      "reason": "Below medium threshold and already corrected: current REQUIREMENTS.md marks CEC-09 checked.",
+      "file_refs": [
+        ".planning/phases/202.1-classic-visual-voice/202.1-VERIFICATION.md",
+        ".planning/REQUIREMENTS.md"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-13",
+      "description": "Check episodes omit token usage and reported cost",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Explicit owner-accepted deferral; changes span both check lanes and their episode-close data flow.",
+      "file_refs": [
+        ".planning/phases/204-learning-governor/204-VERIFICATION.md",
+        "cmd/codex_continue.go",
+        "cmd/codex_continue_finalize.go",
+        ".planning/WINDOWS.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-14",
+      "description": "Thirty confirmed incidents lack guard tests",
+      "severity": "medium",
+      "classification": "manual-only",
+      "reason": "Aggregate coverage work spans distinct incidents; each needs a demonstrated underlying fix and incident-specific regression test. Attaching arbitrary guards would falsify coverage.",
+      "file_refs": [
+        ".planning/phases/204-learning-governor/204-VERIFICATION.md",
+        "cmd/testdata/fixture-bank/v1/bank.json",
+        "cmd/eval_gates.go"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-15",
+      "description": "Automatic learning promotion has no real identity/outcome bridge",
+      "severity": "high",
+      "classification": "manual-only",
+      "reason": "Current learning_validator.go documents separate learning/instinct IDs and absent terminal outcome writers. Multiple valid architectural repairs; changing a lookup cannot establish real evidence.",
+      "file_refs": [
+        ".planning/phases/204-learning-governor/204-VERIFICATION.md",
+        "cmd/learning_validator.go",
+        "cmd/application_evidence.go"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-16",
+      "description": "Fixture-bank prose counts stale",
+      "severity": "low",
+      "classification": "skip",
+      "reason": "Below threshold and already corrected: actual bank is 51 total/21 guarded/30 unguarded; REQUIREMENTS.md agrees.",
+      "file_refs": [
+        ".planning/phases/204-learning-governor/204-VERIFICATION.md",
+        ".planning/REQUIREMENTS.md",
+        ".planning/WINDOWS.md",
+        "cmd/testdata/fixture-bank/v1/bank.json"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-17",
+      "description": "Defect-register summary counts stale",
+      "severity": "low",
+      "classification": "skip",
+      "reason": "Below threshold and already corrected: current header and embedded JSON both report 48 total/34 open/14 fixed.",
+      "file_refs": [
+        ".planning/phases/204-learning-governor/204-VERIFICATION.md",
+        ".planning/WINDOWS.md"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-18",
+      "description": "Actual native scenario matrix and host provenance incomplete",
+      "severity": "high",
+      "classification": "manual-only",
+      "reason": "Requires supported actual host acquisition plus new live proofs, not a synthetic export or relaxed validator; Plan 21 preflight remains blocked.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "cmd/codex_native_gap_host_capture_test.go",
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-21-PREFLIGHT.md"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-19",
+      "description": "Four final-candidate regression runs absent",
+      "severity": "high",
+      "classification": "manual-only",
+      "reason": "Depends on frozen qualified candidate and resource-safe full execution; no small code fix produces missing run evidence.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "scripts/qualify-native-gap-regression.py"
+      ],
+      "status": "not-attempted"
+    },
+    {
+      "id": "F-20",
+      "description": "Regression inventory omits untracked build inputs (CR-01)",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plan 17 added admit_inputs rejection for untracked, ignored and embedded compilation inputs; source repair does not imply final regression completion.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "scripts/qualify-native-gap-regression.py"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-21",
+      "description": "Unrelated hashed artifacts can substitute for host proof (CR-02)",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plan 18 added typed semantic capture checks and actual-source refusal. Real acquisition remains unresolved under F-18.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "cmd/codex_native_gap_host_capture_test.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-22",
+      "description": "Malformed cancellation records can prove no writes (CR-03)",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plan 19 requires complete parsing and a valid interval; actual observation-end provenance remains unavailable and is not upgraded.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "cmd/codex_native_gap_controls_test.go"
+      ],
+      "status": "skipped"
+    },
+    {
+      "id": "F-23",
+      "description": "Recovery snapshot semantics not replayed (WR-01)",
+      "severity": "high",
+      "classification": "skip",
+      "reason": "Later Plan 19 decodes exact attempt/state/source inventory and correlates saved cut semantics. This does not qualify fresh actual recovery.",
+      "file_refs": [
+        ".planning/phases/204.2-codex-native-worker-lifecycle/204.2-VERIFICATION.md",
+        "cmd/codex_native_gap_recovery_test.go"
+      ],
+      "status": "skipped"
+    }
+  ],
+  "counts": {
+    "manual-only": 11,
+    "skip": 12
+  },
+  "fixed": 0,
+  "failed": 0,
+  "tests_run": false,
+  "limitations": [
+    "Source inspection and historical repair records only; no fresh behavioral requalification.",
+    "Canonical historical verification and owner acceptance records preserved.",
+    "Low-severity items are excluded by the default medium threshold."
+  ]
+}

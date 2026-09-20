@@ -17,6 +17,7 @@ import (
 // in sequence within temp directories, verifying data flows correctly and
 // protected directories (data/, dreams/) are never overwritten.
 func TestE2EInstallSetupUpdateFlow(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -24,8 +25,9 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 
 	// --- Setup: create temp directories ---
 	packageDir := t.TempDir() // simulates the Aether npm package
-	homeDir := t.TempDir()    // simulates $HOME
-	repoDir := t.TempDir()    // simulates a target repository
+	seedCodexSkillSupportFixture(t, packageDir)
+	homeDir := t.TempDir() // simulates $HOME
+	repoDir := t.TempDir() // simulates a target repository
 
 	// Create package structure: .aether/ with companion files
 	pkgAether := filepath.Join(packageDir, ".aether")
@@ -113,6 +115,8 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 		if ok, _ := result["ok"].(bool); !ok {
 			t.Fatalf("install returned ok:false, output: %s", output)
 		}
+
+		assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
 
 		// Verify hub was created
 		hubDir := filepath.Join(homeDir, ".aether")
@@ -270,6 +274,22 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 		t.Fatalf("failed to create user dream: %v", err)
 	}
 
+	// Publish a changed support payload; update must consume it through its main transaction.
+	payloadHub := filepath.Join(homeDir, ".aether")
+	priorPayload := antReadPublished(t, payloadHub)
+	supportPath := filepath.Join(packageDir, ".aether", "skills", "colony", "aether-colony-creation", "SKILL.md")
+	writeMaintenanceMutation199File(t, supportPath, append(mustReadLifecycleFixtureFile(t, supportPath), []byte("\nUpdated support fixture.\n")...))
+	nextPayload, err := buildCodexSkillPayload(packageDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := publishCodexSkillPayload(payloadHub, nextPayload); err != nil {
+		t.Fatal(err)
+	}
+	if codexSkillPayloadIdentity(priorPayload) == codexSkillPayloadIdentity(nextPayload) {
+		t.Fatal("fixture failed to publish a change")
+	}
+
 	// ===== STEP 4: Simulate hub update (modify source files) =====
 	hubSystem := filepath.Join(homeDir, ".aether", "system")
 	workersV2 := []byte("# Workers v2 - updated version")
@@ -336,6 +356,9 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Fatalf("update returned ok:false, output: %s", output)
 		}
 
+		antAssertPublishedHome(t, payloadHub, homeDir)
+		assertCodexSkillFixtureInstalled(t, packageDir, homeDir)
+
 		// Verify workers.md remains global
 		repoWorkers := filepath.Join(repoDir, ".aether", "workers.md")
 		if _, err := os.Stat(repoWorkers); err == nil {
@@ -397,6 +420,7 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 
 	// ===== STEP 6: Verify idempotency - running update again skips unchanged =====
 	t.Run("update_idempotent", func(t *testing.T) {
+		beforeSkills := antSnapshot(t, filepath.Join(homeDir, ".codex", "skills", "aether"))
 		saveGlobals(t)
 		resetRootCmd(t)
 
@@ -417,6 +441,9 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 			t.Fatalf("second update failed: %v", err)
 		}
 
+		antAssertSnapshot(t, filepath.Join(homeDir, ".codex", "skills", "aether"), beforeSkills)
+		antAssertPublishedHome(t, payloadHub, homeDir)
+
 		// Verify user data is STILL preserved after second update
 		stateContent, err := os.ReadFile(filepath.Join(localDataDir, "COLONY_STATE.json"))
 		if err != nil {
@@ -432,12 +459,14 @@ func TestE2EInstallSetupUpdateFlow(t *testing.T) {
 // directory contains data/ or dreams/ files, setup and update never overwrite
 // local user data.
 func TestE2EInstallSetupProtectedDirsFromHub(t *testing.T) {
+	isolateUpdateE2ERepositoryRoot(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
 	resetRootCmd(t)
 
 	packageDir := t.TempDir()
+	seedCodexSkillSupportFixture(t, packageDir)
 	homeDir := t.TempDir()
 	repoDir := t.TempDir()
 

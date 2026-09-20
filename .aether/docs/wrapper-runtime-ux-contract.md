@@ -167,17 +167,40 @@ Wrappers MUST NOT:
 
 ## Codex Platform
 
-Codex is a special case because it does NOT use wrapper markdown:
+In Codex, pick an ant skill to enter a workflow. The skill asks the Go program
+what is allowed and follows its answer; it does not decide that work passed.
 
-- Codex interacts directly with the Go CLI
-- Codex agents are defined in `.codex/agents/*.toml`, not slash commands
-- Runtime visual UX comes from `cmd/codex_visuals.go`
-- Wrapper-equivalent intelligence for `init`, `oracle`, `plan`, `build`,
-  `continue`, `seal`, and `discuss` comes from `aether command-guide` plus the
-  Codex lifecycle skills `aether-colony-creation`, `aether-colony-research`, and
-  `aether-colony-build-cycle`
-- Codex skills may interview, synthesize, spawn, and summarize, but runtime
-  commands still own state mutation, manifests, verification, and persistence
+Exactly nine public skills are supported: `$ant-init`, `$ant-discuss`,
+`$ant-oracle`, `$ant-colonize`, `$ant-plan`, `$ant-build`, `$ant-continue`,
+`$ant-swarm`, and `$ant-seal`. The remaining 55 action skills and native-worker
+parity belong to later phases. Runtime IDs, `aether` executable routes, owner
+answers, and automatic-learning limits keep their existing meaning.
+
+- `aether command-guide <command> --platform codex` remains authoritative.
+- The public `ant-<command>/SKILL.md` reads `../support/<helper>.md` relative to
+  its installed location. The three private bodies are
+  `support/aether-colony-creation.md`, `support/aether-colony-research.md`, and
+  `support/aether-colony-build-cycle.md`; none is a public helper skill.
+- Runtime commands own state mutation, dispatch manifests, verification,
+  persistence and finalizers. Codex skills coordinate only the accepted work.
+- Literal passthrough commands (including `aether status` and `aether update`)
+  execute exactly first. Raw, exact, no-interview and no-orchestration requests
+  bypass the coordination layer. Preserve executable arguments and machine IDs.
+- Visual UX remains in `cmd/codex_visuals.go`. Help and Next Up display dollar
+  skills only for the nine supported actions; unsupported actions and
+  environment-prefixed shell commands retain CLI spelling.
+- Agents keep their internal IDs and `.codex/agents/*.toml` definitions. Worker
+  skill injection remains in-process and separate from the public menu.
+
+Install/publish/update share the versioned `system/codex-skills` payload contract,
+with discovery at the qualified `~/.codex/skills/aether/` root. Copied or removed
+skills need a fresh session; unchanged assets do not. Custom skills and project
+documents retain their ownership boundaries, including under `--force`.
+See the [publish/update runbook](publish-update-runbook.md#codex-skill-upgrade-and-recovery)
+for payload validation, dev isolation, failed/interrupted recovery limits, and
+named proof commands. Combined update claims require the Plan 03/06 merge checks;
+Plan 07 owns the all-nine fresh-client receipt. Naming does not establish full
+lifecycle or native-worker capability parity.
 
 ## Source Chain
 
@@ -187,7 +210,9 @@ Codex is a special case because it does NOT use wrapper markdown:
 .claude/commands/ant/*.md        ← Claude Code wrappers
 .opencode/commands/ant/*.md      ← OpenCode wrappers
     ↓ (delegation)
-.aether/skills/colony/aether-colony-*/SKILL.md ← Codex orchestration skills
+.aether/skills/colony/aether-colony-*/SKILL.md ← private support sources
+cmd/codex_skill_surface.go       ← nine public skills + versioned payload
+hub/system/codex-skills/         ← public SKILL.md files + private support/*.md
 aether command-guide              ← Runtime-readable orchestration contract
 cmd/codex_*.go                   ← Go runtime (authoritative execution)
 cmd/codex_visuals.go             ← Visual renderer (authoritative presentation)
@@ -199,6 +224,9 @@ is YAML-backed manual sync plus automated parity and provenance tests.
 ## Enforcement
 
 - Tests in `cmd/codex_visuals_test.go` verify visual output correctness
+- `TestCodexAntSkillDisplayRoutes`, `TestCodexAntSkillGuideSupport` and
+  `TestCodexAntSkillGuidesPreserveOtherPlatforms` bind public spelling and private
+  support to unchanged executable identities and other-platform behavior
 - YAML source files in `.aether/commands/` define wrapper boundaries
 - `source-of-truth-map.md` documents the ownership hierarchy
 - CLAUDE.md and CODEX.md reference this contract

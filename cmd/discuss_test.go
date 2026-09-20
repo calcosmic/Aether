@@ -12,7 +12,7 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-func TestDiscussCreatesClarificationQuestions(t *testing.T) {
+func TestDiscussDoesNotCreateGenericClarificationQuestions(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -44,31 +44,20 @@ func TestDiscussCreatesClarificationQuestions(t *testing.T) {
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if got := int(result["question_count"].(float64)); got != 3 {
-		t.Fatalf("question_count = %d, want 3", got)
+	if got := int(result["question_count"].(float64)); got != 0 {
+		t.Fatalf("question_count = %d, want 0 without an evidence-backed material boundary", got)
 	}
-	if got := int(result["created_count"].(float64)); got != 3 {
-		t.Fatalf("created_count = %d, want 3", got)
+	if got := int(result["created_count"].(float64)); got != 0 {
+		t.Fatalf("created_count = %d, want 0 because discuss no longer invents generic menus", got)
 	}
 
-	var file PendingDecisionFile
-	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-		t.Fatalf("load pending decisions: %v", err)
-	}
-	if len(file.Decisions) != 3 {
-		t.Fatalf("expected 3 clarification decisions, got %d", len(file.Decisions))
-	}
-	for _, decision := range file.Decisions {
-		if decision.Type != clarificationDecisionType {
-			t.Fatalf("decision type = %q, want clarification", decision.Type)
-		}
-		if decision.Resolved {
-			t.Fatal("new discussion questions should be unresolved")
-		}
+	file := loadPendingDecisionFile()
+	if len(file.Decisions) != 0 {
+		t.Fatalf("generic discuss run persisted clarification decisions: %#v", file.Decisions)
 	}
 }
 
-func TestDiscussIncludesCodebaseAwareQuestionWhenRepoContextExists(t *testing.T) {
+func TestDiscussUsesCodebaseContextAsEvidenceWithoutInventingQuestion(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -111,20 +100,11 @@ func TestDiscussIncludesCodebaseAwareQuestionWhenRepoContextExists(t *testing.T)
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	questions := result["questions"].([]interface{})
-	if len(questions) != 3 {
-		t.Fatalf("default discuss questions = %d, want 3", len(questions))
+	if len(questions) != 0 {
+		t.Fatalf("codebase inventory became generic questions: %#v", questions)
 	}
-	hasAnalyze := false
-	for _, raw := range questions {
-		question := raw.(map[string]interface{})
-		source, _ := question["source"].(string)
-		if strings.HasPrefix(source, analyzeSourcePrefix) {
-			hasAnalyze = true
-			break
-		}
-	}
-	if !hasAnalyze {
-		t.Fatalf("expected at least one codebase-aware analyze question, got %#v", questions)
+	if got := int(result["evidence_count"].(float64)); got == 0 {
+		t.Fatal("expected repository context to be represented in the evidence frontier")
 	}
 }
 
@@ -153,6 +133,17 @@ func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
 		ColonyDepth:  "light",
 		Plan:         colony.Plan{},
 	})
+	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
+		ID:             "pd_visual_scope",
+		Type:           clarificationDecisionType,
+		Description:    formatClarificationDescription("Which public surface owns this work?", []string{"current command", "new command"}),
+		Source:         "wrapper:scope:visual-scope",
+		Grounding:      "Two public surfaces would create materially different scope.",
+		HardConstraint: true,
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+	}}}); err != nil {
+		t.Fatalf("seed material visual question: %v", err)
+	}
 
 	rootCmd.SetArgs([]string{"discuss"})
 	if err := rootCmd.Execute(); err != nil {
@@ -162,7 +153,10 @@ func TestDiscussVisualPendingQuestionsAvoidsWorkerTheatre(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
 		"D I S C U S S",
-		"Questions: 3",
+		"Questions: 1",
+		"Owner decisions required",
+		"Queen recommends:",
+		"Answer exactly: $ant-discuss --resolve pd_visual_scope",
 		"This answer becomes a hard constraint.",
 	} {
 		if !strings.Contains(output, want) {
@@ -230,7 +224,7 @@ func TestDiscussVisualSettledPathAvoidsWorkerTheatre(t *testing.T) {
 	for _, want := range []string{
 		"D I S C U S S",
 		"Questions: 0",
-		"No new clarification questions are outstanding.",
+		"No unresolved material owner questions remain; evidence answered the rest.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("settled discuss visual missing %q\n%s", want, output)
@@ -313,7 +307,7 @@ func TestDiscussResolveHardConstraintEmitsRedirect(t *testing.T) {
 	}
 }
 
-func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
+func TestDiscussResolveBoundaryRoutesToDraftSpecification(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -364,8 +358,11 @@ func TestDiscussResolveBoundaryRoutesToFreshWorkflowManifest(t *testing.T) {
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
 	next := stringValue(result["next"])
-	if !strings.Contains(next, "aether build 2") || !strings.Contains(next, "fresh manifest") {
-		t.Fatalf("next = %q, want fresh build manifest guidance", next)
+	if !strings.Contains(next, "aether spec") || strings.Contains(next, "aether build") || strings.Contains(next, "aether plan") {
+		t.Fatalf("next = %q, want draft specification review before workflow redispatch", next)
+	}
+	if got := stringValue(result["specification_status"]); got != string(colony.SpecStatusDraft) {
+		t.Fatalf("specification_status = %q, want draft", got)
 	}
 }
 
@@ -445,19 +442,16 @@ func TestDiscussIsIdempotentAcrossRuns(t *testing.T) {
 	if got := int(result["created_count"].(float64)); got != 0 {
 		t.Fatalf("created_count = %d, want 0 on repeat run", got)
 	}
-	if got := int(result["existing_count"].(float64)); got != 3 {
-		t.Fatalf("existing_count = %d, want 3 on repeat run", got)
+	if got := int(result["existing_count"].(float64)); got != 0 {
+		t.Fatalf("existing_count = %d, want 0 on repeat evidence-only run", got)
 	}
-	if status := stringValue(result["discussion_status"]); status != "pending_questions" {
-		t.Fatalf("discussion_status = %q, want pending_questions", status)
+	if status := stringValue(result["discussion_status"]); status != "settled" {
+		t.Fatalf("discussion_status = %q, want settled", status)
 	}
 
-	var file PendingDecisionFile
-	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
-		t.Fatalf("load pending decisions: %v", err)
-	}
-	if len(file.Decisions) != 3 {
-		t.Fatalf("expected 3 clarification decisions after repeat run, got %d", len(file.Decisions))
+	file := loadPendingDecisionFile()
+	if len(file.Decisions) != 0 {
+		t.Fatalf("repeat run persisted generic decisions: %#v", file.Decisions)
 	}
 }
 
@@ -510,8 +504,8 @@ func TestDiscussIgnoresStalePendingClarificationsFromPriorGoal(t *testing.T) {
 	if got := int(result["existing_count"].(float64)); got != 0 {
 		t.Fatalf("existing_count = %d, want 0 when only prior-goal decisions exist", got)
 	}
-	if got := int(result["created_count"].(float64)); got != 3 {
-		t.Fatalf("created_count = %d, want fresh current-goal questions", got)
+	if got := int(result["created_count"].(float64)); got != 0 {
+		t.Fatalf("created_count = %d, want no invented replacement questions", got)
 	}
 	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
 		t.Fatalf("ignored_stale_count = %d, want 1", got)
@@ -524,8 +518,8 @@ func TestDiscussIgnoresStalePendingClarificationsFromPriorGoal(t *testing.T) {
 	if err := store.LoadJSON(pendingDecisionsFile, &file); err != nil {
 		t.Fatalf("load pending decisions: %v", err)
 	}
-	if len(file.Decisions) != 4 {
-		t.Fatalf("expected old decision plus 3 fresh decisions, got %d", len(file.Decisions))
+	if len(file.Decisions) != 1 {
+		t.Fatalf("expected only the quarantined old decision, got %d", len(file.Decisions))
 	}
 	currentScoped := 0
 	for _, decision := range file.Decisions {
@@ -533,8 +527,8 @@ func TestDiscussIgnoresStalePendingClarificationsFromPriorGoal(t *testing.T) {
 			currentScoped++
 		}
 	}
-	if currentScoped != 3 {
-		t.Fatalf("current scoped decisions = %d, want 3", currentScoped)
+	if currentScoped != 0 {
+		t.Fatalf("current scoped decisions = %d, want 0", currentScoped)
 	}
 }
 
@@ -600,8 +594,8 @@ func TestDiscussDryRunDoesNotPersistQuestions(t *testing.T) {
 	if dryRun, _ := result["dry_run"].(bool); !dryRun {
 		t.Fatal("expected dry_run:true in discuss output")
 	}
-	if got := int(result["question_count"].(float64)); got == 0 {
-		t.Fatal("expected dry-run to preview clarification questions")
+	if got := int(result["question_count"].(float64)); got != 0 {
+		t.Fatalf("dry-run previewed %d generic clarification questions", got)
 	}
 
 	var file PendingDecisionFile
@@ -726,8 +720,8 @@ func TestDiscussSurfacesOrchestratorBoundaryQuestions(t *testing.T) {
 	if boundaryCount == 0 {
 		t.Fatalf("expected discuss to surface orchestrator boundary questions, but found 0 among %d total questions", totalQuestions)
 	}
-	if totalQuestions < 4 {
-		t.Fatalf("expected at least 4 questions (3 discuss + 1 boundary), got %d", totalQuestions)
+	if totalQuestions != 1 {
+		t.Fatalf("expected only the explicit orchestrator boundary, got %d", totalQuestions)
 	}
 }
 
@@ -790,11 +784,11 @@ func TestDiscussSurfacesCandidatesDespiteOldColonyResolvedDecisions(t *testing.T
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if got := int(result["created_count"].(float64)); got != 3 {
-		t.Fatalf("created_count = %d, want 3 (old-colony resolved decisions with same goal but different session should not block new questions)", got)
+	if got := int(result["created_count"].(float64)); got != 0 {
+		t.Fatalf("created_count = %d, want 0 because stale answers do not authorize generic replacements", got)
 	}
-	if got := int(result["question_count"].(float64)); got != 3 {
-		t.Fatalf("question_count = %d, want 3", got)
+	if got := int(result["question_count"].(float64)); got != 0 {
+		t.Fatalf("question_count = %d, want 0", got)
 	}
 	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
 		t.Fatalf("ignored_stale_count = %d, want 1 (old session decision should be stale)", got)
@@ -970,8 +964,8 @@ func TestDiscussSurfacesCandidatesDespiteLegacySameGoalResolvedDecisionWithoutSe
 
 	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
 	result := env["result"].(map[string]interface{})
-	if got := int(result["created_count"].(float64)); got != 3 {
-		t.Fatalf("created_count = %d, want 3 (legacy same-goal decision without session should not block current questions)", got)
+	if got := int(result["created_count"].(float64)); got != 0 {
+		t.Fatalf("created_count = %d, want 0 because legacy state remains evidence rather than a generic prompt template", got)
 	}
 	if got := int(result["ignored_stale_count"].(float64)); got != 1 {
 		t.Fatalf("ignored_stale_count = %d, want 1 legacy stale clarification", got)

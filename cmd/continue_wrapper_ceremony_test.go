@@ -101,10 +101,16 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 		}
 	}
 
-	// Runtime-level assertion: verify renderContinueVisual() emits
-	// context-clear guidance. The safe-to-clear CLAIM is verified, not
-	// assumed: it appears only when .aether/HANDOFF.md is actually on disk,
-	// so the fixture writes one; the no-file case must hold the user back.
+	// Runtime-level assertion: verify renderContinueVisual() tells the owner
+	// whether it is safe to close the chat. The safe-to-close CLAIM is
+	// verified, not assumed: it appears only when .aether/HANDOFF.md is
+	// actually on disk, so the fixture writes one; the no-file case must hold
+	// the user back.
+	//
+	// Phase 197 plan 04: the sentence now comes from the shared closing card
+	// rather than from renderContextClearGuidance, so the wording asserted
+	// below is the card's. The contract is unchanged -- the runtime owns the
+	// verdict, and the claim still requires the file to be seen.
 	saveGlobals(t)
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -115,12 +121,15 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 	state := colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateBUILT, CurrentPhase: 1, BuildStartedAt: &now}
 	phase := colony.Phase{ID: 1, Name: "Contract check"}
 
+	const safeToClose = "it is safe to close this chat"
+	const holdTheChat = "Don't close this chat yet"
+
 	// Without a handoff on disk: an explicit hold, never the claim.
 	heldOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)
-	if strings.Contains(heldOutput, "safe to clear your context now.") {
-		t.Errorf("renderContinueVisual() claims safe-to-clear with no handoff on disk\n%s", heldOutput)
+	if strings.Contains(heldOutput, safeToClose) {
+		t.Errorf("renderContinueVisual() claims it is safe to close the chat with no handoff on disk\n%s", heldOutput)
 	}
-	if !strings.Contains(heldOutput, "don't clear your context yet") {
+	if !strings.Contains(heldOutput, holdTheChat) {
 		t.Errorf("renderContinueVisual() missing the explicit hold when the handoff is absent\n%s", heldOutput)
 	}
 
@@ -134,20 +143,28 @@ func TestContinueWrapperCeremonyContract(t *testing.T) {
 
 	// Non-final case
 	nonFinalOutput := renderContinueVisual(state, phase, nil, false, &colony.Phase{ID: 2, Name: "Next"}, nil, colony.VerificationDepthLight)
-	if !strings.Contains(nonFinalOutput, "safe to clear your context now.") {
-		t.Errorf("renderContinueVisual() non-final missing context-clear guidance\n%s", nonFinalOutput)
+	if !strings.Contains(nonFinalOutput, safeToClose) {
+		t.Errorf("renderContinueVisual() non-final never says whether it is safe to close the chat\n%s", nonFinalOutput)
 	}
 
 	// Final case
 	finalOutput := renderContinueVisual(state, phase, nil, true, nil, nil, colony.VerificationDepthLight)
-	if !strings.Contains(finalOutput, "safe to clear your context now.") {
-		t.Errorf("renderContinueVisual() final missing context-clear guidance\n%s", finalOutput)
+	if !strings.Contains(finalOutput, safeToClose) {
+		t.Errorf("renderContinueVisual() final never says whether it is safe to close the chat\n%s", finalOutput)
 	}
 
-	// Blocked case must NOT contain guidance
+	// A blocked check reads the same rule as every other screen: with the
+	// handover note gone from disk, it holds the owner back rather than
+	// claiming it is safe to walk away.
+	if err := os.Remove(handoffPath); err != nil {
+		t.Fatalf("remove handoff: %v", err)
+	}
 	blockedOutput := renderContinueBlockedVisual(state, phase, nil, colony.VerificationDepthLight)
-	if strings.Contains(blockedOutput, "safe to clear your context now.") {
-		t.Errorf("renderContinueBlockedVisual() should not contain context-clear guidance\n%s", blockedOutput)
+	if strings.Contains(blockedOutput, safeToClose) {
+		t.Errorf("renderContinueBlockedVisual() claims it is safe to close the chat with no handover note on disk\n%s", blockedOutput)
+	}
+	if !strings.Contains(blockedOutput, holdTheChat) {
+		t.Errorf("renderContinueBlockedVisual() never tells the owner whether to close the chat\n%s", blockedOutput)
 	}
 }
 

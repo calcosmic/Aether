@@ -337,11 +337,11 @@ func TestGateRecoveryTemplates_HasAllGateNames(t *testing.T) {
 
 func TestGateRecoveryTemplate_KnownGate(t *testing.T) {
 	result := gateRecoveryTemplate("spawn_gate")
-	if !strings.Contains(result, "ant-build") {
-		t.Errorf("spawn_gate template should contain 'ant-build', got: %s", result)
+	if !strings.Contains(result, "aether build") {
+		t.Errorf("spawn_gate template should contain 'aether build', got: %s", result)
 	}
-	if !strings.Contains(result, "ant-continue") {
-		t.Errorf("spawn_gate template should contain 'ant-continue', got: %s", result)
+	if !strings.Contains(result, "aether continue") {
+		t.Errorf("spawn_gate template should contain 'aether continue', got: %s", result)
 	}
 }
 
@@ -852,8 +852,8 @@ func TestGateRecoveryTemplateCmd_KnownGate(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "ant-build") {
-		t.Errorf("expected recovery template containing 'ant-build', got %q", output)
+	if !strings.Contains(output, "aether build") {
+		t.Errorf("expected recovery template containing 'aether build', got %q", output)
 	}
 }
 

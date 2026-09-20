@@ -140,7 +140,16 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
 	store = s
-	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{Plan: colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "First"}}}}); err != nil {
+	// A saved project without a goal is a leftover file, not a project, and the
+	// runtime reads it as one -- so the fixture carries the goal the runtime
+	// always writes.
+	closeoutGoal := "Ship the billing rewrite"
+	if err := store.SaveJSON("COLONY_STATE.json", colony.ColonyState{
+		Version: "3.0",
+		Goal:    &closeoutGoal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "First", Status: colony.PhaseReady}}},
+	}); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 
@@ -150,17 +159,23 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 		"next":             "Run `aether continue` to verify worker claims and advance.",
 	}
 
+	// Phase 197 plan 04: the verdict on walking away is now the shared closing
+	// card's sentence rather than renderContextClearGuidance's. The contract is
+	// unchanged -- the claim requires the handover note to be seen on disk.
+	const safeToClose = "it is safe to close this chat"
+	const holdTheChat = "Don't close this chat yet"
+
 	// Without persisted worker handoffs: the section must hold the user
 	// back, never claim safety.
 	out := renderCeremonyCloseoutVisual(result)
 	if !strings.Contains(out, "Handoff") {
 		t.Fatalf("build closeout has no Handoff section:\n%s", out)
 	}
-	if !strings.Contains(out, "don't clear your context yet") {
+	if !strings.Contains(out, holdTheChat) {
 		t.Fatalf("closeout without handoffs does not hold the user back:\n%s", out)
 	}
-	if strings.Contains(out, "safe to clear") {
-		t.Fatalf("closeout claims safe-to-clear with no handoffs recorded:\n%s", out)
+	if strings.Contains(out, safeToClose) {
+		t.Fatalf("closeout says it is safe to close the chat with no handoffs recorded:\n%s", out)
 	}
 	if !strings.Contains(out, "Colony State") {
 		t.Fatalf("build closeout lost the colony-state footer:\n%s", out)
@@ -179,11 +194,11 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 		t.Fatalf("write handoff file: %v", err)
 	}
 	out = renderCeremonyCloseoutVisual(result)
-	if !strings.Contains(out, "Worker handoffs recorded for phase 1") {
-		t.Fatalf("closeout does not confirm recorded handoffs:\n%s", out)
+	if !strings.Contains(out, "were saved for phase 1") {
+		t.Fatalf("closeout does not confirm the notes this build's helpers left:\n%s", out)
 	}
-	if !strings.Contains(out, "safe to clear your context now") {
-		t.Fatalf("verified handoff does not produce the safe-to-clear claim:\n%s", out)
+	if !strings.Contains(out, safeToClose) {
+		t.Fatalf("a verified handover note does not produce the safe-to-close claim:\n%s", out)
 	}
 }
 

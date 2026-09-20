@@ -1,7 +1,7 @@
 <!-- Aether-managed: runtime spec at .aether/commands/memory-details.yaml. Synced by aether update. -->
 ---
 name: ant-memory-details
-description: "📜 Show detailed colony memory — wisdom, pending promotions, and recent failures"
+description: "📜 Show what the colony has learned — wisdom, lessons waiting to be promoted, lessons put aside, and recent failures"
 ---
 
 Use the Go `aether` CLI as the source of truth.

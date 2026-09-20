@@ -28,26 +28,50 @@ func forceBuildJSONOutput(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 }
 
+func TestCoreBuildFixturesUseAcceptedAuthority200(t *testing.T) {
+	content, err := os.ReadFile("codex_build_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(content)
+	for _, name := range []string{
+		"TestBuildWritesDispatchArtifactsAndUpdatesState",
+		"TestDispatchEntryCarriesBriefPath",
+		"TestBuildPlanOnlyCLIForwardsVerificationDepth",
+		"TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos",
+		"TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean",
+		"TestBuildCLIForwardsVerificationDepth",
+		"TestBuildFinalizeRecordsExternalTaskResultsForContinue",
+		"TestBuildSupportsTaskScopedRedispatch",
+		"TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest",
+		"TestBuildJobProposalRoundTrip",
+	} {
+		start := strings.Index(source, "func "+name+"(")
+		if start < 0 {
+			t.Fatalf("owned core build fixture %s is missing", name)
+		}
+		body := source[start:]
+		if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+			body = body[:end+1]
+		}
+		if !strings.Contains(body, "createApprovedAcceptedBuildTestColony(") {
+			t.Errorf("%s does not seed explicit approved specification and accepted-plan authority", name)
+		}
+	}
+	if t.Failed() {
+		t.Fatal("core build fixtures must reach their named assertions through D-16 authority")
+	}
+}
+
 func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Bring Codex build parity to the ant process"
 	researchID := "1.1"
 	implementID := "1.2"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -69,6 +93,15 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 			},
 		},
 	})
+	dataDir, root := accepted.DataRoot, accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -86,13 +119,17 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	result := envelope["result"].(map[string]interface{})
 	// Phase 184: the two golden tasks form a dependent chain of single-task
 	// waves with the same caste, so they are now one worker rather than two.
-	if got := int(result["dispatch_count"].(float64)); got != 5 {
-		// Modeless phase resolves to prototype: prose "Research" in a task no
-		// longer spawns an Oracle (typed phase mode). The keyword-gated
-		// external castes (ambassador, gatekeeper) no longer spawn either:
-		// this phase replaces internal build dispatch and has no external
-		// surface or auth boundary for them to review.
-		t.Fatalf("dispatch_count = %d, want 5", got)
+	// Phase 193 (D-08): the build's verification stage no longer dispatches a
+	// watcher without an explicit Queen proposal.
+	// Plan 194-02 (D-07): the build floor shrank to the builder alone, so
+	// probe no longer rides along either.
+	// Plan 194-05 (D-11): the CLI issued no --castes proposal here, so the
+	// no-proposal fallback (queenFallbackTeam) answers with the required-
+	// caste floor alone -- the keyword engine that used to add measurer and
+	// chaos from this fixture's wording no longer runs on build at all. One
+	// worker (the builder) is the whole team.
+	if got := int(result["dispatch_count"].(float64)); got != 1 {
+		t.Fatalf("dispatch_count = %d, want 1", got)
 	}
 	// Phase 184: the two chained tasks are one worker, so one task wave.
 	if got := int(result["wave_count"].(float64)); got != 1 {
@@ -106,8 +143,11 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	// concurrently instead of queued.
 	// Phase 184: one fewer execution wave, because the two chained tasks are one
 	// worker rather than two waves of one.
-	if got := int(result["execution_wave_count"].(float64)); got != 3 {
-		t.Fatalf("execution_wave_count = %d, want 3 execution waves", got)
+	// Phase 193 (D-08): no watcher wave without an explicit Queen proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback is the builder alone, so
+	// there is exactly one execution wave, not two.
+	if got := int(result["execution_wave_count"].(float64)); got != 1 {
+		t.Fatalf("execution_wave_count = %d, want 1 execution wave", got)
 	}
 	if next := result["next"].(string); next != "aether continue" {
 		t.Fatalf("next = %q, want aether continue", next)
@@ -118,8 +158,12 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	}
 	// Was 6 while each reviewer held its own wave. Independent reviewers now
 	// share one step; see TestIndependentSpecialistsShareAWave.
-	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 3 {
-		t.Fatalf("execution_plan = %#v, want 3 execution stages", result["execution_plan"])
+	// Phase 193 (D-08): no verification stage without an explicit Queen
+	// proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback is the builder alone, so
+	// there is exactly one execution stage, not two.
+	if executionPlan, ok := result["execution_plan"].([]interface{}); !ok || len(executionPlan) != 1 {
+		t.Fatalf("execution_plan = %#v, want 1 execution stage", result["execution_plan"])
 	}
 
 	for _, rel := range []string{
@@ -142,12 +186,15 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if manifest.DispatchMode != "simulated" {
 		t.Fatalf("dispatch mode = %q, want simulated", manifest.DispatchMode)
 	}
-	if len(manifest.Dispatches) != 5 {
-		t.Fatalf("expected 5 manifest dispatches, got %d", len(manifest.Dispatches))
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal. Plan 194-02 (D-07): the build floor shrank to the builder
+	// alone. Plan 194-05 (D-11): the no-proposal fallback no longer scores
+	// optional specialists at all, so the whole team is the one builder.
+	if len(manifest.Dispatches) != 1 {
+		t.Fatalf("expected 1 manifest dispatch, got %d", len(manifest.Dispatches))
 	}
-	// Phase 184: five workers, so five briefs. The two chained tasks share one.
-	if len(manifest.WorkerBriefs) != 5 {
-		t.Fatalf("expected 5 worker briefs in manifest, got %d", len(manifest.WorkerBriefs))
+	if len(manifest.WorkerBriefs) != 1 {
+		t.Fatalf("expected 1 worker brief in manifest, got %d", len(manifest.WorkerBriefs))
 	}
 	if len(manifest.Tasks) != 2 {
 		t.Fatalf("expected 2 planned tasks, got %d", len(manifest.Tasks))
@@ -182,9 +229,18 @@ func TestBuildWritesDispatchArtifactsAndUpdatesState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected spawn-tree.txt: %v", err)
 	}
-	for _, want := range []string{"|Queen|builder|", "|Queen|watcher|", "|Queen|probe|"} {
+	// Phase 193 (D-08): no watcher without an explicit Queen proposal.
+	// Plan 194-02 (D-07): probe is no longer unconditionally required
+	// either -- it appears only when genuinely relevant or explicitly
+	// proposed -- so this fixture no longer carries one.
+	for _, want := range []string{"|Queen|builder|"} {
 		if !strings.Contains(string(spawnTreeData), want) {
 			t.Fatalf("spawn tree missing %q\n%s", want, string(spawnTreeData))
+		}
+	}
+	for _, unwanted := range []string{"|Queen|watcher|", "|Queen|probe|"} {
+		if strings.Contains(string(spawnTreeData), unwanted) {
+			t.Fatalf("spawn tree unexpectedly contains a %q dispatch with no explicit Queen proposal\n%s", unwanted, string(spawnTreeData))
 		}
 	}
 
@@ -479,20 +535,9 @@ func TestDispatchEntryCarriesBriefPath(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Prove every dispatch entry names its brief file"
 	researchID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -513,6 +558,15 @@ func TestDispatchEntryCarriesBriefPath(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -627,12 +681,18 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	}
 	// Phase 184: a dependent chain of single-task waves sharing a caste is now
 	// one worker instead of several.
-	if got := int(result["dispatch_count"].(float64)); got != 6 {
-		t.Fatalf("dispatch_count = %d, want 6", got)
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal.
+	// Plan 194-02 (D-07): the build floor shrank to the builder alone.
+	// Plan 194-05 (D-11): the no-proposal fallback no longer scores optional
+	// specialists at all (architect/measurer/chaos used to ride in on this
+	// fixture's own wording) -- the whole team is the one builder.
+	if got := int(result["dispatch_count"].(float64)); got != 1 {
+		t.Fatalf("dispatch_count = %d, want 1", got)
 	}
 	dispatches := result["dispatches"].([]interface{})
-	if len(dispatches) != 6 {
-		t.Fatalf("dispatches = %d, want 6", len(dispatches))
+	if len(dispatches) != 1 {
+		t.Fatalf("dispatches = %d, want 1", len(dispatches))
 	}
 	for _, raw := range dispatches {
 		dispatch := raw.(map[string]interface{})
@@ -685,10 +745,15 @@ func TestBuildPlanOnlyPrintsDispatchManifestWithoutMutatingState(t *testing.T) {
 	// occupy a single "mixed" step.
 	// Phase 184 removed one more: the two chained task waves are now a single
 	// worker, so there is one "wave" step rather than two.
-	if len(executionPlan) != 4 {
-		t.Fatalf("execution_plan = %d, want 4 steps: %#v", len(executionPlan), executionPlan)
+	// Phase 193 (D-08): no trailing verification stage without an explicit
+	// Queen proposal.
+	// Plan 194-05 (D-11): the no-proposal fallback no longer scores
+	// architect/measurer/chaos in on this fixture's wording, so there is no
+	// design step and no mixed-review step -- one worker, one wave.
+	if len(executionPlan) != 1 {
+		t.Fatalf("execution_plan = %d, want 1 step: %#v", len(executionPlan), executionPlan)
 	}
-	wantStages := []string{"design", "wave", "mixed", "verification"}
+	wantStages := []string{"wave"}
 	var gotStages []string
 	for _, raw := range executionPlan {
 		step := raw.(map[string]interface{})
@@ -1084,31 +1149,40 @@ func TestBuildPlanOnlyExecutionPlanRunsWatcherAfterSpecialists(t *testing.T) {
 			t.Fatalf("execution step %+v has no workers", step)
 		}
 	}
-	// The reviewers (probe, measurer, chaos) previously took a wave each. They
-	// examine the same finished code and share no inputs, so they now collapse
-	// into one "mixed" step. The property this test guards — the watcher runs
-	// after every specialist — is unchanged and asserted below.
-	wantStages := []string{"wave", "mixed", "verification"}
+	// The reviewers (probe, measurer, chaos) previously took a wave each, then
+	// collapsed into one "mixed" step (Phase 194). Phase 201-05 (D-05) changed
+	// this again: reviewer judgement now lands at build-end only when a
+	// verification-boundary decision was actually recorded for this attempt
+	// naming build-end (verificationBoundaryForAttempt). No such decision was
+	// recorded for this plan-only preview -- --heavy alone is a worker-count
+	// policy, not a boundary proposal -- so the check-step default applies
+	// (D-01) and no post-wave reviewer wave is planned here at all; review
+	// happens at `aether continue` instead.
+	// Phase 193 (D-08): the build side no longer dispatches a watcher into a
+	// trailing verification stage without an explicit Queen proposal (none was
+	// made here) -- the program's free checks are the floor, and agent review
+	// lives in `continue`. So the property this test now guards is the
+	// opposite of its old name: no verification stage is planned at all.
+	wantStages := []string{"wave"}
 	if strings.Join(gotStages, ",") != strings.Join(wantStages, ",") {
 		t.Fatalf("execution stages = %v, want %v", gotStages, wantStages)
 	}
 
-	// Guard the collapse itself, not just the stage names: the reviewers must
-	// actually share one wave rather than having been dropped.
+	// Guard the absence directly: with no verification-boundary decision
+	// recorded, measurer and chaos never appear in ANY step -- there is no
+	// "mixed" review-wave step to lose them from.
 	for _, step := range manifest.ExecutionPlan {
-		if step.Stage != "mixed" {
-			continue
-		}
-		for _, caste := range []string{"probe", "measurer", "chaos"} {
-			if !containsString(step.Castes, caste) {
-				t.Errorf("review wave lost %s: %+v", caste, step)
+		for _, caste := range []string{"measurer", "chaos"} {
+			if containsString(step.Castes, caste) {
+				t.Errorf("post-wave reviewer %s dispatched at build end with no recorded verification-boundary decision: %+v", caste, step)
 			}
 		}
 	}
 
-	last := manifest.ExecutionPlan[len(manifest.ExecutionPlan)-1]
-	if last.Stage != "verification" || !containsString(last.Castes, "watcher") {
-		t.Fatalf("final execution step = %+v, want watcher verification", last)
+	for _, step := range manifest.ExecutionPlan {
+		if step.Stage == "verification" || containsString(step.Castes, "watcher") {
+			t.Fatalf("no verification-stage watcher should be planned without a Queen proposal: %+v", step)
+		}
 	}
 	contract, ok := result["dispatch_contract"].(map[string]interface{})
 	if !ok {
@@ -1235,10 +1309,16 @@ func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.
 	if got := intValue(rawBudget["overflow_required_workers"]); got < 0 {
 		t.Fatalf("spawn_budget.overflow_required_workers = %d, want non-negative", got)
 	}
-	for _, caste := range []string{"builder", "watcher"} {
+	// Phase 193 (D-08): watcher no longer appears here without an explicit
+	// Queen proposal (none was made in this fixture) -- the build's
+	// verification stage dispatches no reviewer implicitly.
+	for _, caste := range []string{"builder"} {
 		if !containsString(stringSliceValue(rawBudget["castes"]), caste) {
 			t.Fatalf("spawn_budget.castes missing %s: %#v", caste, rawBudget["castes"])
 		}
+	}
+	if containsString(stringSliceValue(rawBudget["castes"]), "watcher") {
+		t.Fatalf("spawn_budget.castes unexpectedly includes watcher with no explicit Queen proposal: %#v", rawBudget["castes"])
 	}
 	counts, ok := rawBudget["counts"].(map[string]interface{})
 	if !ok {
@@ -1255,114 +1335,6 @@ func TestBuildPlanOnlyManifestQueenExecutionPolicyExposesSpawnBudget(t *testing.
 	}
 }
 
-func TestCodexBuildPlanOnlySpawnBudgetPreservesSafetyCastesUnderLightAndHeavy(t *testing.T) {
-	tests := []struct {
-		name      string
-		phase     colony.Phase
-		options   codexBuildOptions
-		wantDepth colony.VerificationDepth
-	}{
-		{
-			name: "security light keeps required safety castes",
-			phase: colony.Phase{
-				ID:          1,
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before production rollout",
-				Mode:        colony.PhaseModeProduction,
-			},
-			options:   codexBuildOptions{LightFlag: true},
-			wantDepth: colony.VerificationDepthLight,
-		},
-		{
-			name: "security heavy keeps required safety castes",
-			phase: colony.Phase{
-				ID:          1,
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before production rollout",
-				Mode:        colony.PhaseModeProduction,
-			},
-			options:   codexBuildOptions{HeavyFlag: true},
-			wantDepth: colony.VerificationDepthHeavy,
-		},
-		{
-			name: "final review light keeps required safety castes",
-			phase: colony.Phase{
-				ID:          1,
-				Name:        "Final review",
-				Description: "Complete final signoff before handoff",
-				Mode:        colony.PhaseModeProduction,
-			},
-			options:   codexBuildOptions{LightFlag: true},
-			wantDepth: colony.VerificationDepthLight,
-		},
-		{
-			name: "final review heavy keeps required safety castes",
-			phase: colony.Phase{
-				ID:          1,
-				Name:        "Final review",
-				Description: "Complete final signoff before handoff",
-				Mode:        colony.PhaseModeProduction,
-			},
-			options:   codexBuildOptions{HeavyFlag: true},
-			wantDepth: colony.VerificationDepthHeavy,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			saveGlobals(t)
-			resetRootCmd(t)
-
-			dataDir := setupBuildFlowTest(t)
-			root := filepath.Dir(filepath.Dir(dataDir))
-			goal := "Preserve build safety castes"
-			taskID := "1.1"
-			tt.phase.Status = colony.PhaseReady
-			tt.phase.Tasks = []colony.Task{{
-				ID:     &taskID,
-				Goal:   "Build release evidence and address blockers",
-				Status: colony.TaskPending,
-			}}
-			createTestColonyState(t, dataDir, colony.ColonyState{
-				Version:      "3.0",
-				Goal:         &goal,
-				State:        colony.StateREADY,
-				ColonyDepth:  "full",
-				CurrentPhase: 0,
-				Plan:         colony.Plan{Phases: []colony.Phase{tt.phase}},
-			})
-
-			result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, tt.options)
-			if err != nil {
-				t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
-			}
-			manifest := result["dispatch_manifest"].(codexBuildManifest)
-			policy := manifest.QueenExecutionPolicy
-			if policy.ReviewDepth != string(tt.wantDepth) {
-				t.Fatalf("queen_execution_policy.review_depth = %q, want %q", policy.ReviewDepth, tt.wantDepth)
-			}
-			if policy.VerificationDepth != string(tt.wantDepth) {
-				t.Fatalf("queen_execution_policy.verification_depth = %q, want %q", policy.VerificationDepth, tt.wantDepth)
-			}
-			if policy.SpawnBudget == nil {
-				t.Fatalf("queen_execution_policy.spawn_budget missing for %s", tt.name)
-			}
-
-			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
-				if !containsString(policy.SpawnBudget.RequiredCastes, caste) {
-					t.Fatalf("spawn_budget.required_castes missing %s: %+v", caste, policy.SpawnBudget.RequiredCastes)
-				}
-				if !containsString(policy.SpawnBudget.Castes, caste) {
-					t.Fatalf("spawn_budget.castes missing %s: %+v", caste, policy.SpawnBudget.Castes)
-				}
-				if !buildManifestHasCaste(manifest, caste) {
-					t.Fatalf("manifest dispatches missing %s after %s pruning: %v", caste, tt.wantDepth, buildManifestCastes(manifest))
-				}
-			}
-		})
-	}
-}
-
 func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
@@ -1370,7 +1342,18 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Separate caste budget from worker dispatch count"
-	taskIDs := []string{"1.1", "1.2", "1.3"}
+	// Plan 194-02 (D-07) shrank the build floor to the builder alone, so
+	// probe no longer rides along on every phase to pad the worker count.
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback
+	// entirely -- chaos and measurer only ride along here because
+	// applyBuildDispatchPolicyCastes adds them unconditionally at heavy
+	// depth with a "full" colony depth (a separate, unaffected policy
+	// hook), not because they scored above a threshold. With optional
+	// specialists otherwise off the table, builder's own independent-task
+	// fan-out is the only lever left to push worker_count above the heavy
+	// caste ceiling (8) -- eight independent (non-chained) tasks, plus
+	// chaos and measurer, clears it.
+	taskIDs := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
@@ -1388,10 +1371,33 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 					{ID: &taskIDs[0], Goal: "Implement budget manifest contract", Status: colony.TaskPending},
 					{ID: &taskIDs[1], Goal: "Add release hardening checks", Status: colony.TaskPending},
 					{ID: &taskIDs[2], Goal: "Verify security signoff evidence", Status: colony.TaskPending},
+					{ID: &taskIDs[3], Goal: "Package release notes for handoff", Status: colony.TaskPending},
+					{ID: &taskIDs[4], Goal: "Implement the audit log writer", Status: colony.TaskPending},
+					{ID: &taskIDs[5], Goal: "Implement the rollback script", Status: colony.TaskPending},
+					{ID: &taskIDs[6], Goal: "Implement the notification hook", Status: colony.TaskPending},
+					{ID: &taskIDs[7], Goal: "Implement the release changelog entry", Status: colony.TaskPending},
 				},
 			}},
 		},
 	})
+
+	// Phase 201-05 (D-05): chaos and measurer only ride along at build end
+	// when a verification-boundary decision naming build-end was actually
+	// recorded for this attempt (queenBuildPostWaveDispatches) -- record one
+	// here so this fixture still proves worker_count can exceed
+	// max_selected_castes via the policy-added specialists it names above.
+	// Marked terminal (built) immediately after so runCodexBuildPlanOnlyWithOptions'
+	// own "already has an active build attempt" guard (buildAttemptStatusActive)
+	// does not see it as in-flight work this fresh plan-only request would
+	// clobber -- loadLatestBuildAttempt still resolves it either way.
+	spawnBudgetAttemptRel := attemptWithVerificationBoundaryRecorded(t, 1, "attempt-spawn-budget", "build_end", "heavy full-depth budget fixture")
+	var spawnBudgetAttempt buildAttemptRecord
+	if err := store.UpdateJSONAtomically(spawnBudgetAttemptRel, &spawnBudgetAttempt, func() error {
+		spawnBudgetAttempt.Status = buildAttemptBuilt
+		return nil
+	}); err != nil {
+		t.Fatalf("mark fixture attempt terminal: %v", err)
+	}
 
 	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
 	if err != nil {
@@ -1483,56 +1489,11 @@ func TestCodexBuildPlanOnlySpawnBudgetExplainsPrunedCastes(t *testing.T) {
 	}
 	for _, caste := range budget.SkippedCastes {
 		reason := budget.PrunedReasons[caste]
-		if !strings.Contains(reason, "not spawned") {
+		// D-09: plain English, not "not spawned; outside Queen spawn budget
+		// N (...)" -- the pruned reason must still say the pick was not
+		// sent, just without the internal jargon.
+		if !strings.Contains(reason, "not sent") {
 			t.Fatalf("pruned reason for %s should explain not spawned decision: %q", caste, reason)
-		}
-	}
-}
-
-func TestCodexBuildPlanOnlyPhaseFiveSafetyVerificationKeepsRequiredCastes(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	goal := "Full safety verification"
-	taskID := "5.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		ColonyDepth:  "full",
-		CurrentPhase: 0,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{{
-				ID:          5,
-				Name:        "Full Safety Verification",
-				Description: "Run the release-oriented verification set and inspect contract-sensitive output so adaptive pruning does not weaken state, security, release, or final safeguards.",
-				Mode:        colony.PhaseModeProduction,
-				Status:      colony.PhaseReady,
-				Tasks:       []colony.Task{{ID: &taskID, Goal: "Run focused release/security/final safeguard checks and manually inspect any failures before closing.", Status: colony.TaskPending}},
-			}},
-		},
-	})
-
-	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
-	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
-	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	budget := manifest.QueenExecutionPolicy.SpawnBudget
-	if budget == nil {
-		t.Fatal("spawn_budget missing from manifest policy")
-	}
-	for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
-		if !containsString(budget.RequiredCastes, caste) {
-			t.Fatalf("required_castes missing %s: %+v", caste, budget.RequiredCastes)
-		}
-		if !containsString(budget.Castes, caste) {
-			t.Fatalf("castes missing required %s: %+v", caste, budget.Castes)
-		}
-		if !buildManifestHasCaste(manifest, caste) {
-			t.Fatalf("manifest dispatches missing required %s: %v", caste, buildManifestCastes(manifest))
 		}
 	}
 }
@@ -1632,9 +1593,17 @@ func TestBuildPlanOnlyAddsAmbassadorForIntegrationPhases(t *testing.T) {
 		},
 	})
 
-	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// build: a phase's own wording no longer summons an optional specialist
+	// on its own, however clear the integration signal. Ambassador needs an
+	// explicit proposal now to reach the dispatch list -- exactly what the
+	// chat's --castes/--caste-why path (queenApplyJudgement) is for.
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{
+		QueenCastes:   []string{"builder", "ambassador"},
+		QueenCasteWhy: []string{"ambassador=this phase wires the OpenAI webhook, an external integration"},
+	})
 	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	var ambassador *codexBuildDispatch
@@ -1688,9 +1657,18 @@ func TestBuildPlanOnlyUsesQueenSelectedSecurityCastes(t *testing.T) {
 		},
 	})
 
-	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
+	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback at
+	// build. This test's own name says "Queen-selected" -- an explicit
+	// proposal is exactly how the Queen selects a caste now.
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{
+		QueenCastes: []string{"builder", "architect", "gatekeeper"},
+		QueenCasteWhy: []string{
+			"architect=a design boundary is worth setting before touching token rotation",
+			"gatekeeper=this phase touches credentials and token handling",
+		},
+	})
 	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
 	for _, caste := range []string{"architect", "gatekeeper"} {
@@ -1704,11 +1682,9 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Build a routine settings panel"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1716,7 +1692,7 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 		CurrentPhase: 0,
 		Plan: colony.Plan{
 			Phases: []colony.Phase{{
-				ID:          3,
+				ID:          1,
 				Name:        "Settings UI panel",
 				Description: "Build a settings panel for user preferences",
 				Mode:        colony.PhaseModePrototype,
@@ -1729,16 +1705,24 @@ func TestBuildPlanOnlyKeepsRoutineUIQueenSelectionLean(t *testing.T) {
 			}},
 		},
 	})
+	root := accepted.Root
 
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
 		t.Fatalf("runCodexBuildPlanOnly returned error: %v", err)
 	}
 	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	if got, want := buildManifestCastes(manifest), []string{"builder", "probe", "measurer", "chaos", "watcher"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	// Phase 193 (D-08): watcher drops off the lean plan too -- no explicit
+	// Queen proposal named it, so the build side leaves review to `continue`.
+	// Plan 194-02 (D-07): probe is no longer unconditionally required either.
+	// Plan 194-05 (D-11): the no-proposal keyword-scoring fallback that used
+	// to add measurer and chaos here (via unrelated depth mechanics, not
+	// genuine relevance to a settings-panel phase) is gone -- the lean plan
+	// really is just the one builder now.
+	if got, want := buildManifestCastes(manifest), []string{"builder"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("dispatch castes = %v, want lean Queen plan %v", got, want)
 	}
-	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper"} {
+	for _, caste := range []string{"archaeologist", "oracle", "architect", "gatekeeper", "watcher", "measurer", "chaos"} {
 		if buildManifestHasCaste(manifest, caste) {
 			t.Fatalf("routine UI phase should not include %s; got %v", caste, buildManifestCastes(manifest))
 		}
@@ -1791,99 +1775,9 @@ func TestBuildPlanOnlyHeavyReviewAllowsPolicyMeasurerAndChaos(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Optimize query performance"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		ColonyDepth:  "full",
-		CurrentPhase: 0,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{{
-				ID:          4,
-				Name:        "Performance optimization",
-				Description: "Optimize query latency and reduce memory usage",
-				Mode:        colony.PhaseModePrototype,
-				Status:      colony.PhaseReady,
-				Tasks: []colony.Task{{
-					ID:     &taskID,
-					Goal:   "Benchmark and optimize slow queries",
-					Status: colony.TaskPending,
-				}},
-			}},
-		},
-	})
-
-	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
-	if err != nil {
-		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
-	}
-	manifest := result["dispatch_manifest"].(codexBuildManifest)
-	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildManifestHasCaste(manifest, caste) {
-			t.Fatalf("heavy full-depth review should allow policy %s, got %v", caste, buildManifestCastes(manifest))
-		}
-	}
-}
-
-func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	forceBuildJSONOutput(t)
-
-	dataDir := setupBuildFlowTest(t)
-	goal := "Optimize query performance"
-	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
-		Version:      "3.0",
-		Goal:         &goal,
-		State:        colony.StateREADY,
-		ColonyDepth:  "full",
-		CurrentPhase: 0,
-		Plan: colony.Plan{
-			Phases: []colony.Phase{{
-				ID:          4,
-				Name:        "Performance optimization",
-				Description: "Optimize query latency and reduce memory usage",
-				Mode:        colony.PhaseModePrototype,
-				Status:      colony.PhaseReady,
-				Tasks: []colony.Task{{
-					ID:     &taskID,
-					Goal:   "Benchmark and optimize slow queries",
-					Status: colony.TaskPending,
-				}},
-			}},
-		},
-	})
-
-	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--verification-depth", "heavy"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("build --plan-only --verification-depth returned error: %v", err)
-	}
-	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
-	result := env["result"].(map[string]interface{})
-	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
-		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
-	}
-	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildEnvelopeHasCaste(result, caste) {
-			t.Fatalf("expected CLI plan-only to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
-		}
-	}
-}
-
-func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
-	saveGlobals(t)
-	resetRootCmd(t)
-	forceBuildJSONOutput(t)
-
-	dataDir := setupBuildFlowTest(t)
-	goal := "Optimize query performance"
-	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1904,6 +1798,105 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 			}},
 		},
 	})
+	root := accepted.Root
+
+	result, _, _, _, err := runCodexBuildPlanOnlyWithOptions(root, 1, nil, codexBuildOptions{HeavyFlag: true})
+	if err != nil {
+		t.Fatalf("runCodexBuildPlanOnlyWithOptions returned error: %v", err)
+	}
+	manifest := result["dispatch_manifest"].(codexBuildManifest)
+	// Phase 201-05 (D-05): heavy full-depth policy still SELECTS measurer and
+	// chaos for the team (applyBuildDispatchPolicyCastes, unchanged), but
+	// queenBuildPostWaveDispatches now dispatches a post-wave reviewer only
+	// when a verification-boundary decision was actually recorded naming
+	// build-end -- none was recorded for this plan-only preview, so the
+	// check-step default applies (D-01) and neither caste is dispatched here.
+	for _, caste := range []string{"measurer", "chaos"} {
+		if buildManifestHasCaste(manifest, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, %s should not be dispatched at build end, got %v", caste, buildManifestCastes(manifest))
+		}
+	}
+}
+
+func TestBuildPlanOnlyCLIForwardsVerificationDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+	withWorkingDir(t, accepted.Root)
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--verification-depth", "heavy"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --plan-only --verification-depth returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
+		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
+	}
+	// Phase 201-05 (D-05): with no verification-boundary decision recorded,
+	// build-end dispatches no post-wave reviewer regardless of depth -- the
+	// heavy flag is forwarded (review_depth above) but judgement lands at
+	// `aether continue` by default (D-01).
+	for _, caste := range []string{"measurer", "chaos"} {
+		if buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, CLI plan-only should not dispatch %s at build end, got %v", caste, buildEnvelopeCastes(result))
+		}
+	}
+}
+
+func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	goal := "Optimize query performance"
+	taskID := "1.1"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{
+				ID:          1,
+				Name:        "Performance optimization",
+				Description: "Optimize query latency and reduce memory usage",
+				Mode:        colony.PhaseModePrototype,
+				Status:      colony.PhaseReady,
+				Tasks: []colony.Task{{
+					ID:     &taskID,
+					Goal:   "Benchmark and optimize slow queries",
+					Status: colony.TaskPending,
+				}},
+			}},
+		},
+	})
+	withWorkingDir(t, accepted.Root)
 
 	rootCmd.SetArgs([]string{"build", "1", "--synthetic", "--verification-depth", "heavy"})
 	if err := rootCmd.Execute(); err != nil {
@@ -1918,9 +1911,13 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 	if result["review_depth"].(string) != string(colony.VerificationDepthHeavy) {
 		t.Fatalf("review_depth = %q, want %q", result["review_depth"], colony.VerificationDepthHeavy)
 	}
+	// Phase 201-05 (D-05): with no verification-boundary decision recorded,
+	// build-end dispatches no post-wave reviewer regardless of depth -- the
+	// heavy flag is forwarded (review_depth above) but judgement lands at
+	// `aether continue` by default (D-01).
 	for _, caste := range []string{"measurer", "chaos"} {
-		if !buildEnvelopeHasCaste(result, caste) {
-			t.Fatalf("expected CLI build to forward heavy depth and include %s, got %v", caste, buildEnvelopeCastes(result))
+		if buildEnvelopeHasCaste(result, caste) {
+			t.Fatalf("with no recorded verification-boundary decision, CLI build should not dispatch %s at build end, got %v", caste, buildEnvelopeCastes(result))
 		}
 	}
 
@@ -1936,25 +1933,77 @@ func TestBuildCLIForwardsVerificationDepth(t *testing.T) {
 	}
 }
 
-func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
+func TestBuildCLINormalPathForwardsQueenTeamFlags(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
+	goal := "Measure the performance change"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		ColonyDepth:  "full",
+		CurrentPhase: 0,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:          1,
+			Name:        "Performance benchmark",
+			Description: "Measure latency before and after the change",
+			Mode:        colony.PhaseModePrototype,
+			Status:      colony.PhaseReady,
+			Tasks:       []colony.Task{{ID: &taskID, Goal: "Implement and benchmark the change", Status: colony.TaskPending}},
+		}}},
+	})
+
+	rootCmd.SetArgs([]string{
+		"build", "1", "--synthetic",
+		"--castes", "measurer",
+		"--caste-why", "measurer=compare latency before and after this change",
+		"--caste-reason", "the Queen wants measured performance evidence",
+	})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("normal build returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load build manifest: %v", err)
+	}
+	// Phase 201-05 (D-05): proposing "measurer" via --castes still reaches the
+	// Queen's team judgement (proven below via caste_decision's rationale
+	// text -- the assertion --castes/--caste-why was built to guard), but
+	// queenBuildPostWaveDispatches now gates the ACTUAL build-end dispatch on
+	// a separately recorded verification-boundary decision naming build-end.
+	// No such decision was proposed here, so measurer is judged but not
+	// dispatched at build end -- it would be judged again, and can dispatch,
+	// at the check step (`aether continue`) instead.
+	for _, dispatch := range manifest.Dispatches {
+		if dispatch.Caste == "measurer" {
+			t.Fatalf("with no recorded verification-boundary decision, measurer should not be dispatched at build end; dispatches=%+v", manifest.Dispatches)
+		}
+	}
+	decisionJSON, err := json.Marshal(manifest.CasteDecision)
 	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
+		t.Fatalf("marshal caste decision: %v", err)
 	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
+	if !strings.Contains(string(decisionJSON), "compare latency before and after this change") {
+		t.Fatalf("normal build discarded --caste-why; caste_decision=%s", decisionJSON)
 	}
-	defer os.Chdir(oldDir)
+}
+
+func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
 
 	goal := "Finalize wrapper-spawned agents"
 	taskID := "1.1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
@@ -1970,6 +2019,15 @@ func TestBuildFinalizeRecordsExternalTaskResultsForContinue(t *testing.T) {
 			}},
 		},
 	})
+	dataDir, root := accepted.DataRoot, accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
@@ -2251,22 +2309,11 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	resetRootCmd(t)
 	forceBuildJSONOutput(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get cwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("failed to chdir to test root: %v", err)
-	}
-	defer os.Chdir(oldDir)
-
 	goal := "Redispatch only the missing task"
 	taskOneID := "1.1"
 	taskTwoID := "1.2"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version:        "3.0",
 		Goal:           &goal,
 		State:          colony.StateEXECUTING,
@@ -2287,6 +2334,15 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 			},
 		},
 	})
+	root := accepted.Root
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatalf("failed to chdir to test root: %v", err)
+	}
+	defer os.Chdir(oldDir)
 
 	rootCmd.SetArgs([]string{"build", "1", "--task", taskTwoID})
 	if err := rootCmd.Execute(); err != nil {
@@ -2310,8 +2366,11 @@ func TestBuildSupportsTaskScopedRedispatch(t *testing.T) {
 	if len(manifest.SelectedTasks) != 1 || manifest.SelectedTasks[0] != taskTwoID {
 		t.Fatalf("manifest selected tasks = %v, want [%s]", manifest.SelectedTasks, taskTwoID)
 	}
-	if len(manifest.Dispatches) != 2 {
-		t.Fatalf("expected 2 manifest dispatches for targeted redispatch, got %d", len(manifest.Dispatches))
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so a targeted redispatch of one task is now just that one
+	// worker.
+	if len(manifest.Dispatches) != 1 {
+		t.Fatalf("expected 1 manifest dispatch for targeted redispatch, got %d", len(manifest.Dispatches))
 	}
 	for _, dispatch := range manifest.Dispatches {
 		if dispatch.TaskID != "" && dispatch.TaskID != taskTwoID {
@@ -2339,71 +2398,86 @@ func TestBuildRepairsCompletedPriorPhaseTasksFromTrustedManifest(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withTestWorkspace(t, root)
-	withWorkingDir(t, root)
-
 	goal := "Repair completed phase task statuses before next build"
 	phaseOneTaskID := "1.1"
 	phaseOneSecondTaskID := "1.2"
 	phaseTwoTaskID := "2.1"
 	now := time.Now().UTC()
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	acceptedState := colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
 		State:        colony.StateREADY,
-		CurrentPhase: 2,
+		CurrentPhase: 1,
 		ColonyDepth:  "light",
 		Plan: colony.Plan{
 			Phases: []colony.Phase{
 				{
 					ID:     1,
 					Name:   "Already closed phase",
-					Status: colony.PhaseCompleted,
+					Status: colony.PhaseReady,
 					Tasks: []colony.Task{
 						{ID: &phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskPending},
-						{ID: &phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskInProgress, DependsOn: []string{phaseOneTaskID}},
+						{ID: &phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskPending, DependsOn: []string{phaseOneTaskID}},
 					},
 				},
 				{
 					ID:     2,
 					Name:   "Next phase",
-					Status: colony.PhaseReady,
+					Status: colony.PhasePending,
 					Tasks:  []colony.Task{{ID: &phaseTwoTaskID, Goal: "Start only after prior tasks are reconciled", Status: colony.TaskPending}},
 				},
 			},
 		},
-	})
+	}
+	accepted := createApprovedAcceptedBuildTestColony(t, acceptedState)
+	root := accepted.Root
+	withTestWorkspace(t, root)
+	withWorkingDir(t, root)
 
-	if err := store.SaveJSON("build/phase-1/manifest.json", codexBuildManifest{
-		Phase:        1,
-		PhaseName:    "Already closed phase",
-		Goal:         goal,
-		Root:         root,
-		ColonyDepth:  "light",
-		DispatchMode: "external-task",
-		GeneratedAt:  now.Format(time.RFC3339),
-		State:        string(colony.StateBUILT),
-		ClaimsPath:   displayDataPath("last-build-claims.json"),
+	priorDispatches := []codexBuildDispatch{
+		{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-prior-1", Task: "Finish the first prior task", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
+		{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-prior-2", Task: "Finish the second prior task", Status: "completed", TaskID: phaseOneSecondTaskID, Outputs: []string{"main.go"}},
+		{Stage: "verification", Caste: "watcher", Name: "Keen-prior-3", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
+	}
+	priorManifest := codexBuildManifest{
+		Phase:          1,
+		PhaseName:      "Already closed phase",
+		Goal:           goal,
+		Root:           root,
+		ColonyDepth:    "light",
+		DispatchMode:   "direct",
+		ExecutionOwner: "runtime-worker-dispatch",
+		GeneratedAt:    now.Format(time.RFC3339),
+		State:          string(colony.StateBUILT),
+		SelectedTasks:  []string{phaseOneTaskID, phaseOneSecondTaskID},
 		Tasks: []codexBuildTaskPlan{
 			{ID: phaseOneTaskID, Goal: "Finish the first prior task", Status: colony.TaskCompleted},
 			{ID: phaseOneSecondTaskID, Goal: "Finish the second prior task", Status: colony.TaskCompleted, DependsOn: []string{phaseOneTaskID}},
 		},
-		Dispatches: []codexBuildDispatch{
-			{Stage: "wave", Wave: 1, Caste: "builder", Name: "Forge-prior-1", Task: "Finish the first prior task", Status: "completed", TaskID: phaseOneTaskID, Outputs: []string{"main.go"}},
-			{Stage: "wave", Wave: 2, Caste: "builder", Name: "Forge-prior-2", Task: "Finish the second prior task", Status: "completed", TaskID: phaseOneSecondTaskID, Outputs: []string{"main.go"}},
-			{Stage: "verification", Caste: "watcher", Name: "Keen-prior-3", Task: "Verify prior phase", Status: "completed", Outputs: []string{"main_test.go"}},
-		},
-	}); err != nil {
-		t.Fatalf("failed to seed prior manifest: %v", err)
+		Dispatches: priorDispatches,
 	}
-	if err := store.SaveJSON("last-build-claims.json", codexBuildClaims{
-		FilesModified: []string{"main.go"},
-		BuildPhase:    1,
-		Timestamp:     now.Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("failed to seed prior claims: %v", err)
+	commitTestBuildStartAt(t, root, 1, now, testBuildStartOptions{
+		Variant:        buildStartDirect,
+		Phase:          1,
+		GeneratedAt:    now,
+		ProcessState:   testBuildProcessDead,
+		SelectedTasks:  []string{phaseOneTaskID, phaseOneSecondTaskID},
+		Dispatches:     priorDispatches,
+		ExecutionOwner: "runtime-worker-dispatch",
+		DispatchMode:   "direct",
+		Manifest:       &priorManifest,
+	})
+
+	completedState := acceptedState
+	completedState.State = colony.StateREADY
+	completedState.CurrentPhase = 2
+	completedState.Plan.Phases[0].Status = colony.PhaseCompleted
+	completedState.Plan.Phases[0].Tasks[0].Status = colony.TaskPending
+	completedState.Plan.Phases[0].Tasks[1].Status = colony.TaskInProgress
+	completedState.Plan.Phases[1].Status = colony.PhaseReady
+	applyAcceptedBuildTestExecutionFacts(t, root, completedState)
+	if _, err := os.Stat(filepath.Join(accepted.DataRoot, "build", "phase-1", "manifest.json")); err != nil {
+		t.Fatalf("canonical build start did not persist prior manifest: %v", err)
 	}
 
 	if _, err := runCodexBuild(root, 2, nil, true); err != nil {
@@ -2653,7 +2727,7 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 		Plan:    colony.Plan{Phases: []colony.Phase{phase}},
 	})
 
-	baseDispatches := plannedBuildDispatches(phase, "standard")
+	baseDispatches := testPlannedBuildDispatches(phase, "standard")
 	if len(baseDispatches) == 0 {
 		t.Fatal("expected planned dispatches")
 	}
@@ -2684,34 +2758,21 @@ func TestBuildAllocatesUniqueNamesWhenSpawnHistoryCollides(t *testing.T) {
 	}
 }
 
-// seedBuildAttemptRecord writes a minimal buildAttemptRecord and its
-// latest-attempt pointer directly to the store, bypassing beginBuildAttempt's
-// ColonyState/workspace-fingerprint requirements, so tests can construct an
-// attempt in an arbitrary status for a given phase.
+// seedBuildAttemptRecord creates a canonical latest attempt and then uses the
+// production transition to place it in the arbitrary status a collision test
+// needs. The accepted authority, attempt, receipt, manifest, and pointer are
+// all committed by commitTestBuildStart.
 func seedBuildAttemptRecord(t *testing.T, phaseNum int, status string, dispatches []codexBuildDispatch) {
 	t.Helper()
-	attemptID := fmt.Sprintf("attempt-test-phase-%d-%s", phaseNum, status)
-	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseNum), "attempts", attemptID+".json"))
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	record := buildAttemptRecord{
-		SchemaVersion: buildAttemptSchemaVersion,
-		ID:            attemptID,
-		Phase:         phaseNum,
-		Status:        status,
-		StartedAt:     now,
-		UpdatedAt:     now,
-		Dispatches:    dispatches,
+	fixture := commitTestBuildStart(t, testBuildStartOptions{
+		GeneratedAt: time.Now().UTC(), ExecutionOwner: "collision-test", Dispatches: dispatches,
+		MakeLatest: testBuildStartBool(true),
+	})
+	if fixture.Request.Phase != phaseNum {
+		t.Fatalf("canonical collision fixture phase = %d, want %d", fixture.Request.Phase, phaseNum)
 	}
-	if err := store.SaveJSON(attemptRel, record); err != nil {
-		t.Fatalf("failed to seed build attempt record: %v", err)
-	}
-	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseNum), latestBuildAttemptPointer{
-		SchemaVersion: buildAttemptSchemaVersion,
-		AttemptID:     attemptID,
-		Path:          displayDataPath(attemptRel),
-		UpdatedAt:     now,
-	}); err != nil {
-		t.Fatalf("failed to seed latest build attempt pointer: %v", err)
+	if err := transitionBuildAttempt(fixture.AttemptPath, status, "collision fixture status", dispatches, nil, "collision-test", nil); err != nil {
+		t.Fatalf("transition canonical collision fixture: %v", err)
 	}
 }
 
@@ -2798,15 +2859,7 @@ func TestEnsureUniqueBuildDispatchNamesStableAcrossRePlan(t *testing.T) {
 // not leak across phases (T-163.1-20).
 func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *testing.T) {
 	saveGlobals(t)
-	dataDir := t.TempDir() + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create data dir: %v", err)
-	}
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
@@ -2814,8 +2867,6 @@ func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *te
 	}
 	// Phase 1 has its own active, unfinalized attempt that used this name --
 	// that exclusion must not apply when planning a DIFFERENT phase.
-	seedBuildAttemptRecord(t, 1, buildAttemptAwaiting, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
-
 	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
 	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 2)
 	if err != nil {
@@ -2835,22 +2886,12 @@ func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromDifferentPhase(t *te
 // attempts only (T-163.1-20).
 func TestEnsureUniqueBuildDispatchNamesSuffixesCollisionFromSealedAttempt(t *testing.T) {
 	saveGlobals(t)
-	dataDir := t.TempDir() + "/.aether/data"
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create data dir: %v", err)
-	}
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	store = s
+	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
 
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	if err := spawnTree.RecordSpawn("Queen", "builder", "Hammer-44", "Phase 1 task", 1); err != nil {
 		t.Fatalf("failed to seed spawn tree: %v", err)
 	}
-	seedBuildAttemptRecord(t, 1, buildAttemptBuilt, []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}})
-
 	dispatches := []codexBuildDispatch{{Name: "Hammer-44", Caste: "builder"}}
 	allocated, err := ensureUniqueBuildDispatchNames(dispatches, 1)
 	if err != nil {
@@ -3008,6 +3049,213 @@ func TestBuildCommandExposesWorkerTimeoutFlag(t *testing.T) {
 	if buildCmd.Flags().Lookup("worker-timeout") == nil {
 		t.Fatal("expected build command to expose --worker-timeout")
 	}
+}
+
+func TestBuildJobProposalRoundTrip(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	goal := "Wire Queen job proposals into build planning"
+	firstID := "1.1"
+	secondID := "1.2"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Proposal round trip",
+			Status: colony.PhaseReady,
+			Tasks: []colony.Task{
+				{ID: &firstID, Goal: "Add the proposal decoder", Status: colony.TaskPending},
+				{ID: &secondID, Goal: "Persist the proposal decision", Status: colony.TaskPending, DependsOn: []string{firstID}},
+			},
+		}}},
+	})
+	withWorkingDir(t, accepted.Root)
+
+	proposal := `{"name":"proposal-wire","task_ids":["1.1","1.2"],"owner_caste":"builder","relationship":"dependency_chain","benefit":"one implementation context"}`
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--no-checkin", "--job-proposal", proposal})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --job-proposal returned error: %v", err)
+	}
+
+	var manifest codexBuildManifest
+	if err := store.LoadJSON("build/phase-1/manifest.json", &manifest); err != nil {
+		t.Fatalf("load proposal manifest: %v", err)
+	}
+	if len(manifest.JobDecisions) != 1 || manifest.JobDecisions[0].Status != "accepted" {
+		t.Fatalf("job decisions = %+v, want one accepted proposal", manifest.JobDecisions)
+	}
+	waveDispatches := buildWaveDispatches(manifest.Dispatches)
+	if len(waveDispatches) != 1 {
+		t.Fatalf("wave dispatches = %+v, want one coherent job", waveDispatches)
+	}
+	got := waveDispatches[0]
+	if got.JobName != "proposal-wire" || got.JobSource != "queen" || got.JobReason == "" {
+		t.Fatalf("job metadata did not round-trip: %+v", got)
+	}
+	if !reflect.DeepEqual(got.CoveredTaskIDs, []string{firstID, secondID}) || got.TaskID != firstID {
+		t.Fatalf("task identity lost during round trip: primary=%q covered=%v", got.TaskID, got.CoveredTaskIDs)
+	}
+}
+
+func TestBuildRejectsInvalidJobProposalBeforeAttempt(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	forceBuildJSONOutput(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	goal := "Reject malformed job proposals without side effects"
+	taskID := "1.1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan: colony.Plan{Phases: []colony.Phase{{
+			ID:     1,
+			Name:   "Invalid proposal",
+			Status: colony.PhaseReady,
+			Tasks:  []colony.Task{{ID: &taskID, Goal: "Keep state untouched", Status: colony.TaskPending}},
+		}}},
+	})
+
+	rootCmd.SetArgs([]string{"build", "1", "--plan-only", "--job-proposal", `{not-json`})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build command should report its contract error through the normal envelope: %v", err)
+	}
+	combined := stdout.(*bytes.Buffer).String() + stderr.(*bytes.Buffer).String()
+	if !strings.Contains(strings.ToLower(combined), "job proposal") {
+		t.Fatalf("error output = %q, want a named job proposal parse error", combined)
+	}
+	for _, rel := range []string{
+		filepath.Join(".aether", "data", "build", "phase-1", "manifest.json"),
+		filepath.Join(".aether", "data", "build", "phase-1", "latest-attempt.json"),
+	} {
+		if _, err := os.Stat(filepath.Join(root, rel)); !os.IsNotExist(err) {
+			t.Fatalf("invalid proposal created %s before rejection (stat err=%v)", rel, err)
+		}
+	}
+}
+
+func TestGroupingOccursBeforeWavesAndWorktreeOwnership(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Planner ordering",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Edit the shared runtime", Status: colony.TaskPending, Hints: []string{"cmd/runtime.go"}},
+			{ID: &secondID, Goal: "Test the shared runtime", Status: colony.TaskPending, DependsOn: []string{firstID}, Hints: []string{"cmd/runtime.go"}},
+		},
+	}
+	state := colony.ColonyState{ParallelMode: colony.ModeWorktree}
+	proposal := coherentJobProposal{
+		Name:         "shared-runtime",
+		TaskIDs:      []string{firstID, secondID},
+		OwnerCaste:   "builder",
+		Relationship: "dependency_chain",
+		Benefit:      "one owner prevents a worktree collision",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, state, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("plannedBuildDispatchesWithJudgement returned error: %v", err)
+	}
+	waveDispatches := buildWaveDispatches(dispatches)
+	if len(waveDispatches) != 1 || !reflect.DeepEqual(waveDispatches[0].CoveredTaskIDs, []string{firstID, secondID}) {
+		t.Fatalf("worktree plan was split before grouping: %+v", waveDispatches)
+	}
+	if waveDispatches[0].Wave != 1 || waveDispatches[0].ExecutionWave <= 0 {
+		t.Fatalf("job DAG did not assign the first coherent job to wave 1: %+v", waveDispatches[0])
+	}
+	if len(decisions) != 1 || decisions[0].Status != "accepted" {
+		t.Fatalf("planner decisions = %+v, want accepted", decisions)
+	}
+}
+
+func TestSelectedTaskJobProposalCannotPullOtherTasks(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Selected task boundary",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Redispatch this task", Status: colony.TaskPending},
+			{ID: &secondID, Goal: "Leave this task untouched", Status: colony.TaskPending},
+		},
+	}
+	proposal := coherentJobProposal{
+		Name:         "scope-escape",
+		TaskIDs:      []string{firstID, secondID},
+		OwnerCaste:   "builder",
+		Relationship: "dependency_chain",
+		Benefit:      "attempt to widen selected scope",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, colony.ColonyState{}, []string{firstID}, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("selected-task planning returned error: %v", err)
+	}
+	waveDispatches := buildWaveDispatches(dispatches)
+	if len(waveDispatches) != 1 || !reflect.DeepEqual(dispatchCoveredTaskIDs(waveDispatches[0]), []string{firstID}) {
+		t.Fatalf("proposal widened selected scope: %+v", waveDispatches)
+	}
+	if len(decisions) != 1 || decisions[0].Status != "refused" || decisions[0].OffendingTaskID != secondID {
+		t.Fatalf("scope refusal was not persisted visibly: %+v", decisions)
+	}
+}
+
+func TestUnsafeJobProposalIsVisiblyRepaired(t *testing.T) {
+	firstID := "1.1"
+	secondID := "1.2"
+	phase := colony.Phase{
+		ID:     1,
+		Name:   "Unsafe proposal repair",
+		Status: colony.PhaseReady,
+		Tasks: []colony.Task{
+			{ID: &firstID, Goal: "Edit the API", Status: colony.TaskPending, Hints: []string{"cmd/api.go"}},
+			{ID: &secondID, Goal: "Edit the UI", Status: colony.TaskPending, DependsOn: []string{firstID}, Hints: []string{"web/ui.ts"}},
+		},
+	}
+	proposal := coherentJobProposal{
+		Name:         "unsafe-bundle",
+		TaskIDs:      []string{secondID, firstID},
+		OwnerCaste:   "builder",
+		Relationship: "same_files",
+		Benefit:      "claims unrelated paths are shared",
+	}
+
+	dispatches, decisions, err := plannedBuildDispatchesWithJobProposals(
+		phase, colony.ColonyState{}, nil, colony.VerificationDepthStandard, nil, "", nil, []coherentJobProposal{proposal},
+	)
+	if err != nil {
+		t.Fatalf("unsafe proposal should be repaired, not abort planning: %v", err)
+	}
+	if len(buildWaveDispatches(dispatches)) != 1 {
+		t.Fatalf("unsafe bundle was not repaired into the safe automatic job: %+v", buildWaveDispatches(dispatches))
+	}
+	if len(decisions) != 1 || decisions[0].Status != "refused" || len(decisions[0].ReplacementJobNames) != 1 {
+		t.Fatalf("repair decision is not visible: %+v", decisions)
+	}
+}
+
+func buildWaveDispatches(dispatches []codexBuildDispatch) []codexBuildDispatch {
+	out := make([]codexBuildDispatch, 0, len(dispatches))
+	for _, dispatch := range dispatches {
+		if dispatch.Stage == "wave" {
+			out = append(out, dispatch)
+		}
+	}
+	return out
 }
 
 func TestBuildUsesWorkerTimeoutOverride(t *testing.T) {
@@ -3980,8 +4228,8 @@ func TestBuildWorkerBriefIsMostlyTask(t *testing.T) {
 // invariant proof for criterion 1: a merged (multi-task) dispatch's brief must
 // carry every covered task's constraints, hints and success criteria, not
 // just the first task folded into the chain. It builds a real 3-task merged
-// dispatch (via CoveredTaskIDs, exactly as coalesceSequentialDispatches
-// produces one) rather than a single-task dispatch with a hand-set
+// dispatch (via CoveredTaskIDs, exactly as planCoherentJobs produces one)
+// rather than a single-task dispatch with a hand-set
 // CoveredTaskIDs list, so it actually exercises the merge-aware resolution
 // path instead of asserting a single hardcoded string.
 func TestBuildWorkerBriefCoversEveryMergedTaskConstraintsAndCriteria(t *testing.T) {
@@ -4496,6 +4744,17 @@ func TestBuildDispatchStartsHeartbeatMonitor(t *testing.T) {
 // executed one worker at a time no matter how many castes share its wave. Both
 // halves are asserted here because either alone is a no-op.
 func TestIndependentSpecialistsShareAWave(t *testing.T) {
+	// Phase 201-05 (D-05): queenBuildPostWaveDispatches now gates on the
+	// recorded verification-boundary decision for the phase's current build
+	// attempt. This test's own subject is wave collapsing, not the boundary
+	// itself -- record a build-end decision so the pre-existing "3 reviewers
+	// collapse into one wave" assertion still exercises real dispatches
+	// (TestBuildEndReviewersGateOnTheRecordedBoundary in
+	// boundary_double_dispatch_test.go covers the boundary gating itself).
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
 	phase := colony.Phase{
 		ID:          1,
 		Name:        "Integration and security review",
@@ -4505,6 +4764,25 @@ func TestIndependentSpecialistsShareAWave(t *testing.T) {
 	queenCastes := map[string]bool{
 		"architect": true, "gatekeeper": true, "includer": true,
 		"tracker": true, "sage": true, "archaeologist": true, "oracle": true,
+	}
+
+	attemptID := "attempt-shared-wave"
+	attemptRel := newTestVerificationBoundaryAttempt(t, phase.ID, attemptID)
+	decision := queenApplyVerificationBoundary("build_end", "release sign-off", colony.Phase{}, colony.ColonyState{})
+	if err := attachVerificationBoundary(attemptRel, decision); err != nil {
+		t.Fatalf("attach verification boundary: %v", err)
+	}
+	// loadLatestBuildAttempt (queenBuildPostWaveDispatches' own read path)
+	// resolves via the latest-attempt pointer, not the raw attempt path --
+	// newTestVerificationBoundaryAttempt derives without MakeLatest, so write
+	// the pointer directly, mirroring deriveBuildAttempt's own pointer shape.
+	if err := store.SaveJSON(latestBuildAttemptPointerPath(phase.ID), latestBuildAttemptPointer{
+		SchemaVersion: buildAttemptSchemaVersion,
+		AttemptID:     attemptID,
+		Path:          attemptRel,
+		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("write latest-attempt pointer: %v", err)
 	}
 
 	pre := queenBuildPreWaveDispatches(phase, queenCastes)

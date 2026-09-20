@@ -56,7 +56,7 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 		"Run `aether build 2 --force` to regenerate the build manifest.",
 		"Run `aether continue --skip-watchers --reconcile-task 2.1` to recover.",
 		"Run `aether update --force --download-binary` to refresh the runtime.",
-		"Run `aether recover --apply --force` to repair the manifest.",
+		"Run `aether maintenance recovery-inspect` to inspect recovery evidence.",
 		// skip-phase has no wrapper, so its flagged form must stay raw.
 		"Run `aether skip-phase 2 --force` only to abandon the phase.",
 	}, "\n")
@@ -82,7 +82,7 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 				"/ant-update --force --download-binary",
 				// Recovery guidance is shown at the worst possible moment to
 				// hand someone a command they cannot type.
-				"/ant-recover --apply --force",
+				"/ant-maintenance recovery-inspect",
 			} {
 				if !strings.Contains(got, want) {
 					t.Errorf("expected %s in %s output, got:\n%s", want, platform, got)
@@ -115,13 +115,29 @@ func TestVisualOutputNeverLeaksRawWrapperCommands(t *testing.T) {
 		writeVisualOutput(&buf, sample)
 		got := buf.String()
 
-		// Codex is runtime-native: it has no slash wrappers, so the raw CLI
-		// form is the only correct naming there.
+		// Codex exposes only nine public skills. Other actions and literal
+		// shell invocations must keep their executable CLI spelling.
 		if strings.Contains(got, "/ant-") {
 			t.Errorf("codex output must not name slash wrappers, got:\n%s", got)
 		}
-		if !strings.Contains(got, "aether continue") {
-			t.Errorf("expected codex output to keep the raw CLI form, got:\n%s", got)
+		for _, want := range []string{
+			"Run `$ant-continue`", "Run `$ant-plan`",
+			"$ant-build 2 --force", "$ant-continue --skip-watchers --reconcile-task 2.1",
+			"aether lay-eggs", "aether patrol", "aether status", "aether publish", "aether integrity",
+			"aether update --force --download-binary", "aether maintenance recovery-inspect",
+			"aether skip-phase 2 --force", "AETHER_OUTPUT_MODE=visual aether build 1",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("codex output missing %q:\n%s", want, got)
+			}
+		}
+		for _, forbidden := range []string{
+			"Run `aether continue", "Run `aether plan", "Run `aether build",
+			"$ant-status", "$ant-patrol", "$ant-maintenance", "$ant-update", "$ant-skip-phase",
+		} {
+			if strings.Contains(got, forbidden) {
+				t.Errorf("codex output advertises incorrect spelling %q:\n%s", forbidden, got)
+			}
 		}
 	})
 }

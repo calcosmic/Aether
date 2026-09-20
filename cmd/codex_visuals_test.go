@@ -14,6 +14,13 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
+// pinRawCommandNames pins legacy visual fixtures to Codex. Public lifecycle
+// suggestions now use its nine ant skills; other suggestions remain raw CLI.
+func pinRawCommandNames(t *testing.T) {
+	t.Helper()
+	t.Setenv("AETHER_PLATFORM", "codex")
+}
+
 func TestCommandCeremonyTaxonomyLevelsAreExplicit(t *testing.T) {
 	levels := map[commandCeremonyLevel]string{
 		commandCeremonyLevelWorkerTheatre: "worker_theatre",
@@ -241,6 +248,7 @@ func TestCeremonyCloseoutNoWorkerExistingPlanDoesNotRenderWorkerTheatre(t *testi
 }
 
 func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -288,7 +296,7 @@ func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
 		"C O N T I N U E   B L O C K E D",
 		"Verification blocked the phase",
 		"go test ./... failed",
-		"Run `/ant-build 1 --force`",
+		"Run `$ant-build 1 --force`",
 	} {
 		if !strings.Contains(visual, want) {
 			t.Fatalf("blocked closeout missing %q\n%s", want, visual)
@@ -296,8 +304,8 @@ func TestCeremonyCloseoutBlockedPathRendersBlockedNotCompletion(t *testing.T) {
 	}
 	for _, forbidden := range []string{
 		"C O N T I N U E   S U M M A R Y",
-		"Run `aether build 1` to dispatch the next phase.",
-		"Run `aether seal`",
+		"Run `$ant-build 1` to dispatch the next phase.",
+		"Run `$ant-seal`",
 	} {
 		if strings.Contains(visual, forbidden) {
 			t.Fatalf("blocked closeout hid blocked state behind %q\n%s", forbidden, visual)
@@ -353,10 +361,12 @@ func TestCeremonyCloseoutFailedFinalizerRendersFailureNotCompletion(t *testing.T
 }
 
 func TestPlanVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	goal := "Ship visual output parity"
@@ -376,24 +386,27 @@ func TestPlanVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"📋", "P L A N", "P L A N   D I S P A T C H", "Planning Wave 1 starting", "✓", "/ant-build 1"} {
+	for _, want := range []string{"📋", "P L A N", "Choose Planning Preset", "Fast", "Balanced", "Deep", "Exhaustive", "Planning did not start. State: unchanged."} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{"P L A N   D I S P A T C H", "Planning Wave 1 starting", "aether build 1"} {
+		if strings.Contains(output, forbidden) {
+			t.Errorf("unselected preset crossed the planning authority boundary via %q\n%s", forbidden, output)
 		}
 	}
 }
 
 func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 	goal := "Improve command visuals"
-	taskOneID := "task-1"
-	taskTwoID := "task-2"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	taskOneID := "1.1"
+	taskTwoID := "1.2"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -412,6 +425,8 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 			},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -422,9 +437,25 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Watcher", "Post-Wave: Probe", "Post-Wave: Watcher", "Total planned dispatches: 4", "Execution: serial", "single task in this wave", "/ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [heavy] ──", "── Housekeeping ──", "── Colony Complete ──", "safe to clear your context now."} {
+	// Phase 193 (D-08): no watcher dispatch without an explicit Queen
+	// proposal, so the spawn plan no longer has a "Post-Wave: Watcher" step.
+	// Plan 194-02 (D-07): the Queen's Team card lists the required-castes
+	// floor, which shrank to the builder alone. The dispatch rationale may
+	// still name Watcher truthfully in its "not called" explanation.
+	// Plan 194-05 (D-06, D-11): this fixture is a single-phase plan, so
+	// position used to imply heavy review; that implicit escalation is gone,
+	// so review depth is standard, not heavy. D-11 also removed the
+	// no-proposal keyword-scoring fallback entirely -- Scout used to ride
+	// along here on task 2's "Document" wording, but the fallback no longer
+	// scores anything, so the dispatch count drops to 1 (builder alone).
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "$ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "it is safe to close this chat"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, unwanted := range []string{"Post-Wave: Watcher", "Post-Wave: Probe"} {
+		if strings.Contains(output, unwanted) {
+			t.Errorf("build visual output unexpectedly contains %q with no explicit Queen proposal\n%s", unwanted, output)
 		}
 	}
 }
@@ -433,12 +464,9 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 	goal := "Lock the build packet contract"
 	taskID := "task-1"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 		Version: "3.0",
 		Goal:    &goal,
 		State:   colony.StateREADY,
@@ -455,6 +483,8 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 			},
 		},
 	})
+	withWorkingDir(t, accepted.Root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	rootCmd.SetArgs([]string{"build", "1"})
 	if err := rootCmd.Execute(); err != nil {
@@ -470,7 +500,7 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 		"── Context ──",
 		"── Tasks ──",
 		"── Dispatch ──",
-		"safe to clear your context now.",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
@@ -499,6 +529,7 @@ func TestRenderSpawnPlanForDispatchesShowsWaveExecutionStrategy(t *testing.T) {
 }
 
 func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -539,7 +570,7 @@ func TestColonizeVisualOutputShowsDispatchPreview(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "/ant-plan"} {
+	for _, want := range []string{"🗺️", "C O L O N I Z E   D I S P A T C H", "Survey Wave 1 starting", "Surveyors", "C O L O N I Z E", "$ant-plan"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
 		}
@@ -632,6 +663,7 @@ func TestPlanVisualOutputShowsSpawnTreeContract(t *testing.T) {
 	resetRootCmd(t)
 
 	dataDir := setupBuildFlowTest(t)
+	withWorkingDir(t, filepath.Dir(filepath.Dir(dataDir)))
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 	goal := "Surface planning contracts"
@@ -648,8 +680,11 @@ func TestPlanVisualOutputShowsSpawnTreeContract(t *testing.T) {
 	}
 
 	output := stdout.(*bytes.Buffer).String()
-	if !strings.Contains(output, ".aether/data/spawn-tree.txt") {
-		t.Errorf("plan visual output missing spawn tree contract\n%s", output)
+	if strings.Contains(output, ".aether/data/spawn-tree.txt") {
+		t.Errorf("preset selection prompt claimed a spawn tree before dispatch\n%s", output)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "spawn-tree.txt")); !os.IsNotExist(err) {
+		t.Errorf("preset selection prompt wrote a spawn tree before dispatch: %v", err)
 	}
 }
 
@@ -687,16 +722,20 @@ func TestPlanVisualOutputShowsDispatchContractDetails(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"Contract",
-		"2 staged workers, scout then route-setter",
-		effectivePlanningDispatchTimeout(0).String() + " worker max",
-		"route-setter only runs after a completed scout stage",
-		"authenticated platform dispatcher",
-		"dispatch_mode, planning_warning, synthetic, synthetic_warning, artifact_source, plan_source",
+		"Planning contract: SPEC Unreported [APPROVED]",
+		"Choose Planning Preset",
+		"Fast       Target 80  Up to 4 passes",
+		"Balanced   Target 90  Up to 6 passes",
+		"Deep       Target 95  Up to 8 passes",
+		"Exhaustive Target 99  Up to 12 passes",
+		"Planning did not start. State: unchanged.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("plan visual output missing %q\n%s", want, output)
 		}
+	}
+	if strings.Contains(output, "2 staged workers") || strings.Contains(output, "authenticated platform dispatcher") {
+		t.Errorf("preset selection prompt exposed a dispatch contract before owner selection\n%s", output)
 	}
 }
 
@@ -770,7 +809,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 		".aether/data/build/phase-1/review.json",
 		".aether/data/build/phase-1/continue.json",
 		".aether/data/spawn-tree.txt",
-		"safe to clear your context now.",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
@@ -782,6 +821,7 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 }
 
 func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -843,7 +883,7 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 		"Continue Worker Flow",
 		"Continue watcher rejected the phase",
 		"blocked",
-		"Fix the blocking issues, then run `/ant-continue` again.",
+		"W H A T   N E X T",
 		"A R T I F A C T S",
 		".aether/data/build/phase-1/verification.json",
 		".aether/data/build/phase-1/gates.json",
@@ -857,12 +897,65 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 	if strings.Contains(output, "Run `aether continue` to recover the blocked work") {
 		t.Fatalf("blocked continue suggested the identical no-op retry:\n%s", output)
 	}
+	if strings.Contains(output, "/ant-") {
+		t.Fatalf("Codex blocked guidance contains unsupported slash commands:\n%s", output)
+	}
 	if strings.Contains(output, "Forge-141 [builder] completed") {
 		t.Fatalf("expected blocked continue worker flow to avoid builder closure entries, got:\n%s", output)
 	}
 }
 
+func TestBlockedContinueRecoveryHintsTranslateFromCanonicalCommands(t *testing.T) {
+	result := map[string]interface{}{
+		"blocking_issues": []interface{}{"verification failed"},
+		"gates": map[string]interface{}{
+			"checks": []interface{}{
+				map[string]interface{}{
+					"name":             "verification_steps_passed",
+					"passed":           false,
+					"fix_hint":         "Fix manually and run aether continue",
+					"recovery_options": []interface{}{"Run aether unblock --dispatch for guided recovery", "Resolve the flag with aether flag-resolve --id <id> --message \"what fixed it\""},
+				},
+			},
+		},
+	}
+
+	for _, tc := range []struct {
+		platform string
+		want     []string
+		notWant  []string
+	}{
+		{platform: "codex", want: []string{"$ant-continue", "aether unblock --dispatch", "aether flag-resolve"}, notWant: []string{"/ant-"}},
+		{platform: "claude", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
+		{platform: "opencode", want: []string{"/ant-continue", "/ant-unblock --dispatch", "aether flag-resolve"}, notWant: []string{"Fix manually and run aether continue", "Run aether unblock"}},
+	} {
+		t.Run(tc.platform, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "visual")
+			t.Setenv("AETHER_PLATFORM", tc.platform)
+			raw := renderContinueBlockedVisual(
+				colony.ColonyState{},
+				colony.Phase{ID: 2, Name: "Blocked phase"},
+				result,
+				colony.VerificationDepthStandard,
+			)
+			var output bytes.Buffer
+			writeVisualOutput(&output, raw)
+			for _, want := range tc.want {
+				if !strings.Contains(output.String(), want) {
+					t.Errorf("%s blocked output missing %q:\n%s", tc.platform, want, output.String())
+				}
+			}
+			for _, notWant := range tc.notWant {
+				if strings.Contains(output.String(), notWant) {
+					t.Errorf("%s blocked output contains unsupported form %q:\n%s", tc.platform, notWant, output.String())
+				}
+			}
+		})
+	}
+}
+
 func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -907,10 +1000,14 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
 		"Phase 1 verified and completed: Finish the final slice",
-		"── Colony Complete ──",
-		"All planned phases are complete. The colony is ready for Crowned Anthill.",
-		"/ant-seal",
-		"safe to clear your context now.",
+		// Widened for Phase "Classic Visual Voice" plan 04: the continue
+		// screen's stage marker now names "project" beside "colony" (the
+		// widened plain-English scan), unlike the build screen's marker,
+		// which is unchanged.
+		"── Project Complete (Colony) ──",
+		"Every phase in the plan is finished.",
+		"$ant-seal",
+		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
@@ -918,7 +1015,7 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 	}
 }
 
-func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
+func TestWatchVisualOutputShowsHonestIdleFallback(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -952,15 +1049,26 @@ func TestWatchVisualOutputShowsSnapshotArtifacts(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"Scope: meta",
+		"No ants are active right now",
+		"Status is the authoritative snapshot",
+		"Projection revision: " + LifecycleProjectionRevision,
+		"Recent recorded activity",
+		"Actor: Hammer-9",
+		"recorded evidence only",
+		"Live event source: unsupported until Phase 202",
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("watch visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{
 		"Active Workers",
-		".aether/data/spawn-tree.txt",
 		".aether/data/watch-status.txt",
 		".aether/data/watch-progress.txt",
 		"Run in a TTY for live refresh.",
 	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("watch visual output missing %q\n%s", want, output)
+		if strings.Contains(output, forbidden) {
+			t.Errorf("idle watch visual output contains obsolete live claim %q\n%s", forbidden, output)
 		}
 	}
 }
@@ -977,6 +1085,7 @@ func TestWatchLiveRefreshRequiresTTY(t *testing.T) {
 }
 
 func TestPrintNextUpVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1007,7 +1116,7 @@ func TestPrintNextUpVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"N E X T   U P", "/ant-continue"} {
+	for _, want := range []string{"N E X T   U P", "$ant-continue"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("next-up visual output missing %q\n%s", want, output)
 		}
@@ -1125,11 +1234,12 @@ func TestInstallVisualOutput(t *testing.T) {
 }
 
 func TestRenderBinaryActionVisualPublishGuidanceSeparatesRepoSetupFromUpdate(t *testing.T) {
+	pinRawCommandNames(t)
 	output := renderBinaryActionVisual("Publish Complete", "Aether v1.0.24 published", "1.0.24", "/tmp/home/.aether")
 
 	for _, want := range []string{
-		"Existing repos: run `/ant-update --force` to refresh companion files from the hub.",
-		"New repos: run `/ant-lay-eggs` to set up Aether.",
+		"Existing repos: run `aether update --force` to refresh companion files from the hub.",
+		"New repos: run `aether lay-eggs` to set up Aether.",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("publish visual output missing %q\n%s", want, output)
@@ -1158,20 +1268,23 @@ func TestRenderUpdateVisualNoChangesSaysNoFollowUpRequired(t *testing.T) {
 		nil,
 		"unchanged",
 		true,
+		map[string]interface{}{},
 	)
 
-	if !strings.Contains(output, "No follow-up is required.") {
-		t.Fatalf("expected no-follow-up guidance, got:\n%s", output)
-	}
 	if !strings.Contains(output, "Binary: already at the current hub version") {
 		t.Fatalf("expected binary-already-current message in update visual, got:\n%s", output)
 	}
-	if strings.Contains(output, "Run `/ant-status` to inspect the colony after the refresh.") {
-		t.Fatalf("expected generic next-step guidance to be suppressed, got:\n%s", output)
+	// The closing block used to hand-write a "No follow-up is required"
+	// sentence for this exact case; that recommendation is the one resolver's
+	// job now (Phase 197 plan 06), so this only asserts the shared card is
+	// present rather than a specific hand-typed sentence.
+	if !strings.Contains(output, spacedTitle("What Next")) {
+		t.Fatalf("expected update to end with the shared closing card, got:\n%s", output)
 	}
 }
 
 func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
+	pinRawCommandNames(t)
 	output := renderUpdateVisual(
 		"/tmp/example",
 		"1.0.27",
@@ -1188,6 +1301,7 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 		nil,
 		"unchanged",
 		true,
+		map[string]interface{}{},
 	)
 
 	if !strings.Contains(output, "Assets: 0 copied, 0 unchanged, 10 removed") {
@@ -1199,8 +1313,11 @@ func TestRenderUpdateVisualShowsRemovedAssets(t *testing.T) {
 	if strings.Contains(output, "No follow-up is required.") {
 		t.Fatalf("removed files should not be reported as a no-change update:\n%s", output)
 	}
-	if !strings.Contains(output, "Run `/ant-status` to inspect the colony after the refresh.") {
-		t.Fatalf("expected post-removal status guidance, got:\n%s", output)
+	// The specific "Run `aether status`..." sentence was a hand-typed
+	// constant; what to do next is the one resolver's job now (Phase 197
+	// plan 06), so this only asserts the shared card is present.
+	if !strings.Contains(output, spacedTitle("What Next")) {
+		t.Fatalf("expected update to end with the shared closing card, got:\n%s", output)
 	}
 }
 
@@ -1244,8 +1361,8 @@ func TestWorkflowSuggestionsForPausedFlagSuggestsResume(t *testing.T) {
 	}
 }
 
-func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testing.T) {
-	goal := "Interrupted build should restart clearly"
+func TestWorkflowSuggestionsForInterruptedExecutingSuggestsResume(t *testing.T) {
+	goal := "Interrupted build should reconcile safely"
 	primary, _ := workflowSuggestionsForState(colony.ColonyState{
 		Goal:         &goal,
 		State:        colony.StateEXECUTING,
@@ -1258,8 +1375,8 @@ func TestWorkflowSuggestionsForInterruptedExecutingSuggestsRestartBuild(t *testi
 		},
 	})
 
-	if !strings.Contains(primary, "aether build 2") {
-		t.Fatalf("expected interrupted executing colony to suggest restarting build 2, got: %s", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected interrupted executing colony to suggest canonical resume, got: %s", primary)
 	}
 }
 
@@ -1290,19 +1407,20 @@ func TestWorkflowSuggestionsBlockBuildAfterPlanFinalizeFailure(t *testing.T) {
 			Phases: []colony.Phase{{ID: 1, Name: "Unsafe phase", Status: colony.PhaseReady}},
 		},
 	})
-	if !strings.Contains(primary, "aether flags --status active") {
-		t.Fatalf("expected active flags primary, got: %s", primary)
+	if !strings.Contains(primary, "aether resume") {
+		t.Fatalf("expected blocked lifecycle to use canonical resume, got: %s", primary)
 	}
 	all := primary + "\n" + strings.Join(alternatives, "\n")
-	if strings.Contains(all, "/ant-build 1") {
-		t.Fatalf("failed finalization must not suggest build:\n%s", all)
+	if strings.Contains(all, "aether build 1") {
+		t.Fatalf("failed finalization must not suggest a direct build:\n%s", all)
 	}
-	if !strings.Contains(all, "aether plan --repair-artifact") {
-		t.Fatalf("expected repair-artifact alternative, got:\n%s", all)
+	if !strings.Contains(all, "aether status") || !strings.Contains(all, "aether history") {
+		t.Fatalf("expected evidence-preserving alternatives, got:\n%s", all)
 	}
 }
 
 func TestSetupVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	// Manages its own hub via --home-dir; opt out of suite-wide hub isolation.
 	t.Setenv("AETHER_HUB_DIR", "")
 	saveGlobals(t)
@@ -1335,7 +1453,7 @@ func TestSetupVisualOutput(t *testing.T) {
 	if strings.Contains(output, `{"ok":true`) {
 		t.Fatalf("expected visual output, got JSON: %s", output)
 	}
-	for _, want := range []string{"🥚", "L A Y   E G G S", "/ant-init"} {
+	for _, want := range []string{"🥚", "L A Y   E G G S", "$ant-init"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("setup visual output missing %q\n%s", want, output)
 		}
@@ -1348,17 +1466,22 @@ func TestUpdateDryRunVisualOutput(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
+	originalVersion := Version
+	Version = "1.0.79"
+	t.Cleanup(func() { Version = originalVersion })
 	homeDir := t.TempDir()
+	createInstalledUpdatePlatformRoots(t, homeDir)
 	repoDir := t.TempDir()
 	hubDir := filepath.Join(homeDir, ".aether")
 	hubSystem := filepath.Join(hubDir, "system")
 	if err := os.MkdirAll(hubSystem, 0755); err != nil {
 		t.Fatalf("failed to create hub system dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.0"}`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(hubDir, "version.json"), []byte(`{"version":"1.0.79"}`), 0644); err != nil {
 		t.Fatalf("failed to create hub version: %v", err)
 	}
 
+	seedCodexSkillPublishedFixture(t, hubDir, "1.0.79")
 	oldDir, _ := os.Getwd()
 	if err := os.Chdir(repoDir); err != nil {
 		t.Fatalf("failed to chdir to repo: %v", err)
@@ -1391,6 +1514,7 @@ func TestUpdateDryRunVisualOutput(t *testing.T) {
 }
 
 func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
+	pinRawCommandNames(t)
 	saveGlobals(t)
 	resetRootCmd(t)
 
@@ -1414,8 +1538,8 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 					Description: "Add missing resume and handoff flow",
 					Status:      colony.PhaseInProgress,
 					Tasks: []colony.Task{
-						{ID: &taskOneID, Goal: "Write pause-colony", Status: colony.TaskCompleted},
-						{ID: &taskTwoID, Goal: "Write resume-colony", Status: colony.TaskInProgress},
+						{ID: &taskOneID, Goal: "Write pause handoff", Status: colony.TaskCompleted},
+						{ID: &taskTwoID, Goal: "Write resume orientation", Status: colony.TaskInProgress},
 					},
 				},
 			},
@@ -1477,10 +1601,10 @@ func TestPauseResumePatrolPhaseAndHistoryVisualOutput(t *testing.T) {
 		}
 	}
 
-	checkVisual([]string{"pause-colony"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "/ant-resume")
-	checkVisual([]string{"resume-colony"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "/ant-build 1")
+	checkVisual([]string{"pause"}, "💾", "P A U S E   C O L O N Y", "HANDOFF.md", "aether resume")
+	checkVisual([]string{"resume"}, "💾", "R E S U M E   C O L O N Y", "Session UX", "Active Signals", "Blockers", "Survey Context", "Source:", "$ant-build 1")
 	checkVisual([]string{"patrol"}, "📊", "P A T R O L", "Signals: 1 active")
-	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume-colony")
+	checkVisual([]string{"phase"}, "🧱", "Session UX", "Write resume orientation")
 	checkVisual([]string{"history"}, "📜", "Colony initialized", "Worker wave launched")
 }
 
@@ -1853,7 +1977,13 @@ func TestRenderPlanVisualAgentDelegatePlanOnly(t *testing.T) {
 	for _, want := range []string{
 		"Agent-Delegate",
 		"host platform must dispatch workers directly",
-		"Host platform should dispatch the JSON `plan_manifest` Scout and Route-Setter workers.",
+		// Phase 197-04 removed the hand-written "Host platform should dispatch
+		// the JSON `plan_manifest` ..." instruction line: next-step guidance now
+		// comes from the one shared card, and the manifest itself still reaches
+		// the wrapper through result.plan_manifest in the JSON envelope, which
+		// is what .opencode/commands/ant/plan.md actually reads ("Reads:
+		// result.plan_manifest"). The line above still asserts the dispatch
+		// intent, so the guarantee this test exists for is unchanged.
 		"`aether plan-finalize --completion-file <file>`",
 	} {
 		if !strings.Contains(output, want) {
@@ -1886,13 +2016,25 @@ func TestRenderPlanVisualPlanOnlyPlannedDispatchesAreNotExecutionResults(t *test
 			t.Fatalf("plan-only visual treated planned dispatches as execution results via %q\n%s", forbidden, output)
 		}
 	}
+	// The guarantee here is that a PLANNED dispatch is never shown as work that
+	// already happened. Phase 197-04 dropped the literal `plan_manifest` token
+	// from the visual (the manifest still travels in the JSON envelope), so the
+	// pending-ness is now carried by the wording and the dispatch mode. Assert
+	// those, not the removed token -- deleting the check would give up the
+	// guarantee, and asserting the token would only prove a string survived.
 	for _, want := range []string{
-		"plan_manifest",
+		// The dispatch-mode line is the discriminating one: the forbidden list
+		// above rejects "Dispatch: Real", so asserting the exact "Dispatch:
+		// Plan-only" line closes the pair. A loose token like "prepared" does
+		// NOT close it -- verified by mutation: changing the prose word left
+		// this test green, so it was asserting a string rather than the
+		// guarantee.
+		"Dispatch: Plan-only",
 		"Seek-70",
 		"Route-70",
 	} {
 		if !strings.Contains(output, want) {
-			t.Fatalf("plan-only visual missing pending manifest cue %q\n%s", want, output)
+			t.Fatalf("plan-only visual missing pending cue %q\n%s", want, output)
 		}
 	}
 }
@@ -1980,8 +2122,8 @@ func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 	if !strings.Contains(output, "2/2 workers completed") {
 		t.Errorf("real dispatch output missing summary '2/2 workers completed'\n%s", output)
 	}
-	// Should show "Workers" section header
-	if !strings.Contains(output, "\nWorkers\n") {
+	// Should show "Workers" section header (Phase 202.1 plan 06: glyph-led)
+	if !strings.Contains(output, "\n🐜 Workers\n") {
 		t.Errorf("real dispatch output should have 'Workers' header\n%s", output)
 	}
 }
@@ -2569,12 +2711,9 @@ func TestCodexVisualParity(t *testing.T) {
 	t.Run("StageSeparators", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 		goal := "Codex parity check"
 		taskID := "task-parity"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
@@ -2584,6 +2723,8 @@ func TestCodexVisualParity(t *testing.T) {
 				},
 			},
 		})
+		withWorkingDir(t, accepted.Root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		rootCmd.SetArgs([]string{"build", "1"})
 		if err := rootCmd.Execute(); err != nil {
@@ -2623,12 +2764,9 @@ func TestCodexVisualParity(t *testing.T) {
 	t.Run("SpawnListParity", func(t *testing.T) {
 		saveGlobals(t)
 		resetRootCmd(t)
-		dataDir := setupBuildFlowTest(t)
-		t.Setenv("AETHER_OUTPUT_MODE", "visual")
-
 		goal := "Spawn parity"
 		taskID := "task-spawn"
-		createTestColonyState(t, dataDir, colony.ColonyState{
+		accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
 			Version: "3.0",
 			Goal:    &goal,
 			State:   colony.StateREADY,
@@ -2638,6 +2776,8 @@ func TestCodexVisualParity(t *testing.T) {
 				},
 			},
 		})
+		withWorkingDir(t, accepted.Root)
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		rootCmd.SetArgs([]string{"build", "1"})
 		if err := rootCmd.Execute(); err != nil {
@@ -3130,4 +3270,100 @@ func TestVisualsConfigOriginalFileValuesMatchCompiledDefaults(t *testing.T) {
 			t.Errorf("aether_wordmark line %d glyph content: file=%q compiled=%q", i, fileGlyphs, compiledGlyphs)
 		}
 	}
+}
+
+func TestCodexVisualsPlanningRoutesCanonicalCandidate(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := planCandidateReviewResult(planningVisualCandidateFixture())
+	output := renderPlanVisual(result)
+
+	for _, want := range []string{"Plan Candidate", "CANDIDATE — NOT ACTIVE", "Queen recommendation", "Accept this candidate?"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("canonical candidate route missing %q:\n%s", want, output)
+		}
+	}
+	for _, forbidden := range []string{"Plan size: 0 phases", "Scout and Route-Setter mapped", "aether build", "aether run"} {
+		if strings.Contains(output, forbidden) {
+			t.Fatalf("canonical candidate route leaked legacy/unauthorized text %q:\n%s", forbidden, output)
+		}
+	}
+}
+
+func TestCodexVisualsPlanningRoutesCanonicalIteration(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := map[string]interface{}{
+		"planned": false, "status": string(planningStageContinueReady),
+		"iteration_card": planningVisualIterationFixture(colony.PlanningStopContinue),
+	}
+	output := renderPlanVisual(result)
+	for _, want := range []string{"Planning Iteration", "Scout", "Route-Setter", "Fresh evidence", "CONTINUE"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("canonical iteration route missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestCodexVisualsSpecIdentityContract(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	if got := commandEmoji("spec"); got != "📜" {
+		t.Fatalf("commandEmoji(spec) = %q, want 📜", got)
+	}
+	output := renderSpecCommandVisual(planningVisualSpecificationFixture())
+	if !strings.Contains(output, "📜 "+spacedTitle("Specification")) {
+		t.Fatalf("specification visual missing full command identity:\n%s", output)
+	}
+	if strings.Contains(output, "Command: Spec\n") || strings.Contains(output, "Identity: Spec\n") {
+		t.Fatalf("specification visual used forbidden full-label abbreviation:\n%s", output)
+	}
+}
+
+// Fixed expectations are independent of the production public-skill inventory.
+func TestCodexAntSkillDisplayRoutes(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_PLATFORM", "codex")
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	setupBuildFlowTest(t)
+	var help bytes.Buffer
+	rootCmd.SetOut(&help)
+	rootCmd.SetArgs([]string{"--help"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ verb, display string }{
+		{"init", "$ant-init"}, {"discuss", "$ant-discuss"}, {"oracle", "$ant-oracle"},
+		{"colonize", "$ant-colonize"}, {"plan", "$ant-plan"}, {"build", "$ant-build"},
+		{"continue", "$ant-continue"}, {"swarm", "$ant-swarm"}, {"seal", "$ant-seal"},
+	} {
+		t.Run(tc.verb, func(t *testing.T) {
+			if !strings.Contains(help.String(), tc.display) {
+				t.Errorf("real root help missing %s", tc.display)
+			}
+			hint := renderNextUp("Run `aether " + tc.verb + "`.")
+			if !strings.Contains(hint, "`"+tc.display+"`") {
+				t.Errorf("next action = %q", hint)
+			}
+			for _, platform := range []string{"claude", "opencode"} {
+				if got := frontDoorCommandForPlatform("/ant-"+tc.verb, platform); got != "/ant-"+tc.verb {
+					t.Errorf("%s help = %q", platform, got)
+				}
+			}
+		})
+	}
+	for _, verb := range []string{"run", "status", "help", "spec", "publish", "maintenance", "plan-finalize", "build-finalize"} {
+		if got := frontDoorCommandForPlatform("/ant-"+verb, "codex"); got != "aether "+verb {
+			t.Errorf("unavailable help = %q", got)
+		}
+		if got := renderNextUp("aether " + verb); !strings.Contains(got, "aether "+verb) || strings.Contains(got, "$ant-"+verb) {
+			t.Errorf("unavailable next = %q", got)
+		}
+	}
+	banner := renderWelcomeBanner()
+	for _, want := range []string{`$ant-init "your goal"`, "aether lay-eggs", "aether status"} {
+		if !strings.Contains(banner, want) {
+			t.Errorf("first-run banner missing %q", want)
+		}
+	}
+	t.Logf("root help:\n%s\nfirst-run:\n%s", help.String(), banner)
 }

@@ -76,7 +76,7 @@ As Measurer, you:
 {
   "ant_name": "{your name}",
   "caste": "measurer",
-  "status": "completed | failed | blocked",
+  "status": "completed | completed_no_change | failed | blocked",
   "summary": "What you accomplished",
   "baseline_vs_current": {},
   "bottlenecks_identified": [],

@@ -1,0 +1,190 @@
+{
+  "schema_version": "phase199-gate-receipt/v2",
+  "phase": "199",
+  "plan": "29",
+  "status": "complete",
+  "created_at": "2026-09-06T04:24:05.063130000Z",
+  "repository": {
+    "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
+    "tree": "8e4a5d1c0afa06f4488dec0ee6fdb8e729c3ddba"
+  },
+  "historical_blobs": [
+    {
+      "path": ".planning/STATE.md",
+      "blob": "2cb1a63896b5361e207ba841ad756af1cf434730",
+      "sha256": "43347ef38cdb20ba564ec9e137375f92014770233a7c49e718644bdf22d1c8d2"
+    }
+  ],
+  "protected_fingerprints": [
+    {
+      "path": ".planning/phases/199-front-door-and-classic-contract/199-PATTERNS.md",
+      "before": {
+        "status": "untracked",
+        "type": "file",
+        "mode": "0644",
+        "digest": "0359d92290e5b6efb8364015e4ebd9bd5669a526256bf02b09705c38ffc84ef0"
+      },
+      "after": {
+        "status": "untracked",
+        "type": "file",
+        "mode": "0644",
+        "digest": "0359d92290e5b6efb8364015e4ebd9bd5669a526256bf02b09705c38ffc84ef0"
+      }
+    }
+  ],
+  "preexisting_user_changes": [
+    {
+      "path": ".planning/config.json",
+      "before": {
+        "status": "changed",
+        "type": "file",
+        "mode": "0644",
+        "digest": "90391e7387617c3d2e4311a4e0c559ed5a831e9b0d5849cd7063ee022c3572ff"
+      },
+      "after": {
+        "status": "changed",
+        "type": "file",
+        "mode": "0644",
+        "digest": "90391e7387617c3d2e4311a4e0c559ed5a831e9b0d5849cd7063ee022c3572ff"
+      }
+    }
+  ],
+  "config_baseline": "{\n  \"version\": 1,\n  \"workflow\": {\n    \"_auto_chain_active\": false,\n    \"verifier\": false,\n    \"nyquist_validation\": false,\n    \"research\": false,\n    \"post_planning_gaps\": false,\n    \"security_enforcement\": false,\n    \"ai_integration_phase\": false,\n    \"plan_checker\": true,\n    \"context_window\": 1000000,\n    \"test_gate_timeout\": 3600,\n    \"use_worktrees\": false\n  }\n}\n",
+  "gsd_baseline": [
+    {
+      "path": ".",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "scratch",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "scratch/blocker1.txt",
+      "type": "file",
+      "mode": "0644",
+      "digest": "00495d1450cd0245b8c55bb3f6db4faa71bcc6080198ba6781a1449f8633a90f"
+    },
+    {
+      "path": "scratch/decision1.txt",
+      "type": "file",
+      "mode": "0644",
+      "digest": "8cc52c32a7ada36fba9fdec6d9435102be2ab082ad747a4ca398d0130303bd1d"
+    },
+    {
+      "path": "scratch/decision2.txt",
+      "type": "file",
+      "mode": "0644",
+      "digest": "120c5c5c9df434f5de719f15c6ad9eba393e2ef241f7e296ca88ef582d7c192b"
+    },
+    {
+      "path": "worktrees",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-1",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-1-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "f341533c4862c05fee6b03aa1753b35e5ec7016f84e5daddbe63fb69092f176d"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-2",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-2-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "179ff37704dd3a3ae9b18f7daca0e22f8e81bd9946f4d420504a15b187b46536"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-3",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-3-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "fafc467ca925b8bc4a3379c8f3107dd82be6e622b0928718ebf5a91024e7cc6c"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-4",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-4-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "8d98b2562a4d288a47da056418b13e69b58783726e2cfc5990a4a8e195149eb4"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-5",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-5-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "b8fc0f17e41b5698169c17078ff322573d88787f8aa262460dbb18a116119ab1"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-6",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-6-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "0259fa8f63ca14047e08749fc35e37a70ac5f520c3759d8cc66974e2641b1dc3"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-7",
+      "type": "directory",
+      "mode": "0755"
+    },
+    {
+      "path": "worktrees/phase-198-3/wave-7-manifest.json",
+      "type": "file",
+      "mode": "0644",
+      "digest": "6140b0d201e7666e584dc2505a6ea5639fa2c799592a82f75b12433ac7771682"
+    }
+  ],
+  "gates": [
+    {
+      "command": "go test ./...",
+      "exit_code": 0,
+      "started_at": "2026-09-06T07:25:54.418296000Z",
+      "finished_at": "2026-09-06T07:33:14.377717000Z",
+      "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
+      "tree": "8e4a5d1c0afa06f4488dec0ee6fdb8e729c3ddba",
+      "output_sha256": "908c4b6e59b7e082df9d315ea75ce6b2b169016c8eac6f65e2b9fef618a7f9e9"
+    },
+    {
+      "command": "go test ./... -race",
+      "exit_code": 0,
+      "started_at": "2026-09-06T07:33:35.574557000Z",
+      "finished_at": "2026-09-06T07:43:23.097179000Z",
+      "revision": "f42bd0b2c5f03b4dbcef8a4d06b3aac3061b4106",
+      "tree": "8e4a5d1c0afa06f4488dec0ee6fdb8e729c3ddba",
+      "output_sha256": "bf34c203efca7772e02866733ca80d9a240a0f9a1179089e998259d140f3cd7a"
+    }
+  ]
+}

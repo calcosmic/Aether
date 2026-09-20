@@ -1,0 +1,19 @@
+name: ant-pause
+description: "Stop at a safe boundary and save one resumable handoff."
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether pause $ARGUMENTS"
+ceremony_contract:
+  class: "lifecycle"
+  authority: "Go owns safe-boundary detection and the atomic handoff transaction."
+  wrapper_role: "Run the canonical command, relay its handoff and receipt fields, and close with `/ant-resume`."
+  result_fields:
+    - "safe boundary"
+    - "handoff ID"
+    - "receipt ID"
+    - "provenance"
+  replay: "Already paused; the existing validated handoff was retained."
+guardrails:
+  - "Do not inspect or mutate host state; the runtime owns every durable write."
+  - "Do not invent a recovery route; `/ant-resume` is the only closeout."
+  - "If docs and runtime disagree, runtime wins."

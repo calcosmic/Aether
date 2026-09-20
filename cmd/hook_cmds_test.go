@@ -848,10 +848,105 @@ func TestHookPreCompactUpdatesSessionSummary(t *testing.T) {
 	if session.LastCommand != "hook-pre-compact" {
 		t.Fatalf("LastCommand = %q, want hook-pre-compact", session.LastCommand)
 	}
-	if session.SuggestedNext != "aether build 1" {
-		t.Fatalf("SuggestedNext = %q, want aether build 1", session.SuggestedNext)
+	if session.SuggestedNext != "aether status" {
+		t.Fatalf("SuggestedNext = %q, want resolver-selected aether status", session.SuggestedNext)
 	}
 	if !strings.Contains(session.Summary, "manual") {
 		t.Fatalf("Summary = %q, want manual trigger context", session.Summary)
+	}
+}
+
+// TestHookStopNeverBlocksAnAetherSpawnedWorker pins the fix for a live failure:
+// this hook ran inside Aether's OWN build workers, blocked one from finishing,
+// and advised `aether pause`. The worker followed that advice and paused a
+// running Autopilot colony mid-build. The hook exists to stop a PERSON walking
+// away mid-phase; applied to a worker it does the opposite of its purpose.
+//
+// The state below is the exact state that blocks a person -- EXECUTING, not
+// paused -- so the only thing separating pass from fail is the worker identity
+// the spawn path now sets (pkg/codex.workerProcessEnv).
+func TestHookStopNeverBlocksAnAetherSpawnedWorker(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "worker must not be blocked"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Bank the in-progress work", Status: colony.PhaseInProgress}},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("AETHER_WORKER_NAME", "Weld-32")
+	t.Setenv("AETHER_WORKER_CASTE", "builder")
+
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+
+	if out := strings.TrimSpace(buf.String()); out != "" {
+		t.Fatalf("hook-stop blocked an Aether-spawned worker; it must stay silent. output: %s", out)
+	}
+}
+
+// The exemption must be narrow: without a worker identity, the very same state
+// still blocks. This is what stops the fix from quietly disabling the hook.
+func TestHookStopStillBlocksAPersonInTheSameState(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "person must still be blocked"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateEXECUTING,
+		CurrentPhase: 1,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{{ID: 1, Name: "Bank the in-progress work", Status: colony.PhaseInProgress}},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("AETHER_WORKER_NAME", "")
+	t.Setenv("AETHER_WORKER_CASTE", "")
+
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &result); err != nil {
+		t.Fatalf("hook-stop stayed silent for a person, so the worker exemption is too wide: %v", err)
+	}
+	if result["decision"] != "block" {
+		t.Fatalf("decision = %v, want block for a person", result["decision"])
 	}
 }

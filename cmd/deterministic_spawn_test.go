@@ -116,8 +116,19 @@ func TestDeterministicCommandsNoSpawn(t *testing.T) {
 			stdout = &buf
 			stderr = &buf
 
-			s, _, cleanup := setupDeterministicTestEnv(t, tc.needsStore, tc.needsGoal)
-			defer cleanup()
+			var s *storage.Store
+			var updateFixture *antUpdateFixture
+			if tc.name == "update" {
+				// Exercise a successful update from a real published payload.
+				// An incomplete hub would refuse before reaching the no-spawn check.
+				fixture := newAntUpdateFixture(t)
+				updateFixture = &fixture
+				s = store
+			} else {
+				var cleanup func()
+				s, _, cleanup = setupDeterministicTestEnv(t, tc.needsStore, tc.needsGoal)
+				defer cleanup()
+			}
 
 			// Capture pre-run spawn state.
 			preEntries := countSpawnEntries(t, s)
@@ -128,6 +139,9 @@ func TestDeterministicCommandsNoSpawn(t *testing.T) {
 			err := rootCmd.Execute()
 			if err != nil {
 				t.Fatalf("command %q returned error: %v", tc.name, err)
+			}
+			if updateFixture != nil {
+				antAssertPublishedHome(t, updateFixture.hub, updateFixture.home)
 			}
 
 			// Some commands may error gracefully (e.g., no colony) but still not spawn.

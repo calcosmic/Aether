@@ -1,0 +1,73 @@
+{
+  "schema": "aether-gsd-planning-checks/v1",
+  "phase": "204.1",
+  "checked_at": "2026-09-16T10:05:50.883407+00:00",
+  "workflow": "gsd-plan-phase 204.1",
+  "runtime": "Codex native GSD agents with installed GSD workflow and tools",
+  "status": "plans_verified_ready_to_execute",
+  "source_baseline": "404731ccffda7bbca64ce801b74b0752a7161315",
+  "counts": {
+    "plans": 7,
+    "tasks": 16,
+    "waves": 5
+  },
+  "requirements_covered": [
+    "ANT-01",
+    "ANT-02",
+    "ANT-03"
+  ],
+  "plan_structure": {
+    "valid": true,
+    "errors": []
+  },
+  "dependency_and_task_checks": {
+    "same_wave_file_conflicts": [],
+    "missing_task_fields": []
+  },
+  "independent_review": {
+    "report": "204.1-CHECK.md",
+    "iteration": 2,
+    "blockers": 0,
+    "warnings": 0,
+    "resolved_first_review_finding": "Bind ownership-time existence, digest and mode through locked commit; test post-plan creation and chmod conflicts at common and registered-update boundaries."
+  },
+  "decision_coverage": {
+    "mechanical_gate": "skipped: context contains no numbered trackable decision IDs",
+    "independent_review": "unnumbered owner decisions mapped to executable tasks in SOURCE-AUDIT and checked against plans"
+  },
+  "gsd_state_validation": {
+    "valid": true,
+    "warnings": []
+  },
+  "post_planning_hooks": [],
+  "navigation": {
+    "phase_status": "Planned",
+    "state_current_phase": "204.1",
+    "next_execution_action": "gsd execute-phase 204.1",
+    "roadmap_next_unplanned_phase": "204.2",
+    "historical_roadmap_current_phase": "199",
+    "note": "The roadmap analyzer retains its preexisting Phase 199 classification; explicit current state and the requested execution phase remain 204.1. Next-unplanned identifies future planning, not completion of 204.1."
+  },
+  "preservation": {
+    "owner_inventory_sha256": "3b2b678284a26332addeadd2bd700bd4f51c4e2b0e6907a987116c85e5c2a8dd",
+    "preexisting_gsd_files": 12,
+    "product_source_changed": false
+  },
+  "evidence_boundary": {
+    "implementation_executed": false,
+    "product_tests_run": false,
+    "installation_or_publication_performed": false,
+    "live_discovery_verified": false,
+    "owner_acceptance_performed": false,
+    "all_ant_requirements_remain_unfulfilled": true
+  },
+  "plan_sha256": {
+    "204.1-01-PLAN.md": "c3a18fe2b29dd94e6d6a0d8bfe93107ece3d810894bd1ecad8d9cbeb3d6d7203",
+    "204.1-02-PLAN.md": "e466b83de4e8c19a572de1f625cbfaa530d25067ab64a30de128c40b70eb90e3",
+    "204.1-03-PLAN.md": "2c6da7a25c4572482bfd4e4027aec06f3b147c50374e846ab657cfe1b3bab1b5",
+    "204.1-04-PLAN.md": "3b55f1468dfdd58bca5bde1769e28987911ec6ae4a933172b45fe6b80afb9b62",
+    "204.1-05-PLAN.md": "98d9079092f787fcf1ea41bc3f7b77c7126e82705cdadbf402440f8ecc3189f0",
+    "204.1-06-PLAN.md": "9b6ff754888a4eaac669207b67096b50ff85c6bc070344f449a2c18b22a90dc0",
+    "204.1-07-PLAN.md": "6ff6113e89f7e55dff5a563a3bca42db42412a4b69f4aed1632b1f3cb9a7b8d9"
+  }
+}

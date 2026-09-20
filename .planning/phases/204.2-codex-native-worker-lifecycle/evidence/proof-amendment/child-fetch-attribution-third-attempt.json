@@ -1,0 +1,1124 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-09-19T15:04:51.825066+00:00",
+  "scope": "Plan25 focused attribution correction and third actual ordinary attempt; no plan completion",
+  "phase_complete": false,
+  "requirements_completed": [],
+  "tested_source_commit": "c17c1122eced33a0fd468c8b0dec38f3c93d2c1c",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/summary.json",
+    "sha256": "sha256:cf316a41917447fe497cada41126f4291a5d28b6a69416cd56c8f951dd884acd"
+  },
+  "focused_snapshot_revision": "abdf3073b7308670684e6e188f534db9b87bab4e",
+  "focused_runs": {
+    "normal-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 44.219770193099976,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/normal-cmd.stdout",
+        "sha256": "sha256:6c54ce9bb1a05142d645213a27f22558deb8b7a7de7ae5c0be8ec874ba7ae2d1"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/normal-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "test_counts": {
+        "pass": 563,
+        "fail": 0,
+        "skip": 0
+      },
+      "top_level_families": 24
+    },
+    "race-cmd": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-race",
+        "-run",
+        "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "600s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/repo",
+      "exit_code": 0,
+      "elapsed_seconds": 118.62874960899353,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/race-cmd.stdout",
+        "sha256": "sha256:6dea7bf6f051393cf5bee6843ddb17e5f112faad2d999f467916d2b12ae324d8"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/race-cmd.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null,
+      "test_counts": {
+        "pass": 563,
+        "fail": 0,
+        "skip": 0
+      },
+      "top_level_families": 24
+    }
+  },
+  "closed_failed_focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/summary.json",
+    "sha256": "sha256:b63cfc1f0e056967c41e6959937f8c8361161119b4f1caa4a8125f491a5f98ff"
+  },
+  "parser_restoration": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/execute-parser-input-restoration.json",
+    "sha256": "sha256:d242f3edb52a4e4764a1f7962f3353b12b5f935fc709ca4e9f30197caf01e525"
+  },
+  "coordinator_restoration": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/execute-coordinator-restoration.json",
+    "sha256": "sha256:11e242c3a45009d2a11a300737eca052e60b7545e4af5142c7139c9935e5c228"
+  },
+  "prospective_cache_readmission": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-child-observed-attribution-20260919T010859Z-7ckyxvd8/execute-cache-readmission.json",
+    "sha256": "sha256:870ec4f57c203dd08efe5e52e665469637fd958b06c15dbada11f2948c3c638b"
+  },
+  "live_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/summary.json",
+    "sha256": "sha256:ecb39a926742656fde2de71ad023dc2c6a5312c9c7d60736b6126e9f76d6feaa"
+  },
+  "live_runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 468.35658175000026,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/live.stdout",
+        "sha256": "sha256:b4738278d8a70efc9d3f3a99f6882645e50d31320c0c3c8b0e30d009928a2798"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-attribution-retry-dfssu58e/repo",
+      "exit_code": 1,
+      "elapsed_seconds": 5.134367292001116,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/replay.stdout",
+        "sha256": "sha256:b27b41642a1fdda1b9e0df70ae7bf27b66802ce93af8d63d2897d0b70faac364"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stopped_reason": null
+    }
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/capture/native-ordinary-1945187536/receipt.json",
+    "sha256": "sha256:7f73c1d79eb5aac1b05910ec370b38f1bb1b4df3842506f28766e988fa965bf2"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/derived-ordinary.json",
+    "sha256": "sha256:82ad24f09b0700fb3eabfd9960199b995b4dfcbdea868fad4c628dab555c0479"
+  },
+  "actual_outcomes": {
+    "original": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": true,
+      "runtime_credit_observed": false,
+      "parent_substitution": true,
+      "parent_unclassified_commands": [
+        "unclassified code-mode command: find /Users/callumcowie/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "/bin/zsh -lc find /Users/callumcowie/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "unclassified code-mode command: find /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/capture/native-ordinary-1945187536/home/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "/bin/zsh -lc find /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/capture/native-ordinary-1945187536/home/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'"
+      ],
+      "temporary_auth_removed": true
+    },
+    "derived": {
+      "outcome": "incomplete",
+      "reason": "actual child-fetch protocol or durable delivery missing",
+      "context_protocol": "child-fetch/v1",
+      "child_checks_passed": false,
+      "child_edit_observed": true,
+      "runtime_credit_observed": false,
+      "parent_substitution": true,
+      "parent_unclassified_commands": [
+        "unclassified code-mode command: find /Users/callumcowie/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "/bin/zsh -lc find /Users/callumcowie/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "unclassified code-mode command: find /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/capture/native-ordinary-1945187536/home/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'",
+        "/bin/zsh -lc find /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-ordinary-v5-20260919T012111Z-lok27lpn/capture/native-ordinary-1945187536/home/.codex/sessions -name '*01a0ba28-a2a1-7fd0-bc8b-036c0fd0cdd0.jsonl'"
+      ],
+      "temporary_auth_removed": true
+    }
+  },
+  "diagnosis": {
+    "first_refusal": "Actual child catalogue discovery before initial context ACK was refused; Python context observer rejects unclassified runtime-operation text. Parent then issued unclassified find searches; no runtime credit.",
+    "prospective_repair": "Keep strict context decoders and work-order validator unchanged. Clarify shell context subcommands and passive bootstrap, direct parent to preserve refusal without ad hoc rollout discovery. Admit exact additional coverage flag order with source-bound controls.",
+    "historical_outcomes_unchanged": true
+  },
+  "focused_required_bytes": 10471960576,
+  "full_plan23_required_bytes": 14191223120,
+  "cleanup": {
+    "live": {
+      "before_wait_processes": [],
+      "errors": [],
+      "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": [],
+      "tracked_processes": [
+        {
+          "pgid": 30461,
+          "pid": 30461,
+          "ppid": 30342,
+          "started": "Sat Sep 19 16:50:27 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30471,
+          "ppid": 30461,
+          "started": "Sat Sep 19 16:50:28 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30476,
+          "ppid": 30461,
+          "started": "Sat Sep 19 16:50:29 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30488,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:30 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30493,
+          "ppid": 30488,
+          "started": "Sat Sep 19 16:50:31 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30548,
+          "ppid": 30488,
+          "started": "Sat Sep 19 16:50:41 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30552,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:42 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30557,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:43 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30558,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:43 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30559,
+          "ppid": 30558,
+          "started": "Sat Sep 19 16:50:43 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30561,
+          "ppid": 30559,
+          "started": "Sat Sep 19 16:50:43 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30562,
+          "ppid": 30561,
+          "started": "Sat Sep 19 16:50:43 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30596,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30682,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30688,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30690,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30692,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30693,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30694,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30711,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:49 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30728,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:50 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30730,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:50 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30731,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:50 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30747,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30754,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30760,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30762,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30763,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30778,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "?E"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30799,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30801,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "Z"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30802,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30803,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30804,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30859,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30861,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30862,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:51 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30868,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:52 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30874,
+          "ppid": 30596,
+          "started": "Sat Sep 19 16:50:52 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30461,
+          "pid": 30877,
+          "ppid": 30476,
+          "started": "Sat Sep 19 16:50:52 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 30896,
+          "pid": 30896,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:50:53 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 30896,
+          "pid": 30905,
+          "ppid": 30896,
+          "started": "Sat Sep 19 16:50:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 30991,
+          "pid": 30991,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:51:02 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31013,
+          "pid": 31013,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:51:07 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 31075,
+          "pid": 31075,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:51:21 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 31075,
+          "pid": 31077,
+          "ppid": 31075,
+          "started": "Sat Sep 19 16:51:21 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31075,
+          "pid": 31079,
+          "ppid": 31077,
+          "started": "Sat Sep 19 16:51:21 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31075,
+          "pid": 31084,
+          "ppid": 31077,
+          "started": "Sat Sep 19 16:51:22 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31075,
+          "pid": 31085,
+          "ppid": 31084,
+          "started": "Sat Sep 19 16:51:22 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31127,
+          "pid": 31127,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:51:31 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 31127,
+          "pid": 31128,
+          "ppid": 31127,
+          "started": "Sat Sep 19 16:51:31 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31127,
+          "pid": 31129,
+          "ppid": 31128,
+          "started": "Sat Sep 19 16:51:31 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31127,
+          "pid": 31135,
+          "ppid": 31127,
+          "started": "Sat Sep 19 16:51:32 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31138,
+          "pid": 31138,
+          "ppid": 31135,
+          "started": "Sat Sep 19 16:51:32 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31276,
+          "pid": 31276,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:51:58 2026",
+          "state": "?s"
+        },
+        {
+          "pgid": 31306,
+          "pid": 31306,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:52:04 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 31369,
+          "pid": 31369,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:52:17 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 31369,
+          "pid": 31371,
+          "ppid": 31369,
+          "started": "Sat Sep 19 16:52:17 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 31369,
+          "pid": 31378,
+          "ppid": 31371,
+          "started": "Sat Sep 19 16:52:18 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31878,
+          "pid": 31878,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:53:40 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31881,
+          "pid": 31881,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:53:40 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31885,
+          "pid": 31885,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:53:40 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31889,
+          "pid": 31889,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:53:40 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 31952,
+          "pid": 31952,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:53:54 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 31989,
+          "pid": 31989,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:54:01 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 32159,
+          "pid": 32159,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:54:25 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 32159,
+          "pid": 32165,
+          "ppid": 32159,
+          "started": "Sat Sep 19 16:54:25 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32318,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "Us"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32321,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32322,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32323,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32324,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32325,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32326,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32327,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32328,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32329,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32330,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32407,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32422,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32425,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32426,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32427,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "?E"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32428,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32429,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32433,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:53 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32455,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32456,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32458,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32472,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32480,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32485,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32486,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32487,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32488,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32489,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32573,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32583,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32585,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32588,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:55 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32591,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:56 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32599,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:56 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32318,
+          "pid": 32603,
+          "ppid": 32318,
+          "started": "Sat Sep 19 16:54:56 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 32792,
+          "pid": 32792,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:55:11 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 32792,
+          "pid": 32801,
+          "ppid": 32792,
+          "started": "Sat Sep 19 16:55:11 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32792,
+          "pid": 32803,
+          "ppid": 32792,
+          "started": "Sat Sep 19 16:55:12 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 32860,
+          "pid": 32860,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:55:22 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 32887,
+          "pid": 32887,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:55:26 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 32887,
+          "pid": 32927,
+          "ppid": 32887,
+          "started": "Sat Sep 19 16:55:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32887,
+          "pid": 32947,
+          "ppid": 32887,
+          "started": "Sat Sep 19 16:55:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32887,
+          "pid": 32950,
+          "ppid": 32887,
+          "started": "Sat Sep 19 16:55:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 32887,
+          "pid": 32951,
+          "ppid": 32887,
+          "started": "Sat Sep 19 16:55:26 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33010,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "Ss"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33028,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33029,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33030,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33031,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33032,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:35 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33010,
+          "pid": 33040,
+          "ppid": 33010,
+          "started": "Sat Sep 19 16:55:36 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 33398,
+          "pid": 33398,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:56:53 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 33503,
+          "pid": 33503,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:57:16 2026",
+          "state": "Us"
+        },
+        {
+          "pgid": 33666,
+          "pid": 33666,
+          "ppid": 30877,
+          "started": "Sat Sep 19 16:57:46 2026",
+          "state": "Rs"
+        }
+      ]
+    },
+    "replay": {
+      "before_wait_processes": [],
+      "errors": [],
+      "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+      "remaining_pids": [],
+      "remaining_zombie_pids": [],
+      "signals": [],
+      "tracked_processes": [
+        {
+          "pgid": 33822,
+          "pid": 33822,
+          "ppid": 30342,
+          "started": "Sat Sep 19 16:58:19 2026",
+          "state": "Rs"
+        },
+        {
+          "pgid": 33822,
+          "pid": 33831,
+          "ppid": 33822,
+          "started": "Sat Sep 19 16:58:20 2026",
+          "state": "R"
+        },
+        {
+          "pgid": 33822,
+          "pid": 33836,
+          "ppid": 33822,
+          "started": "Sat Sep 19 16:58:21 2026",
+          "state": "S"
+        },
+        {
+          "pgid": 33822,
+          "pid": 33848,
+          "ppid": 33836,
+          "started": "Sat Sep 19 16:58:23 2026",
+          "state": "R"
+        }
+      ]
+    }
+  },
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  }
+}

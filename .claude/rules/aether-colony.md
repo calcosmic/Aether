@@ -5,17 +5,16 @@
 
 ## Session Recovery
 
-On the first message of a new conversation, check if `.aether/data/session.json` exists. If it does:
+The program does this for you. Open a chat, resume one, or carry one on after
+clearing it, and Aether prints a short card saying what the project is, how far
+along it is, the one command to run next, and a couple of alternatives. A folder
+with no project set up in it is not greeted at all.
 
-1. Read the file briefly to check for `colony_goal`
-2. If a goal exists, display:
-   ```
-   Previous colony session detected: "{goal}"
-   Run /ant-resume to restore context, or continue with a new topic.
-   ```
-3. Do NOT auto-restore — wait for the user to explicitly run /ant-resume
-
-This only applies to genuinely new conversations, not after /clear.
+Nothing is restored automatically — the card tells you what to run and you
+decide. `/ant-resume` is the one return and recovery command. The Go runtime
+validates a saved handoff or reconstructs the safest honest recovery point from
+durable evidence, keeps confirmed and reconstructed provenance distinct, and
+stops without changing runnable state when evidence conflicts.
 
 ## Available Commands
 
@@ -55,15 +54,19 @@ This only applies to genuinely new conversations, not after /clear.
 ### Session Management
 | Command | Purpose |
 |---------|---------|
-| `/ant-pause-colony` | Save state and create handoff |
-| `/ant-resume-colony` | Restore from pause with the full recovery view |
-| `/ant-resume` | Quick session restore |
+| `/ant-pause` | Stop at a safe boundary and save one validated handoff and receipt |
+| `/ant-resume` | Validate or reconstruct the recovery point and report its provenance |
+
+Both are thin runtime commands. Wrappers never write colony, session, or
+handoff state themselves. Pause and resume use the handoff ID as the
+idempotency key, so a verified replay returns the existing receipt rather than
+creating a second recovery effect.
 
 ### Lifecycle
 | Command | Purpose |
 |---------|---------|
-| `/ant-seal` | Seal colony (Crowned Anthill) |
-| `/ant-entomb` | Archive completed colony |
+| `/ant-seal` | Seal colony and retain active state for review |
+| `/ant-entomb` | Optional explicit owner-invoked archive-and-clear alternative |
 | `/ant-maturity` | View colony maturity journey |
 | `/ant-update` | Update system files from hub |
 | `/ant-migrate-state` | Migrate colony state between versions |
@@ -72,6 +75,7 @@ This only applies to genuinely new conversations, not after /clear.
 | Command | Purpose |
 |---------|---------|
 | `/ant-run` | Autopilot — build, verify, advance automatically |
+| `/ant-improve` | Check how the colony's own suggestions have been doing, or try one by hand |
 | `/ant-quick` | Quick one-shot task |
 | `/ant-swarm "<bug>"` | Parallel bug investigation |
 | `/ant-oracle` | Deep research (RALF loop) |
@@ -104,16 +108,33 @@ Starting a colony:
 7. /ant-build 2                            (repeat until complete)
    /ant-run                                (or use autopilot for all phases)
 
+Before a planned session break:
+8. /ant-pause                              (runtime stops at a safe boundary and saves a receipt)
+
 After /clear or session break:
-8. /ant-resume                             (quick restore)
-9. /ant-resume-colony                      (full recovery view if needed)
+9. /ant-resume                             (validate or safely reconstruct with provenance)
 10. /ant-status                            (see where you left off)
 
 After completing a colony:
-11. /ant-seal                              (mark as complete)
-12. /ant-entomb                            (archive to chambers)
-13. /ant-init "next project goal"          (start fresh colony)
+11. /ant-seal                              (seal and retain active state for review)
+12. /ant-status                            (review the retained sealed state first)
+13. /ant-entomb                            (optional explicit owner-invoked archive-and-clear alternative)
+14. /ant-init "next project goal"          (only after a successful archive-and-clear receipt)
 ```
+
+### Sealed colony: review before archive
+
+After `/ant-seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `/ant-status` to review the retained sealed state.
+2. `/ant-entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `/ant-status` and optional
+   `/ant-entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `/ant-init` for a new goal.
 
 ## Worker Castes
 
@@ -168,3 +189,111 @@ Signals guide colony behavior without hard-coding instructions:
 - **FEEDBACK** — calibrates behavior based on observation (low priority)
 
 Use FOCUS + REDIRECT before builds to steer. Use FEEDBACK after builds to adjust.
+
+## Biological Runtime (v1.28, Phase 203)
+
+A helper stuck on its task can ask the program for backup with the real
+`aether recruit` command, and the program — never the assistant — decides
+whether the request is granted, through the same one gate every ordinary
+helper assignment already goes through. The check looks at how deep the
+chain of asks has gone (capped at two hops), how many helpers the whole run
+has already used, whether the new helper is allowed near what it wants to
+touch, and whether someone is already doing that exact job.
+
+Every dispatched helper is told the ability exists, on every lane and on all
+three assistant platforms, from one shared source so the lanes cannot drift
+apart. Two deliberate exceptions: the security reviewer and the quality
+reviewer hold no shell at all, so they are never told to run any command.
+
+A refusal never stops the work — the helper carries on and finishes the task
+alone, and the command still reports success, not a failure. The owner never
+approves a routine backup request; the program's own limits are the leash.
+What the owner does see, live, in the one window they are already using: one
+line when a helper joins, one line when a request is refused, and — once the
+run ends — the whole family tree of who asked for backup, what each branch
+cost, and every refusal along the way.
+
+The program's own steering notes now get more trusted the more they actually
+help and less trusted — or set aside — the more they don't, based on what a
+note genuinely did afterward, never merely on whether a helper saw it. A note
+the owner pinned in place is never moved by this automatic tuning.
+
+None of this costs anything on an ordinary run that never asks for backup —
+that has been measured, not just promised.
+
+**One honest limit, left open rather than hidden:** the depth check trusts a
+short, fixed list of coordinator names on its own word alone, with nothing
+yet proving that a caller claiming one of those names really is the
+coordinator. This gap predates this phase and is tracked, not silently
+fixed, in `.planning/WINDOWS.md`. See CLAUDE.md's "Biological Runtime"
+section for the full account and the tests that lock every claim above.
+
+## Learning Governor (v1.28, Phase 204)
+
+The evidence-gated outcome ledger the previous phase built now has a real
+production writer, reached from both places the program checks its own
+work, earning credit only when a real decision changed and a real effect
+was measured afterward.
+
+A lesson the program recorded but never checked is no longer shown to a
+helper under a heading that calls it proven — one shared rule now decides,
+everywhere, what counts as verified. A lesson recorded only as a guess is
+meant to be promoted to genuinely verified automatically, at the end of
+every check, on both check lanes, once the program's own records show it
+truly helped, checked independently rather than taken on a helper's own
+word — that gating rule is real, but the promotion itself cannot happen in
+the running program yet: nothing today connects a recorded guess to the
+proof that it helped, so this pass finds nothing to promote on any real
+check, a confirmed, openly recorded gap (WINDOWS.md entry 44, reopened
+2026-09-15), not a silent one.
+
+Every remembered record now carries its own version and says where it came
+from; an old record is read as the older shape it actually is, and every
+field is either filled by something real or sits on a reason-carrying list
+that may only shrink.
+
+Every run the program does now leaves a permanent record of what it cost,
+what it decided and how it ended — one that outlives the live activity
+screen's own thirty-day memory.
+
+Guidance now moves through nine tracked states, a helper's claim that it
+used something is independently checked against what the program can
+actually see for itself, and a lesson must have genuinely helped once
+before it reaches the shared instruction file.
+
+This project's own confirmed failures are now a versioned bank of
+regression fixtures, each traceable to a real incident, either guarded by a
+named check or on a counted list that may only shrink.
+
+The test suite now runs as seven named, budgeted gates, each proving it ran
+everything it found — closing the cause of three separate entries in the
+project's own defect register.
+
+A proposed change to settings or routing can be tried beside current
+behaviour, graded by a judge it structurally cannot reach or edit, and a
+change that only looks better on the work it could see is named as exactly
+that. The judge is now a real grader, not a placeholder that always agreed,
+and the whole sequence — compare, admit, and start a small, watched,
+reversible trial — now runs by itself at the end of every check, on both
+check lanes, with no command required. A new hand-run command, `aether
+improve`, lets you check on its own how those suggestions have been doing,
+without waiting for the next check; by itself it only reads and reports,
+changing nothing on disk.
+
+Two kinds of thing may be changed this way — remembered project facts, and
+task routing — and nine may never be: preferences, skills, workflows,
+source code, security settings, deletion, permissions, verification steps,
+and external actions. The nine have no code path into the automatic route
+at all.
+
+Finally, how often the program's own suggestions genuinely helped and how
+often a person had to step in are two separate figures that can never be
+blended into one. And when the same reason for stepping in keeps recurring
+— the owner intervening for the same reason on three or more separate runs
+— the program now genuinely writes up that case itself, on its own isolated
+branch, for a person to read; a proposed source-code change, automatic or
+hand-typed, can only ever become an ordinary, reviewable change — never
+something the program approves, merges, publishes, or deploys itself.
+
+See CLAUDE.md's "Learning Governor" section for the full account and the
+tests that lock every claim above.

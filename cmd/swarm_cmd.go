@@ -15,6 +15,8 @@ import (
 	"github.com/calcosmic/Aether/pkg/agent"
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
+	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +26,20 @@ const (
 )
 
 var newSwarmWorkerInvoker = codex.NewWorkerInvoker
+
+// swarmRestoreRepairCheckpointFunc is the one call site runSwarmDestroy uses
+// to restore a swarm repair checkpoint -- a test seam (mirroring
+// newSwarmWorkerInvoker above) so TestSwarmRestoreFailureIsReportedHonestly
+// can force the "restore itself failed" case without corrupting real
+// filesystem state. Production always leaves this as
+// restoreSwarmRepairCheckpoint, the direct adapter call.
+var swarmRestoreRepairCheckpointFunc = restoreSwarmRepairCheckpoint
+
+// swarmRepairNotRestoredStatus is the run status reported when a repair
+// failed verification AND the checkpoint restore itself did not succeed --
+// distinct from both "completed" and an ordinary failed/blocked repair, so
+// this state is never described as a rollback that happened.
+const swarmRepairNotRestoredStatus = "repair_failed_not_restored"
 
 type swarmWorkerPlan struct {
 	Stage            string                 `json:"stage,omitempty"`
@@ -158,7 +174,31 @@ func runSwarmCompatibility(root, target string, watch, planOnly bool) (map[strin
 		if planOnly && strings.TrimSpace(target) == "" && !watch {
 			return nil, fmt.Errorf("swarm --plan-only requires a problem description")
 		}
-		return buildSwarmWatchResult(target, watch, false), nil
+		contract, err := swarmInterventionPreflight(root, target)
+		if err != nil {
+			return nil, err
+		}
+		return resultWithSwarmInterventionContract(buildSwarmWatchResult(target, watch, false), contract), nil
+	}
+	history, err := evaluateSwarmStrikeHistory(store, target)
+	if err != nil {
+		return nil, err
+	}
+	if history.StrikeCount >= 3 {
+		contract, err := swarmInterventionPreflight(root, target)
+		if err != nil {
+			return nil, err
+		}
+		if err := ensureSwarmEscalationForHistory(store, target, history); err != nil {
+			return nil, err
+		}
+		result := augmentSwarmArchitecturalCase(swarmArchitecturalConcernResult(target, history), history)
+		return resultWithSwarmInterventionContract(result, contract), nil
+	}
+	if history.LatestRecovery != nil {
+		if err := reconcileSwarmRecoveryEscalation(store, target, history); err != nil {
+			return nil, err
+		}
 	}
 	if planOnly || codex.ShouldUseAgentDelegatePath() {
 		return runSwarmPlanOnly(root, target)
@@ -249,6 +289,10 @@ func spawnEntriesToWatchMaps(entries []agent.SpawnEntry) []map[string]interface{
 }
 
 func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
+	contract, err := swarmInterventionPreflight(root, target)
+	if err != nil {
+		return nil, err
+	}
 	invoker := newSwarmWorkerInvoker()
 	if invoker == nil {
 		return nil, fmt.Errorf("swarm worker invoker is not configured")
@@ -273,27 +317,172 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		finishRuntimeSpawnRun(runHandle, runStatus, time.Now().UTC())
 	}()
 
-	swarmID := fmt.Sprintf("swarm-%d", startedAt.Unix())
+	swarmID := newSwarmRunID(startedAt)
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
+	// 204-13 (SC3b, D-06): the swarm lane's own durable episode boundary,
+	// on the SAME episode id the wave events above already carry --
+	// mirroring cmd/codex_build.go's runCodexBuildWithOptions three-line
+	// shape (emitColonyLiveEpisodeStarted, then a deferred
+	// emitColonyLiveEpisodeEnded reading runStatus) so this run's episode
+	// closes on EVERY return path below, including the investigation-wave
+	// error return, the timeout return, and the interrupted-episode paths.
+	// runStatus is the same variable finishRuntimeSpawnRun's own deferred
+	// call above reads, so the durable episode's terminal result and the
+	// spawn-run record's status can never disagree.
+	emitColonyLiveEpisodeStarted(swarmID, events.EpisodeKindSwarm)
+	// 204-15 (SC3a): swarmFacts accumulates whichever wave(s) below actually
+	// ran and reported usage -- swarm has no hard gates and no acceptance
+	// digest (it dispatches investigators and fixers, it does not itself
+	// grade against a frozen evaluator), so those fields are left absent
+	// rather than written as empty/placeholder values.
+	swarmFacts := &episodeCloseFacts{}
+	defer func() {
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.Usage = swarmFacts.Usage
+		record.ReportedCostUSD = swarmFacts.ReportedCostUSD
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(swarmID, runStatus)
+		emitColonyLiveOutcomeRecorded(swarmID, events.EpisodeKindSwarm, record)
+		emitColonyLiveEpisodeEndedEventOnly(swarmID, events.EpisodeKindSwarm, runStatus)
+	}()
+
 	investigation := buildSwarmInvestigationPlans(root, target)
+	investigationWave := swarmPlansWaveNumber(investigation)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, investigation, "Investigation Wave"))
-	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker)
+	emitColonyLive(events.LiveTopicWaveStarted, events.ColonyLivePayload{
+		EpisodeID:   swarmID,
+		EpisodeKind: events.EpisodeKindSwarm,
+		Wave:        investigationWave,
+		Status:      "starting",
+	})
+	investigationRuns, err := executeSwarmWave(ctx, root, swarmID, target, investigation, "", invoker, true)
+	addSwarmRunsUsage(swarmFacts, investigationRuns)
 	if err != nil {
+		partialHypotheses, partialMissing := hypothesesFromSwarmRuns(investigationRuns)
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageInvestigation, startedAt,
+			compareSwarmHypotheses(partialHypotheses, partialMissing), false, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
 		}
 		return nil, err
 	}
+	emitColonyLive(events.LiveTopicWaveEnded, events.ColonyLivePayload{
+		EpisodeID:   swarmID,
+		EpisodeKind: events.EpisodeKindSwarm,
+		Wave:        investigationWave,
+		Status:      "completed",
+	})
+
+	// D-08/LIVE-05 test seam: a no-op in production, called here so a test
+	// can cancel this run's own context right at the investigation/fix
+	// boundary -- see swarmMidRunInterruptFunc's doc comment
+	// (cmd/swarm_episode.go).
+	swarmMidRunInterruptFunc(cancel)
 
 	findingSummary := renderSwarmFindingSummary(investigationRuns)
+
+	// SYN-202-05/06: map the investigation wave's own worker responses into
+	// structured, per-lens hypotheses, compare and rank them, and render the
+	// one end-of-investigation card. The structured comparison -- not
+	// findingSummary's free-text concatenation above -- is what feeds the
+	// fix wave below. findingSummary itself is untouched and still feeds the
+	// verification wave's prior-summary input further down.
+	hypotheses, missingLenses := hypothesesFromSwarmRuns(investigationRuns)
+	comparison := compareSwarmHypotheses(hypotheses, missingLenses)
+	emitSwarmHypothesisEvents(swarmID, hypotheses)
+	emitSwarmContradictionEvents(swarmID, comparison.Contradictions)
+	emitVisualProgress(renderSwarmHypothesisCard(comparison))
+
+	if comparison.Selected == nil {
+		// No lens produced usable evidence: dispatch no fix wave and no
+		// verification wave, and complete the run with the honest outcome
+		// rather than proceeding on nothing.
+		runStatus = summarizeRunStatus("failed")
+		filesTouched, testsWritten := collectSwarmTouchedFiles(investigationRuns)
+		var blockers []string
+		for _, missingLens := range comparison.MissingLenses {
+			blockers = append(blockers, fmt.Sprintf("%s: %s", missingLens.Label, missingLens.Reason))
+		}
+		blockers = swarmCompactStrings(blockers)
+		recommendation := "No repair was applied: none of the four investigation lenses produced usable evidence."
+		next := swarmNextCommand(state, "failed")
+		strikeStanding, err := persistSwarmResultOutcome(store, swarmResultRecord{
+			SwarmID:        swarmID,
+			Target:         target,
+			Status:         "failed",
+			Recommendation: recommendation,
+			Workers:        investigationRuns,
+			Files:          filesTouched,
+			Tests:          testsWritten,
+			Blockers:       blockers,
+			CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+		}
+		if persistErr := persistSwarmEpisode(store, buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+			SwarmID:            swarmID,
+			Target:             target,
+			Status:             swarmEpisodeStatusCompleted,
+			StartedAt:          startedAt,
+			EndedAt:            time.Now().UTC(),
+			Comparison:         comparison,
+			CheckpointSaved:    false,
+			CheckpointRestored: false,
+			VerificationStatus: "not_run",
+			StrikeStanding:     strikeStanding,
+			SpawnRunID:         spawnRunIDFrom(runHandle),
+		})); persistErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, persistErr)
+		}
+		result := map[string]interface{}{
+			"mode":                "destroy",
+			"autopilot_available": true,
+			"swarm_id":            swarmID,
+			"target":              target,
+			"status":              "failed",
+			"root_cause":          "",
+			"solution":            "",
+			"recommendation":      recommendation,
+			"workers":             swarmExecutionsForJSON(investigationRuns),
+			"worker_count":        len(investigationRuns),
+			"files_touched":       filesTouched,
+			"tests_written":       testsWritten,
+			"blockers":            blockers,
+			"next":                next,
+			"watch":               false,
+			"no_evidence":         true,
+		}
+		return resultWithSwarmInterventionContract(result, contract), nil
+	}
+
 	fixPlans := buildSwarmFixPlans(root, target)
+
+	// D-05/LIVE-04: checkpoint the working tree before the fix wave ever
+	// dispatches, so a repair that fails verification can be put back
+	// exactly. A checkpoint that cannot be saved must never silently block
+	// the existing repair attempt (mirroring applyBoundedCheckFixRepair's
+	// own fallback, cmd/work_repair.go) -- warn and proceed unprotected
+	// rather than refuse to try.
+	checkpoint, checkpointErr := saveSwarmRepairCheckpoint(root, swarmID, target, comparison)
+	haveCheckpoint := checkpointErr == nil
+	if haveCheckpoint {
+		announceSwarmCheckpointSaved(swarmID, target)
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: could not save swarm repair checkpoint for %q: %v\n", target, checkpointErr)
+	}
+
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, fixPlans, "Fix Wave"))
-	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, findingSummary, invoker)
+	builderRuns, err := executeSwarmWave(ctx, root, swarmID, target, fixPlans, swarmFixWaveBrief(comparison), invoker, false)
+	addSwarmRunsUsage(swarmFacts, builderRuns)
 	if err != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageFix, startedAt, comparison, haveCheckpoint, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -304,8 +493,13 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 	builderSummary := renderSwarmFindingSummary(builderRuns)
 	verificationPlans := buildSwarmVerificationPlans(root, target)
 	emitVisualProgress(renderSwarmDispatchPreview(swarmID, target, verificationPlans, "Verification Wave"))
-	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker)
+	watcherRuns, err := executeSwarmWave(ctx, root, swarmID, target, verificationPlans, findingSummary+"\n\n"+builderSummary, invoker, false)
+	addSwarmRunsUsage(swarmFacts, watcherRuns)
 	if err != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
+		persistInterruptedSwarmEpisode(swarmID, target, swarmEpisodeStageVerification, startedAt, comparison, haveCheckpoint, spawnRunIDFrom(runHandle))
 		if ctx.Err() != nil {
 			runStatus = "timeout"
 			return nil, fmt.Errorf("swarm stopped: %w", ctx.Err())
@@ -313,29 +507,139 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	// The verification wave's own outcome -- not the run's combined outcome
+	// below, which also folds in the investigation wave -- decides whether
+	// the repair held. No approval prompt is ever shown here; D-05 is the
+	// owner's locked decision to apply the ranked repair automatically.
+	verificationStatus, _, _, _, _, verificationErr := summarizeSwarmOutcome(watcherRuns)
+	if verificationErr != nil {
+		if haveCheckpoint {
+			os.RemoveAll(checkpoint.BackupDir)
+		}
+		return nil, verificationErr
+	}
+	repairHeld := verificationStatus == "completed"
+	checkpointRestored := false
+
+	if haveCheckpoint {
+		if repairHeld {
+			// Verification passed: release the checkpoint's temporary copy,
+			// the repair stays in place.
+			os.RemoveAll(checkpoint.BackupDir)
+		} else if restoreErr := swarmRestoreRepairCheckpointFunc(checkpoint); restoreErr != nil {
+			// The fix did not work AND the restore itself failed. Stop here
+			// -- state plainly that the project was not put back, name
+			// where the saved copy is and the exact recovery command, and
+			// never describe this as a rollback that happened.
+			runStatus = "failed"
+			message := renderSwarmCheckpointRestoreFailureMessage(target, checkpoint, restoreErr)
+			notRestoredRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
+			notRestoredRuns = append(notRestoredRuns, watcherRuns...)
+			filesTouched, testsWritten := collectSwarmTouchedFiles(notRestoredRuns)
+			strikeStanding, persistErr := persistSwarmResultOutcome(store, swarmResultRecord{
+				SwarmID:        swarmID,
+				Target:         target,
+				Status:         "failed",
+				Recommendation: message,
+				Workers:        notRestoredRuns,
+				Files:          filesTouched,
+				Tests:          testsWritten,
+				Blockers:       []string{message},
+				CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
+			})
+			if persistErr != nil {
+				return nil, fmt.Errorf("write and evaluate swarm result: %w", persistErr)
+			}
+			if episodeErr := persistSwarmEpisode(store, buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+				SwarmID:            swarmID,
+				Target:             target,
+				Status:             swarmEpisodeStatusCompleted,
+				StartedAt:          startedAt,
+				EndedAt:            time.Now().UTC(),
+				Comparison:         comparison,
+				CheckpointSaved:    true,
+				CheckpointRestored: false,
+				VerificationStatus: verificationStatus,
+				StrikeStanding:     strikeStanding,
+				SpawnRunID:         spawnRunIDFrom(runHandle),
+			})); episodeErr != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
+			}
+			result := map[string]interface{}{
+				"mode":                "destroy",
+				"autopilot_available": true,
+				"swarm_id":            swarmID,
+				"target":              target,
+				"status":              swarmRepairNotRestoredStatus,
+				"recommendation":      message,
+				"workers":             swarmExecutionsForJSON(notRestoredRuns),
+				"worker_count":        len(notRestoredRuns),
+				"files_touched":       filesTouched,
+				"tests_written":       testsWritten,
+				"blockers":            []string{message},
+				"backup_path":         checkpoint.BackupDir,
+				"next":                swarmNextCommand(state, swarmRepairNotRestoredStatus),
+				"watch":               false,
+			}
+			return resultWithSwarmInterventionContract(result, contract), nil
+		} else {
+			announceSwarmCheckpointRestored(swarmID, target)
+			checkpointRestored = true
+			os.RemoveAll(checkpoint.BackupDir)
+		}
+	}
+
 	allRuns := append(append([]swarmWorkerExecution{}, investigationRuns...), builderRuns...)
 	allRuns = append(allRuns, watcherRuns...)
 
-	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(allRuns)
+	status, recommendation, rootCause, solution, blockers, err := summarizeSwarmOutcome(allRuns)
+	if err != nil {
+		return nil, err
+	}
 	runStatus = summarizeRunStatus(status)
 	filesTouched, testsWritten := collectSwarmTouchedFiles(allRuns)
 	next := swarmNextCommand(state, status)
 
-	_ = store.SaveJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json")), map[string]interface{}{
-		"swarm_id":       swarmID,
-		"target":         target,
-		"status":         status,
-		"root_cause":     rootCause,
-		"solution":       solution,
-		"recommendation": recommendation,
-		"workers":        allRuns,
-		"files":          filesTouched,
-		"tests":          testsWritten,
-		"blockers":       blockers,
-		"completed_at":   time.Now().UTC().Format(time.RFC3339),
+	strikeStanding, err := persistSwarmResultOutcome(store, swarmResultRecord{
+		SwarmID:        swarmID,
+		Target:         target,
+		Status:         status,
+		RootCause:      rootCause,
+		Solution:       solution,
+		Recommendation: recommendation,
+		Workers:        allRuns,
+		Files:          filesTouched,
+		Tests:          testsWritten,
+		Blockers:       blockers,
+		CompletedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+	}
 
-	return map[string]interface{}{
+	episode := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+		SwarmID:            swarmID,
+		Target:             target,
+		Status:             swarmEpisodeStatusCompleted,
+		StartedAt:          startedAt,
+		EndedAt:            time.Now().UTC(),
+		Comparison:         comparison,
+		CheckpointSaved:    haveCheckpoint,
+		CheckpointRestored: checkpointRestored,
+		VerificationStatus: verificationStatus,
+		StrikeStanding:     strikeStanding,
+		SpawnRunID:         spawnRunIDFrom(runHandle),
+	})
+	// D-CAP-045: the proposer runs once, here, on the same path that
+	// persists the episode -- attached to the record BEFORE the one write,
+	// so persisting the episode and offering its learning proposal (if any)
+	// is a single atomic step rather than a second write.
+	episode.LearningProposal = proposeSwarmLearningFromEpisode(episode)
+	if episodeErr := persistSwarmEpisode(store, episode); episodeErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", target, episodeErr)
+	}
+
+	result := map[string]interface{}{
 		"mode":                "destroy",
 		"autopilot_available": true,
 		"swarm_id":            swarmID,
@@ -351,7 +655,8 @@ func runSwarmDestroy(root, target string) (map[string]interface{}, error) {
 		"blockers":            blockers,
 		"next":                next,
 		"watch":               false,
-	}, nil
+	}
+	return resultWithSwarmInterventionContract(result, contract), nil
 }
 
 func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
@@ -362,6 +667,10 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 	if target == "" {
 		return nil, fmt.Errorf("swarm --plan-only requires a problem description")
 	}
+	contract, err := swarmInterventionPreflight(root, target)
+	if err != nil {
+		return nil, err
+	}
 
 	dispatchMode := "plan-only"
 	status := "plan-only"
@@ -371,8 +680,11 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 	}
 
 	manifest := buildSwarmManifest(root, target, dispatchMode, time.Now().UTC())
+	if err := issueExternalSwarmManifest(manifest); err != nil {
+		return nil, err
+	}
 	dispatchMaps := swarmPlanMaps(manifest.Dispatches)
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":                  "destroy",
 		"status":                status,
 		"dispatch_mode":         dispatchMode,
@@ -393,11 +705,155 @@ func runSwarmPlanOnly(root, target string) (map[string]interface{}, error) {
 		"finalizer_command":     manifest.FinalizerCommand,
 		"next":                  "dispatch host swarm workers, then run `aether swarm-finalize --completion-file <file>`",
 		"watch":                 false,
-	}, nil
+	}
+	return resultWithSwarmInterventionContract(result, contract), nil
+}
+
+func resultWithSwarmInterventionContract(result map[string]interface{}, contract SwarmInterventionContract) map[string]interface{} {
+	result["intervention_contract"] = contract
+	return result
+}
+
+// swarmArchitecturalAttempt is one recorded strike rendered for the
+// third-strike case: which run it was, its terminal status, what that
+// attempt tried, and how it failed -- read from the same durable
+// swarmResultRecord history.Evidence already names, never invented at
+// render time.
+type swarmArchitecturalAttempt struct {
+	SwarmID      string `json:"swarm_id"`
+	Status       string `json:"status"`
+	WhatWasTried string `json:"what_was_tried"`
+	HowItFailed  string `json:"how_it_failed"`
+}
+
+// loadSwarmResultRecordByID reads one already-durable swarm result record by
+// its swarm ID -- the same result.json evaluateSwarmStrikeHistoryAgainstPlan
+// (cmd/swarm_strikes.go) already scans to build history.Evidence, re-read
+// here to recover the fuller record (root cause, solution, workers,
+// blockers) that history.Evidence's own compact shape does not carry.
+func loadSwarmResultRecordByID(s *storage.Store, swarmID string) (swarmResultRecord, bool) {
+	swarmID = strings.TrimSpace(swarmID)
+	if s == nil || swarmID == "" {
+		return swarmResultRecord{}, false
+	}
+	var record swarmResultRecord
+	path := filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json"))
+	if err := s.LoadJSON(path, &record); err != nil {
+		return swarmResultRecord{}, false
+	}
+	return record, true
+}
+
+// swarmArchitecturalAttempts renders one entry per recorded strike naming
+// what that attempt tried and how it failed, from the strike's own already-
+// durable record -- never composed generically at render time.
+func swarmArchitecturalAttempts(s *storage.Store, evidence []swarmStrikeEvidence) []swarmArchitecturalAttempt {
+	attempts := make([]swarmArchitecturalAttempt, 0, len(evidence))
+	for _, e := range evidence {
+		tried := "an automatic fix, but no record of what it attempted survived"
+		failed := fmt.Sprintf("the attempt ended with status %q", e.Status)
+		if record, ok := loadSwarmResultRecordByID(s, e.SwarmID); ok {
+			if solution := strings.TrimSpace(record.Solution); solution != "" {
+				tried = solution
+			} else if rootCause := strings.TrimSpace(record.RootCause); rootCause != "" {
+				tried = fmt.Sprintf("addressed the suspected cause: %s", rootCause)
+			}
+			if len(record.Blockers) > 0 {
+				failed = strings.Join(swarmCompactStrings(record.Blockers), "; ")
+			} else if recommendation := strings.TrimSpace(record.Recommendation); recommendation != "" {
+				failed = recommendation
+			}
+		}
+		attempts = append(attempts, swarmArchitecturalAttempt{
+			SwarmID: e.SwarmID, Status: e.Status, WhatWasTried: tried, HowItFailed: failed,
+		})
+	}
+	return attempts
+}
+
+// swarmArchitecturalStructuralChangeProposal draws the proposed structural
+// change from the recorded hypotheses' shared causes across all three
+// strikes -- reusing hypothesesFromSwarmRuns and detectSwarmSharedCauses
+// (cmd/swarm_lens.go) against each strike's own already-durable Workers
+// field, never a fresh claim composed at render time. A cause two or more
+// recorded hypotheses independently named across the three attempts is the
+// strongest signal that patching around it will not work; absent one, the
+// first recorded hypothesis's claim is used; absent any hypothesis at all,
+// the case says plainly that no structural cause could be determined.
+func swarmArchitecturalStructuralChangeProposal(s *storage.Store, evidence []swarmStrikeEvidence) string {
+	var allHypotheses []swarmHypothesis
+	for _, e := range evidence {
+		record, ok := loadSwarmResultRecordByID(s, e.SwarmID)
+		if !ok {
+			continue
+		}
+		hypotheses, _ := hypothesesFromSwarmRuns(record.Workers)
+		allHypotheses = append(allHypotheses, hypotheses...)
+	}
+	if len(allHypotheses) == 0 {
+		return "No structural cause could be determined from the recorded attempts -- a human should review the three failures directly before deciding what to change."
+	}
+	cause := allHypotheses[0].Claim
+	if shared := detectSwarmSharedCauses(allHypotheses); len(shared) > 0 {
+		cause = shared[0].Cause
+	}
+	return fmt.Sprintf("Address %s directly. Patching around it has not worked across %d attempts.", cause, len(evidence))
+}
+
+// augmentSwarmArchitecturalCase adds the plain-language architectural case
+// (D-07/CAP-046) to swarmArchitecturalConcernResult's existing payload,
+// alongside its existing keys -- strike_count, evidence_ids, next, and every
+// other key it already returns are kept unchanged in shape. The case names
+// each of the three attempts with what it tried and how it failed, states
+// plainly why continuing to patch is not working, and names the structural
+// change proposed, sourced from the recorded hypotheses rather than invented
+// here. No worker is dispatched to build this case -- it is read entirely
+// from durable history already on disk.
+func augmentSwarmArchitecturalCase(result map[string]interface{}, history swarmStrikeHistory) map[string]interface{} {
+	attempts := swarmArchitecturalAttempts(store, history.Evidence)
+	proposal := swarmArchitecturalStructuralChangeProposal(store, history.Evidence)
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("This has now failed %d times in a row. Here is what happened each time:\n", len(attempts)))
+	for i, attempt := range attempts {
+		b.WriteString(fmt.Sprintf("%d. Tried: %s. Failed: %s.\n", i+1, attempt.WhatWasTried, attempt.HowItFailed))
+	}
+	b.WriteString(fmt.Sprintf("\nContinuing to patch this the same way is not working -- three separate attempts have each tried a fix and each been undone by the same problem.\n\n"))
+	b.WriteString("What we think needs to change structurally: ")
+	b.WriteString(proposal)
+
+	result["case"] = strings.TrimSpace(b.String())
+	result["attempts"] = attempts
+	result["structural_change_proposal"] = proposal
+	return result
+}
+
+// swarmInterventionPreflight is causally read-only and runs before any Swarm
+// issuance, worker dispatch, escalation write, or finalizer mutation. Exact
+// active task IDs are the only accepted job link; arbitrary problem prose is
+// deliberately left unlocalized.
+func swarmInterventionPreflight(root, target string) (SwarmInterventionContract, error) {
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		return SwarmInterventionContract{}, err
+	}
+	projection := projectLifecycle(facts, LifecycleViewFocused, "runtime")
+	evidence := SwarmInterventionEvidence{}
+	target = strings.TrimSpace(target)
+	for _, task := range projection.Tasks.Value {
+		if task.ID == nil || task.Status != colony.TaskInProgress {
+			continue
+		}
+		if strings.TrimSpace(*task.ID) == target {
+			evidence.AffectedJobID = target
+			break
+		}
+	}
+	return BuildSwarmInterventionContract(projection, evidence)
 }
 
 func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmManifest {
-	swarmID := fmt.Sprintf("swarm-%d", now.Unix())
+	swarmID := newSwarmRunID(now)
 	dispatches := allSwarmPlans(root, target)
 	for i := range dispatches {
 		dispatches[i] = enrichSwarmPlanForManifest(root, target, swarmID, dispatches[i])
@@ -424,7 +880,7 @@ func buildSwarmManifest(root, target, dispatchMode string, now time.Time) swarmM
 			"state_authority":        "runtime finalizer writes swarm artifacts and spawn-tree status",
 			"wrapper_write_policy":   "workers report structured terminal results to the wrapper; wrappers do not hand-edit .aether/data",
 			"run_timeout_seconds":    int(defaultSwarmRunTimeout / time.Second),
-			"worker_status_values":   []string{"completed", "passed", "code_written", "blocked", "failed", "timeout"},
+			"worker_status_values":   swarmTerminalWorkerStatusValues(),
 			"required_result_fields": []string{"name", "caste", "role", "task", "status", "summary"},
 		},
 		Dispatches:       dispatches,
@@ -527,6 +983,9 @@ func swarmPlanMaps(plans []swarmWorkerPlan) []map[string]interface{} {
 }
 
 func initializeSwarmRun(swarmID string) error {
+	if _, err := validateDurableSwarmID(store, swarmID); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Join(store.BasePath(), "swarms", swarmID, "responses"), 0755); err != nil {
 		return err
 	}
@@ -633,6 +1092,9 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if manifest == nil {
 		return nil, fmt.Errorf("completion file must include swarm_manifest")
 	}
+	if _, err := validateDurableSwarmID(store, manifest.SwarmID); err != nil {
+		return nil, fmt.Errorf("invalid swarm_manifest swarm_id: %w", err)
+	}
 	if (manifest.DispatchMode != "plan-only" && manifest.DispatchMode != "agent-delegate") || !manifest.RequiresFinalizer {
 		return nil, fmt.Errorf("swarm_manifest must come from `aether swarm --plan-only` or an agent-delegate swarm response")
 	}
@@ -642,9 +1104,51 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(manifest.Root, root) {
 		return nil, fmt.Errorf("swarm_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
 	}
+	intervention, err := swarmInterventionPreflight(root, manifest.Target)
+	if err != nil {
+		return nil, err
+	}
+	manifestDigest, err := jsonSHA256(*manifest)
+	if err != nil {
+		return nil, fmt.Errorf("hash swarm_manifest: %w", err)
+	}
+	completionDigest, err := jsonSHA256(completion)
+	if err != nil {
+		return nil, fmt.Errorf("hash external swarm completion: %w", err)
+	}
+	issuance, err := loadExternalSwarmManifestIssuance(*manifest, manifestDigest)
+	if err != nil {
+		return nil, err
+	}
+	if replayed, exact, err := replayExternalSwarmFinalization(issuance, completionDigest); err != nil {
+		return nil, err
+	} else if exact {
+		return resultWithSwarmInterventionContract(replayed, intervention), nil
+	}
 	if err := validateFinalizerManifestFreshness("swarm_manifest", manifest.GeneratedAt, time.Now().UTC()); err != nil {
 		return nil, err
 	}
+	runs, err := mergeExternalSwarmResults(*manifest, completion.workerResults())
+	if err != nil {
+		return nil, err
+	}
+	status, recommendation, rootCause, solution, blockers, err := summarizeSwarmOutcome(runs)
+	if err != nil {
+		return nil, err
+	}
+	reserved, replay, err := reserveExternalSwarmFinalization(*manifest, manifestDigest, completionDigest)
+	if err != nil {
+		return nil, err
+	}
+	if replay {
+		return resultWithSwarmInterventionContract(externalSwarmFinalizationResult(reserved), intervention), nil
+	}
+	reservationCommitted := false
+	defer func() {
+		if !reservationCommitted {
+			releaseExternalSwarmFinalization(*manifest, manifestDigest, completionDigest)
+		}
+	}()
 
 	state, _ := loadColonyState()
 	startedAt := time.Now().UTC()
@@ -658,90 +1162,170 @@ func runSwarmFinalize(root string, completion externalSwarmCompletion) (map[stri
 	}()
 
 	swarmID := strings.TrimSpace(manifest.SwarmID)
-	if swarmID == "" {
-		swarmID = fmt.Sprintf("swarm-%d", startedAt.Unix())
-	}
 	if err := initializeSwarmRun(swarmID); err != nil {
 		return nil, fmt.Errorf("initialize swarm workspace: %w", err)
 	}
 
-	runs, err := mergeExternalSwarmResults(*manifest, completion.workerResults())
-	if err != nil {
-		return nil, err
+	// CR-03 (204-REVIEW.md): the delegate/external swarm-finalize lane
+	// (reached via `aether swarm-finalize --completion-file`, the same
+	// plan-only-dispatch-then-finalize-commits shape build's and
+	// continue's delegate lanes both have) previously opened and closed NO
+	// durable episode at all, unlike runSwarmDestroy's native lane above,
+	// which this block mirrors: emitColonyLiveEpisodeStarted immediately,
+	// then a deferred emitColonyLiveOutcomeRecorded/
+	// emitColonyLiveEpisodeEndedEventOnly pair reading the same runStatus
+	// variable finishRuntimeSpawnRun's own deferred call above reads, so
+	// this run's episode closes on every return path below and the
+	// durable episode's terminal result can never disagree with the spawn
+	// run record's status. Registered AFTER the finishRuntimeSpawnRun
+	// defer so it runs FIRST on return (LIFO), the same ordering
+	// runSwarmDestroy already uses.
+	emitColonyLiveEpisodeStarted(swarmID, events.EpisodeKindSwarm)
+	swarmFacts := &episodeCloseFacts{}
+	addSwarmRunsUsage(swarmFacts, runs)
+	defer func() {
+		record := episodeLedgerRecord{TerminalResult: runStatus}
+		record.Usage = swarmFacts.Usage
+		record.ReportedCostUSD = swarmFacts.ReportedCostUSD
+		record.RuntimeVersion, record.PolicyVersion, record.EndedAt, record.ElapsedSeconds = episodeCloseBasics(swarmID, runStatus)
+		emitColonyLiveOutcomeRecorded(swarmID, events.EpisodeKindSwarm, record)
+		emitColonyLiveEpisodeEndedEventOnly(swarmID, events.EpisodeKindSwarm, runStatus)
+	}()
+
+	for _, run := range runs {
+		if run.Status == "failed" || run.Status == "timeout" {
+			recordSwarmWorkerFailureToMidden(manifest.SwarmID, manifest.Target, run)
+		}
 	}
 	if err := recordExternalSwarmRun(swarmID, runs); err != nil {
 		return nil, err
 	}
 
-	status, recommendation, rootCause, solution, blockers := summarizeSwarmOutcome(runs)
 	runStatus = summarizeRunStatus(status)
 	filesTouched, testsWritten := collectSwarmTouchedFiles(runs)
 	next := swarmNextCommand(state, status)
 
-	if err := store.SaveJSON(filepath.ToSlash(filepath.Join("swarms", swarmID, "result.json")), map[string]interface{}{
-		"swarm_id":       swarmID,
-		"target":         manifest.Target,
-		"status":         status,
-		"root_cause":     rootCause,
-		"solution":       solution,
-		"recommendation": recommendation,
-		"workers":        runs,
-		"files":          filesTouched,
-		"tests":          testsWritten,
-		"blockers":       blockers,
-		"completed_at":   time.Now().UTC().Format(time.RFC3339),
-		"dispatch_mode":  "external-task",
-	}); err != nil {
-		return nil, fmt.Errorf("write swarm result: %w", err)
+	outcome := swarmResultRecord{
+		SwarmID:           swarmID,
+		Target:            manifest.Target,
+		TargetFingerprint: swarmTargetFingerprint(manifest.Target),
+		Status:            status,
+		RootCause:         rootCause,
+		Solution:          solution,
+		Recommendation:    recommendation,
+		Workers:           runs,
+		Files:             filesTouched,
+		Tests:             testsWritten,
+		Blockers:          blockers,
+		CompletedAt:       time.Now().UTC().Format(time.RFC3339Nano),
+		DispatchMode:      "external-task",
 	}
-
-	return map[string]interface{}{
-		"mode":                "destroy",
-		"autopilot_available": true,
-		"swarm_id":            swarmID,
-		"target":              manifest.Target,
-		"status":              status,
-		"root_cause":          rootCause,
-		"solution":            solution,
-		"recommendation":      recommendation,
-		"workers":             swarmExecutionsForJSON(runs),
-		"dispatches":          swarmExecutionsForJSON(runs),
-		"worker_count":        len(runs),
-		"wave_count":          manifest.WaveCount,
-		"files_touched":       filesTouched,
-		"tests_written":       testsWritten,
-		"blockers":            blockers,
-		"dispatch_mode":       "external-task",
-		"dispatch_contract":   manifest.DispatchContract,
-		"next":                next,
-		"watch":               false,
-	}, nil
+	strikeStanding, err := persistSwarmResultOutcome(store, outcome)
+	if err != nil {
+		return nil, fmt.Errorf("write and evaluate swarm result: %w", err)
+	}
+	externalHypotheses, externalMissingLenses := hypothesesFromSwarmRuns(runs)
+	externalComparison := compareSwarmHypotheses(externalHypotheses, externalMissingLenses)
+	externalEpisode := buildSwarmEpisodeRecord(swarmEpisodeBuildParams{
+		SwarmID:            swarmID,
+		Target:             manifest.Target,
+		Status:             swarmEpisodeStatusCompleted,
+		StartedAt:          startedAt,
+		EndedAt:            time.Now().UTC(),
+		Comparison:         externalComparison,
+		CheckpointSaved:    false,
+		CheckpointRestored: false,
+		VerificationStatus: status,
+		StrikeStanding:     strikeStanding,
+		SpawnRunID:         spawnRunIDFrom(runHandle),
+	})
+	if episodeErr := persistSwarmEpisode(store, externalEpisode); episodeErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist swarm episode for %q: %v\n", manifest.Target, episodeErr)
+	}
+	receipt, err := completeExternalSwarmFinalization(*manifest, manifestDigest, completionDigest, outcome, next)
+	if err != nil {
+		return nil, err
+	}
+	reservationCommitted = true
+	return resultWithSwarmInterventionContract(externalSwarmFinalizationResult(receipt), intervention), nil
 }
 
 func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExecution) ([]swarmWorkerExecution, error) {
+	if strings.TrimSpace(manifest.Workflow) != "swarm" {
+		return nil, fmt.Errorf("swarm_manifest workflow must be swarm")
+	}
+	if strings.TrimSpace(manifest.SwarmID) == "" {
+		return nil, fmt.Errorf("swarm_manifest swarm_id is required")
+	}
+	if strings.TrimSpace(manifest.Target) == "" {
+		return nil, fmt.Errorf("swarm_manifest target is required")
+	}
+	if manifest.WorkerCount != len(manifest.Dispatches) {
+		return nil, fmt.Errorf("swarm_manifest worker_count %d does not match %d dispatches", manifest.WorkerCount, len(manifest.Dispatches))
+	}
+	if len(results) != len(manifest.Dispatches) {
+		return nil, fmt.Errorf("external swarm result count %d does not match %d manifest dispatches", len(results), len(manifest.Dispatches))
+	}
+
+	planByName := make(map[string]swarmWorkerPlan, len(manifest.Dispatches))
+	manifestRoles := make(map[string]string, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		name := strings.TrimSpace(plan.Name)
+		role := strings.TrimSpace(plan.Role)
+		if name == "" {
+			return nil, fmt.Errorf("swarm_manifest dispatch name is required")
+		}
+		if role == "" {
+			return nil, fmt.Errorf("swarm_manifest dispatch %s role is required", name)
+		}
+		if _, duplicate := planByName[name]; duplicate {
+			return nil, fmt.Errorf("swarm_manifest contains duplicate dispatch name %s", name)
+		}
+		if prior, duplicate := manifestRoles[role]; duplicate {
+			return nil, fmt.Errorf("swarm_manifest contains duplicate dispatch role %s for %s and %s", role, prior, name)
+		}
+		planByName[name] = plan
+		manifestRoles[role] = name
+	}
+
 	resultByName := make(map[string]swarmWorkerExecution, len(results))
-	resultByRole := make(map[string]swarmWorkerExecution, len(results))
 	for _, result := range results {
-		if name := strings.TrimSpace(result.Name); name != "" {
-			resultByName[name] = result
+		name := strings.TrimSpace(result.Name)
+		if name == "" {
+			return nil, fmt.Errorf("external swarm worker result name is required")
 		}
-		if role := strings.TrimSpace(result.Role); role != "" {
-			resultByRole[role] = result
+		plan, ok := planByName[name]
+		if !ok {
+			return nil, fmt.Errorf("external swarm worker result %s is not in the manifest", name)
 		}
-		if result.Response.Role != "" {
-			resultByRole[result.Response.Role] = result
+		if _, duplicate := resultByName[name]; duplicate {
+			return nil, fmt.Errorf("duplicate external swarm worker result for %s", name)
 		}
+		if err := validateExternalSwarmIdentity(name, "caste", result.Caste, plan.Caste); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "role", result.Role, plan.Role); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "task", result.Task, plan.Task); err != nil {
+			return nil, err
+		}
+		if err := validateExternalSwarmIdentity(name, "response.role", result.Response.Role, plan.Role); err != nil {
+			return nil, err
+		}
+		status := strings.ToLower(strings.TrimSpace(result.Status))
+		if !isSwarmTerminalWorkerStatus(status) {
+			return nil, fmt.Errorf("external swarm worker result %s has non-terminal status %q", name, result.Status)
+		}
+		result.Status = status
+		resultByName[name] = result
 	}
 
 	merged := make([]swarmWorkerExecution, 0, len(manifest.Dispatches))
 	for _, plan := range manifest.Dispatches {
-		result, ok := resultByName[strings.TrimSpace(plan.Name)]
-		if !ok {
-			result, ok = resultByRole[strings.TrimSpace(plan.Role)]
-		}
-		if !ok {
-			return nil, fmt.Errorf("missing external swarm worker result for %s", plan.Name)
-		}
+		result := resultByName[strings.TrimSpace(plan.Name)]
+		response := result.Response
+		response.Role = plan.Role
 
 		execution := swarmWorkerExecution{
 			Name:         plan.Name,
@@ -754,26 +1338,8 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 			Files:        append([]string{}, result.Files...),
 			Tests:        append([]string{}, result.Tests...),
 			Blockers:     append([]string{}, result.Blockers...),
-			Response:     result.Response,
+			Response:     response,
 			ResponsePath: result.ResponsePath,
-		}
-		if strings.TrimSpace(result.Name) != "" {
-			execution.Name = strings.TrimSpace(result.Name)
-		}
-		if strings.TrimSpace(result.Caste) != "" {
-			execution.Caste = strings.TrimSpace(result.Caste)
-		}
-		if strings.TrimSpace(result.Role) != "" {
-			execution.Role = strings.TrimSpace(result.Role)
-		}
-		if strings.TrimSpace(result.Task) != "" {
-			execution.Task = strings.TrimSpace(result.Task)
-		}
-		if execution.Response.Role == "" {
-			execution.Response.Role = execution.Role
-		}
-		if execution.Status == "" || execution.Status == "spawned" {
-			execution.Status = "completed"
 		}
 		if execution.Summary == "" && execution.Response.Summary != "" {
 			execution.Summary = execution.Response.Summary
@@ -792,6 +1358,30 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 		merged = append(merged, execution)
 	}
 	return merged, nil
+}
+
+func validateExternalSwarmIdentity(workerName, field, submitted, manifestValue string) error {
+	submitted = strings.TrimSpace(submitted)
+	if submitted == "" {
+		return nil
+	}
+	if submitted != strings.TrimSpace(manifestValue) {
+		return fmt.Errorf("external swarm worker result %s %s %q does not match manifest value %q", workerName, field, submitted, manifestValue)
+	}
+	return nil
+}
+
+func swarmTerminalWorkerStatusValues() []string {
+	return []string{"completed", "passed", "code_written", "blocked", "failed", "timeout"}
+}
+
+func isSwarmTerminalWorkerStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "passed", "code_written", "blocked", "failed", "timeout":
+		return true
+	default:
+		return false
+	}
 }
 
 func recordExternalSwarmRun(swarmID string, runs []swarmWorkerExecution) error {
@@ -853,12 +1443,30 @@ func buildSwarmVerificationPlans(root, target string) []swarmWorkerPlan {
 	return plans
 }
 
+// swarmMandatoryLensCastes are the four lens castes SYN-202-05 requires in
+// every investigation wave, regardless of the Queen's relevance-based
+// selection below. This is a structural floor layered on top of the
+// existing Queen caste-selection mechanism -- not a replacement of it:
+// gatekeeper and medic (and every other optional Swarm caste) still ride
+// entirely on the Queen's own relevance scoring, exactly as before this
+// plan (TestSwarmTrivialBugSkipsHistoryAndResearch's pin on that scoring is
+// untouched). Only tracker/scout/archaeologist/oracle -- the four declared
+// lenses in cmd/swarm_lens.go -- are unconditional, because a Swarm
+// investigation that skips one of its four genuinely distinct evidence
+// sources is not what LIVE-03 asks for.
+var swarmMandatoryLensCastes = map[string]bool{
+	"tracker":       true,
+	"scout":         true,
+	"archaeologist": true,
+	"oracle":        true,
+}
+
 func buildSwarmPlansForWave(root, target string, wave int) []swarmWorkerPlan {
 	selected := queenSwarmSelectedCastes(target)
-	order := []string{"tracker", "scout", "archaeologist", "gatekeeper", "medic", "builder", "weaver", "fixer", "watcher", "probe"}
+	order := []string{"tracker", "scout", "archaeologist", "oracle", "gatekeeper", "medic", "builder", "weaver", "fixer", "watcher", "probe"}
 	plans := make([]swarmWorkerPlan, 0, len(order))
 	for _, caste := range order {
-		if !selected[caste] {
+		if !selected[caste] && !swarmMandatoryLensCastes[caste] {
 			continue
 		}
 		plan := buildSwarmPlanForCaste(root, target, caste)
@@ -917,6 +1525,8 @@ func swarmTaskForCaste(caste string) string {
 		return "Search the repo for the most relevant files, patterns, tests, and documentation tied to the reported bug."
 	case "archaeologist":
 		return "Inspect git history and prior fixes around the bug area to identify historical context, fragile zones, and regressions."
+	case "oracle":
+		return "Research external evidence for the reported bug: authoritative documentation, official sources, repository issues/history, blog posts, forum discussions, and academic or research sources. Cite the specific external source for each piece of evidence you report."
 	case "gatekeeper":
 		return "Inspect security, auth, permission, dependency, and release-integrity risks tied to the reported bug."
 	case "medic":
@@ -948,7 +1558,29 @@ func buildLegacySwarmWatcherPlan(root, target string) swarmWorkerPlan {
 	}
 }
 
-func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans []swarmWorkerPlan, priorSummary string, invoker codex.WorkerInvoker) ([]swarmWorkerExecution, error) {
+// addSwarmRunsUsage (204-15, SC3a) folds one wave's worker runs' own
+// reported usage into facts, via each run's Claims (*codex.WorkerResult,
+// json:"-") -- the same in-process, never-serialized field build's own
+// dispatches[i].Usage mirrors for the exact same reason (CR-03: a figure
+// that crossed a wire could be asserted rather than measured). A run with
+// no Claims (never dispatched, or the worker produced no result at all)
+// contributes nothing.
+func addSwarmRunsUsage(facts *episodeCloseFacts, runs []swarmWorkerExecution) {
+	for _, run := range runs {
+		if run.Claims == nil {
+			continue
+		}
+		facts.addUsage(run.Claims.Usage)
+	}
+}
+
+// executeSwarmWave dispatches plans sequentially and records their outcome.
+// liveEpisode, when true, publishes a worker-started event through
+// emitColonyLive as each plan is dispatched and a worker-finished event as
+// each returns -- currently wired for the investigation wave only (202-02);
+// the fix and verification waves pass false and are unaffected (202-03
+// owns wiring the rest of the lifecycle lanes).
+func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans []swarmWorkerPlan, priorSummary string, invoker codex.WorkerInvoker, liveEpisode bool) ([]swarmWorkerExecution, error) {
 	spawnTree := agent.NewSpawnTree(store, "spawn-tree.txt")
 	runs := make([]swarmWorkerExecution, 0, len(plans))
 	for _, plan := range plans {
@@ -963,6 +1595,24 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		}
 		if err := updateSwarmDisplayStatus(swarmID, plan.Name, "active"); err != nil {
 			return nil, fmt.Errorf("update swarm display %s: %w", plan.Name, err)
+		}
+		lensID := ""
+		if lens, ok := swarmLensForCaste(plan.Caste); ok {
+			lensID = lens.ID
+		}
+
+		if liveEpisode {
+			emitColonyLive(events.LiveTopicWorkerStarted, events.ColonyLivePayload{
+				EpisodeID:   swarmID,
+				EpisodeKind: events.EpisodeKindSwarm,
+				Wave:        plan.Wave,
+				WorkerID:    plan.Name,
+				Caste:       plan.Caste,
+				WorkerName:  plan.Name,
+				Workspace:   root,
+				Lens:        lensID,
+				Status:      "active",
+			})
 		}
 
 		responsePath := swarmResponsePath(swarmID, plan.Name)
@@ -998,14 +1648,29 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		}
 		execution.Files = swarmCompactStrings(execution.Files)
 		execution.Tests = swarmCompactStrings(execution.Tests)
+		// The execErr blockers append is placed BEFORE both status-transition
+		// checks below (198.1-02) so that whichever point actually sets
+		// Status = "failed" already has the invoker's own error text
+		// available in execution.Blockers when it calls
+		// recordSwarmWorkerFailureToMidden -- the worker's own words, not a
+		// generic fallback, reach the failure log.
+		if execErr != nil {
+			execution.Blockers = append(execution.Blockers, execErr.Error())
+		}
 		if execution.Status == "" {
 			execution.Status = "failed"
 		}
-		if execErr != nil {
-			execution.Blockers = append(execution.Blockers, execErr.Error())
-			if execution.Status == "completed" {
-				execution.Status = "failed"
-			}
+		if execErr != nil && execution.Status == "completed" {
+			execution.Status = "failed"
+		}
+		// 198.1-fix (CR-01): check the FINAL status once, after both
+		// transitions above, rather than gating on how the status got
+		// there -- mirrors mergeExternalSwarmResults' wrapper-lane check
+		// (cmd/swarm_cmd.go, ~line 792) so a worker that itself returns
+		// Status: "failed" or "timeout" with no Go-level invoker error is
+		// no longer silently dropped from the failure log.
+		if execution.Status == "failed" || execution.Status == "timeout" {
+			recordSwarmWorkerFailureToMidden(swarmID, target, execution)
 		}
 
 		summary := execution.Summary
@@ -1021,10 +1686,36 @@ func executeSwarmWave(ctx context.Context, root, swarmID, target string, plans [
 		if err := recordSwarmFinding(swarmID, plan.Name, response, execution); err != nil {
 			return nil, fmt.Errorf("record swarm finding %s: %w", plan.Name, err)
 		}
+		if liveEpisode {
+			emitColonyLive(events.LiveTopicWorkerFinished, events.ColonyLivePayload{
+				EpisodeID:   swarmID,
+				EpisodeKind: events.EpisodeKindSwarm,
+				Wave:        plan.Wave,
+				WorkerID:    plan.Name,
+				Caste:       plan.Caste,
+				WorkerName:  plan.Name,
+				Workspace:   root,
+				Lens:        lensID,
+				Status:      execution.Status,
+				Findings:    append([]string{}, execution.Response.Findings...),
+			})
+		}
 
 		runs = append(runs, execution)
 	}
 	return runs, nil
+}
+
+// swarmPlansWaveNumber returns the wave number shared by a wave's plans,
+// falling back to 1 when the wave list is empty.
+func swarmPlansWaveNumber(plans []swarmWorkerPlan) int {
+	if len(plans) == 0 {
+		return 1
+	}
+	if plans[0].Wave > 0 {
+		return plans[0].Wave
+	}
+	return 1
 }
 
 func invokeSwarmWorker(ctx context.Context, root, target, swarmID string, plan swarmWorkerPlan, priorSummary, responsePath string, invoker codex.WorkerInvoker) (*codex.WorkerResult, *swarmWorkerResponse, error) {
@@ -1119,12 +1810,16 @@ func renderSwarmWorkerBrief(root, target, swarmID string, plan swarmWorkerPlan, 
 	b.WriteString(`  "proposed_fix": "what should change or what changed",` + "\n")
 	b.WriteString(`  "files_touched": ["path/to/file"],` + "\n")
 	b.WriteString(`  "tests_written": ["path/to/test"],` + "\n")
-	b.WriteString(`  "verification": ["command or evidence of validation"]` + "\n")
+	b.WriteString(`  "verification": ["command or evidence of validation"],` + "\n")
+	b.WriteString(`  "confidence": 0,` + "\n")
+	b.WriteString(`  "structured_evidence": [{"title": "what you inspected", "location": "file path, commit, or URL", "kind": "codebase | runtime | documentation | official | github | blog | forum | academic"}],` + "\n")
+	b.WriteString(`  "contradictions": ["how this conflicts with another lens's finding, naming that lens"]` + "\n")
 	b.WriteString("}\n")
 	b.WriteString("```\n")
 	b.WriteString("- Do not write markdown to the response file.\n")
 	b.WriteString("- Non-builder roles should leave files_touched/tests_written empty unless they truly changed something.\n")
 	b.WriteString("- Builder and watcher responses must mention concrete verification evidence.\n")
+	b.WriteString("- If you are one of Swarm's four investigation lenses (error-path/tracker, pattern/scout, history/archaeologist, external-evidence/oracle), state a confidence 0-100 if you have one, and name another lens by role if your finding conflicts with what it is likely to report.\n")
 	return strings.TrimSpace(b.String())
 }
 
@@ -1231,7 +1926,7 @@ func renderSwarmFindingSummary(runs []swarmWorkerExecution) string {
 	return strings.Join(lines, "\n")
 }
 
-func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation, rootCause, solution string, blockers []string) {
+func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation, rootCause, solution string, blockers []string, err error) {
 	status = "completed"
 	for _, run := range runs {
 		if run.Response.RootCause != "" && rootCause == "" {
@@ -1247,12 +1942,15 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 			blockers = append(blockers, run.Blockers...)
 		}
 		switch strings.ToLower(strings.TrimSpace(run.Status)) {
+		case "completed", "passed", "code_written":
 		case "blocked":
 			if status != "failed" {
 				status = "blocked"
 			}
 		case "failed", "timeout":
 			status = "failed"
+		default:
+			return "", "", "", "", nil, fmt.Errorf("summarize swarm outcome: worker %s has non-terminal status %q", run.Name, run.Status)
 		}
 	}
 	if recommendation == "" {
@@ -1274,7 +1972,7 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 		}
 	}
 	blockers = swarmCompactStrings(blockers)
-	return status, recommendation, rootCause, solution, blockers
+	return status, recommendation, rootCause, solution, blockers, nil
 }
 
 func collectSwarmTouchedFiles(runs []swarmWorkerExecution) ([]string, []string) {
@@ -1386,6 +2084,13 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("swarm"), "Swarm"))
 	b.WriteString(visualDividerStr())
+	if contract, ok := result["intervention_contract"].(SwarmInterventionContract); ok {
+		b.WriteString(RenderSwarmInterventionContract(contract))
+		b.WriteString("\n")
+	} else if contract, ok := result["intervention_contract"].(*SwarmInterventionContract); ok && contract != nil {
+		b.WriteString(RenderSwarmInterventionContract(*contract))
+		b.WriteString("\n")
+	}
 
 	mode := strings.TrimSpace(stringValue(result["mode"]))
 	target := strings.TrimSpace(stringValue(result["target"]))
@@ -1467,6 +2172,31 @@ func renderSwarmCompatibilityVisual(result map[string]interface{}) string {
 	}
 
 	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
+	if strings.TrimSpace(stringValue(result["status"])) == "architectural_concern" || dispatchMode == "refused" {
+		b.WriteString("Swarm dispatch refused after repeated failure.\n")
+		if target != "" {
+			b.WriteString("Target: " + target + "\n")
+		}
+		b.WriteString(fmt.Sprintf("Consecutive failed or blocked attempts: %d\n", intValue(result["strike_count"])))
+		if evidenceIDs := stringSliceValue(result["evidence_ids"]); len(evidenceIDs) > 0 {
+			b.WriteString("Evidence\n")
+			for _, id := range evidenceIDs {
+				b.WriteString("  - " + id + "\n")
+			}
+		}
+		if recommendation := strings.TrimSpace(stringValue(result["recommendation"])); recommendation != "" {
+			b.WriteString("Recommendation: " + recommendation + "\n")
+		}
+		next := strings.TrimSpace(stringValue(result["next"]))
+		if next == "" {
+			next = swarmInsertPhaseCommand(target)
+		}
+		b.WriteString(renderNextUp(
+			fmt.Sprintf("Run `%s` before retrying this swarm target.", next),
+			"The three prior swarm result records remain the durable evidence for this refusal.",
+		))
+		return b.String()
+	}
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
 	if requiresFinalizer || dispatchMode == "plan-only" || dispatchMode == "agent-delegate" {
 		b.WriteString("Swarm dispatch manifest ready.\n")

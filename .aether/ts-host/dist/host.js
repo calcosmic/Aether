@@ -107,6 +107,7 @@ export function parseArgs(argv) {
     let force = false;
     let forceResurvey = false;
     const tasks = [];
+    let preset = undefined;
     let depth = undefined;
     let planningDepth = undefined;
     let verificationDepth = undefined;
@@ -188,6 +189,9 @@ export function parseArgs(argv) {
             const value = readValue(arg);
             if (value !== undefined)
                 tasks.push(value);
+        }
+        else if (arg === "--preset") {
+            preset = readValue(arg);
         }
         else if (arg === "--depth") {
             depth = readValue(arg);
@@ -276,6 +280,7 @@ export function parseArgs(argv) {
         force,
         forceResurvey,
         tasks,
+        preset,
         depth,
         planningDepth,
         verificationDepth,
@@ -322,7 +327,8 @@ function printUsage() {
         "  --force                Forward Go force aliases for plan/build\n" +
         "  --force-resurvey       Refresh colonize survey artifacts\n" +
         "  --task <id>            Limit build dispatch to a task id (repeatable)\n" +
-        "  --depth <level>        fast | balanced | deep | exhaustive\n" +
+        "  --preset <level>       fast | balanced | deep | exhaustive (primary; --depth is a legacy alias)\n" +
+        "  --depth <level>        fast | balanced | deep | exhaustive (legacy alias for --preset)\n" +
         "  --planning-depth <lvl> light | standard | deep\n" +
         "  --verification-depth <lvl> light | standard | heavy\n" +
         "  --target <n>           Planning confidence target 70-99\n" +
@@ -436,7 +442,7 @@ function emitSkillSummary(dispatches) {
         process.stderr.write(`Injecting ${skillCount} skills into worker prompts.\n`);
     }
 }
-async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) {
+async function preflightHostWorkerDispatch(bridge, context, phase = 0, fallbackDiagnostic) {
     // D-06: a skipped preflight must never be silent, on either the
     // compat/test-hook path or the production Go-adapter path below.
     const skipRaw = process.env["AETHER_SKIP_PREFLIGHT"]?.trim().toLowerCase();
@@ -472,7 +478,7 @@ async function preflightHostWorkerDispatch(bridge, context, fallbackDiagnostic) 
         }
         return;
     }
-    await preflightGoWorkerProvider(bridge, context);
+    await preflightGoWorkerProvider(bridge, context, phase);
 }
 // ---------------------------------------------------------------------------
 // Dry-run ceremony preview (HOST-07, D-06)
@@ -887,19 +893,21 @@ async function runDispatchedBuildCommand(bridge, parsed, definition) {
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
         const diagnostic = buildResult.provider_diagnostics;
-        await preflightHostWorkerDispatch(bridge, `Build phase ${phase}`, diagnostic ? `No platform workers available. ${diagnostic}` : undefined);
+        await preflightHostWorkerDispatch(bridge, `Build phase ${phase}`, buildManifest.phase, diagnostic ? `No platform workers available. ${diagnostic}` : undefined);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { dispatch_manifest: buildManifest };
     renderManifestCeremony(ceremony, "build", ceremonyEnvelope, dispatches);
-    // Step 5: Initialize spawn budget from manifest QueenSpawnBudget.max_workers (SPAWN-03)
+    // Step 5: spawnBudget still feeds the ConfidenceLoop's own iteration
+    // budget below (an unrelated concept). The spawn orchestrator itself no
+    // longer takes a budget/consumed/depth of its own (SYN-203-02): every
+    // admission decision is asked of the Go binary's spawn-can-spawn command,
+    // against the SAME whole-run ledger the interactive `aether recruit` lane
+    // already consults -- one counter, not two.
     const spawnBudget = buildManifest.queen_execution_policy?.spawn_budget?.max_workers ?? 20;
     const spawnOrchestrator = createSpawnOrchestrator({
         goBinaryPath: bridge.goBinaryPath,
         cwd: bridge.cwd,
-        totalBudget: spawnBudget,
-        consumedBudget: dispatches.length,
-        currentDepth: 1,
     });
     // Step 6: Initialize ConfidenceLoop and ConfidenceEvaluator
     const loopOpts = {
@@ -1030,7 +1038,7 @@ async function runDispatchedPlanCommand(bridge, parsed) {
     // See the note in runDryRunDispatchedCommand and cmd/codex_build.go.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        await preflightHostWorkerDispatch(bridge, "Plan");
+        await preflightHostWorkerDispatch(bridge, "Plan", 0);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { plan_manifest: planManifest, dispatches };
@@ -1118,7 +1126,7 @@ async function runDispatchedContinueCommand(bridge, parsed) {
     // section; recomputing and attaching a second copy duplicated it.
     // Step 2: Ask Go to select and preflight the provider (unless simulating)
     if (!parsed.simulate) {
-        await preflightHostWorkerDispatch(bridge, "Continue");
+        await preflightHostWorkerDispatch(bridge, "Continue", continueManifest.phase);
     }
     // Step 3: Render spawn-plan and wave-start ceremony
     const ceremonyEnvelope = { continue_manifest: continueManifest, dispatches };

@@ -735,6 +735,8 @@ export interface OrchestratorBoundaryQuestionSummary {
  */
 export type TerminalWorkerStatus =
   | "completed"
+  | "completed_no_change"
+  | "interrupted"
   | "failed"
   | "blocked"
   | "timeout"

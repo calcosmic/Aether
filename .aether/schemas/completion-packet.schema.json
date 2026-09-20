@@ -106,6 +106,131 @@
         "approval"
       ]
     },
+    "PlanningEvidenceRef": {
+      "properties": {
+        "schema_version": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "repository_path": {
+          "type": "string"
+        },
+        "goal_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "specification_revision_id": {
+          "type": "string"
+        },
+        "plan_revision_id": {
+          "type": "string"
+        },
+        "source_revision": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "excerpt_digest": {
+          "type": "string"
+        },
+        "applicable_dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "admissible": {
+          "type": "boolean"
+        },
+        "admissibility_reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "content_hash",
+        "kind",
+        "origin",
+        "repository_path",
+        "goal_id",
+        "session_id",
+        "specification_revision_id",
+        "plan_revision_id",
+        "source_revision",
+        "observed_at",
+        "excerpt_digest",
+        "applicable_dimensions",
+        "fresh",
+        "admissible",
+        "admissibility_reason"
+      ]
+    },
+    "TaskReceipt": {
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "files_created": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "files_modified": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tests_written": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "handoff": {
+          "$ref": "#/$defs/WorkerHandoff"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "task_id",
+        "status",
+        "summary",
+        "files_created",
+        "files_modified",
+        "tests_written",
+        "handoff"
+      ]
+    },
     "WorkerHandoff": {
       "properties": {
         "changed_files": {
@@ -237,6 +362,9 @@
         "model": {
           "type": "string"
         },
+        "model_routing_reason": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -249,15 +377,36 @@
         "summary": {
           "type": "string"
         },
+        "disposition": {
+          "type": "string"
+        },
         "task_id": {
           "type": "string"
         },
         "task_index": {
           "type": "integer"
         },
+        "job_name": {
+          "type": "string"
+        },
+        "job_reason": {
+          "type": "string"
+        },
+        "job_source": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
         "covered_task_ids": {
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "task_receipts": {
+          "items": {
+            "$ref": "#/$defs/TaskReceipt"
           },
           "type": "array"
         },
@@ -289,6 +438,9 @@
           "type": "number"
         },
         "brief": {
+          "type": "string"
+        },
+        "brief_sha256": {
           "type": "string"
         },
         "brief_path": {
@@ -368,6 +520,9 @@
     },
     "codexBuildManifest": {
       "properties": {
+        "context_protocol": {
+          "type": "string"
+        },
         "phase": {
           "type": "integer"
         },
@@ -422,6 +577,9 @@
         "generated_at": {
           "type": "string"
         },
+        "plan_authority": {
+          "$ref": "#/$defs/planAuthorityDecision"
+        },
         "plan_revision_id": {
           "type": "string"
         },
@@ -452,12 +610,27 @@
           },
           "type": "array"
         },
+        "context_scope": {
+          "$ref": "#/$defs/codexNativeContextScope"
+        },
+        "context_decision_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "context_capsule": {
           "type": "string"
         },
         "dispatches": {
           "items": {
             "$ref": "#/$defs/codexBuildDispatch"
+          },
+          "type": "array"
+        },
+        "job_decisions": {
+          "items": {
+            "$ref": "#/$defs/coherentJobDecision"
           },
           "type": "array"
         },
@@ -535,6 +708,15 @@
         },
         "caste_decision": {
           "type": "object"
+        },
+        "forced_reviewers": {
+          "items": {
+            "$ref": "#/$defs/codexForcedReviewerRecord"
+          },
+          "type": "array"
+        },
+        "forced_reviewer_announcement": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -545,6 +727,7 @@
         "root",
         "colony_depth",
         "generated_at",
+        "plan_authority",
         "state",
         "checkpoint",
         "claims_path",
@@ -574,6 +757,12 @@
         "tests_written": {
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "artifact_evidence": {
+          "items": {
+            "$ref": "#/$defs/codexBuildArtifactEvidence"
           },
           "type": "array"
         }
@@ -686,6 +875,15 @@
           },
           "type": "array"
         },
+        "task_receipts": {
+          "items": {
+            "$ref": "#/$defs/TaskReceipt"
+          },
+          "type": "array"
+        },
+        "disposition": {
+          "type": "string"
+        },
         "depends_on": {
           "items": {
             "type": "string"
@@ -730,13 +928,71 @@
         },
         "handoff": {
           "$ref": "#/$defs/WorkerHandoff"
-        }
+        },
+        "artifacts": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "scout_report": true
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
         "name",
         "status"
+      ]
+    },
+    "codexForcedReviewerRecord": {
+      "properties": {
+        "caste": {
+          "type": "string"
+        },
+        "signals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "matches": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "caste",
+        "signals",
+        "matches",
+        "sources",
+        "reason"
+      ]
+    },
+    "codexNativeContextScope": {
+      "properties": {
+        "goal_hash": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "goal_hash",
+        "session_id"
       ]
     },
     "codexQueenExecutionPolicy": {
@@ -892,15 +1148,64 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "coherentJobDecision": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "job_name": {
+          "type": "string"
+        },
+        "job_reason": {
+          "type": "string"
+        },
+        "job_source": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "offending_task_id": {
+          "type": "string"
+        },
+        "dependency_id": {
+          "type": "string"
+        },
+        "replacement_job_names": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "status"
+      ]
+    },
     "discussQuestion": {
       "properties": {
         "id": {
           "type": "string"
         },
+        "stable_id": {
+          "type": "string"
+        },
         "category": {
           "type": "string"
         },
+        "domain": {
+          "type": "string"
+        },
         "question": {
+          "type": "string"
+        },
+        "decision": {
           "type": "string"
         },
         "options": {
@@ -910,6 +1215,42 @@
           "type": "array"
         },
         "reasoning": {
+          "type": "string"
+        },
+        "why_now": {
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/PlanningEvidenceRef"
+          },
+          "type": "array"
+        },
+        "queen_recommendation": {
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/planningDecisionChoice"
+          },
+          "type": "array"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "prior_answer": {
+          "type": "string"
+        },
+        "revalidation": {
+          "type": "string"
+        },
+        "planning_resumes": {
+          "type": "string"
+        },
+        "exact_answer_syntax": {
           "type": "string"
         },
         "hard_constraint": {
@@ -1011,6 +1352,114 @@
         "source",
         "question"
       ]
+    },
+    "planAuthorityBinding": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "planAuthorityDecision": {
+      "properties": {
+        "eligible": {
+          "type": "boolean"
+        },
+        "classification": {
+          "type": "string"
+        },
+        "active_revision": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "specification": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "candidate": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "timeline": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "acceptance": {
+          "$ref": "#/$defs/planAuthorityBinding"
+        },
+        "refusal_code": {
+          "type": "string"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recovery_command": {
+          "type": "string"
+        },
+        "diagnostic": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "eligible"
+      ]
+    },
+    "planningDecisionChoice": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "consequence": {
+          "type": "string"
+        },
+        "impact": {
+          "$ref": "#/$defs/planningDecisionContractImpact"
+        },
+        "affected_semantic_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "consequence",
+        "impact"
+      ]
+    },
+    "planningDecisionContractImpact": {
+      "properties": {
+        "behavior": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "risk": {
+          "type": "string"
+        },
+        "acceptance": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "stringList": {
       "oneOf": [

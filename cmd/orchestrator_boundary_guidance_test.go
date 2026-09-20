@@ -227,11 +227,6 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 
-	dataDir := setupBuildFlowTest(t)
-	root := filepath.Dir(filepath.Dir(dataDir))
-	withWorkingDir(t, root)
-	withTestWorkspace(t, root)
-
 	goal := "Build finalizer boundary guidance"
 	taskID := "1.1"
 	startedAt := time.Now().UTC()
@@ -249,7 +244,10 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Tasks:  []colony.Task{{ID: &taskID, Goal: "Implement boundary guidance", Status: colony.TaskInProgress}},
 		}}},
 	}
-	createTestColonyState(t, dataDir, state)
+	accepted := createApprovedAcceptedBuildTestColony(t, state)
+	root := accepted.Root
+	withWorkingDir(t, root)
+	withTestWorkspace(t, root)
 
 	source := orchestratorBoundaryClarificationSource("build", 1, "build-scope", true)
 	if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{{
@@ -270,10 +268,11 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		ColonyMode:      string(colony.ColonyModeOrchestrator),
 		PlanOnly:        true,
 		DispatchMode:    "plan-only",
+		ExecutionOwner:  "host-queen",
 		GeneratedAt:     startedAt.Format(time.RFC3339),
 		State:           string(colony.StateEXECUTING),
 		WorkerBriefs:    []string{},
-		Tasks:           []codexBuildTaskPlan{},
+		Tasks:           []codexBuildTaskPlan{{ID: taskID, Goal: "Implement boundary guidance", Status: colony.TaskInProgress}},
 		SuccessCriteria: []string{},
 		Dispatches: []codexBuildDispatch{{
 			Stage:  "wave",
@@ -291,6 +290,21 @@ func TestBuildFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 			Options: []string{},
 		}},
 	}
+	start := commitTestBuildStartAt(t, root, 1, startedAt, testBuildStartOptions{
+		Variant:        buildStartPlanOnly,
+		Phase:          1,
+		GeneratedAt:    startedAt,
+		ProcessState:   testBuildProcessDead,
+		SelectedTasks:  []string{taskID},
+		Dispatches:     manifest.Dispatches,
+		ExecutionOwner: "host-queen",
+		DispatchMode:   "plan-only",
+		Manifest:       &manifest,
+	})
+	if start.Manifest == nil {
+		t.Fatal("canonical build start returned no bound manifest")
+	}
+	manifest = *start.Manifest
 	completion := codexExternalBuildCompletion{
 		DispatchManifest: &manifest,
 		Results: []codexExternalBuildWorkerResult{{
@@ -344,15 +358,17 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	}
 
 	goal := "Finalize planning with orchestrator guidance"
-	createTestColonyState(t, dataDir, colony.ColonyState{
+	state := codexPlanSpecificationFixture(t, colony.ColonyState{
 		Version:    "3.0",
 		Goal:       &goal,
 		State:      colony.StateREADY,
 		ColonyMode: colony.ColonyModeOrchestrator,
 		Plan:       colony.Plan{Phases: []colony.Phase{}},
-	})
+	}, colony.SpecStatusApproved)
+	createTestColonyState(t, dataDir, state)
+	writeCodexPlanSpecificationProjection(t, root, state)
 
-	planResult, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Depth: "fast"})
+	planResult, err := runCodexPlanWithOptions(root, codexPlanOptions{PlanOnly: true, Preset: "fast", PresetSet: true})
 	if err != nil {
 		t.Fatalf("runCodexPlanWithOptions: %v", err)
 	}
@@ -360,53 +376,21 @@ func TestPlanFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 	if len(manifest.BoundaryQuestions) == 0 {
 		t.Fatalf("expected plan boundary question in manifest")
 	}
-
-	scout := manifest.Dispatches[0]
-	scout.Status = "completed"
-	scout.Summary = "Scout mapped planning context."
-	scout.ScoutReport = &codexScoutReport{
-		Findings:   []codexScoutFinding{{Area: "Runtime", Discovery: "Plan finalizer owns planning state.", Source: "cmd/codex_plan_finalize.go"}},
-		Confidence: 91,
-		StudyFiles: []string{"cmd/codex_plan_finalize.go"},
+	if len(manifest.Dispatches) != 1 || manifest.Dispatches[0].Caste != string(planningStageCasteScout) {
+		t.Fatalf("staged plan manifest dispatches = %#v, want exactly one Scout", manifest.Dispatches)
 	}
-	routeSetter := manifest.Dispatches[1]
-	routeSetter.Status = "completed"
-	routeSetter.Summary = "Route-Setter shaped the first plan."
-	routeSetter.PhasePlan = &codexWorkerPlanArtifact{
-		Phases: []codexWorkerPlanPhase{{
-			Name:        "Guided plan",
-			Description: "Prove plan finalizer guidance.",
-			Tasks: []codexWorkerPlanTask{{
-				Goal:            "Route unresolved plan boundary questions through discuss",
-				SuccessCriteria: []string{"plan finalizer guidance is active"},
-				EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
-					Criterion: "plan finalizer guidance is active", Checks: []string{"claims", "watcher"},
-				}},
-			}},
-			SuccessCriteria: []string{"Guidance is emitted"},
-			EvidenceRequirements: []colony.CriterionEvidenceRequirement{{
-				Criterion: "Guidance is emitted", Checks: []string{"claims", "watcher"},
-			}},
-		}},
-		Confidence: codexPlanConfidence{Knowledge: 90, Requirements: 90, Risks: 85, Dependencies: 85, Effort: 85, Overall: 87},
-	}
-
-	result, err := runCodexPlanFinalize(root, codexExternalPlanCompletion{
-		PlanManifest: &manifest,
-		Dispatches:   []codexPlanningDispatch{scout, routeSetter},
-	})
-	if err != nil {
-		t.Fatalf("runCodexPlanFinalize: %v", err)
-	}
-	if got := result["next"]; got != "aether discuss" {
+	if got := planResult["next"]; got != "aether discuss" {
 		t.Fatalf("next = %v, want aether discuss", got)
 	}
-	if got := result["after_discuss_next"]; got != "aether build 1" {
-		t.Fatalf("after_discuss_next = %v, want aether build 1", got)
+	if got := planResult["after_discuss_next"]; got != "aether plan --preset fast" {
+		t.Fatalf("after_discuss_next = %v, want aether plan --preset fast", got)
 	}
-	guidance := result["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance)
+	guidance := planResult["orchestrator_boundary_guidance"].(orchestratorBoundaryGuidance)
 	if !guidance.Active || guidance.Workflow != "plan" || guidance.PendingCount != 1 {
 		t.Fatalf("guidance = %#v, want active plan guidance with one pending question", guidance)
+	}
+	if manifest.StageManifest == nil || manifest.StageManifest.ExpectedCaste != planningStageCasteScout {
+		t.Fatalf("boundary guidance crossed the staged Scout authority: %#v", manifest.StageManifest)
 	}
 }
 
@@ -465,6 +449,7 @@ func TestContinueFinalizeAddsOrchestratorBoundaryGuidance(t *testing.T) {
 		result := dispatch
 		result.Status = "completed"
 		result.Summary = dispatch.Name + " cleared continue review"
+		result.Artifacts = validCompletedReviewerArtifacts(t, dispatch.Caste)
 		// A completed result must relay a non-empty handoff (189-REVIEW.md
 		// CR-01): the finalizer now enforces the same promise every wrapper
 		// brief states.
@@ -538,8 +523,8 @@ func TestSealFinalizeBlocksUnresolvedOrchestratorBoundaryGuidance(t *testing.T) 
 	}
 
 	err = runSealFinalize(root, externalSealCompletion{SealManifest: &manifest, Dispatches: results})
-	if err == nil || !strings.Contains(err.Error(), "aether discuss") || !strings.Contains(err.Error(), "aether seal") {
-		t.Fatalf("runSealFinalize error = %v, want guidance to run aether discuss before aether seal", err)
+	if err == nil || !strings.Contains(err.Error(), "normal seal requires verified completion") || !strings.Contains(err.Error(), "What boundary should final seal reviewers enforce?") {
+		t.Fatalf("runSealFinalize error = %v, want unresolved boundary guidance to block verified sealing", err)
 	}
 	var after colony.ColonyState
 	if loadErr := store.LoadJSON("COLONY_STATE.json", &after); loadErr != nil {

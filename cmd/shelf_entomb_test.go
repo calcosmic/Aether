@@ -18,8 +18,8 @@ func TestCopyShelfToChamber(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -59,8 +59,8 @@ func TestCopyShelfToChamberMissing(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	chamberDir := tmpDir + "/chamber"
 	os.MkdirAll(chamberDir, 0755)
@@ -85,8 +85,8 @@ func TestShelfChamberSummary(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{
@@ -105,21 +105,67 @@ func TestShelfChamberSummary(t *testing.T) {
 
 func TestShelfChamberSummaryEmpty(t *testing.T) {
 	saveGlobals(t)
-	resetRootCmd(t)
+	originalRoot, hadRoot := os.LookupEnv("AETHER_ROOT")
+	originalDataDir, hadDataDir := os.LookupEnv("COLONY_DATA_DIR")
+	t.Cleanup(func() {
+		if hadRoot {
+			_ = os.Setenv("AETHER_ROOT", originalRoot)
+		} else {
+			_ = os.Unsetenv("AETHER_ROOT")
+		}
+		if hadDataDir {
+			_ = os.Setenv("COLONY_DATA_DIR", originalDataDir)
+		} else {
+			_ = os.Unsetenv("COLONY_DATA_DIR")
+		}
+	})
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
-	s, _ := storage.NewStore(dataDir)
-	store = s
+	_ = os.Unsetenv("AETHER_ROOT")
+	_ = os.Unsetenv("COLONY_DATA_DIR")
+	store = nil
+	tracer = nil
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	var fixtureRoot string
+	var summary string
+	t.Run("isolated shelf fixture", func(t *testing.T) {
+		saveGlobals(t)
+		resetRootCmd(t)
 
-	summary := shelfChamberSummary(s)
+		fixtureRoot = t.TempDir()
+		dataDir := fixtureRoot + "/.aether/data"
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		s, err := storage.NewStore(dataDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store = s
+
+		t.Setenv("AETHER_ROOT", fixtureRoot)
+		t.Setenv("COLONY_DATA_DIR", dataDir)
+
+		summary = shelfChamberSummary(s)
+	})
+
 	want := "Shelved ideas: 0"
 	if summary != want {
 		t.Errorf("summary = %v, want %v", summary, want)
+	}
+	if got, ok := os.LookupEnv("AETHER_ROOT"); ok {
+		t.Errorf("AETHER_ROOT survived deleted shelf fixture: %q", got)
+	}
+	if got, ok := os.LookupEnv("COLONY_DATA_DIR"); ok {
+		t.Errorf("COLONY_DATA_DIR survived deleted shelf fixture: %q", got)
+	}
+	if store != nil {
+		t.Error("repository store survived deleted shelf fixture")
+	}
+	if tracer != nil {
+		t.Error("repository tracer survived deleted shelf fixture")
+	}
+	if _, err := os.Stat(fixtureRoot); !os.IsNotExist(err) {
+		t.Errorf("fixture root still exists after subtest cleanup: %v", err)
 	}
 }
 
@@ -133,8 +179,8 @@ func TestShelfChamberSummaryAllPromoted(t *testing.T) {
 	s, _ := storage.NewStore(dataDir)
 	store = s
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
+	t.Setenv("AETHER_ROOT", tmpDir)
+	t.Setenv("COLONY_DATA_DIR", dataDir)
 
 	sf := colony.NewShelfFile()
 	sf.Entries = []colony.ShelfEntry{

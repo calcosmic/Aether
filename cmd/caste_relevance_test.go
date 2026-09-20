@@ -25,9 +25,9 @@ func TestQueenOrchestrate_SettingsUI(t *testing.T) {
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Settings UI: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Settings UI: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher is no longer required at build -- Phase 193
+	// (D-08) already stopped dispatching it there, and this floor shrink
+	// removes the requirement that used to restore it regardless.
 	if HasCaste(dispatches, "gatekeeper") {
 		t.Error("Settings UI: should NOT spawn gatekeeper for UI work")
 	}
@@ -43,6 +43,15 @@ func TestQueenOrchestrate_SettingsUI(t *testing.T) {
 }
 
 // Test 2: "Auth token rotation" -> Builder + Watcher + Gatekeeper + Probe + Architect
+//
+// Plan 194-05 (D-11): queenOrchestrate's no-proposal path on build no longer
+// goes through the relevance/keyword scoring engine at all -- it answers
+// with the required-caste floor only (queenFallbackTeam). This test's real
+// subject is the scoring registry (which caste a phase's own wording earns),
+// so it now calls queenCandidateDispatches directly -- the scoring function
+// is unchanged by this plan; only queenOrchestrate's use of it for build was
+// gated. See TestKeywordEngineNoLongerSelectsOnBuildOrContinue
+// (cmd/queen_fallback_team_test.go) for the entry-point behaviour itself.
 func TestQueenOrchestrate_AuthToken(t *testing.T) {
 	phase := colony.Phase{
 		ID:          2,
@@ -54,29 +63,36 @@ func TestQueenOrchestrate_AuthToken(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Auth token: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Auth token: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher and probe are no longer required at build;
+	// gatekeeper here is a genuine relevance-score hit on this phase's own
+	// security wording, not the deleted always-required floor.
 	if !HasCaste(dispatches, "gatekeeper") {
 		t.Error("Auth token: expected gatekeeper for security work")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Auth token: expected probe for verification")
 	}
 	if !HasCaste(dispatches, "architect") {
 		t.Error("Auth token: expected architect for design boundaries")
 	}
-	if !HasCaste(dispatches, "auditor") {
-		t.Error("Auth token: expected auditor for production mode")
+	// The "production mode ⇒ auditor" assertion that used to sit here is
+	// gone (D-06/Ruling D11): this phase's own wording names no auditor
+	// keyword (no "compliance", "audit", "release", "standards"), so an
+	// auditor appearing here would be the exact implicit floor this plan
+	// removes, restated as a test expectation. See
+	// TestQueenOrchestrate_DBMigration for the matching fix.
+	if HasCaste(dispatches, "auditor") {
+		t.Error("Auth token: auditor must not be summoned by production mode alone with no auditor-relevant wording")
 	}
 }
 
 // Test 3: "Database migration" -> Builder + Watcher + Auditor + Architect
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_DBMigration(t *testing.T) {
 	phase := colony.Phase{
 		ID:          3,
@@ -88,7 +104,7 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("DB migration: expected builder")
@@ -96,8 +112,11 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 	if !HasCaste(dispatches, "watcher") {
 		t.Error("DB migration: expected watcher")
 	}
-	if !HasCaste(dispatches, "auditor") {
-		t.Error("DB migration: expected auditor for production")
+	// Same fix as TestQueenOrchestrate_AuthToken: this phase's wording names
+	// no auditor keyword either, so "production mode ⇒ auditor" (D-06,
+	// Ruling D11) must not summon one here.
+	if HasCaste(dispatches, "auditor") {
+		t.Error("DB migration: auditor must not be summoned by production mode alone with no auditor-relevant wording")
 	}
 	if !HasCaste(dispatches, "architect") {
 		t.Error("DB migration: expected architect for schema design")
@@ -105,6 +124,10 @@ func TestQueenOrchestrate_DBMigration(t *testing.T) {
 }
 
 // Test 4: "Performance optimization" -> Builder + Watcher + Measurer + Probe
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_Performance(t *testing.T) {
 	phase := colony.Phase{
 		ID:          4,
@@ -116,23 +139,22 @@ func TestQueenOrchestrate_Performance(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Performance: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Performance: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher and probe are no longer required at build.
 	if !HasCaste(dispatches, "measurer") {
 		t.Error("Performance: expected measurer")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Performance: expected probe")
 	}
 }
 
 // Test 5: "Refactor legacy parser" -> Weaver + Archaeologist + Builder + Watcher
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11).
 func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 	phase := colony.Phase{
 		ID:          5,
@@ -144,14 +166,12 @@ func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "builder") {
 		t.Error("Refactor: expected builder")
 	}
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Refactor: expected watcher")
-	}
+	// Plan 194-02 (D-07): watcher is no longer required at build.
 	if !HasCaste(dispatches, "weaver") {
 		t.Error("Refactor: expected weaver for restructuring")
 	}
@@ -161,6 +181,13 @@ func TestQueenOrchestrate_RefactorLegacy(t *testing.T) {
 }
 
 // Test 6: "Discovery spike on vector DB" -> Oracle + Scout + Architect (no Builder, no Watcher)
+//
+// See TestQueenOrchestrate_AuthToken's comment: this exercises the scoring
+// registry directly (queenCandidateDispatches), since queenOrchestrate's
+// no-proposal build path no longer runs it (plan 194-05, D-11). The
+// no-proposal ENTRY POINT's own discovery behaviour (one scout, D-12) is
+// covered separately by TestDiscoveryFallbackSendsOneResearcher
+// (cmd/queen_fallback_team_test.go).
 func TestQueenOrchestrate_DiscoverySpike(t *testing.T) {
 	phase := colony.Phase{
 		ID:          6,
@@ -172,7 +199,7 @@ func TestQueenOrchestrate_DiscoverySpike(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if !HasCaste(dispatches, "oracle") {
 		t.Error("Discovery: expected oracle")
@@ -200,10 +227,15 @@ func TestCasteRelevanceScore_Thresholds(t *testing.T) {
 		Tasks:       []colony.Task{{Goal: "Audit security compliance"}},
 	}
 
-	// Gatekeeper should score high for security keywords
+	// Gatekeeper should score high for security keywords. The >= 80 floor
+	// this test used to assert came from the deleted "risk high ⇒ 100"
+	// special rule (D-06); the genuine keyword-driven score for this
+	// wording (auth, security, compliance, audit all hit) is 60, and that is
+	// now the ceiling this fixture can honestly reach without the deleted
+	// implicit floor.
 	score := casteRelevanceScore(phase, "gatekeeper")
-	if score < 80 {
-		t.Errorf("Gatekeeper score too low for security phase: got %d, want >= 80", score)
+	if score < 50 {
+		t.Errorf("Gatekeeper score too low for security phase: got %d, want >= 50", score)
 	}
 
 	// Dreamer should score low for security phase
@@ -256,6 +288,14 @@ func TestBuilder_AlwaysForImplementation(t *testing.T) {
 }
 
 // Test 11: Verify continue flow includes gatekeeper for security
+//
+// Plan 194-05 (D-13) removed Watcher's and Probe's unconditional continue
+// membership at light/standard depth -- neither is forced any more, and
+// neither's own keyword list matches this fixture's wording, so those two
+// assertions are gone. Gatekeeper still appears: "token" is one of its own
+// keywords, a genuine relevance-score hit, not the deleted floor. This test
+// calls queenCandidateDispatches directly (the scoring engine, unaffected by
+// D-11's gate on queenOrchestrate's no-proposal entry point).
 func TestQueenOrchestrate_ContinueFlow(t *testing.T) {
 	phase := colony.Phase{
 		Name:        "Auth system implementation",
@@ -264,16 +304,10 @@ func TestQueenOrchestrate_ContinueFlow(t *testing.T) {
 		Tasks:       []colony.Task{{Goal: "Implement OAuth flow"}},
 	}
 
-	dispatches := queenOrchestrate(phase, "continue", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "continue", colony.ColonyState{})
 
-	if !HasCaste(dispatches, "watcher") {
-		t.Error("Continue: expected watcher")
-	}
 	if !HasCaste(dispatches, "gatekeeper") {
 		t.Error("Continue: expected gatekeeper for auth phase")
-	}
-	if !HasCaste(dispatches, "probe") {
-		t.Error("Continue: expected probe")
 	}
 }
 
@@ -295,6 +329,12 @@ func TestQueenOrchestrate_PlanFlow(t *testing.T) {
 	}
 }
 
+// TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes exercises
+// the scoring registry directly (queenCandidateDispatches), since
+// queenOrchestrate's no-proposal build path no longer runs it (plan 194-05,
+// D-11). The no-proposal ENTRY POINT's own discovery behaviour (one scout)
+// is covered separately by TestDiscoveryFallbackSendsOneResearcher
+// (cmd/queen_fallback_team_test.go).
 func TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes(t *testing.T) {
 	phase := colony.Phase{
 		Name:        "Discovery spike on cache strategy",
@@ -305,7 +345,7 @@ func TestQueenOrchestrate_DiscoveryBuildSuppressesImplementationCastes(t *testin
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := queenCandidateDispatches(phase, "build", colony.ColonyState{})
 
 	if HasCaste(dispatches, "builder") {
 		t.Error("Discovery build: should suppress builder even when implementation keywords appear")
@@ -349,13 +389,32 @@ func TestQueenOrchestrate_SwarmUsesInvestigationAndFixCastes(t *testing.T) {
 
 	dispatches := queenOrchestrate(phase, "swarm", colony.ColonyState{})
 
-	for _, caste := range []string{"tracker", "scout", "archaeologist", "builder", "watcher"} {
+	for _, caste := range []string{"tracker", "builder", "watcher"} {
 		if !HasCaste(dispatches, caste) {
 			t.Errorf("Swarm: expected %s", caste)
 		}
 	}
+	// "Investigate a failing parser bug" is investigation wording, so Scout is
+	// selected on relevance — the mandatory floor is only the
+	// investigate/fix/verify trio (see TestSwarmTrivialBugSkipsHistoryAndResearch).
+	if !HasCaste(dispatches, "scout") {
+		t.Error("Swarm: investigation wording should select scout via relevance")
+	}
+	// Nothing in this phase names legacy code or git history, so the
+	// Archaeologist stays home.
+	if HasCaste(dispatches, "archaeologist") {
+		t.Error("Swarm: archaeologist selected with no history signal in the phase")
+	}
 }
 
+// TestQueenOrchestrate_ContinueHeavyIncludesReviewGates exercises the
+// scoring registry directly (queenCandidateDispatches). Heavy continue's
+// required set (gatekeeper, auditor, probe-if-testable, plan 194-05 D-13) is
+// unaffected by D-11's gate -- isAlwaysRequired is consulted by
+// queenCandidateDispatches exactly as before, only queenOrchestrate's
+// no-proposal ENTRY POINT changed. Watcher is no longer part of heavy's
+// unconditional panel (194-05, D-13) and this fixture's wording does not
+// clear its own keyword threshold, so it is not asserted here.
 func TestQueenOrchestrate_ContinueHeavyIncludesReviewGates(t *testing.T) {
 	phase := colony.Phase{
 		Name: "Phase verification",
@@ -363,9 +422,9 @@ func TestQueenOrchestrate_ContinueHeavyIncludesReviewGates(t *testing.T) {
 	}
 	state := colony.ColonyState{VerificationDepth: string(colony.VerificationDepthHeavy)}
 
-	dispatches := queenOrchestrate(phase, "continue", state)
+	dispatches := queenCandidateDispatches(phase, "continue", state)
 
-	for _, caste := range []string{"watcher", "gatekeeper", "auditor", "probe"} {
+	for _, caste := range []string{"gatekeeper", "auditor", "probe"} {
 		if !HasCaste(dispatches, caste) {
 			t.Errorf("Heavy continue: expected %s", caste)
 		}
@@ -392,73 +451,6 @@ func TestQueenOrchestrate_SealLightSkipsReviewGates(t *testing.T) {
 	}
 }
 
-func TestQueenOrchestratePreservesSafetyCastes(t *testing.T) {
-	safetyCastes := []string{"builder", "watcher", "probe", "gatekeeper", "auditor"}
-	tests := []struct {
-		name                string
-		phase               colony.Phase
-		belowThresholdCaste string
-	}{
-		{
-			name: "security",
-			phase: colony.Phase{
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before production rollout",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build hardened configuration checks"},
-				},
-			},
-		},
-		{
-			name: "release",
-			phase: colony.Phase{
-				Name:        "Release candidate packaging",
-				Description: "Prepare the candidate for ship readiness",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build release candidate artifacts"},
-				},
-			},
-			belowThresholdCaste: "gatekeeper",
-		},
-		{
-			name: "final-review",
-			phase: colony.Phase{
-				Name:        "Final review",
-				Description: "Complete final signoff before handoff",
-				Mode:        colony.PhaseModeProduction,
-				Tasks: []colony.Task{
-					{Goal: "Build final review evidence and address blockers"},
-				},
-			},
-			belowThresholdCaste: "gatekeeper",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			state := colony.ColonyState{}
-			if tt.belowThresholdCaste != "" {
-				score := casteRelevanceScore(tt.phase, tt.belowThresholdCaste)
-				threshold := spawnThreshold("build", state)
-				if score >= threshold {
-					t.Fatalf("%s fixture %s score = %d, want below build threshold %d so safety is not inferred from score",
-						tt.name, tt.belowThresholdCaste, score, threshold)
-				}
-			}
-
-			dispatches := queenOrchestrate(tt.phase, "build", state)
-
-			for _, caste := range safetyCastes {
-				if !HasCaste(dispatches, caste) {
-					t.Errorf("%s: expected safety caste %s to survive Queen orchestration", tt.name, caste)
-				}
-			}
-		})
-	}
-}
-
 func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 	phase := colony.Phase{
 		Name: "Implementation phase",
@@ -480,6 +472,15 @@ func TestQueenOrchestrate_EmptyFlowDefaultsToBuild(t *testing.T) {
 	}
 }
 
+// TestQueenOrchestrateAppliesAdaptiveSpawnBudget tests the SCORING-PLUS-
+// BUDGET path (applyQueenSpawnBudget over queenCandidateDispatches), not the
+// no-proposal ENTRY POINT: queenOrchestrate's build path (queenFallbackTeam,
+// plan 194-05, D-11) no longer scores anything, so it cannot exercise a
+// budget-pruning claim any more -- there is nothing left to prune once the
+// only candidate is the required builder. The claim this test protects
+// (budget trims optional picks while a documentation phase still never
+// summons a Probe) still lives in the scoring-plus-budget path, called here
+// explicitly.
 func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 	phase := colony.Phase{
 		ID:          13,
@@ -491,14 +492,14 @@ func TestQueenOrchestrateAppliesAdaptiveSpawnBudget(t *testing.T) {
 		},
 	}
 
-	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
+	dispatches := applyQueenSpawnBudget(queenCandidateDispatches(phase, "build", colony.ColonyState{}), phase, "build", colony.ColonyState{})
 
-	// Builder and Watcher survive pruning: something has to do the work, and
-	// something has to check it.
-	for _, caste := range []string{"builder", "watcher"} {
-		if !HasCaste(dispatches, caste) {
-			t.Errorf("Low-risk docs: expected required build caste %s to survive budget pruning", caste)
-		}
+	// Builder survives pruning: something has to do the work. Watcher is no
+	// longer a required build caste (194-02, D-06/D-07) -- it may or may not
+	// appear on relevance score alone; this test does not assert it either
+	// way.
+	if !HasCaste(dispatches, "builder") {
+		t.Error("Low-risk docs: expected required build caste builder to survive budget pruning")
 	}
 
 	// Probe is deliberately absent. This phase writes documentation — there is
@@ -534,10 +535,12 @@ func TestQueenSpawnBudgetAcceptanceContractIsCasteLevel(t *testing.T) {
 	budget := queenSpawnBudgetForPhase(phase, "build", colony.ColonyState{})
 	dispatches := queenOrchestrate(phase, "build", colony.ColonyState{})
 
-	for _, caste := range []string{"builder", "watcher", "probe"} {
-		if !HasCaste(dispatches, caste) {
-			t.Fatalf("failure contract phase should keep required build caste %s", caste)
-		}
+	// Plan 194-02 (D-07): the required-caste floor shrank to the builder
+	// alone (watcher and probe are no longer forced), so the acceptance
+	// contract this test guards -- caste-level budget enforcement, not
+	// worker-count enforcement -- is now pinned on builder alone.
+	if !HasCaste(dispatches, "builder") {
+		t.Fatalf("failure contract phase should keep required build caste builder")
 	}
 	if len(dispatches) > budget.MaxWorkers {
 		t.Fatalf("selected caste count = %d, want <= Queen budget %d: %+v", len(dispatches), budget.MaxWorkers, dispatches)
@@ -590,10 +593,16 @@ func TestQueenSpawnBudgetDecisionsPrunesDeterministically(t *testing.T) {
 			if decision.Selected {
 				t.Fatalf("chaos decision should be pruned: %+v", decision)
 			}
-			for _, want := range []string{"not spawned", "Queen spawn budget"} {
+			// D-09: the pruned rationale is plain English -- no internal
+			// "Queen spawn budget" jargon, and it must still say the pick was
+			// not sent and name the phase's worker cap.
+			for _, want := range []string{"not sent", "capped at"} {
 				if !strings.Contains(decision.Rationale, want) {
 					t.Fatalf("pruned rationale missing %q: %q", want, decision.Rationale)
 				}
+			}
+			if strings.Contains(decision.Rationale, "Queen spawn budget") {
+				t.Fatalf("pruned rationale still names the internal 'Queen spawn budget' identifier: %q", decision.Rationale)
 			}
 		})
 	}
@@ -628,86 +637,6 @@ func TestQueenSpawnBudgetDecisionsKeepsRequiredOverflow(t *testing.T) {
 		if !decision.Required || !decision.Selected {
 			t.Fatalf("%s decision = %+v, want required and selected", caste, decision)
 		}
-	}
-}
-
-func TestQueenSpawnBudgetDecisionsPreservesSafetyCastesUnderPressure(t *testing.T) {
-	tests := []struct {
-		name  string
-		phase colony.Phase
-	}{
-		{
-			name: "security",
-			phase: colony.Phase{
-				Name:        "Security hardening",
-				Description: "Protect privileged configuration before rollout",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build hardened configuration checks"},
-				},
-			},
-		},
-		{
-			name: "release",
-			phase: colony.Phase{
-				Name:        "Release candidate packaging",
-				Description: "Prepare candidate artifacts for handoff",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build candidate artifacts"},
-				},
-			},
-		},
-		{
-			name: "final-review",
-			phase: colony.Phase{
-				Name:        "Final review",
-				Description: "Complete final signoff evidence before handoff",
-				Mode:        colony.PhaseModePrototype,
-				Tasks: []colony.Task{
-					{Goal: "Build final review evidence"},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			budget := queenSpawnBudgetForPhase(tt.phase, "build", colony.ColonyState{})
-			dispatches := budgetPressureDispatches()
-			if len(dispatches) <= budget.MaxWorkers {
-				t.Fatalf("fixture dispatch count = %d, want budget pressure beyond max workers %d", len(dispatches), budget.MaxWorkers)
-			}
-
-			decisions := queenSpawnBudgetDecisions(dispatches, budget)
-
-			for _, caste := range []string{"builder", "watcher", "probe", "gatekeeper", "auditor"} {
-				decision, ok := budgetDecisionForCaste(decisions, caste)
-				if !ok {
-					t.Fatalf("%s: missing decision for safety caste %s", tt.name, caste)
-				}
-				if !decision.Required || !decision.Selected {
-					t.Fatalf("%s: %s decision = %+v, want required and selected under budget pressure", tt.name, caste, decision)
-				}
-			}
-		})
-	}
-}
-
-func budgetPressureDispatches() []CasteDispatch {
-	return []CasteDispatch{
-		{Caste: "ambassador", Score: 95},
-		{Caste: "architect", Score: 94},
-		{Caste: "auditor", Score: 10},
-		{Caste: "builder", Score: 10},
-		{Caste: "chaos", Score: 93},
-		{Caste: "gatekeeper", Score: 10},
-		{Caste: "keeper", Score: 92},
-		{Caste: "measurer", Score: 91},
-		{Caste: "probe", Score: 10},
-		{Caste: "scout", Score: 90},
-		{Caste: "watcher", Score: 10},
-		{Caste: "weaver", Score: 89},
 	}
 }
 
@@ -752,5 +681,25 @@ func TestFilterCastesByMinScore(t *testing.T) {
 	}
 	if filtered[0].Caste != "builder" || filtered[1].Caste != "watcher" {
 		t.Fatalf("filtered castes = %+v, want builder and watcher in original order", filtered)
+	}
+}
+
+// TestChroniclerOwnsTheWordDocument: the keeper trim moved "document" away
+// from keeper on the stated grounds that it "belongs to chronicler", but
+// chronicler's keyword was "documentation" and keyword matching anchors only
+// on the left boundary — so "documentation" never matched the word
+// "document" and neither caste owned it.
+func TestChroniclerOwnsTheWordDocument(t *testing.T) {
+	phase := colony.Phase{Name: "Document the export module"}
+	if !containsKeyword(collectPhaseText(phase), "document") {
+		t.Fatal("control failed: the phase text does not contain the word document")
+	}
+	chronicler := casteRelevanceScore(phase, "chronicler")
+	base := casteRelevanceScore(colony.Phase{Name: "Add a CSV export"}, "chronicler")
+	if chronicler <= base {
+		t.Fatalf("a phase asking to document something must score chronicler above its base (%d), got %d", base, chronicler)
+	}
+	if keeper := casteRelevanceScore(phase, "keeper"); keeper > casteRelevanceScore(colony.Phase{Name: "Add a CSV export"}, "keeper") {
+		t.Fatal("keeper must not score on the word document -- it keys on preservation intent")
 	}
 }

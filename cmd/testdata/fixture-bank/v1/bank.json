@@ -1,0 +1,1313 @@
+{
+  "schema_version": "fixture-bank/v1",
+  "fixtures": [
+    {
+      "id": "fixture-03f8df082186",
+      "title": "[broad-invariant] deviation: cmd/codex_plan_finalize.go. runCodexPlanFinalize never calls closeLifecycleRun (unlik",
+      "failing_baseline": {
+        "description": "deviation: cmd/codex_plan_finalize.go. runCodexPlanFinalize never calls closeLifecycleRun (unlike continue-finalize/completeSealRuntime), so the plan finalizer's own suggested result[\"next\"] command never folds into the unified next-action envelope renderLifecycleClosing reads back -- the closing card instead independently resolves a next step from live colony state, which usually matches but is not guaranteed to. Found and allow-listed, not fixed, in 198-09-PLAN.md Task 1 (cmd/testdata/rendered",
+        "reference": "7"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/codex_plan_finalize.go. runCodexPlanFinalize never calls closeLifecycleRun (unlike continue-finalize/completeSealRuntime), so the plan finalizer's own suggested result[\"next\"] command never folds into the unified next-action envelope renderLifecycleClosing reads back -- the closing card instead independently resolves a next step from live colony state, which usually matches but is not guaranteed to. Found and allow-listed, not fixed, in 198-09-PLAN.md Task 1 (cmd/testdata/rendered",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "7"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "03f8df082186eaf11a5bd339f2d2f627b152868833f6a1590327a80169181c5f"
+    },
+    {
+      "id": "fixture-05a7247fbe72",
+      "title": "[broad-invariant] patrol: plan-vs-reality task evidence verification. The pre-seal audit that checked every comple",
+      "failing_baseline": {
+        "description": "patrol: plan-vs-reality task evidence verification. The pre-seal audit that checked every completed task's claimed files/commands actually exist in the codebase (VERIFIED/UNVERIFIABLE/MISSING per task) no longer runs anywhere on the patrol path.",
+        "reference": "confirmed[56]"
+      },
+      "invariant": "The confirmed defect must not recur: patrol: plan-vs-reality task evidence verification. The pre-seal audit that checked every completed task's claimed files/commands actually exist in the codebase (VERIFIED/UNVERIFIABLE/MISSING per task) no longer runs anywhere on the patrol path.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[56]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "05a7247fbe72f78026f116a442745d1febe625d833fa81dc3722fb82e92577f2"
+    },
+    {
+      "id": "fixture-0b946259e159",
+      "title": "[broad-invariant] TestDeliberatelyDroppedDisplayChoicesStayDropped. 203-14 put a retired phrase into a comment tha",
+      "failing_baseline": {
+        "description": "TestDeliberatelyDroppedDisplayChoicesStayDropped. 203-14 put a retired phrase into a comment that quoted it in order to forbid it; the ratchet is a substring scan and cannot tell. Comment reworded, ratchet untouched",
+        "reference": "203-biological-runtime:TestDeliberatelyDroppedDisplayChoicesStayDropped"
+      },
+      "invariant": "The confirmed defect must not recur: TestDeliberatelyDroppedDisplayChoicesStayDropped. 203-14 put a retired phrase into a comment that quoted it in order to forbid it; the ratchet is a substring scan and cannot tell. Comment reworded, ratchet untouched",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestDeliberatelyDroppedDisplayChoicesStayDropped"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "0b946259e15946a4ccc73d08a432bdae2ee35d9435f6e5a83ce822402b517b8e",
+      "guard": {
+        "test": "TestDeliberatelyDroppedDisplayChoicesStayDropped",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-0feb4e6b8824",
+      "title": "[broad-invariant] TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree d",
+      "failing_baseline": {
+        "description": "TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing — fails identically at 702aee63",
+        "reference": "203-biological-runtime:TestCLIFlagAudit"
+      },
+      "invariant": "The confirmed defect must not recur: TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree depended on lane composition. Pre-existing — fails identically at 702aee63",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestCLIFlagAudit"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "0feb4e6b8824b7b38e26780e37be080bd316c97a5cde56da68faee1488fa8d83",
+      "guard": {
+        "test": "TestCLIFlagAudit",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-1b371cb64348",
+      "title": "[broad-invariant] TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpE",
+      "failing_baseline": {
+        "description": "TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", …), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
+        "reference": "203-biological-runtime:TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause)"
+      },
+      "invariant": "The confirmed defect must not recur: TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause). setupSanitizationTest used os.Setenv(\"AETHER_ROOT\", …), which outlives t.TempDir's cleanup, so every later test in the lane resolved the repository root to a deleted path",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestSkillIndexReadEmpty, TestSkillIsUserCreated, TestSkillIsUserCreatedShipped, TestVisualsDumpExportsCasteIdentityContract (four failures, one cause)"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "1b371cb643487e368af9c0510031f6745083aa95244f32b6c741ac125e4c07e4",
+      "guard": {
+        "test": "TestSkillIndexReadEmpty",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-1e2842699888",
+      "title": "[broad-invariant] interpret (act-on-dreams). The approved-action step that turned dream insights into FOCUS/REDIRE",
+      "failing_baseline": {
+        "description": "interpret (act-on-dreams). The approved-action step that turned dream insights into FOCUS/REDIRECT signals or TO-DOS.md items from inside the command is gone; the wrapper is read-only and only names commands for the user to run afterwards.",
+        "reference": "confirmed[51]"
+      },
+      "invariant": "The confirmed defect must not recur: interpret (act-on-dreams). The approved-action step that turned dream insights into FOCUS/REDIRECT signals or TO-DOS.md items from inside the command is gone; the wrapper is read-only and only names commands for the user to run afterwards.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[51]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "1e284269988873042ddc369d5bdb13cf1bcf002ab00905e5013b06c9e409bcc3"
+    },
+    {
+      "id": "fixture-1fe6e24042ef",
+      "title": "[broad-invariant] TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd. currentStreamingCommand is set on e",
+      "failing_baseline": {
+        "description": "TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd. currentStreamingCommand is set on every command execution and nothing reset it, so a test that ran a quiet command silenced emitVisualLine for the rest of the lane. Now restored by saveGlobals, and the test derives its own context from the real command rather than inheriting whatever ran before it",
+        "reference": "203-biological-runtime:TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd"
+      },
+      "invariant": "The confirmed defect must not recur: TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd. currentStreamingCommand is set on every command execution and nothing reset it, so a test that ran a quiet command silenced emitVisualLine for the rest of the lane. Now restored by saveGlobals, and the test derives its own context from the real command rather than inheriting whatever ran before it",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "1fe6e24042ef661f7c80294b11f886f8167adc0e1f98eb5546a1240c5c965840",
+      "guard": {
+        "test": "TestOracleStatusFollowStreamsExistingRoundsAndExitsOnRunEnd",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-225723e8f991",
+      "title": "[broad-invariant] council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent",
+      "failing_baseline": {
+        "description": "council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
+        "reference": "confirmed[11]"
+      },
+      "invariant": "The confirmed defect must not recur: council: clarification mode (category menu -\u0026gt; pheromones + instincts). The interactive intent-clarification flow that turned answers into FOCUS/REDIRECT/FEEDBACK signals and instincts is gone from council; the wrapper says to fall back to CLI subcommands, none of which write pheromones or instincts.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[11]"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "medium",
+      "content_digest": "225723e8f99121273147f13d0702260259e8b4fb06a866be262e4b3cad444f21"
+    },
+    {
+      "id": "fixture-2b84f3f641cb",
+      "title": "[broad-invariant] TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers. 203-14's family tree was added to the status",
+      "failing_baseline": {
+        "description": "TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers. 203-14's family tree was added to the status screen without consulting the liveness rule the Active Workers list already used, so a paused colony showed a previous session's worker as live",
+        "reference": "203-biological-runtime:TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers"
+      },
+      "invariant": "The confirmed defect must not recur: TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers. 203-14's family tree was added to the status screen without consulting the liveness rule the Active Workers list already used, so a paused colony showed a previous session's worker as live",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "2b84f3f641cbe2ef91decd2eba67c0a42bdda928dab1c3d0d122c84e0fa5d860",
+      "guard": {
+        "test": "TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-2ec5e3c17152",
+      "title": "[broad-invariant] redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry",
+      "failing_baseline": {
+        "description": "redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) — the context-update subcommand exists in Go but redirect never calls it.",
+        "reference": "confirmed[74]"
+      },
+      "invariant": "The confirmed defect must not recur: redirect. Redirect no longer updates the narrative context document (CONTEXT.md constraint entry) — the context-update subcommand exists in Go but redirect never calls it.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[74]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "2ec5e3c171527655c5b5d77d6b09cb56a444f4fb00deaf113149897a6093287d"
+    },
+    {
+      "id": "fixture-361e6b54a1c0",
+      "title": "[broad-invariant] feedback. Feedback no longer creates an instinct (source user_feedback, confidence 0.7) in COLON",
+      "failing_baseline": {
+        "description": "feedback. Feedback no longer creates an instinct (source user_feedback, confidence 0.7) in COLONY_STATE memory.instincts, nor updates the context document; the wrapper explicitly forbids the instinct write and the runtime does not do it.",
+        "reference": "confirmed[21]"
+      },
+      "invariant": "The confirmed defect must not recur: feedback. Feedback no longer creates an instinct (source user_feedback, confidence 0.7) in COLONY_STATE memory.instincts, nor updates the context document; the wrapper explicitly forbids the instinct write and the runtime does not do it.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[21]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "361e6b54a1c0ede8af78d2113c8b7811d278c0a800259c42edd533d68d0382da"
+    },
+    {
+      "id": "fixture-3d1c8b70bfa2",
+      "title": "[broad-invariant] lay-eggs (registry-add). Repo is no longer registered in the hub registry at setup time; registr",
+      "failing_baseline": {
+        "description": "lay-eggs (registry-add). Repo is no longer registered in the hub registry at setup time; registration now happens only at init and seal, so a repo that is laid but never init'd is invisible to the registry.",
+        "reference": "confirmed[47]"
+      },
+      "invariant": "The confirmed defect must not recur: lay-eggs (registry-add). Repo is no longer registered in the hub registry at setup time; registration now happens only at init and seal, so a repo that is laid but never init'd is invisible to the registry.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[47]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "3d1c8b70bfa2087bd9ce9536625ec92727f8dd027ed14a8409c62b9a160bff28"
+    },
+    {
+      "id": "fixture-3e4345ab7744",
+      "title": "[broad-invariant] patrol: unresolved flags + recurring midden review. Patrol no longer surfaces open blocker flags",
+      "failing_baseline": {
+        "description": "patrol: unresolved flags + recurring midden review. Patrol no longer surfaces open blocker flags or recurring midden failure patterns, so a colony with unresolved blockers can report overall_status healthy.",
+        "reference": "confirmed[58]"
+      },
+      "invariant": "The confirmed defect must not recur: patrol: unresolved flags + recurring midden review. Patrol no longer surfaces open blocker flags or recurring midden failure patterns, so a colony with unresolved blockers can report overall_status healthy.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[58]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "3e4345ab7744435cc0dfba7cb4970606d580f14f08bc81da5e675154fbd54cc8"
+    },
+    {
+      "id": "fixture-3fde6d1e4d51",
+      "title": "[broad-invariant] interpret (activity-log + next-up). Interpret no longer records an INTERPRET entry in activity.l",
+      "failing_baseline": {
+        "description": "interpret (activity-log + next-up). Interpret no longer records an INTERPRET entry in activity.log nor prints a state-based Next Up block; there is no aether interpret command and no hook path for it.",
+        "reference": "confirmed[52]"
+      },
+      "invariant": "The confirmed defect must not recur: interpret (activity-log + next-up). Interpret no longer records an INTERPRET entry in activity.log nor prints a state-based Next Up block; there is no aether interpret command and no hook path for it.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[52]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "3fde6d1e4d5175b67621f98e01082e73203561e4078cd9740cc8a9b8b7ffad71"
+    },
+    {
+      "id": "fixture-411f07cc5666",
+      "title": "[broad-invariant] unmet-truth: cmd/caste_relevance.go. Probe/auditor/gatekeeper still legitimately double-dispatch",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/caste_relevance.go. Probe/auditor/gatekeeper still legitimately double-dispatch on build AND continue with no explicit Queen proposal (isAlwaysRequired computes the same required-caste independently on both flows); 193-02 only removed the watcher's implicit build-side dispatch. Flagged in 193-02-PLAN.md frontmatter as unclassified/not-auto-resolved; scoped to Phase 194 (moves the required-caste floor).",
+        "reference": "1"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/caste_relevance.go. Probe/auditor/gatekeeper still legitimately double-dispatch on build AND continue with no explicit Queen proposal (isAlwaysRequired computes the same required-caste independently on both flows); 193-02 only removed the watcher's implicit build-side dispatch. Flagged in 193-02-PLAN.md frontmatter as unclassified/not-auto-resolved; scoped to Phase 194 (moves the required-caste floor).",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "1"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "411f07cc56660b0dc52e24587da38a75b9a4b6b304c8bf818e6a928567b189a5",
+      "guard": {
+        "test": "TestNoCasteIsDispatchedAtBothBoundaries",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-4c5c7d22b094",
+      "title": "[broad-invariant] continue/build: midden-collect and midden-cross-pr-analysis. Cross-PR failure analysis and midde",
+      "failing_baseline": {
+        "description": "continue/build: midden-collect and midden-cross-pr-analysis. Cross-PR failure analysis and midden collection into worker/verification context no longer run anywhere.",
+        "reference": "confirmed[10]"
+      },
+      "invariant": "The confirmed defect must not recur: continue/build: midden-collect and midden-cross-pr-analysis. Cross-PR failure analysis and midden collection into worker/verification context no longer run anywhere.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[10]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "4c5c7d22b094b947db6ecbc9f1ca434fee5db3e611ca5412bc1635130515921c"
+    },
+    {
+      "id": "fixture-539987569003",
+      "title": "[broad-invariant] deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and o",
+      "failing_baseline": {
+        "description": "deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and orchestrateRecovery (cmd/recovery_orchestrator.go, only when it owns the episode itself) now both open and close a durable episode via emitColonyLiveEpisodeStarted/Ended, proven by a FAILS-WHEN-UNWIRED mutation on each. TestEveryLifecycleLaneWritesADurableOutcome's t.Skipf branch is now a named t.Fatalf -- all six declared lifecycle lanes pass with zero skip lines.",
+        "reference": "41"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and orchestrateRecovery (cmd/recovery_orchestrator.go, only when it owns the episode itself) now both open and close a durable episode via emitColonyLiveEpisodeStarted/Ended, proven by a FAILS-WHEN-UNWIRED mutation on each. TestEveryLifecycleLaneWritesADurableOutcome's t.Skipf branch is now a named t.Fatalf -- all six declared lifecycle lanes pass with zero skip lines.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "41"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "539987569003a5889154c0e19516900c60ceb724ff6ff61ab060e7d45dc1f476",
+      "guard": {
+        "test": "TestEveryLifecycleLaneWritesADurableOutcome",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-54a932a1f824",
+      "title": "[broad-invariant] deviation: .planning/REQUIREMENTS.md. BIO-08 and CEC-07 are ready (every declaring plan has a SU",
+      "failing_baseline": {
+        "description": "deviation: .planning/REQUIREMENTS.md. BIO-08 and CEC-07 are ready (every declaring plan has a SUMMARY) but requirements.mark-complete returns not_found and writes nothing -- this repo's checkbox format (- [ ] **REQ-ID -- Title:**) doesn't match the tool's regex (- [ ] **REQ-ID**); re-run mark-complete after reconciling the format",
+        "reference": "24"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: .planning/REQUIREMENTS.md. BIO-08 and CEC-07 are ready (every declaring plan has a SUMMARY) but requirements.mark-complete returns not_found and writes nothing -- this repo's checkbox format (- [ ] **REQ-ID -- Title:**) doesn't match the tool's regex (- [ ] **REQ-ID**); re-run mark-complete after reconciling the format",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "24"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "54a932a1f824611c479faea9b819396983094389cbd63742dc354ca46d36e6b9"
+    },
+    {
+      "id": "fixture-54fe70d83a6f",
+      "title": "[broad-invariant] patrol: colony-health metrics + stale pheromone expiry. Patrol used to actually expire stale phe",
+      "failing_baseline": {
+        "description": "patrol: colony-health metrics + stale pheromone expiry. Patrol used to actually expire stale pheromones and report instinct/learning/event-error counts; now it only lists stale signals as a warning and mutates nothing, and memory metrics are not shown.",
+        "reference": "confirmed[60]"
+      },
+      "invariant": "The confirmed defect must not recur: patrol: colony-health metrics + stale pheromone expiry. Patrol used to actually expire stale pheromones and report instinct/learning/event-error counts; now it only lists stale signals as a warning and mutates nothing, and memory metrics are not shown.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[60]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "54fe70d83a6fd003916877b35a52b692d28bcbd59a5686780f39a771bcc6ea5a"
+    },
+    {
+      "id": "fixture-598b40e37231",
+      "title": "[broad-invariant] pause-colony: handoff 'What Was Happening' / phase-progress list / per-task status icons. HANDOF",
+      "failing_baseline": {
+        "description": "pause-colony: handoff 'What Was Happening' / phase-progress list / per-task status icons. HANDOFF.md no longer carries a free-text description of what was in progress, a per-phase status list, or task status icons; it has a one-line summary ('Paused at phase N'), an active-todo list, and a raw JSON state dump.",
+        "reference": "confirmed[67]"
+      },
+      "invariant": "The confirmed defect must not recur: pause-colony: handoff 'What Was Happening' / phase-progress list / per-task status icons. HANDOFF.md no longer carries a free-text description of what was in progress, a per-phase status list, or task status icons; it has a one-line summary ('Paused at phase N'), an active-todo list, and a raw JSON state dump.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[67]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "598b40e372318abe91b5b112346f7f8606722c923c3726c15d7dc9befb5295df"
+    },
+    {
+      "id": "fixture-59af7d6f3c3e",
+      "title": "[broad-invariant] unrun-verify: cmd/testing_main_test.go. ROOT CAUSE FOUND for the repeated silent-skip problem (e",
+      "failing_baseline": {
+        "description": "unrun-verify: cmd/testing_main_test.go. ROOT CAUSE FOUND for the repeated silent-skip problem (entries 12, 16, 27), and it is not flaky sharding -- it is the DEFAULT GO TEST TIMEOUT. Measured 2026-09-13 at the phase-203 closing gate: 'go test ./... -count=1' with no explicit -timeout reported a result after executing 1635 of 5299 tests. Lanes parallel-019 through parallel-048 executed ZERO tests, duration 0s. The cmd package's own full-suite controller (resolveFullSuiteCeilings, cmd/testing_main",
+        "reference": "32"
+      },
+      "invariant": "The confirmed defect must not recur: unrun-verify: cmd/testing_main_test.go. ROOT CAUSE FOUND for the repeated silent-skip problem (entries 12, 16, 27), and it is not flaky sharding -- it is the DEFAULT GO TEST TIMEOUT. Measured 2026-09-13 at the phase-203 closing gate: 'go test ./... -count=1' with no explicit -timeout reported a result after executing 1635 of 5299 tests. Lanes parallel-019 through parallel-048 executed ZERO tests, duration 0s. The cmd package's own full-suite controller (resolveFullSuiteCeilings, cmd/testing_main",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "32"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "59af7d6f3c3ea6d6dbbe4a30009a554f6f3de4c96569d1a0f31aee026acc8897",
+      "guard": {
+        "test": "TestTruncatedGateRunFails",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-5aced737d86d",
+      "title": "[broad-invariant] pause-colony: pheromone strengths in handoff. Handoff used to list each active signal with its c",
+      "failing_baseline": {
+        "description": "pause-colony: pheromone strengths in handoff. Handoff used to list each active signal with its current decayed strength; now only signal text (max 8) is listed.",
+        "reference": "confirmed[68]"
+      },
+      "invariant": "The confirmed defect must not recur: pause-colony: pheromone strengths in handoff. Handoff used to list each active signal with its current decayed strength; now only signal text (max 8) is listed.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[68]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "5aced737d86d1f885b6fe1933a8a93989b60ca9d831209dff5441ef8fac93752"
+    },
+    {
+      "id": "fixture-5d1a3245223e",
+      "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compar",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compare are now registered, reachable commands (cmd/improvement_cmds.go), alongside a new inspection surface, aether improve (default: read-only report; --declare/--compare route to the same mutating forms). The owner-facing exposure the original entry asked for is the /ant-improve wrapper triplet (.aether/commands/improve.yaml, .claude/commands/ant/improve.md, .opencode/commands/ant/improve.md), whose rout",
+        "reference": "39"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compare are now registered, reachable commands (cmd/improvement_cmds.go), alongside a new inspection surface, aether improve (default: read-only report; --declare/--compare route to the same mutating forms). The owner-facing exposure the original entry asked for is the /ant-improve wrapper triplet (.aether/commands/improve.yaml, .claude/commands/ant/improve.md, .opencode/commands/ant/improve.md), whose rout",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "39"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "5d1a3245223e2d225897d5cd5318bdf5b6c54b4c8b1b390c09f460cdab565f13",
+      "guard": {
+        "test": "TestAutomaticImprovementPassIsReachedFromBothCheckLanes",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-62074fb7e638",
+      "title": "[broad-invariant] oracle (promote observation record). Promotion no longer records a learning observation for the ",
+      "failing_baseline": {
+        "description": "oracle (promote observation record). Promotion no longer records a learning observation for the queen-promote pipeline and stores the learning as a hypothesis rather than a promoted learning; old promote wrote instinct + promoted learning + memory-capture observation per finding.",
+        "reference": "confirmed[55]"
+      },
+      "invariant": "The confirmed defect must not recur: oracle (promote observation record). Promotion no longer records a learning observation for the queen-promote pipeline and stores the learning as a hypothesis rather than a promoted learning; old promote wrote instinct + promoted learning + memory-capture observation per finding.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[55]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "62074fb7e6380b397666e43602d2b733a19f8373999c47f57aa9587f9732b1c3"
+    },
+    {
+      "id": "fixture-6897296bd765",
+      "title": "[broad-invariant] build: midden-write on worker/build failure. Build and continue never record failures to the mid",
+      "failing_baseline": {
+        "description": "build: midden-write on worker/build failure. Build and continue never record failures to the midden any more; the only runtime writer is autopilot retry exhaustion, so the failure log the colony-prime capsule injects stays empty on the interactive path.",
+        "reference": "confirmed[3]"
+      },
+      "invariant": "The confirmed defect must not recur: build: midden-write on worker/build failure. Build and continue never record failures to the midden any more; the only runtime writer is autopilot retry exhaustion, so the failure log the colony-prime capsule injects stays empty on the interactive path.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[3]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "6897296bd765722c583f620197afa5a0470c13b6cf9808ea39c76bd7c7b8e2e9",
+      "guard": {
+        "test": "TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-730cb2297b20",
+      "title": "[broad-invariant] memory-details (queen_md_updated). last_activity.queen_md_updated is hard-coded to an empty stri",
+      "failing_baseline": {
+        "description": "memory-details (queen_md_updated). last_activity.queen_md_updated is hard-coded to an empty string; the old command derived it from QUEEN.md metadata or file mtime.",
+        "reference": "confirmed[44]"
+      },
+      "invariant": "The confirmed defect must not recur: memory-details (queen_md_updated). last_activity.queen_md_updated is hard-coded to an empty string; the old command derived it from QUEEN.md metadata or file mtime.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[44]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "730cb2297b204a4f79e2b1a43f6821aaa2b84b49596fedaed8c311f74ba6a75c",
+      "guard": {
+        "test": "TestQueenMarkdownUpdatedAtFallsBackToModTime",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-732ca716fd27",
+      "title": "[broad-invariant] deviation: cmd/codex_visuals.go. renderPlanVisual's confidence branch only type-asserts to map[s",
+      "failing_baseline": {
+        "description": "deviation: cmd/codex_visuals.go. renderPlanVisual's confidence branch only type-asserts to map[string]interface{}; both runCodexPlanWithOptions and runCodexPlanFinalize always store confidence as a codexPlanConfidence struct, so the Confidence line never renders on the direct or chat path. Out of scope for 198-04 (prohibited from editing that file, owned by a same-wave plan); needs a dual-type fix mirroring planning_loop's existing struct/map switch.",
+        "reference": "5"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/codex_visuals.go. renderPlanVisual's confidence branch only type-asserts to map[string]interface{}; both runCodexPlanWithOptions and runCodexPlanFinalize always store confidence as a codexPlanConfidence struct, so the Confidence line never renders on the direct or chat path. Out of scope for 198-04 (prohibited from editing that file, owned by a same-wave plan); needs a dual-type fix mirroring planning_loop's existing struct/map switch.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "5"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "732ca716fd27469045295b0e27da868bf204b556b47966d9b0f41fc3fb4d207b"
+    },
+    {
+      "id": "fixture-763b0ae32266",
+      "title": "[broad-invariant] data-clean. Cleaning now touches only pheromones.json; the five other targets (QUEEN.md test ent",
+      "failing_baseline": {
+        "description": "data-clean. Cleaning now touches only pheromones.json; the five other targets (QUEEN.md test entries, learning-observations.json, midden.json, spawn-tree.txt, constraints.json) are no longer scanned or cleaned, and the per-file report is gone.",
+        "reference": "confirmed[19]"
+      },
+      "invariant": "The confirmed defect must not recur: data-clean. Cleaning now touches only pheromones.json; the five other targets (QUEEN.md test entries, learning-observations.json, midden.json, spawn-tree.txt, constraints.json) are no longer scanned or cleaned, and the per-file report is gone.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[19]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "763b0ae32266dc57498f57dfc879c51cbbc2ae1597c403c7d87246c9235c74c6"
+    },
+    {
+      "id": "fixture-78ec657a8851",
+      "title": "[broad-invariant] insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the go",
+      "failing_baseline": {
+        "description": "insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event — the downstream steering/learning side effects are all gone.",
+        "reference": "confirmed[28]"
+      },
+      "invariant": "The confirmed defect must not recur: insert-phase. Inserting a corrective phase no longer emits the 30-day FOCUS pheromone for the goal, the REDIRECT for constraints, the memory-capture learning, or the phase_inserted event — the downstream steering/learning side effects are all gone.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[28]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "78ec657a88519a1f9f8f224a8cef25b3804b64b672a17461e0ff0d3dcf6f4ea1"
+    },
+    {
+      "id": "fixture-7e0de2d9e5da",
+      "title": "[broad-invariant] deviation: cmd/status.go. FIXED at the phase-203 closing gate: four failures new since the phase",
+      "failing_baseline": {
+        "description": "deviation: cmd/status.go. FIXED at the phase-203 closing gate: four failures new since the phase base (1617ef3c), established by running the 25 full-suite failures against a detached worktree at that commit -- 16 of the 25 were already red, 9 were not. (1) TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers: 203-14's family tree was added to the status screen with no liveness gate, so a PAUSED colony showed a previous session's worker as live; commit 33331f9c had scoped it to the current run but",
+        "reference": "33"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/status.go. FIXED at the phase-203 closing gate: four failures new since the phase base (1617ef3c), established by running the 25 full-suite failures against a detached worktree at that commit -- 16 of the 25 were already red, 9 were not. (1) TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers: 203-14's family tree was added to the status screen with no liveness gate, so a PAUSED colony showed a previous session's worker as live; commit 33331f9c had scoped it to the current run but",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "33"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "medium",
+      "content_digest": "7e0de2d9e5da20a0e89eabee63ac66fe0e146face81c2e00ecef3e6ad4c5a698"
+    },
+    {
+      "id": "fixture-81a39cbb423c",
+      "title": "[broad-invariant] build: learning capture from worker results. Build no longer captures learnings/patterns from wo",
+      "failing_baseline": {
+        "description": "build: learning capture from worker results. Build no longer captures learnings/patterns from worker results (memory-capture, learning-check-promotion, learning-approve-proposals at build-complete); only continue captures a single phase-level hypothesis.",
+        "reference": "confirmed[4]"
+      },
+      "invariant": "The confirmed defect must not recur: build: learning capture from worker results. Build no longer captures learnings/patterns from worker results (memory-capture, learning-check-promotion, learning-approve-proposals at build-complete); only continue captures a single phase-level hypothesis.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[4]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "81a39cbb423c7e93bff0e1e411155c355805543c0703a4be9092bcb6e6a7a873",
+      "guard": {
+        "test": "TestBuildWorkerLessonsBecomeObservations",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-83a8113c2dd6",
+      "title": "[broad-invariant] TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocati",
+      "failing_baseline": {
+        "description": "TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds — it refused to pass vacuously, which is what it was built to do",
+        "reference": "203-biological-runtime:TestAetherCorpusCatchesAnUnregisteredFlag"
+      },
+      "invariant": "The confirmed defect must not recur: TestAetherCorpusCatchesAnUnregisteredFlag. 203-15 replaced workers.md's spawn-can-spawn invocation with recruit, leaving the negative corpus test hunting a call the live corpus no longer holds — it refused to pass vacuously, which is what it was built to do",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "phase_verification",
+          "identifier": "203-biological-runtime:TestAetherCorpusCatchesAnUnregisteredFlag"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "83a8113c2dd6eee64b080c2376f7b4aa167394d53adb29802fadc23969583bb7",
+      "guard": {
+        "test": "TestAetherCorpusCatchesAnUnregisteredFlag",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-901dfdf5d632",
+      "title": "[broad-invariant] oracle (wrapper persistence suggestions). The wrapper tells the assistant to persist findings wi",
+      "failing_baseline": {
+        "description": "oracle (wrapper persistence suggestions). The wrapper tells the assistant to persist findings with pheromone-write --content '{\"text\":\"...\"}', but the runtime wraps the raw --content string in {\"text\": ...} itself, so following the wrapper stores a double-wrapped JSON string as the signal text.",
+        "reference": "confirmed[54]"
+      },
+      "invariant": "The confirmed defect must not recur: oracle (wrapper persistence suggestions). The wrapper tells the assistant to persist findings with pheromone-write --content '{\"text\":\"...\"}', but the runtime wraps the raw --content string in {\"text\": ...} itself, so following the wrapper stores a double-wrapped JSON string as the signal text.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[54]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "901dfdf5d632fe303e977e934aea759af1a3a622357b1de5d06870ae5dfac93e"
+    },
+    {
+      "id": "fixture-919a43ce2999",
+      "title": "[broad-invariant] unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger fields (evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest, evaluator_digest) now have real production writers on the build lane, the native check lane (runCodexContinue), and the delegate check lane (runCodexContinueFinalize, which previously recorded no episode at all). The episode ledger also joined cmd/memory_schema.g",
+        "reference": "38"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/live_events.go. FIXED by 204-15: all nine previously writerless episode-ledger fields (evidence_ids, hard_gate_results, changed_decision_ids, usage, reported_cost_usd, interventions, episode_revision, acceptance_digest, evaluator_digest) now have real production writers on the build lane, the native check lane (runCodexContinue), and the delegate check lane (runCodexContinueFinalize, which previously recorded no episode at all). The episode ledger also joined cmd/memory_schema.g",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "38"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "919a43ce2999e3af7a5a006f88cbbc7b82eb81fd8b822da45a4cfdc8a90c24d1",
+      "guard": {
+        "test": "TestEveryMemoryStoreFieldHasALiveWriter",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-b1cd712d7fae",
+      "title": "[broad-invariant] continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-ca",
+      "failing_baseline": {
+        "description": "continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-capture -\u0026gt; learning-promote-auto -\u0026gt; instinct-create -\u0026gt; queen-promote-instinct -\u0026gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
+        "reference": "confirmed[0]"
+      },
+      "invariant": "The confirmed defect must not recur: continue: observation -\u0026gt; instinct -\u0026gt; QUEEN.md promotion. The old phase-end loop (memory-capture -\u0026gt; learning-promote-auto -\u0026gt; instinct-create -\u0026gt; queen-promote-instinct -\u0026gt; queen-write-learnings) has no lifecycle caller; continue writes hypotheses to entries.json only, and nothing ever writes learning-observations.json on a build/continue path, so consolidation finds nothing to promote and QueenPromoted is never populated.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[0]"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "high",
+      "content_digest": "b1cd712d7fae156547cfc9f865493551394bad430d26512a32370d1e61b176cf",
+      "guard": {
+        "test": "TestWorkerLessonBecomesQueenFileWisdom",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-b5e9c89cdf5c",
+      "title": "[broad-invariant] stub: cmd/codex_visuals.go. The pause card's Handoff line still reads 'Colony handoff saved for ",
+      "failing_baseline": {
+        "description": "stub: cmd/codex_visuals.go. The pause card's Handoff line still reads 'Colony handoff saved for later resumption' - repo-invented word 'colony' with no plain-English gloss. Found by TestNextActionCardSpeaksPlainEnglish; the plain-English check was scoped to the new next-action card because rewording the ten legacy cards is plans 197-04 and 197-06's declared scope.",
+        "reference": "3"
+      },
+      "invariant": "The confirmed defect must not recur: stub: cmd/codex_visuals.go. The pause card's Handoff line still reads 'Colony handoff saved for later resumption' - repo-invented word 'colony' with no plain-English gloss. Found by TestNextActionCardSpeaksPlainEnglish; the plain-English check was scoped to the new next-action card because rewording the ten legacy cards is plans 197-04 and 197-06's declared scope.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "3"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "b5e9c89cdf5c7a0e893cd2a763181c158a51d2fa7486b2c4358904929a082fd7",
+      "guard": {
+        "test": "TestHandoffConfirmedBeforeClearGuidance",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-b8edbf49712f",
+      "title": "[broad-invariant] continue: hive promotion at phase end. Cross-colony hive promotion of high-confidence instincts ",
+      "failing_baseline": {
+        "description": "continue: hive promotion at phase end. Cross-colony hive promotion of high-confidence instincts no longer happens at continue; it runs only at seal, so a colony that is never sealed contributes nothing to the hive.",
+        "reference": "confirmed[1]"
+      },
+      "invariant": "The confirmed defect must not recur: continue: hive promotion at phase end. Cross-colony hive promotion of high-confidence instincts no longer happens at continue; it runs only at seal, so a colony that is never sealed contributes nothing to the hive.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[1]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "b8edbf49712f52c9d795c0995e52e19d7ec2d89f1428042a7f34cda48cbc5a43",
+      "guard": {
+        "test": "TestStrongInstinctReachesTheSharedStoreAtCheck",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-badffc8ba876",
+      "title": "[broad-invariant] patrol: test-suite run and test-file census. Patrol no longer runs the project's tests or counts",
+      "failing_baseline": {
+        "description": "patrol: test-suite run and test-file census. Patrol no longer runs the project's tests or counts test files; a failing suite is invisible to the pre-seal check.",
+        "reference": "confirmed[59]"
+      },
+      "invariant": "The confirmed defect must not recur: patrol: test-suite run and test-file census. Patrol no longer runs the project's tests or counts test files; a failing suite is invisible to the pre-seal check.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[59]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "badffc8ba87689c8c0b92db1a259129a34892378446c66ff55073b79804ce6f9"
+    },
+    {
+      "id": "fixture-bcc133cfef8d",
+      "title": "[broad-invariant] entomb. Eternal-memory colony record (goal/milestone/sealed_at/chamber appended to ~/.aether/ete",
+      "failing_baseline": {
+        "description": "entomb. Eternal-memory colony record (goal/milestone/sealed_at/chamber appended to ~/.aether/eternal/memory.json .colonies) is no longer written.",
+        "reference": "confirmed[17]"
+      },
+      "invariant": "The confirmed defect must not recur: entomb. Eternal-memory colony record (goal/milestone/sealed_at/chamber appended to ~/.aether/eternal/memory.json .colonies) is no longer written.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[17]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "bcc133cfef8dbfc2996a2b84eb976e761a12fc9cdb53cff6eac64365fe27fcab"
+    },
+    {
+      "id": "fixture-c44507ac4771",
+      "title": "[broad-invariant] phase: task dependencies and success criteria in the view. Single-phase view no longer shows eac",
+      "failing_baseline": {
+        "description": "phase: task dependencies and success criteria in the view. Single-phase view no longer shows each task's 'depends on' or the phase's success criteria.",
+        "reference": "confirmed[65]"
+      },
+      "invariant": "The confirmed defect must not recur: phase: task dependencies and success criteria in the view. Single-phase view no longer shows each task's 'depends on' or the phase's success criteria.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[65]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "c44507ac47717d2eac4af0bb4e8387e95a0bbfd8258f38c1b7b77c96cbb689cc"
+    },
+    {
+      "id": "fixture-c5c8f1407a68",
+      "title": "[broad-invariant] dream. The Dreamer's only write target (.aether/dreams/{date}.md) is blocked by the PreToolUse h",
+      "failing_baseline": {
+        "description": "dream. The Dreamer's only write target (.aether/dreams/{date}.md) is blocked by the PreToolUse hook on Write|Edit for every session, so the wrapper's Step 2/3 journal write cannot succeed on Claude Code.",
+        "reference": "confirmed[15]"
+      },
+      "invariant": "The confirmed defect must not recur: dream. The Dreamer's only write target (.aether/dreams/{date}.md) is blocked by the PreToolUse hook on Write|Edit for every session, so the wrapper's Step 2/3 journal write cannot succeed on Claude Code.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[15]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "c5c8f1407a6874c9bdde0bef8b96e4cf302a81d0a1ccc93bf6e7c3817b4418df"
+    },
+    {
+      "id": "fixture-cc9a1a675f37",
+      "title": "[broad-invariant] unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeIntervention",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared interventio",
+        "reference": "45"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/source_proposal.go. FIXED, both halves: (1) 204-13 declared episodeInterventionKind, a closed, source-derived intervention-kind vocabulary with three real production writers, so collectPreventableInterventions now classifies against a curated set instead of treating every free-form string as its own category. (2) 204-16 gave proposeSourceImprovement its first real production caller, triggerRepeatedInterventionProposal (cmd/improvement_pass.go): when the same declared interventio",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "45"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "cc9a1a675f3752225125aac195493d71dbb068b22f87f2df62022746b03f6cbe",
+      "guard": {
+        "test": "TestRepeatedInterventionProposesExactlyOneSourceChange",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-cfab44c9d745",
+      "title": "[broad-invariant] dream. Dream's activity logging writes to activity-log.jsonl while the Dreamer's own context ste",
+      "failing_baseline": {
+        "description": "dream. Dream's activity logging writes to activity-log.jsonl while the Dreamer's own context step reads .aether/data/activity.log, so dream sessions never appear in the 'what has been happening' context on later runs.",
+        "reference": "confirmed[26]"
+      },
+      "invariant": "The confirmed defect must not recur: dream. Dream's activity logging writes to activity-log.jsonl while the Dreamer's own context step reads .aether/data/activity.log, so dream sessions never appear in the 'what has been happening' context on later runs.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[26]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "cfab44c9d745f1d7f8d4f2e71327e3bb05dfbd39f70eade54fcc8a68945acd41"
+    },
+    {
+      "id": "fixture-cfec0ffacb42",
+      "title": "[broad-invariant] quick. Quick scout is run as a headless subprocess via codex.NewWorkerInvoker with a hard timeou",
+      "failing_baseline": {
+        "description": "quick. Quick scout is run as a headless subprocess via codex.NewWorkerInvoker with a hard timeout instead of a visible Task agent; the visible Scout ceremony and the named-scout banner are gone.",
+        "reference": "confirmed[72]"
+      },
+      "invariant": "The confirmed defect must not recur: quick. Quick scout is run as a headless subprocess via codex.NewWorkerInvoker with a hard timeout instead of a visible Task agent; the visible Scout ceremony and the named-scout banner are gone.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[72]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "cfec0ffacb423f4f2e76d14f4b3dc531682ff63004bb766db640466f5237a913"
+    },
+    {
+      "id": "fixture-d12096a6c651",
+      "title": "[broad-invariant] memory-details. The drill-down view is gone: the command is now an alias of memory-metrics that ",
+      "failing_baseline": {
+        "description": "memory-details. The drill-down view is gone: the command is now an alias of memory-metrics that returns bare counts as JSON with no visual renderer, so no wisdom entries, pending-promotion text, deferred proposals, or midden failure lines are ever shown.",
+        "reference": "confirmed[43]"
+      },
+      "invariant": "The confirmed defect must not recur: memory-details. The drill-down view is gone: the command is now an alias of memory-metrics that returns bare counts as JSON with no visual renderer, so no wisdom entries, pending-promotion text, deferred proposals, or midden failure lines are ever shown.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[43]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19",
+      "guard": {
+        "test": "TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-e2643bd2bf86",
+      "title": "[broad-invariant] build: graveyard (grave-add / grave-check). Failure graves for files a failed worker touched are",
+      "failing_baseline": {
+        "description": "build: graveyard (grave-add / grave-check). Failure graves for files a failed worker touched are never recorded or checked; the subcommands exist but nothing calls them.",
+        "reference": "confirmed[6]"
+      },
+      "invariant": "The confirmed defect must not recur: build: graveyard (grave-add / grave-check). Failure graves for files a failed worker touched are never recorded or checked; the subcommands exist but nothing calls them.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[6]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "e2643bd2bf8623dd6766923fb1987c655633c280cf6fb37bdbd9b50b527b1931"
+    },
+    {
+      "id": "fixture-e317f4c035cf",
+      "title": "[broad-invariant] unmet-truth: pkg/codex/platform_dispatch.go. workerProcessEnv (pkg/codex/process_tracker.go) had",
+      "failing_baseline": {
+        "description": "unmet-truth: pkg/codex/platform_dispatch.go. workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned su",
+        "reference": "46"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: pkg/codex/platform_dispatch.go. workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned su",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "46"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "e317f4c035cfcf1d594bc4e561a0796869b21a8f05f4d7d2a71eb7835a7c2c6a",
+      "guard": {
+        "test": "TestHookStopNeverBlocksAnAetherSpawnedWorker",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-e3c1824e0d6c",
+      "title": "[broad-invariant] flag. Manual blocker flags no longer auto-resolve on build_pass; only machine sources (verificat",
+      "failing_baseline": {
+        "description": "flag. Manual blocker flags no longer auto-resolve on build_pass; only machine sources (verification/watcher/escalation/build/continue/medic) clear, so a user-raised blocker must be resolved by hand (intentional, but the wrapper's old 'Auto-resolved: blockers auto-resolve on build_pass' promise is silently gone).",
+        "reference": "confirmed[25]"
+      },
+      "invariant": "The confirmed defect must not recur: flag. Manual blocker flags no longer auto-resolve on build_pass; only machine sources (verification/watcher/escalation/build/continue/medic) clear, so a user-raised blocker must be resolved by hand (intentional, but the wrapper's old 'Auto-resolved: blockers auto-resolve on build_pass' promise is silently gone).",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[25]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "low",
+      "content_digest": "e3c1824e0d6c7b2b9d17d4812d5bdd1a18dd56848c0635c125555aec575e88c4"
+    },
+    {
+      "id": "fixture-ec011ad6e69c",
+      "title": "[broad-invariant] deviation: cmd/codex_visuals.go. renderPlanVisual never reads result[\"research_warning\"] (which ",
+      "failing_baseline": {
+        "description": "deviation: cmd/codex_visuals.go. renderPlanVisual never reads result[\"research_warning\"] (which renderResearchFailedWarning's own doc comment says exists \"so the omission is durable and visible\" when a phase was planned without its research), result[\"research_failed_phases\"] (the phase IDs that fed that warning), or result[\"gaps\"] (a completed plan's own unresolved gaps). Found and allow-listed, not fixed, in 198-09-PLAN.md Task 1 (cmd/testdata/rendered_field_allowlist.json) because cmd/codex_vi",
+        "reference": "6"
+      },
+      "invariant": "The confirmed defect must not recur: deviation: cmd/codex_visuals.go. renderPlanVisual never reads result[\"research_warning\"] (which renderResearchFailedWarning's own doc comment says exists \"so the omission is durable and visible\" when a phase was planned without its research), result[\"research_failed_phases\"] (the phase IDs that fed that warning), or result[\"gaps\"] (a completed plan's own unresolved gaps). Found and allow-listed, not fixed, in 198-09-PLAN.md Task 1 (cmd/testdata/rendered_field_allowlist.json) because cmd/codex_vi",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "6"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "ec011ad6e69c6d4faacc85d485bae9aa5d6494e658b3e993fc573bf2475a2fbb"
+    },
+    {
+      "id": "fixture-ec047bca7953",
+      "title": "[broad-invariant] oracle (final synthesis pass). The AI-driven final synthesis pass that rewrote synthesis.md into",
+      "failing_baseline": {
+        "description": "oracle (final synthesis pass). The AI-driven final synthesis pass that rewrote synthesis.md into a structured report on stop/converge/interrupt/max-iterations no longer runs; stop and finalize only regenerate derived reports from plan.json.",
+        "reference": "confirmed[53]"
+      },
+      "invariant": "The confirmed defect must not recur: oracle (final synthesis pass). The AI-driven final synthesis pass that rewrote synthesis.md into a structured report on stop/converge/interrupt/max-iterations no longer runs; stop and finalize only regenerate derived reports from plan.json.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[53]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "ec047bca7953a2bda35d3e909bbeb3234d340aa729d397bc700253e7c4c7b145"
+    },
+    {
+      "id": "fixture-f5298cc6d953",
+      "title": "[broad-invariant] continue: auto-emitted phase FEEDBACK / decision FEEDBACK / error REDIRECT pheromones. Continue ",
+      "failing_baseline": {
+        "description": "continue: auto-emitted phase FEEDBACK / decision FEEDBACK / error REDIRECT pheromones. Continue no longer writes any pheromone: the phase-completion FEEDBACK, per-decision FEEDBACK, and midden-threshold auto-REDIRECT signals are gone, although CLAUDE.md still claims 'Decisions become pheromones' and 'Midden affects behavior (threshold auto-REDIRECT)'.",
+        "reference": "confirmed[2]"
+      },
+      "invariant": "The confirmed defect must not recur: continue: auto-emitted phase FEEDBACK / decision FEEDBACK / error REDIRECT pheromones. Continue no longer writes any pheromone: the phase-completion FEEDBACK, per-decision FEEDBACK, and midden-threshold auto-REDIRECT signals are gone, although CLAUDE.md still claims 'Decisions become pheromones' and 'Midden affects behavior (threshold auto-REDIRECT)'.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "audit_finding",
+          "identifier": "confirmed[2]"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "high",
+      "content_digest": "f5298cc6d9536be9c252686f27c4c97bec9be2bb57b3ac54640ee9f1868f10ca",
+      "guard": {
+        "test": "TestThreeFailuresOfOneKindProduceOneRedirect",
+        "package": "cmd"
+      }
+    }
+  ]
+}

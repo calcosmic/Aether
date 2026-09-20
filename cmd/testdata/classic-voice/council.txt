@@ -1,0 +1,8 @@
+              A N T   C O U N C I L
+═══════════════════════════════════════════════ 📜🐜🏛️🐜📜
+
+👑 Queen convenes the council for guidance
+
+   Colony Goal: "{goal}"
+   Current State: {prior_state}
+   Phase: {current_phase}

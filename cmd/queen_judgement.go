@@ -44,7 +44,24 @@ type queenCasteJudgement struct {
 	// Unknown lists proposed names that are not dispatchable castes.
 	Unknown []string
 	// Rationale is the Queen's stated reasoning, carried through for display.
+	// This is the TEAM summary (D-08) -- one string for the whole proposal.
+	// It never satisfies the per-worker reason requirement below; Reasons is
+	// the map that does.
 	Rationale string
+	// Reasons is the per-worker reason a member of Final carries, keyed by
+	// caste (D-08, D-09, D-10). Populated from the proposal's --caste-why
+	// entry where one was supplied, and from the runtime's own written reason
+	// (queenRuntimeReasonForCaste) for a required, forced, or runtime-added
+	// caste -- the two merge (mergeCasteReasons) when both exist for the same
+	// caste. A caste with no entry here and no exemption is not in Final at
+	// all: it was refused, not sent silently unexplained.
+	Reasons map[string]string
+	// RefusedNoReason lists proposed castes that were NOT required and carried
+	// no stated reason -- refused for that worker only (D-08). Distinct from
+	// Refused: a caste in Refused scored zero relevance for this phase; a
+	// caste here may have had real relevance but arrived with nothing said
+	// about why this phase needs it.
+	RefusedNoReason []string
 	// Source is "queen" when a proposal was supplied, "deterministic" when the
 	// keyword engine chose.
 	Source string
@@ -75,11 +92,29 @@ func (j queenCasteJudgement) Summary() string {
 		b.WriteString(fmt.Sprintf(" Refused %s — nothing in this phase for it to do.",
 			strings.Join(j.Refused, ", ")))
 	}
+	if len(j.RefusedNoReason) > 0 {
+		b.WriteString(fmt.Sprintf(" Refused %s — no stated reason arrived with the proposal for it.",
+			strings.Join(j.RefusedNoReason, ", ")))
+	}
 	if len(j.Unknown) > 0 {
 		b.WriteString(fmt.Sprintf(" Ignored unknown caste(s): %s.",
 			strings.Join(j.Unknown, ", ")))
 	}
 	return b.String()
+}
+
+// firstReasonMap returns the sole map a variadic reasons argument carries, or
+// nil if none was passed. queenApplyJudgement and every function between it
+// and the CLI accept reasons as `...map[string]string` rather than a plain
+// `map[string]string` so that the large existing call-site surface (this
+// package's own tests among them) keeps compiling unchanged when no per-worker
+// reason applies to that call -- only the production CLI paths that actually
+// have a --caste-why proposal need to pass one.
+func firstReasonMap(reasons ...map[string]string) map[string]string {
+	if len(reasons) == 0 {
+		return nil
+	}
+	return reasons[0]
 }
 
 // queenApplyJudgement reconciles a proposed team with what the phase requires
@@ -88,14 +123,43 @@ func (j queenCasteJudgement) Summary() string {
 // An empty proposal is not an error and not an empty team: it means no
 // judgement was offered, so the deterministic engine decides. That keeps every
 // existing caller working unchanged and makes the model path additive.
-func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase, flowType string, state colony.ColonyState) queenCasteJudgement {
+func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase, flowType string, state colony.ColonyState, reasons ...map[string]string) queenCasteJudgement {
 	normalized, unknown := normalizeProposedCastes(proposed)
+	reasonMap := firstReasonMap(reasons...)
+
+	// forcedForReasons is the SAME derivation queenRequiredCastesForBudget's
+	// continue branch already uses to fold forced-reviewer castes into
+	// `required` (D-05: one derivation) -- reused here so a forced caste's
+	// Reasons entry states the real signal, not a keyword-scoring guess. A
+	// caller with the build's RECORDED forced set (codexForcedReviewerRecord)
+	// overwrites this with the authoritative sentence downstream
+	// (unionForcedContinueReviewers); this is the honest default when no
+	// recorded set is available yet, matching queenForcedContinueReviewers'
+	// own fallback.
+	var forcedForReasons []forcedReviewer
+	if normalizeQueenFlowType(flowType) == "continue" {
+		forcedForReasons = queenForcedReviewersForPhase(phase)
+	}
 
 	if len(normalized) == 0 {
-		deterministic := casteNames(queenOrchestrate(phase, flowType, state))
+		dispatches := queenOrchestrate(phase, flowType, state)
+		deterministic := casteNames(dispatches)
+		deterministicReasons := make(map[string]string, len(dispatches))
+		for _, d := range dispatches {
+			deterministicReasons[d.Caste] = mergeCasteReasons(d.Rationale, queenRuntimeReasonForCaste(d.Caste, phase, forcedForReasons))
+		}
+		for k, v := range deterministicReasons {
+			if v == "" {
+				delete(deterministicReasons, k)
+			}
+		}
+		if len(deterministicReasons) == 0 {
+			deterministicReasons = nil
+		}
 		return queenCasteJudgement{
 			Final:   deterministic,
 			Unknown: unknown,
+			Reasons: deterministicReasons,
 			Source:  "deterministic",
 		}
 	}
@@ -117,16 +181,41 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 	// work are different decisions, and this floor must never touch the second.
 	requiredForExemption := stringSet(required)
 	refused := []string{}
+	refusedNoReason := []string{}
 	kept := normalized[:0]
 	for _, caste := range normalized {
 		if !requiredForExemption[caste] && casteRelevanceScore(phase, caste) == 0 {
 			refused = append(refused, caste)
 			continue
 		}
+		// D-07 preserves Probe's negative rule as a refusal, not just a
+		// missing requirement: a proposed coverage reviewer is refused BY
+		// NAME on a phase with no testable code, the same way a
+		// zero-relevance caste above is -- Probe is not keyword-gated like
+		// ambassador/gatekeeper, so casteRelevanceScore alone never catches
+		// this case (plan 194-02's queen_probe_gating_test.go left this gate
+		// for this plan to land).
+		if !requiredForExemption[caste] && caste == "probe" && !queenPhaseProducesTestableCode(phase) {
+			refused = append(refused, caste)
+			continue
+		}
+		// A proposal carries one reason per worker (D-08). A caste the phase
+		// requires regardless is exempt -- it is not the Queen's reason that
+		// puts it there. Everything else that arrives with an empty or
+		// whitespace-only reason is refused BY NAME, for that worker only; the
+		// rest of the proposal is unaffected. Whitespace-only counts as no
+		// reason, and a nil reasons map (no --caste-why at all) refuses every
+		// non-required proposed caste -- both are the empty-input probe's
+		// answer (194-CONTEXT.md TEAM-03).
+		if !requiredForExemption[caste] && strings.TrimSpace(reasonMap[caste]) == "" {
+			refusedNoReason = append(refusedNoReason, caste)
+			continue
+		}
 		kept = append(kept, caste)
 	}
 	normalized = kept
 	sort.Strings(refused)
+	sort.Strings(refusedNoReason)
 
 	// Required castes are not negotiable. They are restored whether the Queen
 	// left them out on purpose or overlooked them — the runtime cannot tell the
@@ -172,15 +261,37 @@ func queenApplyJudgement(proposed []string, rationale string, phase colony.Phase
 		final = final[:limit]
 	}
 
+	// Reasons carries one sentence per member of Final (D-08, D-10). The
+	// proposal's own per-worker reason merges with the runtime's own
+	// justification (queenRuntimeReasonForCaste) when the caste is required,
+	// forced, or was added by the runtime rather than proposed -- the same
+	// caste can have BOTH (a Queen reason and a forced signal) and the two
+	// combine into one sentence rather than competing (mergeCasteReasons,
+	// the adjacency answer, TEAM-03).
+	finalReasons := make(map[string]string, len(final))
+	for _, caste := range final {
+		finalReasons[caste] = mergeCasteReasons(reasonMap[caste], queenRuntimeReasonForCaste(caste, phase, forcedForReasons))
+	}
+	for caste, r := range finalReasons {
+		if r == "" {
+			delete(finalReasons, caste)
+		}
+	}
+	if len(finalReasons) == 0 {
+		finalReasons = nil
+	}
+
 	return queenCasteJudgement{
-		Proposed:  normalized,
-		Final:     final,
-		Added:     added,
-		Dropped:   dropped,
-		Refused:   refused,
-		Unknown:   unknown,
-		Rationale: strings.TrimSpace(rationale),
-		Source:    "queen",
+		Proposed:        normalized,
+		Final:           final,
+		Added:           added,
+		Dropped:         dropped,
+		Refused:         refused,
+		RefusedNoReason: refusedNoReason,
+		Unknown:         unknown,
+		Reasons:         finalReasons,
+		Rationale:       strings.TrimSpace(rationale),
+		Source:          "queen",
 	}
 }
 
@@ -269,6 +380,118 @@ func resolveCasteName(raw string, valid map[string]bool) string {
 		}
 	}
 	return name
+}
+
+// parseCasteReasonPairs parses --caste-why's repeatable `caste=reason` pairs
+// (D-08). Splitting on the FIRST `=` only means a reason is free to contain
+// its own `=`. Both halves are trimmed; a whitespace-only reason is dropped
+// (it is the same as not having supplied one). The caste half resolves
+// through the exact same resolveCasteName path --castes already uses,
+// including casteNameAliases and both separator styles, so a reason keyed
+// "route-setter" lands on "route_setter" rather than being silently lost
+// (the encoding probe, TEAM-03). A key that still does not resolve is
+// returned as unknown rather than dropped, so the caller can report it
+// through the SAME unknown-name channel --castes already has, instead of a
+// second, parallel one.
+func parseCasteReasonPairs(raw []string) (map[string]string, []string) {
+	valid := make(map[string]bool, len(casteRelevanceRegistry))
+	for _, profile := range casteRelevanceRegistry {
+		valid[profile.Caste] = true
+	}
+
+	reasons := make(map[string]string)
+	var unknown []string
+	for _, entry := range raw {
+		idx := strings.Index(entry, "=")
+		if idx < 0 {
+			// No separator at all: there is no caste to key this to, so it
+			// cannot be reported as an unknown caste name either -- it is
+			// simply malformed and is dropped rather than guessed at.
+			continue
+		}
+		key := strings.TrimSpace(entry[:idx])
+		reason := strings.TrimSpace(entry[idx+1:])
+		if reason == "" {
+			continue
+		}
+		caste := resolveCasteName(key, valid)
+		if caste == "" {
+			continue
+		}
+		if !valid[caste] {
+			unknown = append(unknown, key)
+			continue
+		}
+		// A caste named twice (two --caste-why flags for the same worker, or
+		// the same key spelled two ways) keeps its LAST reason rather than
+		// erroring -- consistent with how a repeated --castes value already
+		// de-duplicates silently.
+		reasons[caste] = reason
+	}
+	if len(reasons) == 0 {
+		reasons = nil
+	}
+	sort.Strings(unknown)
+	return reasons, unknown
+}
+
+// parseAndMergeCasteWhy parses --caste-why and folds any key that did not
+// resolve to a known caste into the --castes proposal list itself, so it
+// surfaces through normalizeProposedCastes' existing Unknown reporting rather
+// than a second, parallel unknown-name channel (parseCasteReasonPairs' own
+// doc comment). A key that already failed to resolve here will fail to
+// resolve there too, by construction -- both call the same resolveCasteName.
+func parseAndMergeCasteWhy(proposed []string, casteWhy []string) ([]string, map[string]string) {
+	reasons, unknownKeys := parseCasteReasonPairs(casteWhy)
+	if len(unknownKeys) == 0 {
+		return proposed, reasons
+	}
+	merged := append(append([]string{}, proposed...), unknownKeys...)
+	return merged, reasons
+}
+
+// queenRuntimeReasonForCaste is D-09's answer for a caste the RUNTIME adds
+// itself, not the Queen's proposal: the implementation worker names the tasks
+// it is writing, and a forced reviewer names the signal and the phrase that
+// matched (194-01's forcedReviewerReason, reused verbatim rather than
+// reworded a second time). A caste this function does not recognise returns
+// "" -- callers merge that with whatever else they have (mergeCasteReasons)
+// rather than treating "" as an error.
+func queenRuntimeReasonForCaste(caste string, phase colony.Phase, forced []forcedReviewer) string {
+	for _, reviewer := range forced {
+		if reviewer.Caste == caste {
+			return reviewer.Reason
+		}
+	}
+	switch caste {
+	case "builder":
+		if len(phase.Tasks) == 0 {
+			return ""
+		}
+		return fmt.Sprintf("writes the code for %d task(s): %s", len(phase.Tasks), strings.TrimSpace(phase.Tasks[0].Goal))
+	case "scout":
+		if effectiveQueenPhaseMode(phase) == colony.PhaseModeDiscovery {
+			return "research findings are the deliverable on a discovery phase"
+		}
+	}
+	return ""
+}
+
+// mergeCasteReasons is the adjacency answer (TEAM-03): a caste that has both
+// a proposal reason AND a runtime-written reason (it was proposed AND also
+// required or forced) gets ONE sentence carrying both, never two competing
+// dispatch lines for the same worker. An exact repeat de-duplicates rather
+// than saying the same thing twice.
+func mergeCasteReasons(existing, added string) string {
+	existing = strings.TrimSpace(existing)
+	added = strings.TrimSpace(added)
+	if existing == "" {
+		return added
+	}
+	if added == "" || strings.EqualFold(existing, added) {
+		return existing
+	}
+	return existing + "; " + added
 }
 
 func casteNames(dispatches []CasteDispatch) []string {
@@ -362,10 +585,10 @@ func queenCasteRoster() []map[string]string {
 // path it reports source "deterministic", which is what tells a reading Queen
 // that the team it is looking at came from keyword scoring and is therefore
 // the thing it may want to correct.
-func queenCasteDecisionSummary(phase colony.Phase, state colony.ColonyState, reviewDepth colony.VerificationDepth, proposed []string, reason string) map[string]interface{} {
+func queenCasteDecisionSummary(phase colony.Phase, state colony.ColonyState, reviewDepth colony.VerificationDepth, proposed []string, reason string, reasons ...map[string]string) map[string]interface{} {
 	judgementState := state
 	judgementState.VerificationDepth = string(reviewDepth)
-	judgement := queenApplyJudgement(proposed, reason, phase, "build", judgementState)
+	judgement := queenApplyJudgement(proposed, reason, phase, "build", judgementState, reasons...)
 
 	summary := map[string]interface{}{
 		"source":  judgement.Source,
@@ -386,6 +609,16 @@ func queenCasteDecisionSummary(phase colony.Phase, state colony.ColonyState, rev
 	}
 	if judgement.Rationale != "" {
 		summary["rationale"] = judgement.Rationale
+	}
+	// reasons/refused_no_reason (D-08, D-10): the per-worker sentence every
+	// spawned caste carries, and the name of anyone refused for arriving
+	// without one. Both travel to the check-in card and the dispatch record
+	// from this one manifest key rather than being recomputed downstream.
+	if len(judgement.Reasons) > 0 {
+		summary["reasons"] = judgement.Reasons
+	}
+	if len(judgement.RefusedNoReason) > 0 {
+		summary["refused_no_reason"] = judgement.RefusedNoReason
 	}
 	return summary
 }

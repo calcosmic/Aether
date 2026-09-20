@@ -4,26 +4,18 @@ Step 1/5: Prepare (0s)
 Worker wave dispatching.
 [Phase 1/1] [████████████████] 100%
 Phase: Golden phase
+Objective: Golden phase exercises accepted build authority
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks 1.1, 1.2]
 
-Post-Wave: Probe
-  Execution: serial — post-wave independent verification of builder claims
-  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims
+Total planned dispatches: 1
+2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
 
-Post-Wave: Watcher
-  Execution: serial — post-wave watcher verification before advancement
-  👁️🐜 Watcher Worker-XX  Independent verification before advancement
-
-Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher
-
-Total planned dispatches: 3
-
-The Queen chose this team for the phase: Builder, Probe, Watcher.
+The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
 Safety castes a risky phase needs are kept at every size.
 
@@ -38,29 +30,7 @@ Wave 11 starting (in-repo, serial)
 
 … 🔨🐜 Builder Worker-XX  running wave 11  Worker: Worker-XX  [simulated worker heartbeat observed]
 
-✓ 🔨🐜 Builder Worker-XX  completed 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
-
-── Dispatch ──
-Wave 13 starting (in-repo, serial)
-  Execution: serial — single task in this wave
-──── 🧪🐜 Spawning Worker-XX — Worker: Worker-XX ────
-
-… 🧪🐜 Probe [sonnet] Worker-XX  starting wave 13  Worker: Worker-XX
-
-… 🧪🐜 Probe Worker-XX  running wave 13  Worker: Worker-XX  [simulated worker heartbeat observed]
-
-✓ 🧪🐜 Probe Worker-XX  completed 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
-
-── Dispatch ──
-Wave 14 starting (in-repo, serial)
-  Execution: serial — single task in this wave
-──── 👁️🐜 Spawning Worker-XX — Worker: Worker-XX ────
-
-… 👁️🐜 Watcher [sonnet] Worker-XX  starting wave 14  Worker: Worker-XX
-
-… 👁️🐜 Watcher Worker-XX  running wave 14  Worker: Worker-XX  [simulated worker heartbeat observed]
-
-✓ 👁️🐜 Watcher Worker-XX  completed 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
+✓ 🔨🐜 Builder Worker-XX  completed (0.0s, 0 tool calls)  FakeInvoker completed task 1.1 for worker Worker-XX (caste: builder)
 
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)
@@ -69,7 +39,8 @@ Ceremony complete in 0s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [Phase 1/1] [████████████████] 100%
 Phase: Golden phase
-Review depth: heavy (final phase)
+Review depth: standard (Phase 1 of 1)
+Objective: Golden phase exercises accepted build authority
 ── Context ──
 Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
 ── Tasks ──
@@ -78,29 +49,20 @@ Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"
 
 ── Dispatch ──
 Queen's Team
-  🔨🐜 Builder — builder is always required for build flow
-  🧪🐜 Probe — probe is always required for build flow
-  👁️🐜 Watcher — watcher is always required for build flow
+  🔨🐜 Builder — this phase has tasks that need code written
+  Kept by safety policy: Builder — this phase has tasks that need code written
+  Not called (2): Gatekeeper — not sent -- nobody asked for it and nothing in this phase forces it; Watcher — not sent -- nobody asked for it and nothing in this phase forces it
 
 ━━ 🐜 S P A W N   P L A N ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Wave 1
   Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task g-task-1 for worker Worker-XX (caste: builder)
+  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks 1.1, 1.2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task 1.1 for worker Worker-XX (caste: builder)
 
-Post-Wave: Probe
-  Execution: serial — post-wave independent verification of builder claims
-  🧪🐜 Probe Worker-XX  Independent probe verification of builder claims  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task probe-probe-check-80 for worker Worker-XX (caste: probe)
+Total planned dispatches: 1
+2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
 
-Post-Wave: Watcher
-  Execution: serial — post-wave watcher verification before advancement
-  👁️🐜 Watcher Worker-XX  Independent verification before advancement
-
-Persist your testing and quality findings to the domain review ledger using: aether review-ledger-write --domain <domain> --phase <N> --findings '<json>' --agent watcher  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task verification-watcher-keen-6 for worker Worker-XX (caste: watcher)
-
-Total planned dispatches: 3
-
-The Queen chose this team for the phase: Builder, Probe, Watcher.
+The Queen chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
 Safety castes a risky phase needs are kept at every size.
 ━━ 🗂️ A R T I F A C T S ━━
@@ -108,14 +70,34 @@ Safety castes a risky phase needs are kept at every size.
 .aether/data/build/phase-1/manifest.json
 .aether/data/last-build-claims.json
 .aether/data/spawn-tree.txt
-── Verification [heavy] ──
+── Verification [standard] ──
 Verification happens during `/ant-continue`.
 ── Housekeeping ──
 Signal housekeeping runs during `/ant-continue`.
 ── Colony Complete ──
-This is the final phase. Seal the colony after continue.
+This is the last phase in the plan. Once its work is checked, the project can be
+signed off as finished.
+━━ 📊 W H A T   N E X T ━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+── Where things stand ──
+Goal: Golden workflow test colony
+Phase 1 of 1: Golden phase. 0 phase(s) finished so far.
+
+── What changed ──
+  - The last thing you ran was build.
+  - Phase 1: Golden phase
+  - Dispatched 1 workers for phase 1
+  - Phase 1 build packet prepared (simulated dispatch)
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-continue` after the work is implemented and independently verified.
-Alternative: Run `/ant-status` if you want to inspect progress before advancing.
-Handoff saved (.aether/HANDOFF.md) — safe to clear your context now. Run `/ant-resume` to restore.
+Run `/ant-continue` — The current phase has work that must be checked and advanced.
+Alternative: Run `/ant-status` — Inspect the current phase before checking it.
+Alternative: Run `/ant-history` — Review the activity behind the current phase.
+
+This is a natural break, and everything is written down -- it is safe to close this chat, and starting a fresh one from here will work better than carrying this one on.
+
+── What The Helpers Cost ──
+Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.
+  🔨🐜 Builder Worker-XX (job: automatic-1.1)  —  not reported
+(1 worker's tool did not report usage, so its use is not in the total.)
+(The coordinator's own back-and-forth, the main session itself, is not counted here. These figures are the helpers it sent.)

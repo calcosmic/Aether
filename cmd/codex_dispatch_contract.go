@@ -534,12 +534,18 @@ func recommendQueenExecutionPolicy(state colony.ColonyState, phase colony.Phase,
 	}
 }
 
-func enrichQueenExecutionPolicyWithSpawnBudget(policy codexQueenExecutionPolicy, state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) codexQueenExecutionPolicy {
-	policy.SpawnBudget = buildQueenSpawnBudgetContract(state, phase, flowType, reviewDepth, dispatches)
+func enrichQueenExecutionPolicyWithSpawnBudget(policy codexQueenExecutionPolicy, state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch, reasons ...map[string]string) codexQueenExecutionPolicy {
+	policy.SpawnBudget = buildQueenSpawnBudgetContract(state, phase, flowType, reviewDepth, dispatches, reasons...)
 	return policy
 }
 
-func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch) *codexQueenSpawnBudgetContract {
+// buildQueenSpawnBudgetContract's reasons parameter, when supplied, is the
+// judgement's already-merged per-caste Reasons map (D-09, D-10) -- it is
+// preferred over decision.Rationale for any caste it names, so the card and
+// the manifest's spawn_budget both show the SAME sentence
+// queenCasteDecisionSummary shows, rather than two independently-derived
+// ones that could drift apart.
+func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase, flowType string, reviewDepth colony.VerificationDepth, dispatches []codexBuildDispatch, reasons ...map[string]string) *codexQueenSpawnBudgetContract {
 	flowType = normalizeQueenFlowType(flowType)
 	budgetState := state
 	if reviewDepth != "" {
@@ -567,12 +573,36 @@ func buildQueenSpawnBudgetContract(state colony.ColonyState, phase colony.Phase,
 	// pruned_castes while budget_unit remains "caste".
 	contract.PrunedWorkers = intRef(len(prunedBudgetCastes))
 	contract.OverflowRequiredWorkers = intRef(maxInt(0, len(contract.RequiredCastes)-budget.MaxWorkers))
+	preferredReasons := firstReasonMap(reasons...)
+	// gated is true on build and continue (D-11): the selector no longer
+	// picks anyone, so queenSpawnBudgetDecisions' own Selected flag (which
+	// still runs the old score-and-budget arithmetic against the UNGATED
+	// candidate list, because that list is also the "Not sent" surface the
+	// card reads) disagrees with what actually dispatched. selectedSet --
+	// the real gated selection queenOrchestrate returned -- is the honest
+	// answer for which half a candidate belongs in.
+	gated := queenSelectorIsGatedForFlow(flowType)
+	selectedSet := stringSet(selectedBudgetCastes)
 	for _, decision := range queenSpawnBudgetDecisions(candidateBudgetDispatches, budget) {
 		rationale := strings.TrimSpace(decision.Rationale)
+		if preferred := strings.TrimSpace(preferredReasons[decision.Caste]); preferred != "" {
+			rationale = preferred
+		}
+		selected := decision.Selected
+		if gated {
+			selected = selectedSet[decision.Caste]
+			if !selected {
+				// Not a budget cut -- the gate means nobody proposed this
+				// candidate and nothing in the phase forces it. Saying "over
+				// budget" here would name a number that played no part in
+				// the decision.
+				rationale = "not sent -- nobody asked for it and nothing in this phase forces it"
+			}
+		}
 		if rationale == "" {
 			continue
 		}
-		if decision.Selected {
+		if selected {
 			if contract.SelectedReasons == nil {
 				contract.SelectedReasons = make(map[string]string)
 			}
@@ -857,11 +887,28 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 		// third hand-copied definition.
 		if codex.IsEmptyWorkerHandoffIncludingFreshness(handoff) {
 			handoff = codex.WorkerHandoff{
-				ChangedFiles:       append(append(append([]string{}, result.WorkerResult.FilesCreated...), result.WorkerResult.FilesModified...), result.WorkerResult.TestsWritten...),
 				KnownFailures:      append([]string{}, result.WorkerResult.Blockers...),
 				VerificationStatus: verificationStatusForWorkerStatus(status),
 			}
 		}
+		// ChangedFiles is the UNION of every place a worker can name a path
+		// -- top-level lists, each task receipt, and the worker's own handoff
+		// -- never whichever single one happened to be populated.
+		//
+		// The phase commit stages exactly this list
+		// (phaseChangedFilesFromHandoffs, cmd/phase_commit.go), so a path
+		// missing here is finished, verified work left silently uncommitted.
+		// That is what happened downstream on v1.0.75: a builder asked to
+		// correct one task resent a report whose top-level lists AND handoff
+		// both named only the follow-up, its earlier completed work
+		// surviving only in task_receipts, and seven files were dropped from
+		// the commit with no warning.
+		//
+		// This assignment is deliberately unconditional rather than a repair
+		// of the fallback branch above: the reported failure supplied a
+		// NON-empty handoff, so that branch never ran and mending it would
+		// have fixed nothing. Both paths now converge on the same union.
+		handoff.ChangedFiles = codex.AllClaimedFiles(*result.WorkerResult)
 	}
 	if result.Error != nil {
 		handoff.KnownFailures = append(handoff.KnownFailures, result.Error.Error())
@@ -907,6 +954,14 @@ func buildWorkerHandoffRecord(dispatch codex.WorkerDispatch, result codex.Dispat
 }
 
 func loadWorkerHandoffRecords() ([]workerHandoffRecord, error) {
+	// A nil store (a lightweight test, or a call site reached before the
+	// store is initialized) is "no handoffs recorded yet", not a crash --
+	// phaseChangedFilesFromHandoffs is now on every continue dispatch
+	// construction path (plan 194-06, D-02), including callers that never
+	// needed a store before this.
+	if store == nil {
+		return nil, nil
+	}
 	raw, err := store.ReadFile(workerHandoffsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -941,8 +996,13 @@ func pruneWorkerHandoffRecords(records []workerHandoffRecord, limit int) []worke
 
 func verificationStatusForWorkerStatus(status string) string {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "completed", "manually-reconciled":
+	case "completed", "completed_no_change", "manually-reconciled":
 		return "pass"
+	// interrupted (ruling D7): the worker stopped before verifying — the
+	// work is resumable, so the honest verification answer is "not run",
+	// never "fail".
+	case "interrupted":
+		return "not_run"
 	case "failed", "blocked", "timeout":
 		return "fail"
 	case "":

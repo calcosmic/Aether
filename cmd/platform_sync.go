@@ -1,16 +1,585 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
+	"github.com/calcosmic/Aether/pkg/colony"
 	"gopkg.in/yaml.v3"
 )
+
+const maintenanceMutationSchemaVersion = "maintenance-mutation/v1"
+
+type maintenanceMutationChange string
+
+const (
+	maintenanceMutationChangeWrite     maintenanceMutationChange = "write"
+	maintenanceMutationChangeRemove    maintenanceMutationChange = "remove"
+	maintenanceMutationChangeUnchanged maintenanceMutationChange = "unchanged"
+)
+
+// maintenanceMutationTarget is the exact, ownership-proven input to the
+// shared lifecycle transaction. A target is never discovered again during
+// commit: preview and commit operate on this same closed set.
+type maintenanceMutationTarget struct {
+	Root           lifecycleTransactionRootKind
+	RelativeTarget string
+	Label          string
+	Source         string
+	Action         lifecycleTransactionAction
+	Content        []byte
+	Mode           os.FileMode
+	ExpectedDigest string
+	ExpectedMode   *os.FileMode
+	Managed        bool
+}
+
+type maintenanceMutationPlan struct {
+	SchemaVersion        string
+	Operation            string
+	TransactionID        string
+	SourceRoot           string
+	DestinationRoot      string
+	Channel              runtimeChannel
+	CurrentVersion       string
+	DesiredVersion       string
+	Checkpoint           string
+	Recovery             string
+	Allowlist            lifecycleTransactionAllowlist
+	Targets              []maintenanceMutationTarget
+	PreservedCodexSkills []string
+	Rename               func(oldPath, newPath string) error
+	Fault                lifecycleTransactionFaultHook
+}
+
+type maintenanceMutationTargetPreview struct {
+	Root           lifecycleTransactionRootKind `json:"root"`
+	RelativeTarget string                       `json:"target"`
+	Label          string                       `json:"label,omitempty"`
+	Source         string                       `json:"source"`
+	Change         maintenanceMutationChange    `json:"change"`
+	CurrentDigest  string                       `json:"current_digest"`
+	DesiredDigest  string                       `json:"desired_digest"`
+	CurrentMode    uint32                       `json:"current_mode,omitempty"`
+	DesiredMode    uint32                       `json:"desired_mode,omitempty"`
+	CommitOrder    int                          `json:"commit_order"`
+}
+
+type maintenanceMutationPreview struct {
+	SchemaVersion        string                             `json:"schema_version"`
+	Operation            string                             `json:"operation"`
+	TransactionID        string                             `json:"transaction_id"`
+	SourceRoot           string                             `json:"source_root"`
+	DestinationRoot      string                             `json:"destination_root"`
+	Channel              runtimeChannel                     `json:"channel,omitempty"`
+	CurrentVersion       string                             `json:"current_version,omitempty"`
+	DesiredVersion       string                             `json:"desired_version,omitempty"`
+	Checkpoint           string                             `json:"checkpoint"`
+	CommitOrder          []string                           `json:"commit_order"`
+	Targets              []maintenanceMutationTargetPreview `json:"targets"`
+	Recovery             string                             `json:"recovery"`
+	PreservedCodexSkills []string                           `json:"preserved_codex_skills,omitempty"`
+}
+
+type maintenanceMutationResult struct {
+	SchemaVersion string                             `json:"schema_version"`
+	Operation     string                             `json:"operation"`
+	Preview       maintenanceMutationPreview         `json:"preview"`
+	Targets       []maintenanceMutationTargetPreview `json:"targets"`
+	StateEffect   colony.LifecycleStateEffect        `json:"state_effect"`
+	Receipt       *colony.LifecycleReceipt           `json:"receipt,omitempty"`
+	Verification  []colony.LifecycleVerification     `json:"verification,omitempty"`
+	Recovery      string                             `json:"recovery"`
+}
+
+// prepareMaintenanceMutation is read-only. It resolves and validates each
+// exact target with the lifecycle coordinator, records before/after digests,
+// and assigns the order that commit will use without creating staging or a
+// journal.
+func prepareMaintenanceMutation(plan maintenanceMutationPlan) (maintenanceMutationPreview, error) {
+	preview := maintenanceMutationPreview{
+		SchemaVersion:        plan.SchemaVersion,
+		Operation:            strings.TrimSpace(plan.Operation),
+		TransactionID:        strings.TrimSpace(plan.TransactionID),
+		SourceRoot:           filepath.Clean(plan.SourceRoot),
+		DestinationRoot:      filepath.Clean(plan.DestinationRoot),
+		Channel:              plan.Channel,
+		CurrentVersion:       normalizeVersion(plan.CurrentVersion),
+		DesiredVersion:       normalizeVersion(plan.DesiredVersion),
+		Checkpoint:           strings.TrimSpace(plan.Checkpoint),
+		Recovery:             strings.TrimSpace(plan.Recovery),
+		PreservedCodexSkills: append([]string(nil), plan.PreservedCodexSkills...),
+	}
+	if preview.SchemaVersion != maintenanceMutationSchemaVersion {
+		return preview, fmt.Errorf("maintenance mutation: schema_version must be %s", maintenanceMutationSchemaVersion)
+	}
+	if preview.Operation == "" || preview.TransactionID == "" {
+		return preview, fmt.Errorf("maintenance mutation: operation and transaction id are required")
+	}
+	if preview.Checkpoint == "" || preview.Recovery == "" {
+		return preview, fmt.Errorf("maintenance mutation: checkpoint and recovery action are required")
+	}
+	for label, root := range map[string]string{"source": plan.SourceRoot, "destination": plan.DestinationRoot} {
+		if strings.TrimSpace(root) == "" || !filepath.IsAbs(root) || filepath.Clean(root) != root {
+			return preview, fmt.Errorf("maintenance mutation: %s root must be a canonical absolute path", label)
+		}
+		info, err := os.Lstat(root)
+		if err != nil {
+			return preview, fmt.Errorf("maintenance mutation: inspect %s root: %w", label, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return preview, fmt.Errorf("maintenance mutation: %s root must be a real directory", label)
+		}
+	}
+	if plan.Channel != "" && plan.Channel != channelStable && plan.Channel != channelDev {
+		return preview, fmt.Errorf("maintenance mutation: unsupported channel %q", plan.Channel)
+	}
+	if plan.Allowlist.Hub.Path != "" {
+		want := lifecycleTransactionHubStable
+		if plan.Channel == channelDev {
+			want = lifecycleTransactionHubDev
+		}
+		if plan.Allowlist.Hub.Channel != want {
+			return preview, fmt.Errorf("maintenance mutation: %s operation cannot use %s hub", plan.Channel, plan.Allowlist.Hub.Channel)
+		}
+	}
+	if plan.Channel == channelDev {
+		for _, target := range plan.Targets {
+			switch target.Root {
+			case lifecycleTransactionRootClaudeHome, lifecycleTransactionRootOpenCodeHome, lifecycleTransactionRootCodexHome:
+				return preview, fmt.Errorf("maintenance mutation: dev channel cannot write stable platform homes")
+			}
+		}
+	}
+
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: plan.TransactionID,
+		Command:       plan.Operation,
+		Allowlist:     plan.Allowlist,
+		Rename:        plan.Rename,
+		Fault:         plan.Fault,
+	})
+	if err != nil {
+		return preview, err
+	}
+	seen := make(map[string]bool, len(plan.Targets))
+	for index, target := range plan.Targets {
+		if !target.Managed {
+			return preview, fmt.Errorf("maintenance mutation: target %q has no managed ownership proof", target.RelativeTarget)
+		}
+		action := target.Action
+		if action == "" {
+			action = lifecycleTransactionWrite
+		}
+		if action != lifecycleTransactionWrite && action != lifecycleTransactionRemove {
+			return preview, fmt.Errorf("maintenance mutation: target %q has invalid action %q", target.RelativeTarget, action)
+		}
+		root, targetPath, clean, err := tx.resolveTarget(target.Root, target.RelativeTarget)
+		if err != nil {
+			return preview, err
+		}
+		if seen[targetPath] {
+			return preview, fmt.Errorf("maintenance mutation: duplicate target %q", targetPath)
+		}
+		seen[targetPath] = true
+		current, err := readLifecycleFileState(targetPath)
+		if err != nil {
+			return preview, fmt.Errorf("maintenance mutation: read target baseline: %w", err)
+		}
+		if isCodexSkillTarget(target) && (target.ExpectedDigest == "" || target.ExpectedMode == nil) {
+			return preview, fmt.Errorf("maintenance mutation: complete original baseline required for Codex skill target %q", targetPath)
+		}
+		if target.ExpectedMode != nil && current.Mode.Perm() != (*target.ExpectedMode).Perm() {
+			return preview, fmt.Errorf("maintenance mutation: baseline mode changed for %q", targetPath)
+		}
+		if target.ExpectedDigest != "" && current.Digest != target.ExpectedDigest {
+			return preview, fmt.Errorf("maintenance mutation: baseline changed for %q", targetPath)
+		}
+		desiredDigest := lifecycleTransactionMissingDigest
+		desiredMode := os.FileMode(0)
+		change := maintenanceMutationChangeRemove
+		if action == lifecycleTransactionWrite {
+			desiredDigest = lifecycleDigest(target.Content)
+			desiredMode = target.Mode.Perm()
+			if desiredMode == 0 {
+				desiredMode = current.Mode.Perm()
+			}
+			if desiredMode == 0 {
+				desiredMode = 0o644
+			}
+			change = maintenanceMutationChangeWrite
+		}
+		if current.Digest == desiredDigest && (action == lifecycleTransactionRemove || current.Mode.Perm() == desiredMode) {
+			change = maintenanceMutationChangeUnchanged
+		}
+		entry := maintenanceMutationTargetPreview{
+			Root: root.Kind, RelativeTarget: clean, Label: strings.TrimSpace(target.Label), Source: strings.TrimSpace(target.Source),
+			Change: change, CurrentDigest: current.Digest, DesiredDigest: desiredDigest,
+			CurrentMode: uint32(current.Mode.Perm()), DesiredMode: uint32(desiredMode.Perm()), CommitOrder: index + 1,
+		}
+		preview.Targets = append(preview.Targets, entry)
+		preview.CommitOrder = append(preview.CommitOrder, fmt.Sprintf("%d:%s:%s", index+1, root.Kind, filepath.ToSlash(clean)))
+	}
+	return preview, nil
+}
+
+func commitMaintenanceMutation(plan maintenanceMutationPlan) (result maintenanceMutationResult, retErr error) {
+	result = maintenanceMutationResult{
+		SchemaVersion: maintenanceMutationSchemaVersion,
+		Operation:     strings.TrimSpace(plan.Operation),
+		StateEffect:   colony.LifecycleStateEffectNone,
+		Recovery:      strings.TrimSpace(plan.Recovery),
+	}
+	unlock, err := maintenanceCodexSkillLocker(plan)
+	if err != nil {
+		return result, err
+	}
+	defer func() { retErr = errors.Join(retErr, unlock()) }()
+	// This observation can validate the frozen ownership baseline, never replace it.
+	preview, err := prepareMaintenanceMutation(plan)
+	result.Preview = preview
+	result.Targets = append([]maintenanceMutationTargetPreview(nil), preview.Targets...)
+	if err != nil {
+		return result, err
+	}
+
+	tx, err := beginLifecycleTransaction(lifecycleTransactionConfig{
+		TransactionID: plan.TransactionID,
+		Command:       plan.Operation,
+		Allowlist:     plan.Allowlist,
+		Rename:        plan.Rename,
+		Fault:         plan.Fault,
+	})
+	if err != nil {
+		return result, err
+	}
+	declared := 0
+	for index, target := range plan.Targets {
+		if preview.Targets[index].Change == maintenanceMutationChangeUnchanged {
+			continue
+		}
+		action := target.Action
+		if action == "" {
+			action = lifecycleTransactionWrite
+		}
+		if action == lifecycleTransactionRemove {
+			err = tx.DeclareRemoval(target.Root, target.RelativeTarget)
+		} else {
+			err = tx.DeclareWriteWithMode(target.Root, target.RelativeTarget, target.Content, target.Mode)
+		}
+		if err != nil {
+			return result, err
+		}
+		declaration := tx.declarations[len(tx.declarations)-1]
+		if target.ExpectedDigest != "" && (declaration.BeforeDigest != target.ExpectedDigest || declaration.BeforeExists != (target.ExpectedDigest != lifecycleTransactionMissingDigest)) {
+			return result, fmt.Errorf("maintenance mutation: original baseline changed for %q", declaration.TargetPath)
+		}
+		if target.ExpectedMode != nil && declaration.BeforeMode.Perm() != (*target.ExpectedMode).Perm() {
+			return result, fmt.Errorf("maintenance mutation: original baseline mode changed for %q", declaration.TargetPath)
+		}
+		if declaration.BeforeDigest != preview.Targets[index].CurrentDigest {
+			return result, fmt.Errorf("maintenance mutation: baseline changed for %q", declaration.TargetPath)
+		}
+		if uint32(declaration.BeforeMode.Perm()) != preview.Targets[index].CurrentMode {
+			return result, fmt.Errorf("maintenance mutation: baseline mode changed for %q", declaration.TargetPath)
+		}
+		declared++
+	}
+	// Include unchanged targets in the final pre-journal check as well. They do
+	// not get transaction declarations, but their ownership evidence still matters.
+	if _, err := prepareMaintenanceMutation(plan); err != nil {
+		return result, err
+	}
+	if declared == 0 {
+		if receipt, ok, loadErr := tx.loadCommittedReceipt(); ok || loadErr != nil {
+			if loadErr != nil {
+				return result, loadErr
+			}
+			result.StateEffect = receipt.StateEffect
+			result.Receipt = &receipt
+			result.Verification = append([]colony.LifecycleVerification(nil), receipt.Verification...)
+			return result, nil
+		}
+		return result, nil
+	}
+	receipt, commitErr := tx.Commit()
+	if commitErr == nil {
+		result.StateEffect = receipt.StateEffect
+		result.Receipt = &receipt
+		result.Verification = append([]colony.LifecycleVerification(nil), receipt.Verification...)
+		return result, nil
+	}
+	if tx.progress != nil && tx.intent != nil {
+		switch tx.progress.StateEffect {
+		case colony.LifecycleStateEffectRolledBack:
+			rollbackReceipt := tx.rolledBackResult()
+			result.StateEffect = rollbackReceipt.StateEffect
+			result.Receipt = &rollbackReceipt
+			result.Verification = append([]colony.LifecycleVerification(nil), rollbackReceipt.Verification...)
+		case colony.LifecycleStateEffectRecoveryRequired:
+			recoveryReceipt, _ := tx.recoveryResult(commitErr, lifecycleRecoveryProvenance(commitErr))
+			result.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+			result.Receipt = &recoveryReceipt
+			result.Recovery = recoveryReceipt.Recovery.SafeNextStep
+		default:
+			// A fault can arrive after replacement but before the coordinator
+			// records its final effect. In a live process we can still restore
+			// every staged pre-image; never report "none" or "committed"
+			// without a durable receipt while bytes may have changed.
+			if rollbackErr := tx.rollbackPreparedTargets(); rollbackErr == nil {
+				rollbackReceipt := tx.rolledBackResult()
+				result.StateEffect = rollbackReceipt.StateEffect
+				result.Receipt = &rollbackReceipt
+				result.Verification = append([]colony.LifecycleVerification(nil), rollbackReceipt.Verification...)
+				result.Recovery = rollbackReceipt.Recovery.SafeNextStep
+			} else {
+				cause := fmt.Errorf("maintenance commit failed (%v) and rollback failed: %w", commitErr, rollbackErr)
+				recoveryReceipt, recoveryErr := tx.recoveryResult(cause, lifecycleRecoveryProvenance(rollbackErr))
+				result.StateEffect = colony.LifecycleStateEffectRecoveryRequired
+				result.Receipt = &recoveryReceipt
+				result.Recovery = recoveryReceipt.Recovery.SafeNextStep
+				commitErr = recoveryErr
+			}
+		}
+	}
+	return result, commitErr
+}
+
+type maintenanceSyncSpec struct {
+	Root                lifecycleTransactionRootKind
+	Label               string
+	SourceDir           string
+	DestinationBase     string
+	Options             syncOptions
+	PruneRetiredAliases bool
+	CleanupOwned        func(relativePath string, content []byte) bool
+}
+
+// appendMaintenanceSyncTargets converts an existing sync contract into a
+// read-only exact manifest. Cleanup is intentionally conservative: only a
+// generated Aether ownership header can authorize removal of a stale command.
+func appendMaintenanceSyncTargets(plan *maintenanceMutationPlan, spec maintenanceSyncSpec) error {
+	if plan == nil {
+		return fmt.Errorf("maintenance sync: plan is required")
+	}
+	info, err := os.Lstat(spec.SourceDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("maintenance sync: inspect source: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("maintenance sync: source must be a real directory")
+	}
+	roots, err := resolveLifecycleTransactionRoots(plan.Allowlist)
+	if err != nil {
+		return err
+	}
+	root, ok := roots[spec.Root]
+	if !ok {
+		return fmt.Errorf("maintenance sync: destination root %s is not configured", spec.Root)
+	}
+	base := filepath.Clean(spec.DestinationBase)
+	if base == "" {
+		base = "."
+	}
+	if filepath.IsAbs(base) || base == ".." || strings.HasPrefix(base, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("maintenance sync: destination base escapes root")
+	}
+	sourceFiles, err := listMaintenanceRegularFiles(spec.SourceDir)
+	if err != nil {
+		return err
+	}
+	sourceRawCount := len(sourceFiles)
+	if spec.Options.include != nil {
+		sourceFiles = filterSyncFiles(sourceFiles, spec.Options.include)
+	}
+	sourceFiles, _ = filterIgnoredSyncFiles(sourceFiles)
+	destinationSet := make(map[string]bool, len(sourceFiles))
+	added := make(map[string]bool)
+	for _, sourceRel := range sourceFiles {
+		destRel := mapSyncDestRelPath(sourceRel, spec.Options.mapRelPath)
+		if destRel == "" || syncPathProtected(destRel, spec.Options.protectedDirs, spec.Options.protectedFiles) {
+			continue
+		}
+		targetRel := filepath.Clean(filepath.Join(base, destRel))
+		destinationSet[filepath.ToSlash(destRel)] = true
+		sourcePath := filepath.Join(spec.SourceDir, sourceRel)
+		content, err := os.ReadFile(sourcePath)
+		if err != nil {
+			return fmt.Errorf("maintenance sync: read %s: %w", sourcePath, err)
+		}
+		if spec.Options.validate != nil {
+			if err := spec.Options.validate(sourcePath, sourceRel, content); err != nil {
+				return err
+			}
+		}
+		destinationPath := filepath.Join(root.Path, targetRel)
+		if existing, readErr := os.ReadFile(destinationPath); readErr == nil {
+			if spec.Options.merge != nil {
+				content, err = spec.Options.merge(content, existing)
+				if err != nil {
+					return fmt.Errorf("maintenance sync: merge %s: %w", destinationPath, err)
+				}
+			} else if spec.Options.preserveLocalChanges && !bytes.Equal(content, existing) {
+				content = existing
+			}
+		} else if !os.IsNotExist(readErr) {
+			return fmt.Errorf("maintenance sync: read destination %s: %w", destinationPath, readErr)
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+			Root: spec.Root, RelativeTarget: targetRel, Label: spec.Label, Source: sourcePath,
+			Action: lifecycleTransactionWrite, Content: content, Managed: true,
+		})
+		added[filepath.ToSlash(targetRel)] = true
+	}
+
+	if !spec.Options.cleanup && !spec.PruneRetiredAliases {
+		return nil
+	}
+	destinationDir := filepath.Join(root.Path, base)
+	destFiles, err := listMaintenanceRegularFilesIfPresent(destinationDir)
+	if err != nil {
+		return err
+	}
+	cleanupFilter := spec.Options.cleanupInclude
+	if cleanupFilter == nil {
+		cleanupFilter = spec.Options.include
+	}
+	for _, destRel := range destFiles {
+		if destinationSet[filepath.ToSlash(destRel)] || syncPathProtected(destRel, spec.Options.protectedDirs, spec.Options.protectedFiles) {
+			continue
+		}
+		retired := spec.PruneRetiredAliases && isRetiredLifecycleWrapperPath(destRel)
+		if !retired && (!spec.Options.cleanup || (cleanupFilter != nil && !cleanupFilter(destRel))) {
+			continue
+		}
+		targetPath := filepath.Join(destinationDir, destRel)
+		content, err := os.ReadFile(targetPath)
+		if err != nil {
+			return fmt.Errorf("maintenance sync: read cleanup target %s: %w", targetPath, err)
+		}
+		owned := isGeneratedAetherCommandWrapper(content)
+		if !owned && spec.CleanupOwned != nil {
+			owned = spec.CleanupOwned(destRel, content)
+		}
+		if !owned {
+			continue
+		}
+		targetRel := filepath.Clean(filepath.Join(base, destRel))
+		if added[filepath.ToSlash(targetRel)] {
+			continue
+		}
+		// A source directory with zero files never authorizes pruning: a real
+		// hub always ships commands, so an empty source is a mid-publish or
+		// corrupted hub (2026-09-12: this deleted all user-level ant-*.md
+		// commands). Retiring individual wrappers still works — that shape is
+		// a populated source missing some names, not an empty one.
+		if sourceRawCount == 0 {
+			return fmt.Errorf("maintenance sync %s: source %s has no files while destination %s holds managed files — refusing to prune (hub may be mid-publish or incomplete; run aether publish, then retry)", spec.Label, spec.SourceDir, destinationDir)
+		}
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{
+			Root: spec.Root, RelativeTarget: targetRel, Label: spec.Label, Source: "managed generated wrapper ownership header",
+			Action: lifecycleTransactionRemove, Managed: true,
+		})
+		added[filepath.ToSlash(targetRel)] = true
+	}
+	return nil
+}
+
+func listMaintenanceRegularFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("maintenance sync: symbolic link is not an owned file: %s", path)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("maintenance sync: non-regular source file: %s", path)
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+// listMaintenanceRegularFilesIfPresent lists cleanup candidates in a
+// DESTINATION tree — user territory, where symlinks and other non-regular
+// entries (node_modules/.bin, sockets) are normal and can never be owned
+// managed files. They are skipped, never an error; only the hub SOURCE
+// listing (listMaintenanceRegularFiles) stays strict.
+func listMaintenanceRegularFilesIfPresent(root string) ([]string, error) {
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
+}
 
 type installSyncPair struct {
 	srcRel               string
@@ -57,11 +626,11 @@ type codexAgentDefinition struct {
 
 func installSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{srcRel: ".claude/commands/ant", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedNonRetiredFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{srcRel: ".claude/agents/ant", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
-		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: false},
+		{srcRel: ".opencode/commands/ant", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
+		{srcRel: ".opencode/commands/ant", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: isNonRetiredCommandPath, cleanupLegacyClaude: true},
 		{srcRel: ".opencode/agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: ".codex/agents", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -69,11 +638,11 @@ func installSyncPairs() []installSyncPair {
 
 func platformHomeHubSyncPairs() []installSyncPair {
 	return []installSyncPair{
-		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedFlatClaudeCommandPath, cleanupLegacyClaude: true},
+		{srcRel: "commands/claude", destRel: ".claude/commands", label: "Commands (claude)", cleanup: true, mapRelPath: claudeCommandDestRelPath, cleanupInclude: isManagedNonRetiredFlatClaudeCommandPath, cleanupLegacyClaude: true},
 		{srcRel: "agents-claude", destRel: ".claude/agents/ant", label: "Agents (claude)", cleanup: true},
-		{srcRel: "commands/opencode", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: false},
+		{srcRel: "commands/opencode", destRel: ".opencode/command", label: "Commands (opencode home)", cleanup: true, cleanupInclude: neverSyncPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".opencode/agent", label: "Agents (opencode home)", cleanup: false, validate: validateOpenCodeAgentFile},
-		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true},
+		{srcRel: "commands/opencode", destRel: ".config/opencode/commands/ant", label: "Commands (opencode)", cleanup: true, cleanupInclude: isNonRetiredCommandPath, cleanupLegacyClaude: true},
 		{srcRel: "agents", destRel: ".config/opencode/agents", label: "Agents (opencode)", cleanup: false, validate: validateOpenCodeAgentFile},
 		{srcRel: "codex", destRel: ".codex/agents", label: "Agents (codex)", cleanup: false, preserveLocalChanges: true, validate: validateCodexAgentFile, include: isShippedAetherCodexAgent},
 	}
@@ -105,70 +674,17 @@ type codexSkillShim struct {
 }
 
 func codexSkillShims() []codexSkillShim {
-	shims := []codexSkillShim{
-		{
-			Dir:         "aether-command-guide",
-			Name:        "aether-command-guide",
-			Description: "Use for Aether lifecycle commands; ask the runtime for current orchestration guidance before acting.",
-			Body:        "Run `aether command-guide <command> --platform codex` before intelligent Aether flows. Follow the guide over stale local notes. For raw user commands, run the literal command.",
-		},
-		{
-			Dir:         "aether-skill-loader",
-			Name:        "aether-skill-loader",
-			Description: "Explains where Aether worker skill content comes from -- no on-demand loader command exists.",
-			Body:        "Skill content is already included automatically in the worker brief text returned by `aether build`, `aether colonize`, `aether plan`, and `aether continue` -- it is assembled in-process from the matched shipped and custom Aether skills. There is no separate command to fetch it on demand (skill-inject, the CLI command this shim used to call, was deleted in Phase 191 as dead CLI surface -- its underlying matching logic is what dispatches use automatically). Do not preload full skill mirrors.",
-		},
-		{
-			Dir:         "aether-colony-creation",
-			Name:        "aether-colony-creation",
-			Description: "Use when initializing an Aether colony in Codex; refine intent before calling the runtime.",
-			Body:        "For `aether init` or setup requests, use `aether command-guide init --platform codex`, ask compact clarifying questions when needed, ask the user to choose Colony Mode or Orchestrator Mode, synthesize a precise charter, then run the runtime with `--colony-mode <selected>` so it creates state.",
-		},
-		{
-			Dir:         "aether-colony-research",
-			Name:        "aether-colony-research",
-			Description: "Use when running Oracle or discuss flows in Codex; scope research before persistence begins.",
-			Body:        "For `aether oracle` or `aether discuss`, use `aether command-guide <oracle|discuss> --platform codex`, clarify output shape, scope, depth, and confidence, then run the runtime flow.",
-		},
-		{
-			Dir:              "aether-colony-build-cycle",
-			Name:             "aether-colony-build-cycle",
-			Description:      "Use when Codex is asked to colonize, plan, build, continue, swarm, or seal an Aether colony and must mirror wrapper orchestration safely.",
-			Body:             "For `aether colonize`, `aether plan`, `aether build`, `aether continue`, `aether swarm`, or `aether seal`, run `aether command-guide <command> --platform codex`, use runtime JSON manifests and finalizers, pass worker briefs verbatim, honor loop guards, and never hand-edit `.aether/data`.",
-			WorkflowTriggers: []string{"colonize", "plan", "build", "continue", "swarm", "seal"},
-			TaskKeywords:     []string{"aether colonize", "aether plan", "aether build", "aether continue", "aether swarm", "aether seal", "dispatch manifest", "plan-only", "finalize"},
-		},
-	}
-	return append(shims, codexCommandSkillShims()...)
+	return codexCommandSkillShims()
 }
 
 func codexCommandSkillShims() []codexSkillShim {
-	commands := []string{"init", "discuss", "oracle", "colonize", "plan", "build", "continue", "swarm", "seal"}
-	catalog := commandGuideCatalog()
+	commands, catalog := codexPublicSkillCommands(), commandGuideCatalog()
+	if validateCodexSkillInventory(commands, catalog) != nil {
+		return nil // Production installation uses the error-returning payload builder.
+	}
 	shims := make([]codexSkillShim, 0, len(commands))
 	for _, command := range commands {
-		def, ok := catalog[command]
-		if !ok || def.Literal {
-			continue
-		}
-		keywords := []string{
-			"aether " + command,
-			"/ant-" + command,
-			"ant-" + command,
-			"command-guide " + command,
-			"aether command-guide " + command,
-		}
-		if def.SkillReference != "" {
-			keywords = append(keywords, def.SkillReference)
-		}
-		shims = append(shims, codexSkillShim{
-			Dir:              "aether-" + command,
-			Name:             "aether-" + command,
-			Description:      fmt.Sprintf("Use when Codex is asked to run `aether %s` or the equivalent Aether lifecycle action.", command),
-			Body:             renderCodexCommandSkillShimBody(command, def),
-			WorkflowTriggers: []string{command},
-			TaskKeywords:     keywords,
-		})
+		shims = append(shims, codexPublicSkillShim(command, catalog[command]))
 	}
 	return shims
 }
@@ -178,12 +694,13 @@ func renderCodexCommandSkillShimBody(command string, def commandGuideDefinition)
 	fmt.Fprintf(&b, "This is the Codex command-shaped skill for `aether %s`. Use it instead of relying on free-form natural language for this lifecycle action.\n\n", command)
 	fmt.Fprintf(&b, "1. Run `aether command-guide %s --platform codex` first and treat that runtime guide as authoritative.\n", command)
 	if def.SkillReference != "" {
-		fmt.Fprintf(&b, "2. Load or follow `%s`; this command-specific skill is the entrypoint, not a replacement for the shared lifecycle skill.\n", def.SkillReference)
+		fmt.Fprintf(&b, "2. Read `../support/%s.md`, resolved relative to this installed SKILL.md (not the working directory). References to `%s` in runtime guidance mean this private support document.\n", def.SkillReference, def.SkillReference)
 	} else {
 		b.WriteString("2. Follow the runtime guide directly.\n")
 	}
 	b.WriteString("3. Preserve runtime ownership of state: wrappers and skills may interview, synthesize, spawn workers, and summarize, but must not hand-edit `.aether/data`.\n")
 	b.WriteString("4. Honor raw/exact/no-orchestration requests by using the raw bypass below.\n\n")
+	b.WriteString("Worker skill content is included automatically in runtime worker briefs. There is no separate skill-loader command; do not preload full skill mirrors. Follow command-guide over stale local notes.\n\n")
 
 	if def.Intent != "" {
 		fmt.Fprintf(&b, "## Intent\n%s\n\n", def.Intent)
@@ -211,59 +728,25 @@ func writeCodexCommandSkillList(b *strings.Builder, heading string, values []str
 	b.WriteString("\n")
 }
 
+// Compatibility for internal callers: all writes use the same payload planner
+// and transaction. This entrypoint never directly writes or prunes skills.
 func syncCodexSkillShims(destDir string) syncResult {
-	result := syncResult{}
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", destDir, err))
-		return result
+	home := filepath.Dir(filepath.Dir(filepath.Dir(destDir)))
+	if filepath.Clean(destDir) != filepath.Join(home, ".codex", "skills", "aether") {
+		return syncResult{errors: []string{"codex skills: destination must be <home>/.codex/skills/aether"}}
 	}
-
-	allowed := map[string]bool{}
-	for _, shim := range codexSkillShims() {
-		allowed[filepath.ToSlash(shim.Dir)] = true
+	packageDir, cleanup, err := resolveInstallPackageDir("")
+	if err != nil {
+		return syncResult{errors: []string{err.Error()}}
 	}
-
-	for _, dir := range findSkillDirs(destDir) {
-		rel, err := filepath.Rel(destDir, dir)
-		if err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("rel %s: %v", dir, err))
-			continue
-		}
-		rel = filepath.ToSlash(rel)
-		if allowed[rel] {
-			continue
-		}
-		if skillDirDeclaresSource(dir, "custom") {
-			result.skipped++
-			continue
-		}
-		if err := os.RemoveAll(dir); err != nil && !os.IsNotExist(err) {
-			result.errors = append(result.errors, fmt.Sprintf("remove %s: %v", dir, err))
-			continue
-		}
-		result.removed = append(result.removed, rel)
+	if cleanup != nil {
+		defer cleanup()
 	}
-
-	for _, shim := range codexSkillShims() {
-		skillPath := filepath.Join(destDir, filepath.FromSlash(shim.Dir), "SKILL.md")
-		content := renderCodexSkillShim(shim)
-		if current, err := os.ReadFile(skillPath); err == nil && string(current) == content {
-			result.skipped++
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(skillPath), 0755); err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("mkdir %s: %v", filepath.Dir(skillPath), err))
-			continue
-		}
-		if err := os.WriteFile(skillPath, []byte(content), 0644); err != nil {
-			result.errors = append(result.errors, fmt.Sprintf("write %s: %v", skillPath, err))
-			continue
-		}
-		result.copied++
+	payload, err := buildCodexSkillPayload(packageDir)
+	if err != nil {
+		return syncResult{errors: []string{err.Error()}}
 	}
-
-	cleanEmptyDirs(destDir)
-	return result
+	return syncCodexSkillsFromPayload(payload, home)
 }
 
 func renderCodexSkillShim(shim codexSkillShim) string {
@@ -383,6 +866,24 @@ func isManagedFlatClaudeCommandPath(relPath string) bool {
 	return strings.HasPrefix(base, "ant-") && filepath.Ext(base) == ".md"
 }
 
+func isManagedNonRetiredFlatClaudeCommandPath(relPath string) bool {
+	return isManagedFlatClaudeCommandPath(relPath) && isNonRetiredCommandPath(relPath)
+}
+
+func isNonRetiredCommandPath(relPath string) bool {
+	return !isRetiredLifecycleWrapperPath(relPath)
+}
+
+func isRetiredLifecycleWrapperPath(path string) bool {
+	base := filepath.Base(filepath.Clean(path))
+	if filepath.Ext(base) != ".md" {
+		return false
+	}
+	name := strings.TrimSuffix(base, ".md")
+	name = strings.TrimPrefix(name, "ant-")
+	return name == "pause-colony" || name == "resume-colony"
+}
+
 // isGeneratedAetherCommandWrapper marks a file as Aether-managed for
 // update/prune. It accepts both the current header and the legacy
 // "Generated from" form so downstream repos installed before the header
@@ -398,17 +899,38 @@ func isGeneratedAetherCommandWrapper(data []byte) bool {
 }
 
 func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string) {
+	var removed []string
+	var errs []string
+
+	// Platform command homes can contain user-authored files beside Aether's
+	// generated wrappers. Generic filename cleanup cannot distinguish those
+	// owners, so only the managed header may authorize a stale-wrapper removal.
+	if homeDir, ok := platformHomeFromCommandDir(commandsDir); ok {
+		for _, commandDir := range platformCommandHomeDirs(homeDir) {
+			pruned := pruneRetiredGeneratedCommandFiles(commandDir)
+			for _, rel := range pruned.removed {
+				removed = append(removed, filepath.ToSlash(filepath.Join(commandDir, rel)))
+			}
+			errs = append(errs, pruned.errors...)
+		}
+	}
+
+	// Only Claude's old nested namespace is retired wholesale. The same
+	// function is also invoked after OpenCode sync so parser-only files copied
+	// later in the pair order are pruned before the operation completes.
+	if !strings.HasSuffix(filepath.ToSlash(filepath.Clean(commandsDir)), "/.claude/commands") {
+		return removed, errs
+	}
 	legacyDir := filepath.Join(commandsDir, "ant")
 	entries, err := os.ReadDir(legacyDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return removed, errs
 		}
-		return nil, []string{fmt.Sprintf("read legacy Claude commands %s: %v", legacyDir, err)}
+		errs = append(errs, fmt.Sprintf("read legacy Claude commands %s: %v", legacyDir, err))
+		return removed, errs
 	}
 
-	var removed []string
-	var errs []string
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
 			continue
@@ -441,6 +963,32 @@ func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string)
 	return removed, errs
 }
 
+func platformHomeFromCommandDir(commandsDir string) (string, bool) {
+	clean := filepath.ToSlash(filepath.Clean(commandsDir))
+	for _, suffix := range []string{
+		".claude/commands",
+		".opencode/command",
+		".config/opencode/commands/ant",
+	} {
+		needle := "/" + suffix
+		if strings.HasSuffix(clean, needle) {
+			home := strings.TrimSuffix(clean, needle)
+			if home != "" {
+				return filepath.FromSlash(home), true
+			}
+		}
+	}
+	return "", false
+}
+
+func platformCommandHomeDirs(homeDir string) []string {
+	return []string{
+		filepath.Join(homeDir, ".claude", "commands"),
+		filepath.Join(homeDir, ".opencode", "command"),
+		filepath.Join(homeDir, ".config", "opencode", "commands", "ant"),
+	}
+}
+
 func appendSyncResult(details *[]map[string]interface{}, totals *updateSyncResult, label string, result syncResult) {
 	entry := map[string]interface{}{
 		"label":   label,
@@ -455,6 +1003,127 @@ func appendSyncResult(details *[]map[string]interface{}, totals *updateSyncResul
 	*details = append(*details, entry)
 	totals.copied += result.copied
 	totals.skipped += result.skipped
+}
+
+// declaredAliasSurfaceStatus names one platform-home destination where a
+// declared alias command's wrapper must exist for that alias to actually
+// work from that surface.
+type declaredAliasSurfaceStatus struct {
+	Alias string
+	Label string
+	Path  string
+}
+
+// aliasWrapperHomeSurfaces returns each platform-home destination path a
+// command's wrapper is synced to, paired with a plain-English label for the
+// surface. These mirror platformHomeHubSyncPairs's actual destinations.
+func aliasWrapperHomeSurfaces(homeDir, name string) []declaredAliasSurfaceStatus {
+	return []declaredAliasSurfaceStatus{
+		{Alias: name, Label: "Claude", Path: filepath.Join(homeDir, ".claude", "commands", "ant-"+name+".md")},
+		{Alias: name, Label: "OpenCode", Path: filepath.Join(homeDir, ".opencode", "command", name+".md")},
+		{Alias: name, Label: "OpenCode (project config)", Path: filepath.Join(homeDir, ".config", "opencode", "commands", "ant", name+".md")},
+	}
+}
+
+// declaredAliasSurfaces reads the alias declarations directly off the live
+// Cobra command tree -- the same field cobra.Command.Find uses to route
+// `aether pause-colony` to the `pause` handler -- rather than maintaining a
+// second, feature-specific list of alias names in Go. A future command that
+// declares an alias is picked up here automatically.
+func declaredAliasSurfaces(homeDir string) []declaredAliasSurfaceStatus {
+	var out []declaredAliasSurfaceStatus
+	seen := map[string]bool{}
+	for _, sub := range rootCmd.Commands() {
+		for _, alias := range sub.Aliases {
+			alias = strings.TrimSpace(alias)
+			if alias == "" || seen[alias] || !wrapperCommandNames[alias] {
+				continue
+			}
+			seen[alias] = true
+			out = append(out, aliasWrapperHomeSurfaces(homeDir, alias)...)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Alias != out[j].Alias {
+			return out[i].Alias < out[j].Alias
+		}
+		return out[i].Label < out[j].Label
+	})
+	return out
+}
+
+// missingDeclaredAliasSurfaces reports which declared-alias platform
+// surfaces are absent from homeDir right now.
+func missingDeclaredAliasSurfaces(homeDir string) []declaredAliasSurfaceStatus {
+	var missing []declaredAliasSurfaceStatus
+	for _, surface := range declaredAliasSurfaces(homeDir) {
+		if _, err := os.Stat(surface.Path); err != nil {
+			missing = append(missing, surface)
+		}
+	}
+	return missing
+}
+
+// aliasWrapperRepair names one alias command and every platform surface it
+// was missing from before an update repaired it.
+type aliasWrapperRepair struct {
+	Alias  string   `json:"alias"`
+	Labels []string `json:"surfaces"`
+}
+
+// aliasWrapperRepairReport is the plain-words account of which declared
+// alias wrappers an update run restored -- distinct from the ordinary
+// copied/unchanged file counts, and distinct from the stale-publish signal:
+// this is "a command came back", not "republish the hub".
+type aliasWrapperRepairReport struct {
+	Repairs []aliasWrapperRepair
+}
+
+func (r aliasWrapperRepairReport) Empty() bool {
+	return len(r.Repairs) == 0
+}
+
+// Message renders the repair report in plain English, naming each restored
+// command and the surface(s) it was missing from. Empty when nothing was
+// repaired -- an update that reports a repair on every run is noise, and
+// noise is how a real repair gets ignored.
+func (r aliasWrapperRepairReport) Message() string {
+	if r.Empty() {
+		return ""
+	}
+	parts := make([]string, 0, len(r.Repairs))
+	for _, repair := range r.Repairs {
+		parts = append(parts, fmt.Sprintf("`%s` (missing from %s)", repair.Alias, strings.Join(repair.Labels, ", ")))
+	}
+	plural := ""
+	if len(r.Repairs) != 1 {
+		plural = "s"
+	}
+	return fmt.Sprintf("Restored missing command%s: %s.", plural, strings.Join(parts, "; "))
+}
+
+// diffAliasRepairs compares the alias surfaces that were missing before a
+// sync ran against what exists now, and reports only the ones the sync
+// actually restored. A surface that was missing before and is still missing
+// after (e.g. because the platform-home sync was skipped, or the hub itself
+// never shipped that wrapper) is not a repair -- silence, not a false claim.
+func diffAliasRepairs(missingBefore []declaredAliasSurfaceStatus) aliasWrapperRepairReport {
+	var report aliasWrapperRepairReport
+	byAlias := map[string][]string{}
+	var order []string
+	for _, surface := range missingBefore {
+		if _, err := os.Stat(surface.Path); err != nil {
+			continue // still missing -- not a repair
+		}
+		if _, seen := byAlias[surface.Alias]; !seen {
+			order = append(order, surface.Alias)
+		}
+		byAlias[surface.Alias] = append(byAlias[surface.Alias], surface.Label)
+	}
+	for _, alias := range order {
+		report.Repairs = append(report.Repairs, aliasWrapperRepair{Alias: alias, Labels: byAlias[alias]})
+	}
+	return report
 }
 
 func pruneLegacyRepoPlatformAssets(repoDir string) syncResult {
@@ -516,6 +1185,18 @@ func pruneLegacyRepoPlatformAssets(repoDir string) syncResult {
 }
 
 func pruneGeneratedCommandFiles(dir string) syncResult {
+	return pruneGeneratedCommandFilesMatching(dir, func(string) bool { return true })
+}
+
+// pruneRetiredGeneratedCommandFiles removes only generated wrappers for the
+// two bounded parser-only lifecycle tokens. A freshly supplied command may not
+// exist in this binary's wrapper registry yet, so registry absence alone can
+// never authorize deletion.
+func pruneRetiredGeneratedCommandFiles(dir string) syncResult {
+	return pruneGeneratedCommandFilesMatching(dir, isRetiredLifecycleWrapperPath)
+}
+
+func pruneGeneratedCommandFilesMatching(dir string, shouldRemove func(path string) bool) syncResult {
 	result := syncResult{}
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -531,6 +1212,9 @@ func pruneGeneratedCommandFiles(dir string) syncResult {
 
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+			return nil
+		}
+		if shouldRemove != nil && !shouldRemove(path) {
 			return nil
 		}
 		data, readErr := os.ReadFile(path)

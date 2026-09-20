@@ -15,6 +15,7 @@ import (
 
 	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -91,24 +92,69 @@ func bareFileNameWithExtension(value string) bool {
 	return bareFileNamePattern.MatchString(value) && !strings.Contains(value, "/")
 }
 
+// worktreeOwnershipOwner is one execution owner's identity for the same-wave
+// ownership guard. A coherent job is ONE owner of the union of its tasks'
+// declared paths (JOBS-04) -- key is the dispatch's primary TaskID, which
+// stays the compatibility key, while label names the job and every task it
+// covers so a refusal is readable without opening the manifest.
+type worktreeOwnershipOwner struct {
+	key   string
+	label string
+}
+
+func worktreeOwnershipIdentity(dispatch codex.WorkerDispatch) worktreeOwnershipOwner {
+	covered := dispatch.CoveredTaskIDs
+	if len(covered) == 0 && strings.TrimSpace(dispatch.TaskID) != "" {
+		covered = []string{strings.TrimSpace(dispatch.TaskID)}
+	}
+	label := ""
+	if len(covered) > 1 {
+		label = fmt.Sprintf("tasks %s", strings.Join(covered, ", "))
+	} else if len(covered) == 1 {
+		label = fmt.Sprintf("task %s", covered[0])
+	} else {
+		label = fmt.Sprintf("worker %s", dispatch.WorkerName)
+	}
+	if job := strings.TrimSpace(dispatch.JobName); job != "" {
+		label = fmt.Sprintf("job %s (%s)", job, label)
+	}
+	// IN-03 (195-REVIEW.md): fall back to the worker's name when there is no
+	// task id. Keying on an empty string made two different workers compare
+	// equal, so a real collision between them over one file was not refused.
+	key := strings.TrimSpace(dispatch.TaskID)
+	if key == "" {
+		key = "worker:" + strings.TrimSpace(dispatch.WorkerName)
+	}
+	return worktreeOwnershipOwner{key: key, label: label}
+}
+
 // validateDeclaredWorktreeOwnership rejects a worktree-mode build before any
-// worker runs when two tasks in the same wave declare the same path. Parallel
-// claims on one path cannot reconcile, so the conflict is surfaced while it is
-// still cheap. Declared overlaps across waves are allowed: waves execute
-// sequentially and later worktrees inherit the earlier waves' synced output.
+// worker runs when two same-wave execution owners declare the same path.
+// Parallel claims on one path cannot reconcile, so the conflict is surfaced
+// while it is still cheap. Declared overlaps across waves are allowed: waves
+// execute sequentially and later worktrees inherit the earlier waves' synced
+// output.
+//
+// The unit of ownership is the DISPATCH, not the task. Grouping already ran
+// (cmd/coherent_jobs.go, plan 195-03) before this guard is reached, so tasks
+// that meaningfully share an implementation file arrive as one job owning the
+// union of their paths and can never conflict with themselves. What remains
+// refusable is exactly what should be: two genuinely distinct jobs in one wave
+// claiming the same file.
 func validateDeclaredWorktreeOwnership(dispatches []codex.WorkerDispatch) error {
-	declaredByWave := map[int]map[string]string{}
+	declaredByWave := map[int]map[string]worktreeOwnershipOwner{}
 	for _, dispatch := range dispatches {
+		owner := worktreeOwnershipIdentity(dispatch)
 		for _, path := range dispatch.DeclaredPaths {
 			owners := declaredByWave[dispatch.Wave]
 			if owners == nil {
-				owners = map[string]string{}
+				owners = map[string]worktreeOwnershipOwner{}
 				declaredByWave[dispatch.Wave] = owners
 			}
-			if previous, ok := owners[path]; ok && previous != dispatch.TaskID {
-				return fmt.Errorf("worktree declared ownership conflict: wave %d tasks %s and %s both declare %s; declare disjoint paths, move the tasks into different waves, or run with --parallel-mode in-repo", dispatch.Wave, previous, dispatch.TaskID, path)
+			if previous, ok := owners[path]; ok && previous.key != owner.key {
+				return fmt.Errorf("worktree declared ownership conflict: in wave %d, %s and %s both declare %s; declare disjoint paths, move the work into different waves, or run with --parallel-mode in-repo", dispatch.Wave, previous.label, owner.label, path)
 			}
-			owners[path] = dispatch.TaskID
+			owners[path] = owner
 		}
 	}
 	return nil
@@ -215,7 +261,7 @@ func collectRepoTouchedPaths(root string, baseline map[string]string, result cod
 }
 
 func dispatchCodexBuildWorkers(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
-	return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, dispatches, invoker, startedAt, parallelMode, cb)
+	return dispatchCodexBuildWorkersWithReconciliation(ctx, root, phase, dispatches, invoker, startedAt, parallelMode, cb, nil)
 }
 
 // worktreeWaveOutcome captures everything a worker goroutine produced. No
@@ -228,7 +274,46 @@ type worktreeWaveOutcome struct {
 	touched  []string
 }
 
-func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker) ([]codex.DispatchResult, error) {
+// worktreeReceiptLedger carries each dispatch's worktree-resolved receipt
+// outcome back to the caller that owns the codexBuildDispatch list. The
+// worktree lane runs the admission -> sync -> finalization sequence at the
+// only moment the worker's checkout still exists; the build lane needs the
+// resulting credit afterwards, when that checkout may already be gone.
+//
+// It is a per-build value passed in by the caller, never package state: two
+// concurrent builds must never see each other's credit.
+type worktreeReceiptLedger struct {
+	mu      sync.Mutex
+	entries map[string]coherentJobWorktreeReceipts
+}
+
+func newWorktreeReceiptLedger() *worktreeReceiptLedger {
+	return &worktreeReceiptLedger{entries: map[string]coherentJobWorktreeReceipts{}}
+}
+
+func (l *worktreeReceiptLedger) record(workerName string, resolved coherentJobWorktreeReceipts) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.entries == nil {
+		l.entries = map[string]coherentJobWorktreeReceipts{}
+	}
+	l.entries[workerName] = resolved
+}
+
+func (l *worktreeReceiptLedger) lookup(workerName string) (coherentJobWorktreeReceipts, bool) {
+	if l == nil {
+		return coherentJobWorktreeReceipts{}, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	resolved, ok := l.entries[workerName]
+	return resolved, ok
+}
+
+func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root string, phase colony.Phase, dispatches []codex.WorkerDispatch, invoker codex.WorkerInvoker, startedAt time.Time, parallelMode colony.ParallelMode, cb *CircuitBreaker, ledger *worktreeReceiptLedger) ([]codex.DispatchResult, error) {
 	if parallelMode != colony.ModeWorktree {
 		return dispatchCodexBuildWorkersInRepo(ctx, phase, dispatches, invoker, parallelMode, cb)
 	}
@@ -252,6 +337,8 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 		waveDispatches := waves[wave]
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
+		liveEpisodeID := currentLiveBuildEpisode()
+		emitColonyLiveWaveStarted(liveEpisodeID, events.EpisodeKindBuild, wave)
 		outcomes := make([]*worktreeWaveOutcome, len(waveDispatches))
 		cb.Reset() // Per D-06: per-wave reset
 		var wg sync.WaitGroup
@@ -325,6 +412,7 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 
 				emitBuildCeremonyWorkerStarting(dispatch, wave)
 				emitCodexBuildWorkerStarted(dispatch, wave)
+				emitColonyLiveWorkerStarted(liveEpisodeID, events.EpisodeKindBuild, dispatch)
 
 				cfg := codex.WorkerConfig{
 					AgentName:         dispatch.AgentName,
@@ -358,13 +446,26 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 					}
 				}
 
-				if dr.Status == "completed" && dr.WorkerResult != nil {
+				// Touched paths are collected for EVERY terminal result that
+				// produced one, not only a clean success. A worker that
+				// crashed after finishing four of six steps still changed
+				// real files in its checkout, and the receipt-scoped
+				// partition below cannot tell proven work from unproven work
+				// without knowing what it actually touched (D-08).
+				// applyObservedClaims stays gated on a clean success: it
+				// rewrites the worker's own claim fields, which must not be
+				// re-derived for a result that failed.
+				if dr.WorkerResult != nil {
 					touched, touchErr := collectWorktreeTouchedPaths(session.AbsPath, baseline, *dr.WorkerResult)
 					if touchErr != nil {
-						dr.Status = "failed"
-						dr.Error = touchErr
+						if dr.Status == "completed" {
+							dr.Status = "failed"
+							dr.Error = touchErr
+						}
 					} else {
-						applyObservedClaims(session.AbsPath, baseline, touched, dr.WorkerResult)
+						if dr.Status == "completed" {
+							applyObservedClaims(session.AbsPath, baseline, touched, dr.WorkerResult)
+						}
 						outcome.touched = touched
 					}
 				}
@@ -372,8 +473,9 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 			}(idx, dispatch)
 		}
 		wg.Wait()
-		waveResults := reconcileWorktreeWave(root, phase, wave, outcomes, cb)
+		waveResults := reconcileWorktreeWave(root, phase, wave, outcomes, cb, ledger)
 		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
+		emitColonyLiveWaveEnded(liveEpisodeID, events.EpisodeKindBuild, wave, "completed")
 		results = append(results, waveResults...)
 	}
 	return results, nil
@@ -386,8 +488,8 @@ func dispatchCodexBuildWorkersWithReconciliation(ctx context.Context, root strin
 // conflict-free workers are blocked rather than silently accepted, so the root
 // never carries a partial wave. Terminal results are journaled only after the
 // decision, so the attempt journal always matches the reconciled outcome.
-func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes []*worktreeWaveOutcome, cb *CircuitBreaker) []codex.DispatchResult {
-	conflicts, conflictWorkers := detectWorktreeWaveConflicts(outcomes)
+func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes []*worktreeWaveOutcome, cb *CircuitBreaker, ledger *worktreeReceiptLedger) []codex.DispatchResult {
+	conflicts, conflictWorkers := detectWorktreeWaveConflicts(root, outcomes)
 
 	accepted := map[int]bool{}
 	if len(conflicts) == 0 {
@@ -435,7 +537,30 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 				dr.Error = fmt.Errorf("wave reconciliation rejected the wave before this worker's output could sync: %s", rejectionReason)
 			}
 		case dr.Status != "completed" && session != nil:
+			// D-08/D-09/JOBS-04: a grouped worker that failed part-way may
+			// still have honestly finished some of the tasks it covered. Its
+			// proof lives only inside this checkout, so the shared receipt
+			// boundary runs here -- admission, then a sync limited to the
+			// admitted paths, then root-backed finalization -- while the
+			// checkout still exists. Everything it touched but never proved
+			// stays exactly where it is, and the checkout is preserved below
+			// rather than deleted, so unproven work is recoverable instead of
+			// either lost or falsely credited.
+			//
+			// CR-05 (195-REVIEW.md): this runs ONLY when the wave was
+			// actually reconcilable. When the wave was rejected for
+			// ownership conflicts, every completed worker is blocked and
+			// preserved so the project never carries a partial wave -- a
+			// failed worker's receipt-scoped copy-back must be held back for
+			// exactly the same reason, or it becomes the one write that gets
+			// through, unarbitrated, and can land on top of a file another
+			// worker in the same wave already synced.
 			preserveWorktree = true
+			if len(conflicts) > 0 {
+				emitVisualProgress(cancelledWorktreeWaveMessage199(outcome.dispatch.WorkerName, session.Branch))
+			} else {
+				resolveWorktreePartialReceipts(root, phase, outcome, ledger)
+			}
 		}
 
 		if session != nil {
@@ -476,6 +601,7 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 
 		emitBuildCeremonyWorkerFinished(outcome.dispatch, dr)
 		emitCodexBuildWorkerFinished(outcome.dispatch, dr)
+		emitColonyLiveWorkerFinished(currentLiveBuildEpisode(), events.EpisodeKindBuild, outcome.dispatch, dr)
 		outcome.result = dr
 	}
 
@@ -489,12 +615,68 @@ func reconcileWorktreeWave(root string, phase colony.Phase, wave int, outcomes [
 	return results
 }
 
-// detectWorktreeWaveConflicts finds every same-wave ownership violation among
-// completed workers: a path touched by a worker whose task did not declare it
-// when another same-wave task did, or a path produced by more than one worker
-// with no declared owner to arbitrate. Returns human-readable conflict
-// descriptions and the set of outcome indexes involved.
-func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
+// resolveWorktreePartialReceipts runs the shared admission -> sync ->
+// finalization sequence for one worker whose result did not reach a clean
+// success but whose checkout may still hold proof for some of the tasks it
+// covered. It records the outcome in the ledger; it never mutates the
+// dispatch result's own status, and it never removes the worker's checkout.
+func resolveWorktreePartialReceipts(root string, phase colony.Phase, outcome *worktreeWaveOutcome, ledger *worktreeReceiptLedger) {
+	if ledger == nil || outcome == nil || outcome.session == nil || outcome.result.WorkerResult == nil {
+		return
+	}
+	receipts := outcome.result.WorkerResult.TaskReceipts
+	if len(receipts) == 0 {
+		return
+	}
+	dispatch := codexBuildDispatch{
+		Name:           outcome.dispatch.WorkerName,
+		TaskID:         outcome.dispatch.TaskID,
+		CoveredTaskIDs: append([]string{}, outcome.dispatch.CoveredTaskIDs...),
+		JobName:        outcome.dispatch.JobName,
+		Status:         outcome.result.Status,
+	}
+	// The same aggregate-claim source the other two lanes use: the worker's
+	// OWN reported result. A receipt may never claim a path the worker's
+	// result never said it touched, whichever lane it arrived on.
+	aggregateClaims := buildDispatchClaimOutputs(*outcome.result.WorkerResult)
+	resolved := resolveCoherentJobWorktreeReceipts(
+		root, outcome.session.AbsPath, phase, dispatch, aggregateClaims, outcome.touched, receipts)
+	ledger.record(outcome.dispatch.WorkerName, resolved)
+
+	if len(resolved.UncreditedPaths) > 0 {
+		emitVisualProgress(uncreditedWorktreeReceiptMessage199(
+			outcome.dispatch.WorkerName, resolved.UncreditedPaths, outcome.session.Branch))
+	}
+	// WR-01 (195-REVIEW.md): this used to print only two of the twelve named
+	// refusal rules, so a receipt refused for being out of scope, for
+	// laundering a path, or for claiming a file the worker's own result never
+	// reported vanished with no owner-visible trace at all.
+	reportCoherentJobReceiptRefusals(outcome.dispatch.WorkerName, resolved.Violations)
+}
+
+func cancelledWorktreeWaveMessage199(workerName, branch string) string {
+	return fmt.Sprintf("%s finished part of its work, but this round was cancelled because two workers changed the same file — nothing was copied into the project. Its work is kept on branch %s. Inspect it with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.", workerName, branch)
+}
+
+func uncreditedWorktreeReceiptMessage199(workerName string, paths []string, branch string) string {
+	return fmt.Sprintf("%s changed %d file(s) it never proved finished (%s) — those changes were NOT copied into the project and are kept on branch %s. Inspect them with `aether maintenance recovery-inspect` (State effect: none). To restore runnable lifecycle state, run `aether resume`.", workerName, len(paths), strings.Join(paths, ", "), branch)
+}
+
+// detectWorktreeWaveConflicts finds every same-wave ownership violation: a
+// path written by a worker whose task did not declare it when another same-wave
+// task did, or a path produced by more than one worker with no declared owner
+// to arbitrate. Returns human-readable conflict descriptions and the set of
+// outcome indexes involved.
+//
+// "Written" means every path this wave could actually put into the root
+// checkout. For a worker that finished cleanly that is everything it touched.
+// For a worker that failed part-way it is the paths its own task receipts
+// claim that could plausibly be admitted -- see worktreeReceiptClaimedPaths
+// for exactly which of admission's rules are applied and which are not.
+// CR-05 (195-REVIEW.md): leaving them out made a failed worker's writes
+// invisible to the very check that exists to stop two workers overwriting each
+// other, so index order silently decided the winner.
+func detectWorktreeWaveConflicts(root string, outcomes []*worktreeWaveOutcome) ([]string, map[int]bool) {
 	declared := map[string]string{}
 	for _, outcome := range outcomes {
 		if outcome == nil {
@@ -509,10 +691,16 @@ func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map
 
 	touchedBy := map[string][]int{}
 	for i, outcome := range outcomes {
-		if outcome == nil || outcome.result.Status != "completed" || outcome.result.WorkerResult == nil || outcome.session == nil {
+		if outcome == nil || outcome.result.WorkerResult == nil || outcome.session == nil {
 			continue
 		}
-		for _, path := range outcome.touched {
+		if outcome.result.Status == "completed" {
+			for _, path := range outcome.touched {
+				touchedBy[path] = append(touchedBy[path], i)
+			}
+			continue
+		}
+		for _, path := range worktreeReceiptClaimedPaths(root, outcome) {
 			touchedBy[path] = append(touchedBy[path], i)
 		}
 	}
@@ -536,11 +724,77 @@ func detectWorktreeWaveConflicts(outcomes []*worktreeWaveOutcome) ([]string, map
 		}
 		idx := idxs[0]
 		if owner, ok := declared[path]; ok && owner != outcomes[idx].dispatch.TaskID {
-			conflicts = append(conflicts, fmt.Sprintf("%s touched by worker %s (task %s) but declared by task %s", path, outcomes[idx].dispatch.WorkerName, outcomes[idx].dispatch.TaskID, owner))
+			conflicts = append(conflicts, fmt.Sprintf("%s touched by worker %s (%s) but declared by task %s", path, outcomes[idx].dispatch.WorkerName, worktreeOwnershipIdentity(outcomes[idx].dispatch).label, owner))
 			conflictWorkers[idx] = true
 		}
 	}
 	return conflicts, conflictWorkers
+}
+
+// worktreeReceiptClaimedPaths returns the repository-relative paths a
+// non-completed worker's own task receipts claim AND that could plausibly be
+// admitted, normalized exactly the way admitCoherentJobTaskReceipts normalizes
+// them, so conflict detection compares like with like.
+//
+// Three of admission's own cheap, lexical rules are applied here, because a
+// path that fails any of them can never be copied into root and so can never
+// be part of a real collision: the receipt must cover a task this dispatch was
+// actually given, it must report a successful terminal status, and the path
+// must be one the worker's OWN result already reported touching.
+//
+// NEW-04 (195-REVIEW.iter2.md): without those filters a failed worker naming
+// a file it never went near -- an ordinary AI output error -- collided with
+// the file's declared owner and cancelled the entire round, blocking every
+// worker in it. The remaining set is still a deliberate superset of what
+// admission will finally accept (the per-task declared-file binding and the
+// root-backed check are not applied here): refusing a wave the runtime cannot
+// prove is safe is the conservative direction, since every worker's own copy
+// is preserved on its branch either way and nothing is destroyed.
+func worktreeReceiptClaimedPaths(root string, outcome *worktreeWaveOutcome) []string {
+	if outcome == nil || outcome.result.WorkerResult == nil {
+		return nil
+	}
+	covered := make(map[string]struct{}, len(outcome.dispatch.CoveredTaskIDs)+1)
+	for _, id := range outcome.dispatch.CoveredTaskIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			covered[id] = struct{}{}
+		}
+	}
+	if id := strings.TrimSpace(outcome.dispatch.TaskID); id != "" {
+		covered[id] = struct{}{}
+	}
+	reported := make(map[string]struct{})
+	for _, raw := range buildDispatchClaimOutputs(*outcome.result.WorkerResult) {
+		if normalized, err := lexicallyNormalizeReceiptPath(root, raw); err == nil {
+			reported[normalized] = struct{}{}
+		}
+	}
+
+	var paths []string
+	for _, receipt := range outcome.result.WorkerResult.TaskReceipts {
+		if _, inScope := covered[strings.TrimSpace(receipt.TaskID)]; !inScope {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(receipt.Status))
+		if status != codex.TaskReceiptStatusCompleted && status != codex.TaskReceiptStatusCompletedNoChange {
+			continue
+		}
+		raws := make([]string, 0, len(receipt.FilesCreated)+len(receipt.FilesModified)+len(receipt.TestsWritten))
+		raws = append(raws, receipt.FilesCreated...)
+		raws = append(raws, receipt.FilesModified...)
+		raws = append(raws, receipt.TestsWritten...)
+		for _, raw := range raws {
+			normalized, err := lexicallyNormalizeReceiptPath(root, raw)
+			if err != nil {
+				continue
+			}
+			if _, ok := reported[normalized]; !ok {
+				continue
+			}
+			paths = append(paths, normalized)
+		}
+	}
+	return uniqueSortedStrings(paths)
 }
 
 func mapKeys[V any](values map[string]V) []string {
@@ -593,6 +847,8 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 		waveDispatches := waves[wave]
 		emitBuildCeremonyWaveStart(phase, wave, waveDispatches, parallelMode)
 		emitCodexBuildWaveProgress(phase, wave, waveDispatches, parallelMode)
+		liveEpisodeID := currentLiveBuildEpisode()
+		emitColonyLiveWaveStarted(liveEpisodeID, events.EpisodeKindBuild, wave)
 		waveResults := make([]codex.DispatchResult, 0, len(waveDispatches))
 		cb.Reset() // Per D-06: per-wave reset
 		for _, dispatch := range waveDispatches {
@@ -633,6 +889,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			}
 			emitBuildCeremonyWorkerStarting(dispatch, wave)
 			emitCodexBuildWorkerStarted(dispatch, wave)
+			emitColonyLiveWorkerStarted(liveEpisodeID, events.EpisodeKindBuild, dispatch)
 
 			cfg := codex.WorkerConfig{
 				AgentName:         dispatch.AgentName,
@@ -690,10 +947,12 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 			}
 			emitBuildCeremonyWorkerFinished(dispatch, dr)
 			emitCodexBuildWorkerFinished(dispatch, dr)
+			emitColonyLiveWorkerFinished(liveEpisodeID, events.EpisodeKindBuild, dispatch, dr)
 			waveResults = append(waveResults, dr)
 			results = append(results, dr)
 		}
 		emitBuildCeremonyWaveEnd(phase, wave, waveResults)
+		emitColonyLiveWaveEnded(liveEpisodeID, events.EpisodeKindBuild, wave, "completed")
 	}
 	return results, nil
 }
@@ -701,7 +960,7 @@ func dispatchCodexBuildWorkersInRepo(ctx context.Context, phase colony.Phase, di
 func ensureGitRepository(root string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--show-toplevel")
+	cmd := readOnlyGitCommand(ctx, root, "rev-parse", "--show-toplevel")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -729,7 +988,7 @@ func allocateBuildWorktree(root string, phaseID int, dispatch codex.WorkerDispat
 
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "worktree", "add", "-b", branch, absPath, "HEAD")
+	cmd := worktreeGitCommand(ctx, root, false, "worktree", "add", "-b", branch, absPath, "HEAD")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("git worktree add: %v: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -830,15 +1089,15 @@ func removeGitWorktree(root, absPath, branch string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
 
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "worktree", "remove", absPath, "--force").CombinedOutput(); err != nil {
 		// Do NOT continue to prune or branch deletion — the working copy
 		// still exists, so its branch is the only handle left on that work.
 		return fmt.Errorf("worktree remove: %v (output: %s)", err, string(out))
 	}
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "worktree", "prune").CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "worktree", "prune").CombinedOutput(); err != nil {
 		return fmt.Errorf("worktree prune: %v (output: %s)", err, string(out))
 	}
-	if out, err := exec.CommandContext(ctx, "git", "-C", root, "branch", "-D", branch).CombinedOutput(); err != nil {
+	if out, err := worktreeGitCommand(ctx, root, false, "branch", "-D", branch).CombinedOutput(); err != nil {
 		return fmt.Errorf("branch delete: %v (output: %s)", err, string(out))
 	}
 	return nil
@@ -878,7 +1137,7 @@ func snapshotWorktreeStatus(worktreePath string) (map[string]string, error) {
 func snapshotGitStatus(root string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), GitTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "-C", root, "status", "--porcelain", "--untracked-files=all")
+	cmd := readOnlyGitCommand(ctx, root, "status", "--porcelain", "--untracked-files=all")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("git status: %v: %s", err, strings.TrimSpace(string(out)))
@@ -1268,9 +1527,9 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 
 		// Merge
 		gitCtx, gitCancel := context.WithTimeout(context.Background(), GitTimeout)
-		coOut, coErr := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "main").CombinedOutput()
+		coOut, coErr := worktreeGitCommand(gitCtx, root, false, "checkout", "main").CombinedOutput()
 		if coErr != nil {
-			coOut2, coErr2 := exec.CommandContext(gitCtx, "git", "-C", root, "checkout", "master").CombinedOutput()
+			coOut2, coErr2 := worktreeGitCommand(gitCtx, root, false, "checkout", "master").CombinedOutput()
 			if coErr2 != nil {
 				gitCancel()
 				failed = append(failed, fmt.Sprintf("%s (checkout failed: %s / %s)", entry.Branch, string(coOut), string(coOut2)))
@@ -1278,7 +1537,7 @@ func mergePhaseWorktrees(phaseNum int) (merged []string, failed []string, err er
 			}
 		}
 
-		mergeOut, mergeErr := exec.CommandContext(gitCtx, "git", "-C", root, "merge", entry.Branch).CombinedOutput()
+		mergeOut, mergeErr := worktreeGitCommand(gitCtx, root, false, "merge", entry.Branch).CombinedOutput()
 		gitCancel()
 		if mergeErr != nil {
 			failed = append(failed, fmt.Sprintf("%s (merge failed: %s)", entry.Branch, string(mergeOut)))

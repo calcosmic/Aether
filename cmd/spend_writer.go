@@ -1,0 +1,379 @@
+package cmd
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/calcosmic/Aether/pkg/codex"
+	"github.com/calcosmic/Aether/pkg/colony"
+)
+
+// spendWriteRequest is one finished run's accounting, ready to be filed.
+type spendWriteRequest struct {
+	// Phase and Workflow key the ledger file. Workflow is "build" or
+	// "continue"; anything else is refused rather than quietly creating a
+	// third file nothing aggregates.
+	Phase     int
+	PhaseName string
+	Workflow  string
+
+	// RepoRoot, Platform and the run window are what the usage resolver needs
+	// to find this run's own session artifacts.
+	RepoRoot  string
+	Platform  string
+	StartedAt time.Time
+	EndedAt   time.Time
+
+	// RunID identifies THIS attempt at the phase, so a retry adds to what the
+	// phase cost instead of redefining it. See writeSpendRowsForRun.
+	RunID string
+
+	// Dispatches are the run's workers at their terminal status.
+	Dispatches []codexBuildDispatch
+}
+
+// spendWriteOutcome is what the writer did, for the caller to report.
+type spendWriteOutcome struct {
+	// RowsWritten counts the rows actually filed.
+	RowsWritten int
+
+	// Reported counts how many of those rows carry a real measurement. The
+	// rest carry no token figure at all (D-01 as amended).
+	Reported int
+
+	// Notes are plain-English remarks about anything the writer could not
+	// account for. They never stop a build.
+	Notes []string
+}
+
+// spendWorkerNameForDispatch is the one name a dispatch is accounted under.
+//
+// Name is the deterministic per-worker name ("Mason-67") and it is the name
+// the platform's own session title carries -- OpenCode writes titles shaped
+// "🔨 Builder Mason-67: ...", and it is what the usage resolver matches on.
+// AgentName is the agent DEFINITION the worker ran as ("aether-builder"),
+// which several workers in one build share, so it cannot identify a row.
+// It is only the fallback for a dispatch that never got a worker name.
+func spendWorkerNameForDispatch(dispatch codexBuildDispatch) string {
+	if name := strings.TrimSpace(dispatch.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(dispatch.AgentName)
+}
+
+// spendRunStartFromManifest reads the run's own start time from the dispatch
+// manifest. A manifest that never recorded one yields the zero time, which the
+// writer reports rather than replacing with a made-up window.
+func spendRunStartFromManifest(generatedAt string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(generatedAt))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed.UTC()
+}
+
+// spendRunIDFromAttempt is the run identity of a build lane: the durable
+// attempt id the build already owns ("attempt-20260828T090000.000000000Z-4711"),
+// derived from the attempt record's own store path.
+//
+// It is stable across a re-finalize of one attempt and different for every new
+// attempt at the same phase, which is exactly the distinction the ledger needs.
+func spendRunIDFromAttempt(attemptRel string) string {
+	base := filepath.Base(strings.TrimSpace(attemptRel))
+	if base == "." || base == string(filepath.Separator) {
+		return ""
+	}
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// spendRunIDFromTimestamp is the run identity of a lane with no attempt record
+// of its own -- the checking pass, whose plan carries the moment it was
+// generated. The same plan finalized twice yields the same id; a second check
+// of the phase yields a different one.
+func spendRunIDFromTimestamp(prefix, timestamp string) string {
+	timestamp = strings.TrimSpace(timestamp)
+	if timestamp == "" {
+		return ""
+	}
+	return prefix + "-" + timestamp
+}
+
+// writeSpendRowsForRun turns a finished run's dispatches into ledger rows and
+// files them under this phase and this workflow.
+//
+// Every figure it files was read from disk by the Go runtime — the platform's
+// own session transcript or session store, or the provider's own attached
+// measurement. Nothing is relayed through a completion packet and nothing is
+// derived from a length.
+//
+// A worker the platform reported nothing for still gets a row, carrying no
+// token figure and no source tag, so it cannot vanish and make the run look
+// cheaper than it was.
+//
+// Replacement is keyed by RUN, not by phase-and-workflow alone.
+//
+// Rerunning the SAME run's finalize replaces that run's own rows, so a second
+// finalize of one build cannot double its own cost. A SECOND ATTEMPT at the
+// same phase -- the recovery redispatch of the unfinished tasks, or
+// `build --force` after a blocked check -- keeps every earlier attempt's rows
+// and adds its own, because a retry adds to what a phase cost; it does not
+// redefine it. Getting that wrong reported a phase that really cost 1,150,000
+// tokens as 250K, and the part that vanished was the failed first attempt.
+//
+// A run that supplies no RunID falls back to whole-workflow replacement, which
+// is what this writer did for every run before the field existed. It is
+// reported in the outcome's notes rather than passing silently.
+//
+// The other workflow's file is never opened.
+func writeSpendRowsForRun(req spendWriteRequest) (spendWriteOutcome, error) {
+	outcome := spendWriteOutcome{}
+
+	if req.StartedAt.IsZero() {
+		outcome.Notes = append(outcome.Notes,
+			"this run's start time was not recorded, so no worker's usage could be matched to it by time")
+	}
+
+	workerNames := make([]string, 0, len(req.Dispatches))
+	// Attached is what the provider itself reported at the dispatch boundary,
+	// read by the Go runtime from the worker's raw output
+	// (codex.AttachWorkerUsage -> codex.ParseUsage). It is the ONLY source on
+	// the directly-spawned lane, where there is no chat-platform session
+	// artifact to read, and it outranks a session artifact everywhere else.
+	//
+	// codexBuildDispatch.Usage is never serialized, so a dispatch that reached
+	// this writer through an externally-shaped completion packet carries the
+	// zero value here and contributes nothing: an outside caller can no more
+	// assert what a run cost than it could before.
+	attached := make(map[string]codex.WorkerUsage, len(req.Dispatches))
+	// The agent DEFINITION each worker ran as. It is not the accounting key --
+	// several workers share one -- but it is what Claude Code records in its
+	// transcript, so the resolver cannot join a single row without it (CR-01).
+	agentNameByWorker := make(map[string]string, len(req.Dispatches))
+	for _, dispatch := range req.Dispatches {
+		name := spendWorkerNameForDispatch(dispatch)
+		if name == "" {
+			continue
+		}
+		workerNames = append(workerNames, name)
+		if definition := strings.TrimSpace(dispatch.AgentName); definition != "" {
+			agentNameByWorker[name] = definition
+		}
+		if wrapperUsageWasReported(dispatch.Usage) {
+			attached[name] = dispatch.Usage
+		}
+	}
+
+	resolution := resolveWrapperWorkerUsage(wrapperUsageRequest{
+		Platform:          req.Platform,
+		RepoRoot:          req.RepoRoot,
+		StartedAt:         req.StartedAt,
+		EndedAt:           req.EndedAt,
+		WorkerNames:       workerNames,
+		AgentNameByWorker: agentNameByWorker,
+		Attached:          attached,
+	})
+	outcome.Notes = append(outcome.Notes, resolution.Diagnostics...)
+
+	usageByWorker := make(map[string]wrapperWorkerUsage, len(resolution.Workers))
+	for _, worker := range resolution.Workers {
+		usageByWorker[worker.WorkerName] = worker
+	}
+
+	rows := make([]spendRow, 0, len(req.Dispatches))
+	credited := make(map[string]bool, len(req.Dispatches))
+	for _, dispatch := range req.Dispatches {
+		name := spendWorkerNameForDispatch(dispatch)
+		if name == "" {
+			outcome.Notes = append(outcome.Notes,
+				"one worker had no name at all, so its cost could not be filed against anything")
+			continue
+		}
+		// A row whose status is outside the dispatch vocabulary cannot be
+		// saved, and saveSpendLedger refuses the WHOLE ledger over one bad
+		// row. Dropping that one row with a note is the lesser loss: the rest
+		// of the run's accounting still gets filed, and nothing invents a
+		// status the dispatch never stated.
+		if _, ok := normalizeSpendRowStatus(dispatch.Status); !ok {
+			outcome.Notes = append(outcome.Notes, fmt.Sprintf(
+				"worker %s did not state an outcome this ledger recognises (%q), so its cost was left unfiled rather than recorded under a made-up one",
+				name, dispatch.Status))
+			continue
+		}
+
+		worker := usageByWorker[name]
+		// The resolver answers once per DISTINCT name, and this loop walks every
+		// dispatch -- so two dispatches sharing a name would each be credited
+		// that one answer, and the run would report twice what it spent (WR-02).
+		// Both dispatches keep a row, because a worker that vanishes makes a run
+		// look cheaper than it was; only the first carries the measurement.
+		if credited[name] && worker.Reported {
+			outcome.Notes = append(outcome.Notes, fmt.Sprintf(
+				"two workers on this run were both named %s, so the one figure recorded under that name was counted once rather than credited to both", name))
+			worker = wrapperWorkerUsage{WorkerName: name}
+		}
+		if worker.Reported {
+			credited[name] = true
+		}
+		rows = append(rows, spendRow{
+			AgentName: name,
+			Caste:     dispatch.Caste,
+			Task:      dispatch.Task,
+			JobName:   dispatch.JobName,
+			Status:    dispatch.Status,
+			// When the platform reported nothing this is the zero value: no
+			// columns, no source tag. That absence IS the record.
+			Usage: worker.Usage,
+		})
+		if worker.Reported {
+			outcome.Reported++
+		}
+	}
+
+	// A run that filed nothing leaves no file. An empty ledger on disk is
+	// indistinguishable from a run that genuinely cost nothing, and the
+	// closeout line reads that file: a phase whose check spawned nobody must
+	// say "nothing recorded", never show a zero that reads as a measurement.
+	if len(rows) == 0 {
+		return outcome, nil
+	}
+
+	runID := strings.TrimSpace(req.RunID)
+	for i := range rows {
+		rows[i].RunID = runID
+	}
+
+	merged := rows
+	if runID == "" {
+		outcome.Notes = append(outcome.Notes,
+			"this run did not record which attempt it was, so it replaced everything already recorded for this phase instead of adding to it")
+	} else if existing, ok := loadSpendLedger(req.Phase, req.Workflow); ok {
+		// Rows from EARLIER attempts survive; this run's own rows are the ones
+		// being rewritten. Kept in attempt order, earliest first, so the
+		// breakdown reads down the page the way the work happened.
+		merged = make([]spendRow, 0, len(existing.Rows)+len(rows))
+		for _, row := range existing.Rows {
+			if strings.TrimSpace(row.RunID) != runID {
+				merged = append(merged, row)
+			}
+		}
+		merged = append(merged, rows...)
+	}
+
+	if err := saveSpendLedger(spendLedger{
+		Phase:      req.Phase,
+		PhaseName:  req.PhaseName,
+		Workflow:   req.Workflow,
+		RunID:      runID,
+		RecordedAt: time.Now().UTC().Format(time.RFC3339),
+		Rows:       merged,
+	}); err != nil {
+		return outcome, err
+	}
+
+	outcome.RowsWritten = len(rows)
+	return outcome, nil
+}
+
+// spendDispatchesFromContinueFlow turns a finished check's worker flow into the
+// dispatch shape the writer accounts. The flow step is what the finalizer has
+// after every reviewer and watcher reached a terminal status, and it already
+// carries the worker's own deterministic name, its role and that status.
+//
+// The planned manifest is consulted only for the agent DEFINITION a worker ran
+// as, which the flow step does not carry. It is never used as the accounting
+// key: several reviewers in one check share one definition, so it cannot
+// identify a row (see spendWorkerNameForDispatch).
+//
+// This is a conversion, not a second writer. Both lanes file through
+// writeSpendRowsForRun, because two writers is how two vocabularies for one
+// idea start.
+// spendWorkerFlowSteps keeps only the steps that represent a worker somebody
+// actually spawned.
+//
+// A check's flow also carries bookkeeping entries the runtime performs itself
+// -- the deterministic verification commands, signal housekeeping, the
+// learning pass -- which are marked with the "system" caste. Those cost no
+// worker tokens, and filing a row for one would put a name in the owner's
+// breakdown that never corresponded to anybody.
+func spendWorkerFlowSteps(flow []codexContinueWorkerFlowStep) []codexContinueWorkerFlowStep {
+	workers := make([]codexContinueWorkerFlowStep, 0, len(flow))
+	for _, step := range flow {
+		if strings.TrimSpace(step.Caste) == "" || strings.EqualFold(strings.TrimSpace(step.Caste), "system") {
+			continue
+		}
+		workers = append(workers, step)
+	}
+	return workers
+}
+
+// fileDirectContinueSpendRows files the check's per-worker token record on the
+// direct in-process lane -- `aether continue`, which runs its reviewers and its
+// watcher inside the runtime rather than handing a plan to a chat wrapper.
+//
+// The platform-driven lane files its own rows in continue-finalize
+// (cmd/codex_continue_finalize.go). Both lanes go through the same writer under
+// the same key, so a phase's recorded cost does not depend on which way its
+// check was run.
+//
+// It is called at every point this lane can end -- verification blocked, review
+// blocked, and advanced -- because a blocked check still spent what it spent.
+// Accounting is a record OF the check, never a gate ON it: a write that fails
+// is reported on stderr and the check still finishes, so this returns nothing.
+func fileDirectContinueSpendRows(root string, phase colony.Phase, startedAt, endedAt time.Time, flow []codexContinueWorkerFlowStep) {
+	workers := spendWorkerFlowSteps(flow)
+	if len(workers) == 0 {
+		return
+	}
+	// Platform is deliberately empty: these workers were spawned as
+	// subprocesses by the runtime, so there is no chat-platform session
+	// artifact belonging to them and the provider figures carried on the flow
+	// steps are the whole source. See the same reasoning in
+	// runCodexBuildWithOptions.
+	outcome, err := writeSpendRowsForRun(spendWriteRequest{
+		Phase:     phase.ID,
+		PhaseName: phase.Name,
+		Workflow:  spendWorkflowContinue,
+		RepoRoot:  root,
+		Platform:  "",
+		// This lane has no attempt record, so the moment the check started is
+		// its run identity: a second check of the same phase adds to what the
+		// phase cost rather than erasing the first one's rows.
+		RunID:      spendRunIDFromTimestamp("continue", startedAt.UTC().Format(time.RFC3339Nano)),
+		StartedAt:  startedAt,
+		EndedAt:    endedAt,
+		Dispatches: spendDispatchesFromContinueFlow(workers, nil),
+	})
+	if err != nil {
+		visualFprintf(stderr, "warning: this check's per-worker token record could not be filed: %v\n", err)
+		return
+	}
+	for _, note := range outcome.Notes {
+		visualFprintf(stderr, "⚠ %s\n", note)
+	}
+}
+
+func spendDispatchesFromContinueFlow(flow []codexContinueWorkerFlowStep, planned []codexContinueExternalDispatch) []codexBuildDispatch {
+	agentNameByWorker := make(map[string]string, len(planned))
+	for _, dispatch := range planned {
+		agentNameByWorker[strings.TrimSpace(dispatch.Name)] = strings.TrimSpace(dispatch.AgentName)
+	}
+	dispatches := make([]codexBuildDispatch, 0, len(flow))
+	for _, step := range flow {
+		name := strings.TrimSpace(step.Name)
+		if name == "" {
+			continue
+		}
+		dispatches = append(dispatches, codexBuildDispatch{
+			Stage:     step.Stage,
+			Caste:     step.Caste,
+			AgentName: agentNameByWorker[name],
+			Name:      name,
+			Task:      step.Task,
+			Status:    step.Status,
+			Usage:     step.Usage,
+		})
+	}
+	return dispatches
+}

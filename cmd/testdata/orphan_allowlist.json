@@ -15,41 +15,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether autopilot-headless-check",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-init",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-resume",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-set-headless",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-status",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-stop",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether autopilot-update",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether backup-prune-global",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
@@ -345,11 +310,6 @@
     "owner_phase": "RECLAIM"
   },
   {
-    "name": "aether failure-classify",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
     "name": "aether flag-auto-resolve",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
@@ -471,21 +431,6 @@
   },
   {
     "name": "aether hive-search",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether hook-pre-compact",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether hook-pre-tool-use",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether hook-stop",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
@@ -676,16 +621,6 @@
   },
   {
     "name": "aether load-state",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether medic-auto-spawn-check",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether memory-capture",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
@@ -881,16 +816,6 @@
   },
   {
     "name": "aether reconcile",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether recovery-log-read",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether recovery-log-write",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },
@@ -1206,16 +1131,6 @@
   },
   {
     "name": "aether trace-summary",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether trophallaxis-diagnose",
-    "reason": "unreviewed-pre-existing",
-    "owner_phase": "RECLAIM"
-  },
-  {
-    "name": "aether trophallaxis-retry",
     "reason": "unreviewed-pre-existing",
     "owner_phase": "RECLAIM"
   },

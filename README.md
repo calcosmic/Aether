@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-60-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.61-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.82-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -121,7 +121,7 @@ This is the lowest-friction path for new users. The npm package is a thin
 bootstrap wrapper: it downloads the matching Go release binary for your
 platform, installs it locally, and then runs `aether install` for you. The npm
 package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.61` bootstraps Aether `1.0.61`.
+`aether-colony@1.0.82` bootstraps Aether `1.0.82`.
 
 **Option 1: Go binary**
 
@@ -175,12 +175,14 @@ aether install
 cd ~/projects/my-app
 aether lay-eggs
 
-# Codex CLI
+# Codex CLI (direct executable route)
 aether init "Build X"
 aether discuss
 aether plan
 aether assumptions-analyze
+aether run --dry-run
 aether run --max-phases 2
+aether status
 aether watch
 aether build 1
 aether continue
@@ -202,6 +204,55 @@ aether seal
 The Go binary is the source of truth. Claude Code and OpenCode also expose the
 same lifecycle through slash commands after the repo is bootstrapped on the
 primary platforms.
+
+### Codex Skills
+
+Pick an ant skill in Codex to start the matching workflow. The skill reads Aether's
+instructions; the `aether` executable still owns state, checks, and authorization.
+
+Aether's Codex actions use skills, with exactly nine public names:
+
+| Skill | Workflow |
+|-------|----------|
+| `$ant-init` | Start a colony |
+| `$ant-discuss` | Clarify intent |
+| `$ant-oracle` | Research a concern |
+| `$ant-colonize` | Survey existing code |
+| `$ant-plan` | Plan phases |
+| `$ant-build` | Build a phase |
+| `$ant-continue` | Verify and advance |
+| `$ant-swarm` | Route work or watch workers |
+| `$ant-seal` | Seal and retain work for review |
+
+The remaining 55 action skills and native-worker parity belong to later inserted
+phases. These nine names establish entrypoints, not complete lifecycle parity.
+
+The selected installation root is `~/.codex/skills/aether/`, qualified with Codex
+CLI 0.154.0. Each public `ant-<command>/SKILL.md` reads private support relative to
+its own installed file, not the working directory:
+
+- `support/aether-colony-creation.md`
+- `support/aether-colony-research.md`
+- `support/aether-colony-build-cycle.md`
+
+These three ordinary files are private support, not public helper skills. Worker
+skills still arrive automatically in runtime dispatch briefs. Start a fresh Codex
+session after skill files are copied or removed; unchanged updates need no refresh.
+
+When a user types a literal `aether ...` passthrough command such as `status`,
+`update`, `focus`, `pheromones`, or `reference-list`, execute that exact command
+first. The installed binary and `aether --help` are the runtime source of truth.
+
+For the nine lifecycle actions above, run or inspect
+`aether command-guide <command> --platform codex` and follow the matching public
+skill and its private support. If the user explicitly says raw, exact,
+no-interview, or no-orchestration, execute the requested CLI command directly.
+Do not reinterpret a literal passthrough command as a vague workflow request.
+
+For lifecycle shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...`
+unless the user explicitly wants JSON. Preserve exact arguments. Do not preface
+literal passthrough execution with repo archaeology or skill narration; the CLI
+output is primary, with at most one short sentence of extra explanation.
 
 ### Tips
 
@@ -225,11 +276,11 @@ primary platforms.
 | | Feature | Description |
 |---|---------|-------------|
 | **Agents** | 27 Specialized Workers | Builder, Watcher, Scout, Tracker, Archaeologist, Oracle, Medic, Fixer, Porter, and more |
-| **Commands** | 60 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode, native `aether` lifecycle for Codex CLI |
+| **Commands** | 64 Slash Commands + Native CLI | Slash workflow for Claude Code and OpenCode; nine ant skills and retained `aether` CLI for Codex |
 | **Signals** | Pheromone System | FOCUS, REDIRECT, FEEDBACK — guide colony attention |
 | **Memory** | Colony Wisdom | Learnings and instincts persist via QUEEN.md |
 | **Hive Brain** | Cross-colony | Domain-scoped wisdom sharing |
-| **Autopilot** | `/ant-run` | Build-verify-advance loop with smart pause on Claude Code and OpenCode |
+| **Autopilot** | `aether run` / `/ant-run` | Build-verify-advance loop with typed stops, morning queues, and normal endings |
 | **Skills** | 86 Skills | 55 colony + 31 domain knowledge modules for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
 | **Quality Gates** | 6-phase verification before advancing |
@@ -277,7 +328,7 @@ primary platforms.
 | **Memory / Learning** | Colony Wisdom — learnings persist as instincts, promote to QUEEN.md, share cross-colony via Hive Brain | Short-term memory + optional long-term via integration | No built-in persistent memory | Checkpoint-based state persistence |
 | **Agent Coordination** | Pheromone signals (FOCUS, REDIRECT, FEEDBACK) guide attention without rewriting prompts | Hierarchical task delegation between role-assigned agents | Turn-based conversation between agents | Explicit graph edges define control flow |
 | **Workers / Agents** | 27 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, Fixer, Porter, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
-| **Commands / Control** | 60 slash commands on Claude/OpenCode + native `aether` CLI workflow on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
+| **Commands / Control** | 64 slash commands on Claude/OpenCode + nine ant skills and `aether` CLI on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
 | **Autopilot** | `/ant-run` on Claude/OpenCode, `aether run` on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
 | **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
@@ -311,8 +362,8 @@ primary platforms.
 ### 🔄 Colony Lifecycle
 
 Claude Code and OpenCode expose this flow as slash commands. Codex uses the
-same core stages via `aether lay-eggs`, `aether init`, `aether plan`,
-`aether build`, `aether continue`, and `aether seal`.
+same core stages through its nine public skills, with `aether lay-eggs` for
+setup and the direct executable routes still available.
 
 ```mermaid
 flowchart TD
@@ -334,8 +385,8 @@ flowchart TD
     redirect["/ant-redirect\nHard constraint"]:::signal
 
     %% Session management
-    pause["/ant-pause-colony\nSave state"]:::session
-    resume["/ant-resume-colony\nRestore context"]:::session
+    pause["/ant-pause\nSave a resumable handoff"]:::session
+    resume["/ant-resume\nValidate and restore safely"]:::session
 
     %% Connections
     node --> node2
@@ -473,27 +524,63 @@ aether context-capsule
 aether resume
 ```
 
-## 🚀 Autopilot Mode (Claude Code / OpenCode)
+## 🚀 Autopilot Mode
 
-`/ant-run` chains the build-verify-advance loop across multiple phases with intelligent pause conditions. Instead of running each command by hand, you engage autopilot and it handles the cycle automatically.
+`aether run` chains build, verification, and phase advancement. Claude Code and
+OpenCode expose the same flow as `/ant-run`.
 
-It streams its progress in your terminal as it works — an engage banner, live worker lines during each build, a phase-advancement block with a momentum ticker between phases, and a celebration when everything is done.
+For beginners: things only you can judge are put on a morning list; broken or
+unsafe work still stops. A normal boundary, such as your `--max-phases` limit
+or completing the colony, also ends the invocation without pretending that
+anything failed.
 
-It pauses — not crashes — when something needs attention: failed verification, unresolved blocker decisions, test-failure signals, failed quality/security gates, critical resilience findings, an uncommitted-changes marker, or the replan checkpoint (every 2 phases by default; `--continue` skips it). The pause prints its reason and the suggested next command. Fix the issue, run `/ant-run` again, and it resumes. (`aether run --dry-run` previews the plan and lists every pause trigger.)
+| Kind of event | Headless run | Interactive run |
+|---|---|---|
+| Owner judgement: visual check, hands-on runtime verification, or a lesson-backed replan suggestion | Saves one durable decision and continues | Pauses for the owner |
+| Genuine problem: deterministic checks still fail, Auditor score is below 60, a Critical finding appears, blocker count grows or gains escalation, state is not runnable, or the provider is unavailable | Stops | Stops |
+| Normal boundary: cancellation, worker timeout, `--max-phases`, or colony completion | Ends normally | Ends normally |
+
+Auditor score 60 passes. High findings stay visible in the morning report but
+do not stop by severity alone; Critical findings do. An ordinary blocker that
+already existed at a run stage boundary remains visible and unresolved, but it
+stops the run only if the count grows or new escalation evidence appears.
+Direct `aether continue` remains stricter and will not advance with any open
+blocker. Replan cadence is also not enough by itself: headless replanning needs
+at least one confirmed lesson created after the active plan revision.
 
 ```bash
-# Run all remaining phases automatically
-/ant-run
+# Preview phases and the exact trigger/disposition table without changing state
+aether run --dry-run
 
-# Run at most 2 phases then stop
-/ant-run --max-phases 2
+# Run all remaining phases without interactive prompts
+aether run --headless
 
-# Preview the plan without executing
-/ant-run --dry-run
-
-# Run without interactive prompts
-/ant-run --headless
+# Or put an explicit limit on this invocation
+aether run --headless --max-phases 2
 ```
+
+### Morning handoff
+
+`aether run` never seals automatically. When it finishes, review the frozen run
+report and the live decision list. The list is an identity-and-evidence view:
+it deliberately does not expose reusable authorization. Review any replan
+note, then ask seal to issue fresh owner commands:
+
+```bash
+aether status
+aether pending-decision-list --unresolved
+aether plan        # only when the morning list contains a replan suggestion
+aether seal
+```
+
+When owner checkpoints remain, `aether seal` refuses and emits one exact,
+capability-bearing `decision-answer` command for each checkpoint. Copy each
+emitted command verbatim, run it, then rerun `aether seal`. Do not construct an
+answer command from the redacted decision list: the fresh capability in seal's
+immediate output is what authorizes the exact checkpoint. Queued morning work
+is therefore never mistaken for approval. Status reads the stored last-run
+report rather than recalculating its elapsed time, measured/unreported token
+usage, findings, or blocker movement from newer data.
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -501,9 +588,9 @@ It pauses — not crashes — when something needs attention: failed verificatio
 
 ## 🔌 Works With
 
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 60 slash commands + 27 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 60 slash commands + 27 agent definitions
-- **Codex CLI** - secondary platform, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 27 TOML agent definitions
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 64 slash commands + 27 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 64 slash commands + 27 agent definitions
+- **Codex CLI** - secondary platform, nine public ant skills, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 27 TOML agent definitions
 
 <div align="center">
   <img src="assets/logo/logo.jpg" alt="✦" width="80" />
@@ -512,14 +599,15 @@ It pauses — not crashes — when something needs attention: failed verificatio
 ## 📋 Command Reference (Claude Code / OpenCode)
 
 <details>
-<summary>60 slash commands for Claude Code and OpenCode — click to expand</summary>
+<summary>64 slash commands for Claude Code and OpenCode — click to expand</summary>
 
-Aether provides 60 slash commands organized into seven categories for Claude
+Aether provides 64 slash commands organized into seven categories for Claude
 Code and OpenCode. This section is the slash-command reference for the primary
 platforms.
 
-Codex CLI uses the native Go binary instead. It is a supported secondary surface
-rather than a strict slash-command mirror. The core Codex workflow is:
+Codex exposes the nine [public skills](#codex-skills) over the Go runtime. The
+remaining 55 action skills and native-worker parity are later work. The retained
+executable routes include:
 `aether install`, `aether lay-eggs`, `aether init`, `aether discuss`,
 `aether plan`, `aether assumptions-analyze`, `aether run`, `aether watch`,
 `aether build <phase>`, `aether continue`, `aether profile-read`,
@@ -542,7 +630,7 @@ These commands set up, initialize, and drive the core colony workflow from first
 | `/ant-assumptions` | Surface current plan assumptions, write `assumptions.json`, and auto-emit `FOCUS` / `FEEDBACK` pheromones from the analysis. |
 | `/ant-build <phase>` | Execute a phase with parallel workers. Loads and runs 5 build playbooks sequentially (prep, context, wave, verify, complete). Self-organizing emergence. |
 | `/ant-continue` | Verify completed build, reconcile state, and advance to the next phase. Runs 4 continue playbooks (verify, gates, advance, finalize). Enforces quality gates. |
-| `/ant-run` | Autopilot mode -- chains build and continue across multiple phases automatically. Pauses on failures, blockers, or replan triggers. Flags: `--max-phases N`, `--replan-interval N`, `--continue`, `--dry-run`, `--headless`, `--verbose`. |
+| `/ant-run` | Autopilot mode -- chains build and continue. Headless visual/runtime/lesson-backed-replan work queues for morning review; genuine failures stop; limits and completion end normally. Flags: `--max-phases N`, `--replan-interval N`, `--continue`, `--dry-run`, `--headless`, `--verbose`. |
 | `/ant-profile` | Read or refresh the behavioral profile. `profile-update` consolidates observations and promotes top `[profiled]` directives into `QUEEN.md`. |
 
 ---
@@ -585,9 +673,8 @@ Manage session state for handoff between conversations, so you can safely `/clea
 
 | Command | Description |
 |---------|-------------|
-| `/ant-pause-colony` | Save colony state and create a handoff document at `.aether/HANDOFF.md`. Optionally suggests committing uncommitted work. Flag: `--no-visual`. |
-| `/ant-resume-colony` | Full session restore from pause -- loads state, displays pheromones with strength bars, phase progress, survey freshness, and handoff context. Clears paused state and removes HANDOFF.md. Flag: `--no-visual`. |
-| `/ant-resume` | Quick session restore after `/clear` or new session. Detects codebase drift, computes next-step guidance, and displays a compact dashboard with memory health. Includes blocking guards for missing plans or interrupted builds. |
+| `/ant-pause` | Stop at a safe boundary and save one structured, resumable handoff. |
+| `/ant-resume` | Validate and restore the safest honest recovery point: a clean handoff is **Confirmed**; unclean interruptions may be **Reconstructed** from durable evidence; **Conflicting** or **Unknown** evidence stops without changing state. |
 
 ---
 
@@ -915,7 +1002,7 @@ The pattern repeats. `aether build N`, then `aether continue`. Each phase
 builds on the verified output of the last. Instincts accumulate. The colony
 gets smarter about your project's patterns.
 
-On Codex, you can keep using the explicit loop when you want tight control:
+On Codex, select `$ant-build 3`, then `$ant-continue`, or use the direct loop:
 
 ```bash
 aether build 3
@@ -927,8 +1014,15 @@ aether continue
 Or hand the next stretch to the native Codex autopilot:
 
 ```bash
+aether run --dry-run
 aether run --max-phases 2
+aether status
 ```
+
+In headless mode, visual or hands-on checks are saved for the owner instead of
+stopping healthy work. Use the exact morning `decision-answer` flow documented
+in [Autopilot Mode](#-autopilot-mode), then run `aether seal` yourself when the
+colony is complete and the queued work is resolved.
 
 <details><summary>Phase progression output (click to expand)</summary>
 
@@ -1038,6 +1132,20 @@ The colony ran a final curation pass. Repo-specific lessons were preserved in
 the local QUEEN.md, and cross-colony wisdom can be promoted to the hub-global
 QUEEN.md and Hive Brain so other projects on your machine can reuse it.
 
+### Sealed colony: review before archive
+
+After `/ant-seal`, whether it is verified or a forced-incomplete closure, the
+active colony remains retained for review; a forced-incomplete seal is never
+verified completion.
+
+1. First run `/ant-status` to review the retained sealed state.
+2. `/ant-entomb` is an optional, explicit owner-invoked archive-and-clear
+   alternative; it is never automatic or required after sealing.
+3. A forced-incomplete marker remains visible in `/ant-status` and optional
+   `/ant-entomb`.
+4. Only after a successful archive-and-clear receipt has verified the archive
+   and cleared active state may you run `/ant-init` for a new goal.
+
 ---
 
 ### ⚡ The Shortcut: Autopilot from Start (Claude Code / OpenCode)
@@ -1054,9 +1162,10 @@ aether lay-eggs
 /ant-run
 ```
 
-Autopilot runs every remaining phase, pausing only when something needs your
-attention -- a test failure, a security concern, a blocker it cannot resolve.
-Fix the issue, run `/ant-run` again, and it resumes.
+Autopilot runs every remaining phase. In headless mode it queues visual,
+hands-on runtime, and lesson-backed replan work for morning review; failed
+verification, unsafe review evidence, a newly worse blocker state, or an
+unavailable provider still stops immediately. It never seals for you.
 
 Codex now supports both the explicit `aether build` -> `aether continue`
 loop and a native `aether run` autopilot path, plus `aether watch` for live

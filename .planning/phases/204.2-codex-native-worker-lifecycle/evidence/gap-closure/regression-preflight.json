@@ -1,0 +1,385 @@
+{
+  "broad_suites_executed": false,
+  "check_mode_negative_control": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/check-mode-negative-outcome.json",
+    "sha256": "sha256:605b43fb846db6f5a70d24949aa3110f8e9a52482490195c7d3e4afe7d4fc8e5"
+  },
+  "expected_base": "65dafe3e41618b6c26f8f98b0c29672d33406938",
+  "go_version": "go version go1.26.5 darwin/arm64",
+  "host_proof": "No native host launched. Installed executable versions/hashes are read-only tool identity, not qualification of the shared narrow CalVault hotfix or these candidate binaries. Model, effort and native tool-schema observations remain unavailable in this regression-only task.",
+  "identity": {
+    "contract_sha256": "sha256:0b97a022add05553b36602e0526a8afc276034224815496ad2cf1df24178347a",
+    "harness_sha256": "sha256:bafaed8881fa4853d20e030348bc26a56f6f65762ca92b7ace03d96572ca367c",
+    "production_digest": "sha256:08cf994909e034ec397b454fcd848f0bdc7277fd2d5d13d3ef1191040eacdf0c",
+    "test_corpus_digest": "sha256:d35a29eb9a84d76932467f4b5a22f0cc9d4ab14720728db2bc03d3476752c360"
+  },
+  "lanes": {
+    "normal": {
+      "build": {
+        "argv": [
+          "go",
+          "build",
+          "-buildvcs=false",
+          "-ldflags",
+          "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+          "-o",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/candidate-aether",
+          "./cmd/aether"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/repo",
+        "elapsed_seconds": 24.224649906158447,
+        "exit_code": 0,
+        "started_epoch": 1789680735.208564,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/build.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/build.stdout",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timed_out": false
+      },
+      "candidate_reference_build": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/candidate-aether",
+        "sha256": "sha256:e4bafef1717279939fab4605f60e7a0987dc1d7641e2ef7001152ea45a3dafdd"
+      },
+      "discovered_top_level_cases": 6803,
+      "discovery_packages": 21,
+      "discovery_probe": {
+        "argv": [
+          "go",
+          "test",
+          "-overlay",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/discovery/overlay.json",
+          "./cmd",
+          "-run",
+          "^TestPlan13EvidenceProbe$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/repo",
+        "elapsed_seconds": 28.75662326812744,
+        "exit_code": 0,
+        "started_epoch": 1789680804.4515169,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/discovery/probe.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/discovery/probe.stdout",
+          "sha256": "sha256:8d6c9bf210e2d29ccf32def7261ea06436c905e9a5fdafa5337415cceea6806d"
+        },
+        "timed_out": false
+      },
+      "disposed_commits_verified": [
+        "be1e160b09109c2af56f5df6c8a1adee5b002a5a",
+        "ecd98b5cc81d0c51b82c04139df14d90e38e4619",
+        "1cbf3615100203be7d59d49ffc2cf224367cedaa"
+      ],
+      "fixture": {
+        "argv": [
+          "go",
+          "test",
+          "./cmd",
+          "-run",
+          "^(TestCLIInterruptedBuildResumesThroughForceRedispatch|TestCLIInterruptedBuildReadinessCleanup|TestPackedNPMAncestorIsolation|TestPackedNPMReleaseCandidateContract|TestDisposedBranchesAreGoneFromTheRepository)$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 420,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/repo",
+        "elapsed_seconds": 44.98499798774719,
+        "exit_code": 0,
+        "started_epoch": 1789680759.463593,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/fixture.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/fixture.stdout",
+          "sha256": "sha256:1aa6403111171acf683a54a10cce7bc3bbb4ae88fd5d72172fef887ff0b37155"
+        },
+        "timed_out": false
+      },
+      "fixture_terminals": {
+        "TestCLIInterruptedBuildReadinessCleanup": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/descendant": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/exit": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/missing": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/success": "pass",
+        "TestCLIInterruptedBuildResumesThroughForceRedispatch": "pass",
+        "TestDisposedBranchesAreGoneFromTheRepository": "pass",
+        "TestPackedNPMAncestorIsolation": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=false": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=true": "pass",
+        "TestPackedNPMReleaseCandidateContract": "pass",
+        "TestPackedNPMReleaseCandidateContract/checksum_failure_preserves_the_previous_binary": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_candidate_migrates_and_rolls_back_an_n-1_colony_without_local_data_loss": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_npm_installs_the_matching_staged_archive": "pass",
+        "TestPackedNPMReleaseCandidateContract/retry_recovers_the_state_left_by_interrupted_activation": "pass",
+        "TestPackedNPMReleaseCandidateContract/wrong_version_archive_preserves_the_previous_binary": "pass"
+      },
+      "focused_cases": 372,
+      "installed_inventory": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/installed-inventory-normal.json",
+        "sha256": "sha256:9bef144745c345a1e944d1a0bf05538d782000d00b979868d598912889fd77c6"
+      },
+      "passed": true,
+      "reference_build_scope": "Independent compilation reference only. Packed fixture actual candidate/package/archive and 1119 installed entries are pinned in its raw test output and installed inventory; no native-host execution is inferred.",
+      "standalone_git_dir": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/normal/repo/.git",
+      "test_cases": {
+        "fail": 0,
+        "pass": 16,
+        "skip": 0
+      }
+    },
+    "race": {
+      "build": {
+        "argv": [
+          "go",
+          "build",
+          "-buildvcs=false",
+          "-ldflags",
+          "-X github.com/calcosmic/Aether/cmd.Version=1.0.79",
+          "-o",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/candidate-aether",
+          "./cmd/aether"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/repo",
+        "elapsed_seconds": 18.849874019622803,
+        "exit_code": 0,
+        "started_epoch": 1789680842.167377,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/build.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/build.stdout",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "timed_out": false
+      },
+      "candidate_reference_build": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/candidate-aether",
+        "sha256": "sha256:71cd8fd2aac9231ceed64746019f00fa0c0567d421721b85900a46b8018a5ca6"
+      },
+      "discovered_top_level_cases": 6803,
+      "discovery_packages": 21,
+      "discovery_probe": {
+        "argv": [
+          "go",
+          "test",
+          "-overlay",
+          "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/discovery/overlay.json",
+          "./cmd",
+          "-run",
+          "^TestPlan13EvidenceProbe$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 300,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/repo",
+        "elapsed_seconds": 57.980934143066406,
+        "exit_code": 0,
+        "started_epoch": 1789680978.992178,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/discovery/probe.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/discovery/probe.stdout",
+          "sha256": "sha256:c4c2ed9e425da002ac3fd1b641a97d5e7bc29f56e31a549d1a8d0a8ac0ae7ac6"
+        },
+        "timed_out": false
+      },
+      "disposed_commits_verified": [
+        "be1e160b09109c2af56f5df6c8a1adee5b002a5a",
+        "ecd98b5cc81d0c51b82c04139df14d90e38e4619",
+        "1cbf3615100203be7d59d49ffc2cf224367cedaa"
+      ],
+      "fixture": {
+        "argv": [
+          "go",
+          "test",
+          "./cmd",
+          "-race",
+          "-run",
+          "^(TestCLIInterruptedBuildResumesThroughForceRedispatch|TestCLIInterruptedBuildReadinessCleanup|TestPackedNPMAncestorIsolation|TestPackedNPMReleaseCandidateContract|TestDisposedBranchesAreGoneFromTheRepository)$",
+          "-count=1",
+          "-timeout",
+          "180s",
+          "-json"
+        ],
+        "bound_seconds": 420,
+        "cwd": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/repo",
+        "elapsed_seconds": 117.9410171508789,
+        "exit_code": 0,
+        "started_epoch": 1789680861.047966,
+        "stderr": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/fixture.stderr",
+          "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/fixture.stdout",
+          "sha256": "sha256:dd1d1c1312b29288a808426b59bf27504d4625d831ea919244d412ed98ab7800"
+        },
+        "timed_out": false
+      },
+      "fixture_terminals": {
+        "TestCLIInterruptedBuildReadinessCleanup": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/descendant": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/exit": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/missing": "pass",
+        "TestCLIInterruptedBuildReadinessCleanup/success": "pass",
+        "TestCLIInterruptedBuildResumesThroughForceRedispatch": "pass",
+        "TestDisposedBranchesAreGoneFromTheRepository": "pass",
+        "TestPackedNPMAncestorIsolation": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=false": "pass",
+        "TestPackedNPMAncestorIsolation/prefix=true": "pass",
+        "TestPackedNPMReleaseCandidateContract": "pass",
+        "TestPackedNPMReleaseCandidateContract/checksum_failure_preserves_the_previous_binary": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_candidate_migrates_and_rolls_back_an_n-1_colony_without_local_data_loss": "pass",
+        "TestPackedNPMReleaseCandidateContract/packed_npm_installs_the_matching_staged_archive": "pass",
+        "TestPackedNPMReleaseCandidateContract/retry_recovers_the_state_left_by_interrupted_activation": "pass",
+        "TestPackedNPMReleaseCandidateContract/wrong_version_archive_preserves_the_previous_binary": "pass"
+      },
+      "focused_cases": 372,
+      "installed_inventory": {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/installed-inventory-race.json",
+        "sha256": "sha256:a4ee3604039d888a9e59df63fc0f68eeecd0fa4ca0d46a8e2dc8a1ca3450955b"
+      },
+      "passed": true,
+      "reference_build_scope": "Independent compilation reference only. Packed fixture actual candidate/package/archive and 1119 installed entries are pinned in its raw test output and installed inventory; no native-host execution is inferred.",
+      "standalone_git_dir": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/race/repo/.git",
+      "test_cases": {
+        "fail": 0,
+        "pass": 16,
+        "skip": 0
+      }
+    }
+  },
+  "manifest": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/manifest.json",
+    "sha256": "sha256:84e932dcf0151643f54e5b72a46674dd2d5a8fdf9ef019cd29aef081fc56d805"
+  },
+  "native_qualification_passed": false,
+  "outstanding_gaps": [
+    "Historical full-suite readiness timeout cause remains unreproduced; original evidence is unchanged.",
+    "Plan16 still owns actual exact focused/full normal and race executions on the final integrated candidate. These list-only discovery and bounded checks are not full-run credit.",
+    "Real current-candidate native/Claude qualification and Phase205 owner acceptance are not supplied by this plan.",
+    "Disk exhaustion was measured and preserved. Only this run\u2019s owned disposable caches/checkouts were removed; disk capacity remains a host constraint.",
+    "The prior home-NPM incident remains only partially recovered."
+  ],
+  "plan": "204.2-13",
+  "prepare_invocation": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/prepare-final-invocation.json",
+    "sha256": "sha256:4e41ec66befb9d18a3c14f16fcd20d63e3241e8f1432fe7a1f694bc836e3696d"
+  },
+  "prior_npm_incident": "Partial recovery remains partial: 31 additions, 64 changes and 17 removals remain unestablished. This task does not restore or mutate the real home project.",
+  "production_inventory_entries": 1711,
+  "protected_files": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/protected-files-check.json",
+    "sha256": "sha256:e055a15cb9c3ab6cef4d3cbd5df809b2b8c58e2c0e8bdc60df5336066e859d52"
+  },
+  "recorded_at": "2026-09-17T21:41:18.367075+00:00",
+  "schema_version": "aether-native-gap-regression-preflight/v1",
+  "script_admission_controls": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/script-guard-checks.json",
+    "sha256": "sha256:9d52d99169c748a54b171bd206697a6764c71c148b7be490e2ee3d22104e7720"
+  },
+  "setup_attempts": {
+    "disposition": "Three pre-test exits are retained: local Go 1.26.1 was too old; automatic toolchain selection with disabled sum database refused twice. Selecting the existing cached Go 1.26.5 executable directly resolved setup without downloading or changing shared installations.",
+    "invocations": [
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-normal-invocation.json",
+        "sha256": "sha256:67d93edac2c6ef92859510bba4a769f6f6ddd15bfef4e3f399b2f4de98846b1e"
+      },
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-normal-v2-invocation.json",
+        "sha256": "sha256:aea6e505e29a745e120cc27cb110e7a7e60efc18bd426c52733549e66275c97f"
+      },
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-race-invocation.json",
+        "sha256": "sha256:c0f5521c13d2e0a9c3aa4bdd769b9e16fc1d471f38b5e67c97bd1b600c6ea77a"
+      }
+    ]
+  },
+  "source_patch": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight-final/candidate.patch",
+    "sha256": "sha256:c84b162bf2b93e4161b61a0436c63c1e77d2bca8918e2988840c9227de358950"
+  },
+  "source_refs_unchanged_during_preparation": true,
+  "status": "bounded_preflight_passed",
+  "superseded_attempts": {
+    "admission_refusal": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/failed-preflight-refusal.json",
+      "sha256": "sha256:95a985ab6eb29339eb998ba03cff2fa5373610a36cc97f7d5e3e0bfbcbf4068b"
+    },
+    "cleanup": [
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/cache-cleanup.json",
+        "sha256": "sha256:f0553477396ba69caa364580a6f4270e145ab2df5af3eac709e752f6d5b563a1"
+      },
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/cache-cleanup-outcome.json",
+        "sha256": "sha256:7e85975f54c6ab16fb7dc8c1af630c741c975d62d387836a0cd5f369a745a2c9"
+      },
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/initial-cache-cleanup.json",
+        "sha256": "sha256:e3392ebaccbbd4ea14355118d5313ef94c2486185d0b7ac19ee60ac7de1fd4d3"
+      },
+      {
+        "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/retired-clones.json",
+        "sha256": "sha256:0de9a047b0840778b4ba5170e53d6814618e9b2bfc4a574e24f0a6e1e65c028d"
+      }
+    ],
+    "disposition": "Normal preflight passed; first race command exited 1 with no events. Bounded retry reported compile: writing output: no space left on device. No test pass or broad-run credit is assigned. Only owned disposable caches and failed clones were retired after preserving raw evidence, source pins, patch, manifests and candidate binaries.",
+    "failed_manifest": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight/manifest.json",
+      "sha256": "sha256:276ce031b5d4fbef4cc211b131dc200095337a85fee0ce37959a42682e5deb01"
+    },
+    "first_preparation": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/prepare-invocation.json",
+      "sha256": "sha256:f6ce9054499d16da7dc876fd0ebc31ba2b0b1b3959031c1887fda1b833c28d3f"
+    },
+    "race_retry": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/regression-preflight/race-retry.json",
+      "sha256": "sha256:2953477c16f9b032a9dc9827b01f820290219b591cb3da8f1767108c636b6701"
+    }
+  },
+  "task1": {
+    "commit": "bfa78aed458f6d351b9f017c373c39db21b0a3d5",
+    "diagnosis": "Unconditional exactly-once parent Wait plus fixture-log-scoped descendant cleanup and synchronized output are proved. Forced missing-sentinel, early-exit, success and descendant cases pass and preserve an unrelated writer. The historical full-suite ten-second timeout did not recur; its original cause remains unresolved. No timeout extension or contention/path-length waiver was applied.",
+    "normal": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-final-normal-invocation.json",
+      "sha256": "sha256:9f763ec97ac21ecbc51ef7f27bdcc026c3732d183f57b93e3fee1074de0d4047"
+    },
+    "race": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-final-race-invocation.json",
+      "sha256": "sha256:0e4d55f9a744feb08427a88adf447981351b42493fa3f422ef4322d3378b728f"
+    },
+    "readiness_bound_seconds": 10,
+    "source": {
+      "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task1-final-source.json",
+      "sha256": "sha256:0125bb2686c3e27bebab6d68cb987e919a3c98b0c0ae8eb9c83ab225e8c6f276"
+    },
+    "test_count_per_mode": 6
+  },
+  "task2_initial_bounded_check": {
+    "path": "/Users/callumcowie/.aether-evidence/phase-204.2-gap-20260917T210924Z/plan-13/task2-normal-invocation.json",
+    "sha256": "sha256:e196e6a476d04a92e7fcc2f07e7c6a07bedc680d8143030f31b17d83cb6d6a06"
+  },
+  "test_corpus_entries": 833,
+  "tested_source_revision": "bfa78aed458f6d351b9f017c373c39db21b0a3d5",
+  "tested_source_status": "M  cmd/release_candidate_blackbox_test.go\nA  scripts/qualify-native-gap-regression.py"
+}

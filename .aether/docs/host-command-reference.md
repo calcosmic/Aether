@@ -93,7 +93,7 @@ ritual, heavy review, or runtime guidance asks for wrapper-spawned reviewers.
 - `--synthetic` — Mark as synthetic (Go CLI flag)
 - `--simulate` — Run in simulation mode (TS host flag). No real workers are spawned.
 - `--worker-timeout <duration>` — e.g. `15m`
-- `--no-learn` — Disable learning capture when finalization uses the flag
+- `--no-learn` — Skips only the legacy learning-entry capture; observations and failure records are still written so a blocked check still records what broke
 - `--classic-ceremony` — Named shortcut for the real heavy-review manifest path
 - `--no-dashboard` — Plain text output
 

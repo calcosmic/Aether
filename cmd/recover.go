@@ -1,106 +1,68 @@
 package cmd
 
 import (
-	"fmt"
-	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/spf13/cobra"
 )
 
-// recoverCmd is the cobra command for rescuing a stuck colony.
+const legacyRecoverMigrationSchemaVersion = "legacy-recover-migration/v1"
+
+type legacyRecoverMigrationResult struct {
+	SchemaVersion string                      `json:"schema_version"`
+	Command       string                      `json:"command"`
+	OutcomeKind   colony.OutcomeKind          `json:"outcome_kind"`
+	Explanation   string                      `json:"explanation"`
+	StateEffect   colony.LifecycleStateEffect `json:"state_effect"`
+	NextAction    string                      `json:"next_action"`
+}
+
+// recoverCmd remains parseable only so old automation receives a safe,
+// deterministic migration route. Recovery is now owned by resume; detailed
+// evidence inspection lives under maintenance.
 var recoverCmd = &cobra.Command{
-	Use:   "recover",
-	Short: "Rescue a stuck colony",
-	Long: `Scan the colony for stuck-state conditions and diagnose why it cannot make progress.
-Read-only by default; use --apply to attempt automatic fixes.`,
-	Args: cobra.NoArgs,
-	RunE: runRecover,
+	Use:          "recover",
+	Short:        "Legacy recovery migration route",
+	Hidden:       true,
+	Args:         cobra.NoArgs,
+	Annotations:  map[string]string{"aether.io/read-only": "true", "aether.io/store-free": "true", "aether.io/internal-only": "true"},
+	SilenceUsage: true,
+	RunE:         runRecover,
 }
 
 func init() {
 	rootCmd.AddCommand(recoverCmd)
-	recoverCmd.Flags().Bool("apply", false, "apply fixes for detected issues")
-	recoverCmd.Flags().Bool("force", false, "allow destructive repairs")
+	recoverCmd.Flags().Bool("apply", false, "legacy compatibility flag; no repair is performed")
+	recoverCmd.Flags().Bool("force", false, "legacy compatibility flag; no repair is performed")
 	recoverCmd.Flags().Bool("json", false, "output structured JSON")
+	_ = recoverCmd.Flags().MarkHidden("apply")
+	_ = recoverCmd.Flags().MarkHidden("force")
+	_ = recoverCmd.Flags().MarkHidden("json")
 }
 
-func runRecover(cmd *cobra.Command, args []string) error {
-	state, err := loadActiveColonyState()
-	if err != nil {
-		if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
-			visualFprint(stdout, renderNoColonyRecoverVisual())
-			return nil
-		}
-		visualFprintln(stdout, colonyStateLoadMessage(err))
-		return nil
+func runRecover(_ *cobra.Command, _ []string) error {
+	result := legacyRecoverMigrationResult{
+		SchemaVersion: legacyRecoverMigrationSchemaVersion,
+		Command:       "recover",
+		OutcomeKind:   colony.OutcomeKindNoChange,
+		Explanation:   "The standalone recover command is retired. Recovery now resumes the recorded lifecycle without creating a second repair owner.",
+		StateEffect:   colony.LifecycleStateEffectNone,
+		NextAction:    "aether resume",
 	}
-
-	dataDir := filepath.Join(resolveAetherRoot(), ".aether", "data")
-
-	apply, _ := cmd.Flags().GetBool("apply")
-	force, _ := cmd.Flags().GetBool("force")
-	jsonOut, _ := cmd.Flags().GetBool("json")
-
-	scanStart := time.Now()
-	issues, scanErr := performStuckStateScan(dataDir)
-	scanDuration := time.Since(scanStart)
-	if scanErr != nil {
-		visualFprintf(stdout, "Scan failed: %v\n", scanErr)
-		return nil
-	}
-
-	var repairResult *RepairResult
-	if apply && len(issues) > 0 {
-		repairResult, err = performRecoverRepairs(issues, dataDir, force, jsonOut)
-		if err != nil {
-			visualFprintf(stdout, "Repair failed: %v\n", err)
-			if jsonOut {
-				fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, nil))
-			} else {
-				output := renderRecoverDiagnosis(issues, state, nil)
-				visualFprint(stdout, output)
-			}
-			if recoverExitCode(issues) != 0 {
-				cmd.SilenceUsage = true
-				return fmt.Errorf("issues detected")
-			}
-			return nil
-		}
-
-		// Re-scan to get post-repair state (matches medic pattern).
-		postIssues, postErr := performStuckStateScan(dataDir)
-		if postErr != nil {
-			visualFprintf(stdout, "Post-repair scan failed: %v\n", postErr)
-		} else {
-			issues = postIssues
-		}
-	}
-
-	if jsonOut {
-		fmt.Fprint(stdout, renderRecoverJSON(issues, state, scanDuration, repairResult))
-	} else {
-		output := renderRecoverDiagnosis(issues, state, repairResult)
-		visualFprint(stdout, output)
-	}
-
-	if recoverExitCode(issues) != 0 {
-		cmd.SilenceUsage = true
-		return fmt.Errorf("issues detected")
-	}
+	outputWorkflow(result, renderLegacyRecoverMigration(result))
 	return nil
 }
 
-// renderNoColonyRecoverVisual renders the visual when no colony is initialized.
-func renderNoColonyRecoverVisual() string {
+func renderLegacyRecoverMigration(result legacyRecoverMigrationResult) string {
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("recover"), "Colony Recovery"))
+	b.WriteString(renderBanner(commandEmoji("recover"), "Recovery Moved"))
 	b.WriteString(visualDividerStr())
-	b.WriteString("No colony initialized in this repo.\n")
+	b.WriteString(result.Explanation)
+	b.WriteString("\nState effect: none; no repair was attempted.\n")
 	b.WriteString(renderNextUp(
-		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
-		`Run `+"`aether lay-eggs`"+` first if this repo has not been set up for Aether yet.`,
+		"Run `aether resume` to continue or recover the recorded lifecycle.",
+		"Run `aether maintenance recovery-inspect` when you need read-only diagnostic evidence.",
 	))
 	return b.String()
 }

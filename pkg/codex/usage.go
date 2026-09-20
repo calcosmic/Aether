@@ -76,26 +76,25 @@ const (
 	UsageSourceEstimate = "estimate"
 )
 
-// estimateTokensPerChar is the fallback ratio when no provider usage is found.
-// It is deliberately crude: an estimate exists so a dispatch never vanishes
-// from the ledger entirely, not so it can stand in for a measurement. Rows
-// carrying it are tagged UsageSourceEstimate and must be reported as such.
-const estimateCharsPerToken = 4
-
-// EstimateUsage produces a clearly-labelled fallback for a prompt whose worker
-// reported nothing. A missing row would silently shrink the measured total and
-// make a run look cheaper than it was.
-func EstimateUsage(promptChars int) WorkerUsage {
-	if promptChars <= 0 {
-		return WorkerUsage{Source: UsageSourceEstimate}
-	}
-	tokens := int64(promptChars / estimateCharsPerToken)
-	return WorkerUsage{
-		InputTokens: tokens,
-		TotalTokens: tokens,
-		Source:      UsageSourceEstimate,
-	}
-}
+// There is deliberately no character-derived fallback here.
+//
+// One existed: a helper that divided the assembled prompt's character count by
+// a fixed characters-per-token ratio and tagged the result as an estimate. It
+// was introduced so a dispatch never vanished from the ledger. Phase 196
+// deleted it at source, ratio constant and all.
+//
+// The owner ruled (D-01 as amended, 2026-08-27) that a worker whose tool
+// reported nothing shows NO number at all rather than a guess wearing a label:
+// the marked estimate collided with the promise that no figure is derived from
+// text length, and a number he cannot trust is worse than no number. Hiding
+// the figure at the renderer would have left a fake one sitting in the ledger
+// and surfacing in `aether spend`, so it goes at the producer.
+//
+// An unreported worker therefore carries the zero WorkerUsage, which Empty()
+// reports as absent and the renderer shows as "not reported".
+// TestNoTokenCountIsDerivedFromLength in the cmd package fails if anything,
+// anywhere in this package, the chat-model client, the agent pool or the whole
+// command package ever derives a token count from a length again.
 
 // ParseUsage extracts provider-reported token usage from a worker's raw stdout.
 //

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -102,24 +103,31 @@ var flagAddCmd = &cobra.Command{
 		if !loaded {
 			ff = colony.FlagsFile{Decisions: []colony.FlagEntry{}}
 		}
-		if ff.Decisions == nil {
-			ff.Decisions = []colony.FlagEntry{}
-		}
-
-		if existing, ok := matchingEnvironmentBlockedLaunchFlag(ff.Decisions, flag); ok {
-			result := map[string]interface{}{
-				"created": false,
-				"deduped": true,
-				"flag":    existing,
-				"total":   len(ff.Decisions),
+		err := updateFlagFile(&ff, func() error {
+			if ff.Decisions == nil {
+				ff.Decisions = []colony.FlagEntry{}
 			}
-			outputWorkflow(result, renderFlagActionVisual("flag", "Flag Already Active", result))
+
+			if existing, ok := matchingEnvironmentBlockedLaunchFlag(ff.Decisions, flag); ok {
+				result := map[string]interface{}{
+					"created": false,
+					"deduped": true,
+					"flag":    existing,
+					"total":   len(ff.Decisions),
+				}
+				outputWorkflow(result, renderFlagActionVisual("flag", "Flag Already Active", result))
+				return errFlagNoMutation
+			}
+
+			ff.Decisions = append(ff.Decisions, flag)
+
 			return nil
-		}
+		})
 
-		ff.Decisions = append(ff.Decisions, flag)
-
-		if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
+		if err != nil {
+			if errors.Is(err, errFlagNoMutation) {
+				return nil
+			}
 			outputError(2, fmt.Sprintf("failed to save flags: %v", err), nil)
 			return nil
 		}
@@ -184,23 +192,34 @@ var flagResolveCmd = &cobra.Command{
 			}
 		}
 
-		found := false
-		for i := range ff.Decisions {
-			if ff.Decisions[i].ID == id {
-				ff.Decisions[i].Resolved = true
-				ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
-				ff.Decisions[i].Resolution = message
-				found = true
-				break
+		err := updateFlagFile(&ff, func() error {
+			found := false
+			for i := range ff.Decisions {
+				if ff.Decisions[i].ID == id {
+					if flagRequiresBoundDecisionAnswer(ff.Decisions[i]) {
+						outputError(1, "protected decision requires its displayed bound decision-answer command", nil)
+						return errFlagNoMutation
+					}
+					ff.Decisions[i].Resolved = true
+					ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+					ff.Decisions[i].Resolution = message
+					found = true
+					break
+				}
 			}
-		}
 
-		if !found {
-			outputError(1, fmt.Sprintf("flag %q not found", id), nil)
+			if !found {
+				outputError(1, fmt.Sprintf("flag %q not found", id), nil)
+				return errFlagNoMutation
+			}
+
 			return nil
-		}
+		})
 
-		if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
+		if err != nil {
+			if errors.Is(err, errFlagNoMutation) {
+				return nil
+			}
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
@@ -226,44 +245,41 @@ var flagCheckBlockersCmd = &cobra.Command{
 			return nil
 		}
 
-		var ff colony.FlagsFile
-		if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
-			if err2 := store.LoadJSON("flags.json", &ff); err2 != nil {
-				outputOK(map[string]interface{}{
-					"blockers":     0,
-					"issues":       0,
-					"notes":        0,
-					"has_blockers": false,
-				})
-				return nil
-			}
+		snapshot, err := readBlockerSnapshot(store)
+		if err != nil {
+			detail := blockerSnapshotErrorDetail(store, err)
+			outputError(2, "blocker truth unavailable", map[string]interface{}{
+				"blocker_snapshot_available": false,
+				"blocker_snapshot_error":     detail,
+			})
+			return nil
 		}
-
-		blockers := 0
 		issues := 0
 		notes := 0
-		for _, f := range ff.Decisions {
-			if f.Resolved {
-				continue
-			}
-			switch f.Type {
-			case "blocker":
-				blockers++
-			case "issue":
-				issues++
-			case "note":
-				notes++
-			default:
-				issues++
+		if ff, ok := loadFlagsFile(store); ok {
+			for _, f := range ff.Decisions {
+				if f.Resolved || f.Type == "blocker" {
+					continue
+				}
+				switch f.Type {
+				case "note":
+					notes++
+				default:
+					// Preserve the diagnostic command's compatibility rule:
+					// unknown non-blocker records are issues, not notes.
+					issues++
+				}
 			}
 		}
 
-		outputOK(map[string]interface{}{
-			"blockers":     blockers,
-			"issues":       issues,
-			"notes":        notes,
-			"has_blockers": blockers > 0,
-		})
+		result := map[string]interface{}{
+			"issues":                     issues,
+			"notes":                      notes,
+			"has_blockers":               snapshot.Count > 0,
+			"blocker_snapshot_available": true,
+		}
+		addBlockerSnapshotFields(result, snapshot)
+		outputOK(result)
 		return nil
 	},
 }
@@ -291,29 +307,40 @@ var flagAcknowledgeCmd = &cobra.Command{
 			}
 		}
 
-		found := false
-		for i := range ff.Decisions {
-			if ff.Decisions[i].ID == id {
-				// Classic flag lifecycle: "Blockers CANNOT be acknowledged —
-				// they must be resolved before phase advancement." Parking a
-				// blocker would let the Iron Law gate be waved through.
-				if strings.EqualFold(strings.TrimSpace(ff.Decisions[i].Type), "blocker") {
-					outputError(1, fmt.Sprintf("flag %q is a blocker and cannot be acknowledged — resolve it: aether flag-resolve --id %s --message \"what fixed it\"", id, id), nil)
-					return nil
+		err := updateFlagFile(&ff, func() error {
+			found := false
+			for i := range ff.Decisions {
+				if ff.Decisions[i].ID == id {
+					if flagRequiresBoundDecisionAnswer(ff.Decisions[i]) {
+						outputError(1, "protected decision requires its displayed bound decision-answer command", nil)
+						return errFlagNoMutation
+					}
+					// Classic flag lifecycle: "Blockers CANNOT be acknowledged —
+					// they must be resolved before phase advancement." Parking a
+					// blocker would let the Iron Law gate be waved through.
+					if strings.EqualFold(strings.TrimSpace(ff.Decisions[i].Type), "blocker") {
+						outputError(1, fmt.Sprintf("flag %q is a blocker and cannot be acknowledged — resolve it: aether flag-resolve --id %s --message \"what fixed it\"", id, id), nil)
+						return errFlagNoMutation
+					}
+					ff.Decisions[i].Acknowledged = true
+					ff.Decisions[i].AcknowledgedAt = time.Now().UTC().Format(time.RFC3339)
+					found = true
+					break
 				}
-				ff.Decisions[i].Acknowledged = true
-				ff.Decisions[i].AcknowledgedAt = time.Now().UTC().Format(time.RFC3339)
-				found = true
-				break
 			}
-		}
 
-		if !found {
-			outputError(1, fmt.Sprintf("flag %q not found", id), nil)
+			if !found {
+				outputError(1, fmt.Sprintf("flag %q not found", id), nil)
+				return errFlagNoMutation
+			}
+
 			return nil
-		}
+		})
 
-		if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
+		if err != nil {
+			if errors.Is(err, errFlagNoMutation) {
+				return nil
+			}
 			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
 			return nil
 		}
@@ -364,27 +391,31 @@ var flagAutoResolveCmd = &cobra.Command{
 		cutoff := time.Now().UTC().AddDate(0, 0, -maxDays)
 		resolved := 0
 
-		for i := range ff.Decisions {
-			if ff.Decisions[i].Resolved {
-				continue
+		err := updateFlagFile(&ff, func() error {
+			for i := range ff.Decisions {
+				if ff.Decisions[i].Resolved || flagRequiresBoundDecisionAnswer(ff.Decisions[i]) {
+					continue
+				}
+				createdAt, err := time.Parse(time.RFC3339, ff.Decisions[i].CreatedAt)
+				if err != nil {
+					continue
+				}
+				if createdAt.Before(cutoff) {
+					ff.Decisions[i].Resolved = true
+					ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+					ff.Decisions[i].Resolution = fmt.Sprintf("aged out by flag-auto-resolve --max-days %d", maxDays)
+					resolved++
+				}
 			}
-			createdAt, err := time.Parse(time.RFC3339, ff.Decisions[i].CreatedAt)
-			if err != nil {
-				continue
-			}
-			if createdAt.Before(cutoff) {
-				ff.Decisions[i].Resolved = true
-				ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
-				ff.Decisions[i].Resolution = fmt.Sprintf("aged out by flag-auto-resolve --max-days %d", maxDays)
-				resolved++
-			}
-		}
 
-		if resolved > 0 {
-			if err := store.SaveJSON("pending-decisions.json", ff); err != nil {
-				outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
-				return nil
+			if resolved == 0 {
+				return errFlagNoMutation
 			}
+			return nil
+		})
+		if err != nil && !errors.Is(err, errFlagNoMutation) {
+			outputError(2, fmt.Sprintf("failed to save: %v", err), nil)
+			return nil
 		}
 
 		result := map[string]interface{}{
@@ -430,25 +461,31 @@ func autoResolveVerificationBlockers(verificationPassed bool, phaseID int) int {
 	}
 	resolved := 0
 	now := time.Now().UTC().Format(time.RFC3339)
-	for i := range ff.Decisions {
-		flag := &ff.Decisions[i]
-		if flag.Resolved || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
-			continue
+	err := updateFlagFile(&ff, func() error {
+		for i := range ff.Decisions {
+			flag := &ff.Decisions[i]
+			if flag.Resolved || flagRequiresBoundDecisionAnswer(*flag) || !strings.EqualFold(strings.TrimSpace(flag.Type), "blocker") {
+				continue
+			}
+			source := strings.ToLower(strings.TrimSpace(flag.Source))
+			if strings.Contains(source, "chaos") {
+				continue
+			}
+			if !autoResolveMachineSources[source] {
+				continue
+			}
+			flag.Resolved = true
+			flag.ResolvedAt = now
+			flag.Resolution = fmt.Sprintf("auto-resolved: phase %d verification passed", phaseID)
+			resolved++
 		}
-		source := strings.ToLower(strings.TrimSpace(flag.Source))
-		if strings.Contains(source, "chaos") {
-			continue
+		if resolved == 0 {
+			return errFlagNoMutation
 		}
-		if !autoResolveMachineSources[source] {
-			continue
-		}
-		flag.Resolved = true
-		flag.ResolvedAt = now
-		flag.Resolution = fmt.Sprintf("auto-resolved: phase %d verification passed", phaseID)
-		resolved++
-	}
-	if resolved > 0 {
-		_ = store.SaveJSON("pending-decisions.json", ff)
+		return nil
+	})
+	if err != nil && !errors.Is(err, errFlagNoMutation) {
+		return 0
 	}
 	return resolved
 }
@@ -474,4 +511,29 @@ func init() {
 	rootCmd.AddCommand(flagCheckBlockersCmd)
 	rootCmd.AddCommand(flagAcknowledgeCmd)
 	rootCmd.AddCommand(flagAutoResolveCmd)
+}
+
+// The generic flag lifecycle has no native binding or owner capability. These
+// rows share its file, but only their existing bound decision route may resolve
+// them. Recognize typed provenance and retained fields, never question prose.
+func flagRequiresBoundDecisionAnswer(flag colony.FlagEntry) bool {
+	if flag.Source == codexNativeDecisionSource || flag.Source == "forced-reviewer-waiver" || isAutopilotCheckpointType(flag.Type) {
+		return true
+	}
+	for _, key := range []string{"native_binding", "waiver_capability_sha256", "waiver_capability_sha256s", "checkpoint_key", "checkpoint_capability_sha256", "checkpoint_capability_sha256s", "work_generation"} {
+		if flag.HasAdditionalField(key) {
+			return true
+		}
+	}
+	return false
+}
+
+var errFlagNoMutation = errors.New("flag mutation declined or unchanged")
+
+// updateFlagFile reloads the current shared decision file under its existing
+// store lock before applying an ordinary flag mutation. A caller's earlier
+// flags.json fallback remains available only when the canonical file is absent;
+// an intervening native question/answer commit always replaces that stale read.
+func updateFlagFile(file *colony.FlagsFile, mutate func() error) error {
+	return store.UpdateJSONAtomically(pendingDecisionsFile, file, mutate)
 }

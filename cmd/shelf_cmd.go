@@ -260,7 +260,7 @@ func isNotExist(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "no such file") || strings.Contains(err.Error(), "not found")
+	return strings.Contains(err.Error(), "no such file") || strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "does not exist")
 }
 
 func init() {

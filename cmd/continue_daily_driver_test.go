@@ -67,10 +67,20 @@ func TestTasklessPhaseAdvancesOnVerifiedClaims(t *testing.T) {
 	}
 }
 
-// TestReconciledTaskAdvancesWhenVerified locks the H-04 fix: the runtime's
-// own recovery hint is `--reconcile-task <id>`, so a reconciled task with
-// passing phase verification must count as advancement evidence — excluding
-// it made the hint a dead loop.
+// TestReconciledTaskAdvancesWhenVerified locks the H-04 fix, extended by
+// 193-04 (FLOOR-03, closes the 2026-08-01 folded todo): the runtime's own
+// recovery hint is `--reconcile-task <id>`, so a reconciled task with a
+// passing deterministic floor (task.Verified -- verification.ChecksPassed,
+// which already folds criterion evidence in) must count as advancement
+// evidence, even when the generic claimsSatisfied flag is false — an
+// operator reconciling work done outside the pipeline structurally has no
+// claims file to satisfy, which is precisely why the finalize lane
+// deadlocked before this fix. "Reconcile is not a bypass" still holds
+// through task.Verified itself: a reconciled task whose deterministic floor
+// (and therefore verification.ChecksPassed) genuinely failed still blocks,
+// and claimsSatisfied still gates every UNRECONCILED task via the
+// artifactEvidenceTrusted path in classifyContinueTaskAssessment, untouched
+// by this change.
 func TestReconciledTaskAdvancesWhenVerified(t *testing.T) {
 	reconciledVerified := []codexContinueTaskAssessment{{TaskID: "2.2", Outcome: "manually_reconciled", Verified: true}}
 	if !continueTasksSupportAdvancement(reconciledVerified, true) {
@@ -80,8 +90,16 @@ func TestReconciledTaskAdvancesWhenVerified(t *testing.T) {
 	if continueTasksSupportAdvancement(reconciledUnverified, true) {
 		t.Fatal("reconciled task without verification advanced")
 	}
-	// Reconcile is not a bypass: failed builder claims still block.
-	if continueTasksSupportAdvancement(reconciledVerified, false) {
-		t.Fatal("reconciled task advanced despite failed claim verification")
+	// FLOOR-03: a reconciled+verified task now advances even when the
+	// generic claimsSatisfied flag is false -- claims absence alone is no
+	// longer sufficient to block a reconciled task (only a genuinely failed
+	// deterministic floor, i.e. Verified:false, still blocks one).
+	if !continueTasksSupportAdvancement(reconciledVerified, false) {
+		t.Fatal("reconciled+verified task should advance regardless of claimsSatisfied (FLOOR-03)")
+	}
+	// "Not a bypass" still holds: reconciled but NOT verified (deterministic
+	// floor failed) blocks regardless of claimsSatisfied.
+	if continueTasksSupportAdvancement(reconciledUnverified, false) {
+		t.Fatal("reconciled task with a failed deterministic floor must still block")
 	}
 }

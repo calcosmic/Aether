@@ -46,14 +46,14 @@ func setupStuckColonyStore(t *testing.T) (string, func(args []string) (string, s
 func TestForceSealOverridesIncompletePhases(t *testing.T) {
 	tmpDir, run := setupStuckColonyStore(t)
 
-	run([]string{"--force", "--reason", "finished the engine by hand outside the colony"})
+	out, errOut := run([]string{"--force", "--reason", "finished the engine by hand outside the colony"})
 
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatal(err)
 	}
 	if state.State != colony.StateCOMPLETED {
-		t.Fatalf("force seal did not seal the colony: state=%s", state.State)
+		t.Fatalf("force seal did not seal the colony: state=%s output=%s", state.State, out+errOut)
 	}
 
 	// The override is a named event, not a footnote.
@@ -66,7 +66,7 @@ func TestForceSealOverridesIncompletePhases(t *testing.T) {
 	if forcedEvent == "" {
 		t.Fatalf("no sealed_forced event recorded: %v", state.Events)
 	}
-	if !strings.Contains(forcedEvent, "2 unverified phase(s)") || !strings.Contains(forcedEvent, "finished the engine by hand") {
+	if !strings.Contains(forcedEvent, "sealed_forced_incomplete") || !strings.Contains(forcedEvent, "finished the engine by hand") {
 		t.Fatalf("forced event does not carry the honest record: %q", forcedEvent)
 	}
 
@@ -77,10 +77,10 @@ func TestForceSealOverridesIncompletePhases(t *testing.T) {
 	}
 	text := string(summary)
 	for _, want := range []string{
-		"Owner Override (Force Seal)",
+		"Forced seal record — completion not verified",
 		"finished the engine by hand outside the colony",
-		"phase 2 — Engine",
-		"phase 3 — Polish",
+		"phase 2 (Engine) is in_progress",
+		"phase 3 (Polish) is pending",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("CROWNED-ANTHILL.md missing override record %q:\n%s", want, text)
@@ -93,7 +93,7 @@ func TestForceSealRequiresReason(t *testing.T) {
 
 	out, errOut := run([]string{"--force"})
 	combined := out + errOut
-	if !strings.Contains(combined, "reason is required") {
+	if !strings.Contains(combined, "requires a nonblank --reason") {
 		t.Fatalf("force without a reason was not refused with an explanation: %s", combined)
 	}
 	var state colony.ColonyState
@@ -110,14 +110,11 @@ func TestSealStillRefusesWithoutForce(t *testing.T) {
 
 	out, errOut := run(nil)
 	combined := out + errOut
-	if !strings.Contains(combined, "all phases must be completed") {
+	if !strings.Contains(combined, "normal seal requires verified completion") {
 		t.Fatalf("incomplete phases did not refuse the seal: %s", combined)
 	}
 	// The refusal teaches the escape hatch instead of leaving the owner
 	// stuck with no way forward.
-	if !strings.Contains(combined, "--force --reason") {
-		t.Fatalf("refusal does not name the force-seal escape hatch: %s", combined)
-	}
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatal(err)

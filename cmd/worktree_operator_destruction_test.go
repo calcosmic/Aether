@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
-	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // This file proves 187-VERIFICATION.md's GAP-1, GAP-2 and GAP-3: three real,
@@ -60,9 +59,9 @@ func TestWorktreeMergeBackPreservesUncommittedWorkAfterMerge(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
+	dataDir := binding.DataDir
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -114,12 +113,6 @@ func TestNewFilePreserve(t *testing.T) {}
 	}
 	state := makeTestStateWithWorktrees(worktrees)
 	os.WriteFile(dataDir+"/COLONY_STATE.json", []byte(state), 0644)
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-merge-back", "--branch", branch})
 
@@ -200,9 +193,8 @@ func TestWorktreeCleanupRefusesToDestroyDirtyWorktree(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -221,12 +213,6 @@ func TestWorktreeCleanupRefusesToDestroyDirtyWorktree(t *testing.T) {
 	if err := os.WriteFile(wtPath+"/dirty-work.txt", []byte(dirtyContent), 0644); err != nil {
 		t.Fatalf("write dirty file: %v", err)
 	}
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-cleanup", "--branch", branch})
 
@@ -272,9 +258,8 @@ func TestWorktreeCleanupRemovesCleanMergedWorktree(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -289,12 +274,6 @@ func TestWorktreeCleanupRemovesCleanMergedWorktree(t *testing.T) {
 	wtPath := tmpDir + "/" + wtRelPath
 	// No commits ahead of main, no dirty files: fully clean and merged.
 	runGit(t, tmpDir, "worktree", "add", "-b", branch, wtPath, "HEAD")
-
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, _ := storage.NewStore(dataDir)
-	store = s
 
 	rootCmd.SetArgs([]string{"worktree-cleanup", "--branch", branch})
 
@@ -345,9 +324,8 @@ func TestInitPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -382,13 +360,7 @@ func TestInitPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		Worktrees:    []colony.WorktreeEntry{},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -450,9 +422,8 @@ func TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -476,13 +447,7 @@ func TestInitStillWipesWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 		Worktrees:    []colony.WorktreeEntry{},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -530,9 +495,8 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -584,13 +548,7 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -625,10 +583,10 @@ func TestRecoverApplyPreservesUnmergedOrphanBranch(t *testing.T) {
 		t.Fatalf("expected the unmerged commit to still be reachable from some ref, but `git log --all --oneline` shows: %s", string(logOut))
 	}
 
-	// D-02: report, don't stay silent.
+	// Retired recovery is intentionally a zero-write compatibility response.
 	combined := stdoutBuf.String() + stderrBuf.String() + realStderr
-	if !strings.Contains(combined, "left alone") && !strings.Contains(combined, "Kept the work") {
-		t.Errorf("expected a plain-language report that the branch was kept, got: %s", combined)
+	if !strings.Contains(combined, "standalone recover command is retired") || !strings.Contains(combined, "aether resume") {
+		t.Errorf("expected canonical recovery migration guidance, got: %s", combined)
 	}
 }
 
@@ -645,9 +603,8 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -687,13 +644,7 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -718,8 +669,11 @@ func TestRecoverApplyDeletesTrulyMergedOrphanBranch(t *testing.T) {
 	}
 
 	listOut, _ := exec.Command("git", "-C", tmpDir, "branch", "--list", "phase-4/orphan-merged").CombinedOutput()
-	if strings.TrimSpace(string(listOut)) != "" {
-		t.Errorf("expected a truly merged orphan branch to be deleted by `recover --apply`, but it still exists: %q", string(listOut))
+	if strings.TrimSpace(string(listOut)) == "" {
+		t.Errorf("retired recover unexpectedly deleted branch: %q", string(listOut))
+	}
+	if !strings.Contains(stdoutBuf.String()+stderrBuf.String(), "standalone recover command is retired") {
+		t.Errorf("retired recover did not report its no-op migration: stdout=%s stderr=%s", stdoutBuf.String(), stderrBuf.String())
 	}
 }
 
@@ -750,9 +704,8 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 	stdout = &stdoutBuf
 	stderr = &stderrBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -796,13 +749,7 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -829,10 +776,11 @@ func TestAbandonPreservesUnrecordedWorktreeWithUncommittedWork(t *testing.T) {
 		t.Fatalf("expected the worker workspace's uncommitted file to survive `abandon --confirm`, but it is gone: stat %s: no such file or directory", wtPath+"/mid-build-notes.txt")
 	}
 
-	// D-02: report, don't stay silent.
+	// Retired abandon leaves every workspace untouched and routes the owner to
+	// the explicit forced-seal decision instead.
 	combined := stdoutBuf.String() + stderrBuf.String() + realStderr
-	if !strings.Contains(combined, "left in place") && !strings.Contains(combined, "Kept the work") {
-		t.Errorf("expected a plain-language report that the worker workspace's work was kept, got: %s", combined)
+	if !strings.Contains(combined, "standalone abandon command is retired") || !strings.Contains(combined, "aether seal --force --reason") {
+		t.Errorf("expected retired-command migration guidance, got: %s", combined)
 	}
 }
 
@@ -848,9 +796,8 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -887,13 +834,7 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -909,8 +850,8 @@ func TestAbandonStillClearsWorktreesDirectoryWhenTrulyEmpty(t *testing.T) {
 	}
 
 	worktreesDir := filepath.Join(tmpDir, ".aether", "worktrees")
-	if _, statErr := os.Stat(worktreesDir); statErr == nil {
-		t.Errorf("expected worktrees directory to be cleared when it holds no real worktree work, but it still exists")
+	if _, statErr := os.Stat(worktreesDir); statErr != nil {
+		t.Errorf("retired abandon must not delete the worktrees directory: %v", statErr)
 	}
 }
 
@@ -925,9 +866,8 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 	var stdoutBuf bytes.Buffer
 	stdout = &stdoutBuf
 
-	tmpDir := t.TempDir()
-	dataDir := tmpDir + "/.aether/data"
-	os.MkdirAll(dataDir, 0755)
+	binding := bindCommandTestRepository(t)
+	tmpDir := binding.Root
 
 	runGit(t, tmpDir, "init")
 	runGit(t, tmpDir, "config", "user.email", "test@example.com")
@@ -966,13 +906,7 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 		},
 	}
 
-	os.Setenv("AETHER_ROOT", tmpDir)
-	defer os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))
-
-	s, err := storage.NewStore(dataDir)
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
+	s := binding.Store
 	if err := s.SaveJSON("COLONY_STATE.json", priorState); err != nil {
 		t.Fatalf("save prior state: %v", err)
 	}
@@ -989,24 +923,12 @@ func TestAbandonPreviewMentionsWorkerWorkspacesWithWork(t *testing.T) {
 	if output == "" {
 		t.Fatalf("expected JSON output on stdout, got empty")
 	}
-	// Test mode captures the raw JSON envelope (outputOK), not the rendered
-	// visual (writeVisualOutput only fires for a real terminal) -- assert on
-	// the structured field the preview now carries, and separately confirm
-	// renderAbandonPreviewVisual actually turns that field into a
-	// plain-language sentence a human reading the real CLI output would see.
+	// Retired inputs deliberately expose a narrow no-op migration response,
+	// rather than a preview with destructive authority.
 	envelope := assertOKEnvelope(t, output)
 	result := envelope["result"].(map[string]interface{})
-	if withWork := intValue(result["worker_workspaces_with_work"]); withWork < 1 {
-		t.Errorf("expected worker_workspaces_with_work >= 1 in the preview, got %v (full output: %s)", result["worker_workspaces_with_work"], output)
-	}
-
-	summary := abandonColonySummary(colony.ColonyState{
-		Plan: colony.Plan{Phases: []colony.Phase{}},
-	})
-	summary["worker_workspaces_with_work"] = 1
-	visual := renderAbandonPreviewVisual(summary)
-	if !strings.Contains(visual, "unsaved") && !strings.Contains(visual, "unmerged") {
-		t.Errorf("expected the rendered preview to mention worker workspaces holding unsaved/unmerged work, got: %s", visual)
+	if result["state_effect"] != "none" || !strings.Contains(stringValue(result["explanation"]), "retired") {
+		t.Errorf("retired abandon preview did not fail closed: %v", result)
 	}
 
 	if content, readErr := os.ReadFile(wtPath + "/dirty.txt"); readErr != nil || string(content) != "dirty\n" {

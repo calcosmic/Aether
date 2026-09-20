@@ -1,0 +1,77 @@
+{
+  "schema_version": "phase204.2-focused-failure/v1",
+  "recorded_at": "2026-09-20T07:56:01.442842+00:00",
+  "source_revision": "e6e5c5111aebd104957af08e77772283bbb1e3db",
+  "snapshot_revision": "3f548ec56371ab5cf050eaeb4d6eb116b5bdae96",
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/summary.json",
+    "sha256": "sha256:ff705d88185aaf3e875b223cfcdc50997d841cfa8fe6a3dc42b3ca10adfaf799"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/run-focused-inspection-forms-repair.PENDING.py",
+    "sha256": "sha256:d875caae39ddf2669ba9c3226673d82ae6134760e5a03c815de3f4d51fd08a0d"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/config.READY.json",
+    "sha256": "sha256:e39a86d086dcdce164905beb80e409be3227951269a5729eb88a0856354186a5"
+  },
+  "integrated_admission": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/preflight.json",
+    "sha256": "sha256:208b3a5e75d70c300379dd44fdeb31020cfa626309bffe9b2325735f427f7bdb"
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "normal": {
+    "argv": [
+      "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "./cmd",
+      "-run",
+      "^(TestCodexNativeChildContextFetchEvidence|TestCodexNativeChildContextBootstrap|TestCodexNativeChildContextPassiveWait|TestCodexNativeChildFetchFactoryAndLegacy|TestCodexNativeChildFetchReadAckNoMutation|TestCodexNativeChildFetchAckRefusals|TestCodexNativeGapLiteralCommandAttribution|TestCodexNativeCodeModeOutputProjection|TestCodexNativeGapObservedSingleQuoteCapture|TestCodexNativeGapParentCoordination|TestCodexNativeGapUncachedCheckSurvivesPlainRecheck|TestCodexNativeGapUncachedCheckSurvivesCoverageRecheck|TestCodexNativeGapRecordedFailedRefusal|TestCodexNativeGapObservedRefusal|TestCodexNativeObservedOperationWrappers|TestCodexNativeObservedReadOnlyBatch|TestCodexNativeObservedFixtureInspections|TestCodexNativeObservedLiteralPatch|TestCodexNativeCodeModeSequenceBoundary|TestCodexNativeReadOnlyBatchBoundary|TestCodexNativeLiteralPatchBoundary|TestCodexNativeReadOnlyBatchEventLinkage|TestCodexNativeThirdReviewCodeModeOutcome|TestCodexNativeSecondReviewControls)$",
+      "-parallel",
+      "1",
+      "-count=1",
+      "-timeout",
+      "600s",
+      "-json"
+    ],
+    "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/repo",
+    "exit_code": 1,
+    "elapsed_seconds": 53.05963706970215,
+    "stopped_reason": null,
+    "stdout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/normal-cmd.stdout",
+      "sha256": "sha256:feeacc90709ad1c6afe0a1a3b5cb7f797286b2da4f28f586ca7321094fb9e5fc"
+    },
+    "stderr": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-inspection-forms-repair-ege7ii4g/normal-cmd.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "normal_result": {
+    "pass": 1664,
+    "fail": 3,
+    "skip": 0,
+    "failed_leaf": "TestCodexNativeObservedFixtureInspections/rg_--files_-g_'*.go'",
+    "failure_message": "codex_native_gap_attribution_test.go:1924: child=true wantfalse",
+    "parent_and_package_failure_included": true
+  },
+  "race": "not run after normal-lane failure",
+  "cleanup": {
+    "errors": [],
+    "remaining_pids": [],
+    "remaining_zombie_pids": [],
+    "reaped_pids": [
+      54637
+    ],
+    "signals": []
+  },
+  "diagnosis": "A pre-existing table row still expects quoted basename-positive rg glob *.go to be rejected. The reviewed new bounded positive basename grammar intentionally accepts it. Actual parser acceptance agrees with the new contract; the single stale fixture expectation must be corrected without changing production parser or historical outcome.",
+  "proposed_scope": [
+    "cmd/codex_native_gap_attribution_test.go"
+  ],
+  "next": "Independently review the one-line fixture expectation correction, preserve this failed focused attempt, and require new admitted normal/race execution before live qualification."
+}

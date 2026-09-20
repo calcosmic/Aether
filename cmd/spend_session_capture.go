@@ -44,45 +44,97 @@ type spendSessionRecord struct {
 // which a crafted sibling directory name could defeat (e.g.
 // "/home/user/.claude/projects-evil").
 func validateSpendTranscriptPath(claimed string) (string, error) {
-	claimed = strings.TrimSpace(claimed)
-	if claimed == "" {
-		return "", fmt.Errorf("transcript path is empty")
-	}
-	if strings.ContainsRune(claimed, 0) {
-		return "", fmt.Errorf("transcript path contains a null byte")
-	}
-	if !filepath.IsAbs(claimed) {
-		return "", fmt.Errorf("transcript path %q must be absolute", claimed)
-	}
-	candidate := filepath.Clean(claimed)
-
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		return "", fmt.Errorf("resolve user home directory: %w", err)
 	}
 	root := filepath.Join(home, ".claude", "projects")
 
-	rootEval, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		rootEval = root
+	return validateSpendContainedPath(root, claimed, "transcript path")
+}
+
+// validateSpendContainedPath is the ONE containment boundary for every path the
+// spend subsystem opens, whichever platform's store it belongs to. Both callers
+// -- validateSpendTranscriptPath (Claude Code's projects directory) and
+// validateOpenCodeStoragePath (OpenCode's local storage tree) -- go through it.
+//
+// It was two copies until Phase 196 plan 05. Two copies of a security boundary
+// is one copy too many: the salvaged OpenCode reader restated the same rule and
+// added its own symlink helper without refactoring the original to use it, so a
+// later fix to one copy would silently have left the other wrong.
+// TestSpendPathContainmentHasOneImplementation fails if a second copy appears.
+//
+// The rule, unchanged: reject an empty path, a null byte and a relative path;
+// filepath.Clean; resolve symlinks on BOTH root and candidate; then decide
+// containment with filepath.Rel and a leading ".." rejection -- never a bare
+// lexical prefix match on the raw strings, which a crafted sibling directory
+// name such as "<root>-evil" would defeat.
+//
+// label names the thing being validated in plain English, so the diagnostic a
+// caller surfaces says what was refused rather than quoting an internal name.
+func validateSpendContainedPath(root, claimed, label string) (string, error) {
+	claimed = strings.TrimSpace(claimed)
+	if claimed == "" {
+		return "", fmt.Errorf("%s is empty", label)
 	}
-	candidateEval, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		candidateEval = candidate
+	if strings.ContainsRune(claimed, 0) {
+		return "", fmt.Errorf("%s contains a null byte", label)
 	}
+	if !filepath.IsAbs(claimed) {
+		return "", fmt.Errorf("%s %q must be absolute", label, claimed)
+	}
+	candidate := filepath.Clean(claimed)
+
+	rootEval := evalSpendPathSymlinks(root)
+	candidateEval := evalSpendPathSymlinks(candidate)
 
 	if candidateEval == rootEval {
 		return candidate, nil
 	}
 	rel, err := filepath.Rel(rootEval, candidateEval)
 	if err != nil {
-		return "", fmt.Errorf("transcript path %q does not resolve under %q", claimed, root)
+		return "", fmt.Errorf("%s %q does not resolve under %q", label, claimed, root)
 	}
 	if strings.SplitN(rel, string(filepath.Separator), 2)[0] == ".." {
-		return "", fmt.Errorf("transcript path %q escapes %q", claimed, root)
+		return "", fmt.Errorf("%s %q escapes %q", label, claimed, root)
 	}
 
 	return candidate, nil
+}
+
+// evalSpendPathSymlinks resolves symlinks in path, and — where path does not
+// exist yet — resolves symlinks in its deepest EXISTING ancestor and rejoins
+// the remainder.
+//
+// The plain filepath.EvalSymlinks fallback this replaced returned the
+// un-evaluated path whenever the target was absent, which made containment
+// compare an evaluated root against an unevaluated candidate. On macOS, where
+// /var is a symlink to /private/var, that rejected a perfectly legitimate
+// transcript path purely because the file did not exist yet — the containment
+// answer depended on whether the file happened to have been written, which is
+// not what containment means. Found by Phase 196 plan 03, whose reader must
+// answer "no rows, no error" for a session that never wrote a transcript.
+//
+// It cannot loosen containment: every segment that exists is still resolved,
+// filepath.Clean has already collapsed any "..", and the caller still decides
+// containment with filepath.Rel rather than a lexical prefix match.
+func evalSpendPathSymlinks(path string) string {
+	if evaluated, err := filepath.EvalSymlinks(path); err == nil {
+		return evaluated
+	}
+	remainder := ""
+	current := path
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			return path
+		}
+		remainder = filepath.Join(filepath.Base(current), remainder)
+		if evaluated, err := filepath.EvalSymlinks(parent); err == nil {
+			return filepath.Join(evaluated, remainder)
+		}
+		current = parent
+	}
 }
 
 // recordSpendSessionFromHook is the fail-soft entry point called on every

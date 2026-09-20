@@ -203,10 +203,12 @@ else, once the kill has happened:
 | Lane | Resume command |
 |---|---|
 | gsd | `/gsd-resume-work` |
-| aether-interactive | `/ant-resume`, then `/ant-recover` |
-| aether-autopilot | `/ant-resume`, then `/ant-recover` |
+| aether-interactive | `/ant-resume` |
+| aether-autopilot | `/ant-resume` |
 
-Any operator input beyond the single documented resume command/sequence for
+For Aether, `/ant-resume` itself validates a clean handoff or reconstructs the
+safest honest point after an unclean interruption. Any operator input beyond
+the single documented resume command for
 that lane is an unscripted intervention (see "What you may type" above) —
 it does not disqualify the run, but it must be logged, not silently
 absorbed into "the system resumed successfully."

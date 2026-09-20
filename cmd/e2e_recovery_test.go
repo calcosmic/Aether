@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +76,70 @@ func assertCategoryInIssues(t *testing.T, issues []HealthIssue, category string)
 	for _, iss := range issues {
 		t.Logf("  found: [%s] %s: %s", iss.Severity, iss.Category, iss.Message)
 	}
+}
+
+// inspectE2ERecovery exercises the canonical diagnostic-only maintenance route.
+// It proves that inspection reports the same recovery categories while leaving
+// the fixture byte-for-byte unchanged; runnable restoration remains resume-owned.
+func inspectE2ERecovery(t *testing.T, buf *bytes.Buffer, dataDir string) []HealthIssue {
+	t.Helper()
+	before := e2eRecoveryFingerprint(t, dataDir)
+	buf.Reset()
+	if err := e2eRunRecover(t, "maintenance", "recovery-inspect"); err != nil {
+		t.Fatalf("maintenance recovery inspection returned error: %v\n%s", err, buf.String())
+	}
+	after := e2eRecoveryFingerprint(t, dataDir)
+	if after != before {
+		t.Fatalf("read-only recovery inspection changed durable evidence\nbefore=%s\nafter=%s", before, after)
+	}
+
+	var envelope struct {
+		OK     bool           `json:"ok"`
+		Result map[string]any `json:"result"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode maintenance recovery inspection: %v\n%s", err, buf.String())
+	}
+	if !envelope.OK || envelope.Result["operation_id"] != "recovery.inspect" || envelope.Result["state_effect"] != "none" || envelope.Result["next_action"] != "aether resume" {
+		t.Fatalf("unexpected canonical recovery inspection result: %#v", envelope)
+	}
+	rawIssues, err := json.Marshal(envelope.Result["issues"])
+	if err != nil {
+		t.Fatalf("marshal inspection issues: %v", err)
+	}
+	var issues []HealthIssue
+	if err := json.Unmarshal(rawIssues, &issues); err != nil {
+		t.Fatalf("decode inspection issues: %v", err)
+	}
+	return issues
+}
+
+func e2eRecoveryFingerprint(t *testing.T, root string) string {
+	t.Helper()
+	hash := sha256.New()
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(hash, "%s|%s|%o\n", filepath.ToSlash(rel), entry.Type(), entry.Type())
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		_, _ = hash.Write(content)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("fingerprint recovery fixture: %v", err)
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
 // ---------------------------------------------------------------------------
@@ -227,23 +292,15 @@ func TestE2ERecoveryMissingBuildPacket(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedMissingPacketState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for missing build packet")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	if output.ExitCode != 1 {
-		t.Errorf("expected exit_code=1, got %d", output.ExitCode)
-	}
-	if len(output.Issues) < 1 {
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	if len(issues) < 1 {
 		t.Fatal("expected at least 1 issue")
 	}
 
-	assertCategoryInIssues(t, output.Issues, "missing_build_packet")
+	assertCategoryInIssues(t, issues, "missing_build_packet")
 
 	// Verify severity and fixability.
-	for _, iss := range output.Issues {
+	for _, iss := range issues {
 		if iss.Category == "missing_build_packet" {
 			if iss.Severity != "critical" {
 				t.Errorf("expected severity critical, got %s", iss.Severity)
@@ -266,45 +323,26 @@ func TestE2ERecoveryStaleSpawned(t *testing.T) {
 
 	seedStaleSpawnedState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for stale spawned workers")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	if output.ExitCode != 1 {
-		t.Errorf("expected exit_code=1, got %d", output.ExitCode)
-	}
-
-	assertCategoryInIssues(t, output.Issues, "stale_spawned")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "stale_spawned")
 }
 
 func TestE2ERecoveryPartialPhase(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedPartialPhaseState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for partial phase")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, output.Issues, "partial_phase")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "partial_phase")
 }
 
 func TestE2ERecoveryBadManifest(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedBadManifestState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for bad manifest")
-	}
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "bad_manifest")
 
-	output := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, output.Issues, "bad_manifest")
-
-	for _, iss := range output.Issues {
+	for _, iss := range issues {
 		if iss.Category == "bad_manifest" && iss.Severity != "critical" {
 			t.Errorf("expected severity critical for bad_manifest, got %s", iss.Severity)
 		}
@@ -315,56 +353,32 @@ func TestE2ERecoveryDirtyWorktree(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedDirtyWorktreeState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for dirty worktree")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, output.Issues, "dirty_worktree")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "dirty_worktree")
 }
 
 func TestE2ERecoveryBrokenSurvey(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedBrokenSurveyState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for broken survey")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, output.Issues, "broken_survey")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "broken_survey")
 }
 
 func TestE2ERecoveryMissingAgents(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 	seedMissingAgentsState(t, dataDir)
 
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for missing agents")
-	}
-
-	output := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, output.Issues, "missing_agents")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "missing_agents")
 }
 
 // ---------------------------------------------------------------------------
-// TEST-02: Compound stuck-state detection and repair (2 tests)
+// TEST-02: Compound stuck-state diagnosis without mutation (2 tests)
 // ---------------------------------------------------------------------------
 
-// TestE2ERecoveryCompoundState seeds multiple safe stuck states simultaneously,
-// verifies all categories are detected in a single scan, then runs --apply --force
-// to exercise the full repair pipeline.
-//
-// Note: The recovery system uses atomic rollback -- if ANY single repair fails,
-// ALL repairs in the batch are rolled back to the backup. The missing_agents repair
-// always fails in a test environment (no hub available), which triggers rollback of
-// all other successful repairs. The test verifies:
-// 1. All 5 safe categories are correctly detected in a single scan
-// 2. Repairs are attempted (present in the repair output)
-// 3. A backup is created before repairs begin
+// TestE2ERecoveryCompoundState keeps compound detection separate from
+// restoration: inspection reports every condition without changing durable state.
 func TestE2ERecoveryCompoundState(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 
@@ -398,73 +412,16 @@ func TestE2ERecoveryCompoundState(t *testing.T) {
 	// No manifest (triggers missing_build_packet AND partial_phase).
 	// No agent files (triggers missing_agents).
 
-	// Step 1: Scan-only to verify all expected categories are detected.
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error (exit code 1) for compound stuck state")
-	}
-
-	scanOutput := parseRecoverJSON(t, buf)
+	issues := inspectE2ERecovery(t, buf, dataDir)
 	expectedCategories := []string{"missing_build_packet", "stale_spawned", "partial_phase", "broken_survey", "missing_agents"}
 	for _, cat := range expectedCategories {
-		assertCategoryInIssues(t, scanOutput.Issues, cat)
-	}
-
-	// Step 2: Run repair (--apply --force --json) and verify the pipeline executes.
-	buf.Reset()
-	_ = e2eRunRecover(t, "recover", "--apply", "--force", "--json")
-
-	// Parse the full JSON output (including repair details).
-	repairOutput := parseRecoverJSONMap(t, buf)
-
-	// Verify backup was created.
-	tmpDir := os.Getenv("AETHER_ROOT")
-	backupsDir := filepath.Join(tmpDir, ".aether", "backups")
-	if entries, err := os.ReadDir(backupsDir); err != nil || len(entries) == 0 {
-		t.Errorf("expected backup directory to be created at %s", backupsDir)
-	}
-
-	// Verify repairs were attempted.
-	repairs, ok := repairOutput["repairs"].(map[string]interface{})
-	if !ok {
-		t.Fatal("expected 'repairs' in output")
-	}
-	attempted, _ := repairs["attempted"].(float64)
-	if attempted == 0 {
-		t.Error("expected at least 1 repair attempted")
-	}
-
-	// Verify the repair output contains a mix of succeeded and failed/rolled-back.
-	// Due to atomic rollback triggered by missing_agents failure, all successful
-	// repairs are rolled back. This is expected behavior.
-	details, ok := repairs["details"].([]interface{})
-	if !ok || len(details) == 0 {
-		t.Fatal("expected repair details in output")
-	}
-	foundRepairAttempt := false
-	for _, d := range details {
-		detail, ok := d.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		cat, _ := detail["Category"].(string)
-		action, _ := detail["Action"].(string)
-		if cat == "missing_build_packet" && strings.Contains(action, "reset_to_ready") {
-			foundRepairAttempt = true
-		}
-	}
-	if !foundRepairAttempt {
-		t.Error("expected missing_build_packet repair to be attempted")
+		assertCategoryInIssues(t, issues, cat)
 	}
 }
 
 // TestE2ERecoveryCompoundDestructive seeds both destructive stuck states
-// (dirty_worktree + bad_manifest), verifies both are detected, then runs
-// --apply --force and verifies the repair pipeline executes.
-//
-// Note: bad_manifest with corrupt JSON is marked non-fixable by the scanner,
-// so it is not dispatched for repair. dirty_worktree is fixable but may be
-// rolled back if other repairs in the batch fail (e.g., missing_agents).
+// (dirty_worktree + bad_manifest), verifies both are detected and that the
+// diagnostic route neither repairs nor clears either piece of evidence.
 func TestE2ERecoveryCompoundDestructive(t *testing.T) {
 	buf, dataDir := e2eRecoverSetup(t)
 
@@ -489,43 +446,20 @@ func TestE2ERecoveryCompoundDestructive(t *testing.T) {
 	// Create corrupt manifest.
 	recoverWriteFile(t, dataDir, "build/phase-1/manifest.json", "{broken")
 
-	// Step 1: Scan-only to verify both categories.
-	err := e2eRunRecover(t, "recover", "--json")
-	if err == nil {
-		t.Fatal("expected error for compound destructive state")
-	}
-	scanOutput := parseRecoverJSON(t, buf)
-	assertCategoryInIssues(t, scanOutput.Issues, "dirty_worktree")
-	assertCategoryInIssues(t, scanOutput.Issues, "bad_manifest")
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	assertCategoryInIssues(t, issues, "dirty_worktree")
+	assertCategoryInIssues(t, issues, "bad_manifest")
 
 	// Verify bad_manifest corrupt JSON is detected as critical but NOT fixable.
-	for _, iss := range scanOutput.Issues {
+	for _, iss := range issues {
 		if iss.Category == "bad_manifest" {
 			if iss.Severity != "critical" {
 				t.Errorf("expected bad_manifest severity critical, got %s", iss.Severity)
 			}
-			// Known behavior: corrupt JSON manifest is not marked fixable by the scanner,
-			// even though the repair function can handle it. The repair dispatcher only
-			// processes fixable issues, so this issue is not repaired.
 			if iss.Fixable {
 				t.Error("expected bad_manifest corrupt JSON to be non-fixable per scanner")
 			}
 		}
-	}
-
-	// Step 2: Run repair with --apply --force --json.
-	buf.Reset()
-	_ = e2eRunRecover(t, "recover", "--apply", "--force", "--json")
-
-	// Verify repair output contains attempts.
-	repairOutput := parseRecoverJSONMap(t, buf)
-	repairs, ok := repairOutput["repairs"].(map[string]interface{})
-	if !ok {
-		t.Fatal("expected 'repairs' in repair output")
-	}
-	attempted, _ := repairs["attempted"].(float64)
-	if attempted == 0 {
-		t.Error("expected at least 1 repair attempt")
 	}
 }
 
@@ -534,39 +468,18 @@ func TestE2ERecoveryCompoundDestructive(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestE2ERecoveryHealthyColony proves that a fully healthy colony produces
-// zero false positives from aether recover. Tests both JSON and text output modes.
+// zero false positives from the canonical structured inspection route.
 func TestE2ERecoveryHealthyColony(t *testing.T) {
-	buf, _ := e2eRecoverSetup(t)
+	buf, dataDir := e2eRecoverSetup(t)
 	tmpDir := os.Getenv("AETHER_ROOT")
 
 	seedHealthyColonyState(t, tmpDir)
 
-	// JSON mode: verify exit code 0 and empty issues.
-	err := e2eRunRecover(t, "recover", "--json")
-	if err != nil {
-		t.Fatalf("expected exit code 0 for healthy colony, got error: %v\noutput: %s", err, buf.String())
-	}
-
-	output := parseRecoverJSON(t, buf)
-	if output.ExitCode != 0 {
-		t.Errorf("expected exit_code=0, got %d", output.ExitCode)
-	}
-	if len(output.Issues) != 0 {
-		t.Errorf("expected 0 issues for healthy colony, got %d:", len(output.Issues))
-		for _, iss := range output.Issues {
+	issues := inspectE2ERecovery(t, buf, dataDir)
+	if len(issues) != 0 {
+		t.Errorf("expected 0 issues for healthy colony, got %d:", len(issues))
+		for _, iss := range issues {
 			t.Logf("  unexpected: [%s] %s: %s", iss.Severity, iss.Category, iss.Message)
 		}
-	}
-
-	// Text mode: verify "No stuck-state conditions detected" message.
-	buf.Reset()
-	err = e2eRunRecover(t, "recover")
-	if err != nil {
-		t.Fatalf("expected exit code 0 in text mode, got error: %v", err)
-	}
-
-	textOutput := buf.String()
-	if !strings.Contains(textOutput, "No stuck-state conditions detected") {
-		t.Errorf("text output should contain 'No stuck-state conditions detected', got:\n%s", textOutput)
 	}
 }

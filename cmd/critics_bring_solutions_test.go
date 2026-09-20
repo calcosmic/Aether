@@ -210,7 +210,7 @@ func TestAutoResolveRequiresBuildPass(t *testing.T) {
 	}
 }
 
-func TestStructuredBlockingFindingBlocksContinue(t *testing.T) {
+func TestStructuredCriticalFindingBlocksContinue(t *testing.T) {
 	now := time.Now().UTC()
 	steps := []codexContinueWorkerFlowStep{
 		{
@@ -219,14 +219,14 @@ func TestStructuredBlockingFindingBlocksContinue(t *testing.T) {
 			Name:   "Sentinel-2",
 			Status: "completed",
 			Findings: []codexReviewFinding{
-				{Domain: "testing", Severity: "HIGH", Blocking: true, Description: "the CSV export writes headers twice", Suggestion: "guard the header write with the firstRow flag in export.go:88"},
+				{Domain: "testing", Severity: "CRITICAL", Description: "the CSV export writes headers twice", Suggestion: "guard the header write with the firstRow flag in export.go:88"},
 			},
 		},
 	}
 	planned := []codexContinueExternalDispatch{{Stage: "review", Caste: "watcher", Name: "Sentinel-2"}}
 	report := externalContinueReviewReport(4, steps, now, false, colony.VerificationDepthStandard, planned)
 	if report.Passed {
-		t.Fatalf("a completed review with a typed blocking finding passed — structured findings are still decorative")
+		t.Fatalf("a completed review with a Critical finding passed — structured findings are still decorative")
 	}
 	found := false
 	for _, blocker := range report.BlockingIssues {
@@ -270,7 +270,7 @@ func TestFixlessBlockingFindingOffersFixer(t *testing.T) {
 	}
 	found := false
 	for _, blocker := range report.BlockingIssues {
-		if strings.Contains(blocker, "/ant-unblock") {
+		if strings.Contains(blocker, "aether unblock --dispatch") {
 			found = true
 		}
 	}
@@ -299,12 +299,12 @@ func TestFixlessBlockingFindingOffersFixer(t *testing.T) {
 	}
 	unblockNamed := false
 	for _, option := range reviewGate.RecoveryOptions {
-		if strings.Contains(option, "/ant-unblock") {
+		if strings.Contains(option, "aether unblock --dispatch") {
 			unblockNamed = true
 		}
 	}
 	if !unblockNamed {
-		t.Fatalf("recovery options do not name /ant-unblock: %v", reviewGate.RecoveryOptions)
+		t.Fatalf("recovery options do not name aether unblock --dispatch: %v", reviewGate.RecoveryOptions)
 	}
 }
 
@@ -354,7 +354,7 @@ func TestBlockedContinueOutputNamesUnblock(t *testing.T) {
 				map[string]interface{}{
 					"name": "no_critical_flags", "passed": false,
 					"fix_hint":         "Resolve critical flags before continuing",
-					"recovery_options": []interface{}{"Fix the issue, then resolve its flag: /ant-flags --resolve <id> \"what fixed it\""},
+					"recovery_options": []interface{}{"Fix the issue, then resolve its flag: aether flag-resolve --id <id> --message \"what fixed it\""},
 				},
 			},
 		},
@@ -363,7 +363,7 @@ func TestBlockedContinueOutputNamesUnblock(t *testing.T) {
 	if !strings.Contains(out, "Way forward") {
 		t.Fatalf("blocked output has no way-forward section:\n%s", out)
 	}
-	if !strings.Contains(out, "/ant-unblock") {
+	if !strings.Contains(out, "aether unblock --dispatch") {
 		t.Fatalf("blocked output does not offer the Fixer:\n%s", out)
 	}
 	if !strings.Contains(out, "Resolve critical flags") {

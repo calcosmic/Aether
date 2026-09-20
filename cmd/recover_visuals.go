@@ -9,8 +9,8 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// renderRecoverDiagnosis renders the human-readable diagnosis report for
-// aether recover. It follows the same visual patterns as medic_cmd.go
+// renderRecoverDiagnosis renders the human-readable diagnosis report for the
+// retired recovery scanner. It follows the same visual patterns as medic_cmd.go
 // (renderBanner, renderStageMarker, renderNextUp) for consistency.
 func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repairResult *RepairResult) string {
 	var b strings.Builder
@@ -42,7 +42,8 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[0m")
 		}
-		b.WriteString("\n")
+		b.WriteString("\n\n")
+		b.WriteString(renderNextActionCard(recoverNextAction(issues, state)))
 		return b.String()
 	}
 
@@ -90,21 +91,13 @@ func renderRecoverDiagnosis(issues []HealthIssue, state colony.ColonyState, repa
 	b.WriteString(fmt.Sprintf("%d issues found (%d critical, %d warning, %d info)\n",
 		len(issues), len(critical), len(warnings), len(infos)))
 
-	fixableCount := 0
-	for _, issue := range issues {
-		if issue.Fixable {
-			fixableCount++
-		}
-	}
-	if fixableCount > 0 {
-		b.WriteString(fmt.Sprintf("Run `aether recover --apply` to fix %d issues automatically.\n", fixableCount))
-	} else {
-		b.WriteString("No automatic fixes available. Review issues above.\n")
-	}
+	b.WriteString("Inspect the evidence with `aether maintenance recovery-inspect`; state effect: none.\n")
+	b.WriteString("Run `aether resume` only when you are ready to restore lifecycle progress.\n")
 	b.WriteString("\n")
 
-	// Next-step suggestion based on most severe category.
-	b.WriteString(renderNextUp(recoverNextStep(issues)))
+	// The one resolver's answer, fed this scan's own top finding as an
+	// override -- recover.go's private next-step decider is retired.
+	b.WriteString(renderNextActionCard(recoverNextAction(issues, state)))
 
 	return b.String()
 }
@@ -116,11 +109,7 @@ func writeRecoverIssueLine(b *strings.Builder, issue HealthIssue) {
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[2m") // dim
 		}
-		if isDestructiveCategory(issue.Category) {
-			b.WriteString("    Needs confirmation with --apply\n")
-		} else {
-			b.WriteString("    Fixable with --apply\n")
-		}
+		b.WriteString("    Inspect with aether maintenance recovery-inspect; it does not change state.\n")
 		if shouldUseANSIColors() {
 			b.WriteString("\x1b[0m")
 		}
@@ -131,9 +120,9 @@ func writeRecoverIssueLine(b *strings.Builder, issue HealthIssue) {
 func recoverFixHint(category string) string {
 	switch category {
 	case "dirty_worktree":
-		return "Needs --apply with confirmation"
+		return "Inspect preserved work before choosing an owner-authorized maintenance mutation"
 	case "bad_manifest":
-		return "Needs --force for manual repair"
+		return "Inspect the manifest before choosing an owner-authorized maintenance mutation"
 	case "state":
 		return "Check colony initialization"
 	default:
@@ -141,27 +130,38 @@ func recoverFixHint(category string) string {
 	}
 }
 
-// recoverNextStep returns a next-step suggestion based on the most severe issue.
-func recoverNextStep(issues []HealthIssue) string {
-	// Find the highest-severity issue category.
+// recoverOverrideFromIssues turns this scan's own findings into a command and
+// a plain-English reason for the one decision -- what recover found is
+// something the saved project alone cannot tell the resolver, so it is fed in
+// as an override rather than deciding on its own, second, private path. This
+// is the sixth and last hand-rolled next-step function in the runtime; the
+// others were retired in plans 197-02 and 197-04.
+//
+// A category with no command (the two "review the ... above" defaults) is
+// deliberately not a command at all: the findings are already listed above
+// the card, and there is nothing more specific to run than the ordinary
+// answer the resolver already gives.
+func recoverOverrideFromIssues(issues []HealthIssue, state colony.ColonyState) (string, string) {
 	for _, issue := range issues {
 		if issue.Severity != "critical" {
 			continue
 		}
 		switch issue.Category {
 		case "missing_build_packet":
-			return "Run `aether build <phase>` to re-dispatch the build."
+			phase := state.CurrentPhase
+			if phase < 1 {
+				phase = 1
+			}
+			return fmt.Sprintf("aether build %d --force", phase),
+				"A build record is missing for the current phase. Rebuild that phase so its durable record is recreated."
 		case "partial_phase":
-			return "Run `aether continue` to advance the colony."
-		case "stale_spawned":
-			return "Run `aether recover --apply` to reset stale spawn state."
-		case "bad_manifest":
-			return "Run `aether recover --apply --force` to repair the manifest."
-		case "dirty_worktree":
-			return "Run `aether recover --apply --force` to auto-fix with confirmation bypassed."
-		default:
-			return "Review the critical issues above."
+			return "aether continue",
+				"This phase only partly finished. Checking it moves the colony on if the work holds up."
+		case "stale_spawned", "bad_manifest", "dirty_worktree":
+			return "aether maintenance recovery-inspect",
+				"Inspect the durable evidence without changing state, then use aether resume as the only lifecycle restoration command."
 		}
+		return "", ""
 	}
 
 	// Check warnings next.
@@ -171,19 +171,32 @@ func recoverNextStep(issues []HealthIssue) string {
 		}
 		switch issue.Category {
 		case "missing_agents":
-			return "Run `aether recover --apply` to restore missing global agent files from the hub."
+			return "aether maintenance recovery-inspect",
+				"Inspect missing runtime evidence without changing state, then use aether resume as the only lifecycle restoration command."
 		case "broken_survey":
-			return "Run `aether colonize` to regenerate survey data."
+			return "aether colonize",
+				"The saved scan of the existing code is broken. Re-scanning rebuilds it."
 		case "partial_phase":
-			return "Run `aether continue` to advance the colony."
+			return "aether continue",
+				"This phase only partly finished. Checking it moves the colony on if the work holds up."
 		case "unreconciled_worker_changes":
-			return "Run `aether build-reconcile` to record changes."
-		default:
-			return "Review the warnings above."
+			return "aether build-reconcile",
+				"A helper made changes that were never recorded. This records them."
 		}
+		return "", ""
 	}
 
-	return "Run `aether recover --apply` to fix auto-fixable issues."
+	if len(issues) > 0 {
+		return "aether maintenance recovery-inspect", "Inspect the issues without changing state, then use aether resume as the only lifecycle restoration command."
+	}
+	return "", ""
+}
+
+// recoverNextAction resolves the one closing answer for a recover run,
+// feeding this scan's own top finding in as an override.
+func recoverNextAction(issues []HealthIssue, state colony.ColonyState) nextAction {
+	command, why := recoverOverrideFromIssues(issues, state)
+	return lifecycleNextActionForState(state, "recover", command, why)
 }
 
 // recoverJSONOutput is the structured output for JSON rendering.
@@ -261,6 +274,10 @@ func renderRecoverJSON(issues []HealthIssue, state colony.ColonyState, duration 
 			"details":   repairResult.Repairs,
 		}
 	}
+	// The same closing answer the text report renders, carrying the stable
+	// keys every migrated command's envelope carries -- a wrapper reading
+	// this JSON and an owner reading the text report are told the same thing.
+	applyNextActionToResult(outputMap, recoverNextAction(issues, state))
 	data, err := json.MarshalIndent(outputMap, "", "  ")
 	if err != nil {
 		return fmt.Sprintf(`{"error": "failed to marshal report: %v"}`, err)

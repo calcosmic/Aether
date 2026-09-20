@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/events"
 	"github.com/calcosmic/Aether/pkg/storage"
 	"github.com/spf13/cobra"
@@ -785,6 +786,53 @@ func sanitizeQueenInline(value string) string {
 	value = strings.ReplaceAll(value, "\r", " ")
 	value = strings.ReplaceAll(value, "\n", " ")
 	return strings.TrimSpace(strings.Join(strings.Fields(value), " "))
+}
+
+// sanitizeQueenPromotedLesson is the untrusted-input gate for a
+// worker-reported "lesson" on its way into the owner-facing habits file
+// (QUEEN.md). It is a distinct, additional function from sanitizeQueenInline
+// -- not a replacement -- because sanitizeQueenInline's other callers
+// (promoteInstinctLocal and friends) promote runtime-computed text, not raw
+// worker prose, and must keep their existing whitespace-collapse-only
+// behaviour unchanged.
+//
+// A reviewer-reported lesson is exactly the kind of untrusted worker output
+// CLAUDE.md's "Definition of Done" names explicitly ("Anything a worker or a
+// wrapper can influence: parsed output, submitted packets, reported
+// evidence. Treat it as untrusted input."). The 2026-09-14 field report's
+// sixth finding found this path unfiltered: a reviewer's lesson containing a
+// shell command that copied the project's .env.local file was promoted
+// verbatim into QUEEN.md and then surfaced back to the owner at session
+// start as a "Learned habit".
+//
+// This deliberately does NOT hand-write a new pattern list here. It applies
+// the existing whitespace collapse, then defers entirely to pkg/colony's
+// shared content-integrity detector (DetectPromptIntegrityFindings, plus
+// SanitizeSignalContent's length ceiling and escaping) -- the same detector
+// every other worker-authored store (pheromone signals) already runs
+// through. Extending that one shared detector (secretsPathRuleSpecs) instead
+// of adding a private list here means every caller gains the same
+// protection at once.
+//
+// Returns ("", false) when the lesson is empty after whitespace collapsing,
+// when the detector reports any finding (XML tag, prompt injection, shell
+// injection, or secrets-file path), or when the shared sanitizer refuses the
+// content outright (e.g. the 500-character length ceiling). Callers must
+// treat a refusal the same silent way an empty lesson is already treated --
+// one bad lesson must never fail the seal that is promoting a whole batch.
+func sanitizeQueenPromotedLesson(value string) (string, bool) {
+	value = sanitizeQueenInline(value)
+	if value == "" {
+		return "", false
+	}
+	if findings := colony.DetectPromptIntegrityFindings(value); len(findings) > 0 {
+		return "", false
+	}
+	sanitized, err := colony.SanitizeSignalContent(value)
+	if err != nil {
+		return "", false
+	}
+	return sanitized, true
 }
 
 func appendEntryToQueenSection(text, section, entry string) string {

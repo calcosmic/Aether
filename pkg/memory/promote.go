@@ -94,6 +94,16 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			nowCopy := nowStr
 			existing.Provenance.LastApplied = &nowCopy
 			existing.Provenance.ApplicationCount++
+			if obs.OriginLabel != "" {
+				existing.Provenance.OriginLabel = obs.OriginLabel
+			}
+			// SYN-204-02 (204-03-PLAN.md Task 1, LEARN-01): promotion's
+			// provenance is learning -- this record was written by the
+			// learning pipeline deciding to reinforce an existing
+			// instinct, never by the runtime observing a raw fact.
+			dedupLineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceLearning, obs.ContentHash, nowStr)
+			existing.SchemaVersion = colony.CurrentMemorySchemaVersion
+			existing.Lineage = &dedupLineage
 
 			if err := s.store.SaveJSON("instincts.json", file); err != nil {
 				return nil, fmt.Errorf("save instincts: %w", err)
@@ -136,6 +146,10 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 	// truncation cut mid-word. Content is admissible-gated above, so it is
 	// already bounded and concrete; wrapping it added nothing but noise.
 	action := strings.TrimSpace(obs.Content)
+	// SYN-204-02 (204-03-PLAN.md Task 1, LEARN-01): promotion's provenance
+	// is learning -- see the dedup-update branch above for the same
+	// rationale.
+	newLineage := colony.NewMemoryRecordLineage(colony.MemoryProvenanceLearning, obs.ContentHash, nowStr)
 	entry := colony.InstinctEntry{
 		ID:         instID,
 		Trigger:    obs.Content,
@@ -151,10 +165,16 @@ func (s *PromoteService) Promote(ctx context.Context, obs colony.Observation, co
 			CreatedAt:        nowStr,
 			LastApplied:      nil,
 			ApplicationCount: 0,
+			OriginLabel:      obs.OriginLabel,
 		},
-		ApplicationHistory: []interface{}{},
-		RelatedInstincts:   []interface{}{},
-		Archived:           false,
+		ApplicationHistory: []colony.InstinctApplicationEntry{},
+		// RelatedInstincts is retired (204-03-PLAN.md Task 4, LEARN-01,
+		// owner-recorded agreement 2026-09-14) -- no writer populates it
+		// on a newly-created record; see colony.InstinctEntry's own doc
+		// comment.
+		Archived:      false,
+		SchemaVersion: colony.CurrentMemorySchemaVersion,
+		Lineage:       &newLineage,
 	}
 
 	file.Instincts = append(file.Instincts, entry)

@@ -53,6 +53,13 @@ func createDownstreamRepo(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(tmpDir, "main_test.go"), []byte("package main\n\nimport \"testing\"\n\nfunc TestMain(t *testing.T) {}\n"), 0644); err != nil {
 		t.Fatalf("write main_test.go: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, ".aether"), 0755); err != nil {
+		t.Fatalf("create aether fixture directory: %v", err)
+	}
+	context := "# Downstream Context\n\nThis accepted project context explains the feature goal, repository boundaries, verification expectations, and lifecycle constraints for the generated plan.\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, ".aether", "CONTEXT.md"), []byte(context), 0644); err != nil {
+		t.Fatalf("write accepted downstream context: %v", err)
+	}
 
 	// Commit initial files so sealInProgress works correctly
 	gitAdd := exec.Command("git", "add", ".")
@@ -146,6 +153,10 @@ func assertBuildClaimsExist(t *testing.T, dir string) {
 // TestFullLifecycleInDownstreamRepo exercises the complete colony lifecycle
 // in a separate downstream repository.
 func TestFullLifecycleInDownstreamRepo(t *testing.T) {
+	runIsolatedProcessTest(t, "TestFullLifecycleInDownstreamRepo", testFullLifecycleInDownstreamRepo)
+}
+
+func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceJSONOutputModeForTest(t)
@@ -206,17 +217,39 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 
 	// Verify COLONY_STATE.json created
 	assertColonyState(t, downstream, goal)
+	contextStore, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("open downstream context store: %v", err)
+	}
+	var contextState colony.ColonyState
+	if err := contextStore.LoadJSON("COLONY_STATE.json", &contextState); err != nil {
+		t.Fatalf("load downstream context state: %v", err)
+	}
+	contextState.Charter = &colony.Charter{
+		Intent:      "Deliver a small verified downstream feature.",
+		Goals:       "Keep work inside the accepted repository boundary and verify it before lifecycle advance.",
+		Governance:  "Preserve durable lifecycle evidence and do not widen scope without an owner decision.",
+		Constraints: "Use executable checks and retain the safety boundary for every generated plan.",
+	}
+	if contextState.AcceptedCharter != nil {
+		contextState.AcceptedCharter.Charter = contextState.Charter
+	}
+	contextState = codexPlanSpecificationFixture(t, contextState, colony.SpecStatusApproved)
+	if err := contextStore.SaveJSON("COLONY_STATE.json", contextState); err != nil {
+		t.Fatalf("save accepted downstream context: %v", err)
+	}
+	writeCodexPlanSpecificationProjection(t, downstream, contextState)
 	t.Log("Step 2: PASSED -- colony initialized")
 
 	// ---- Step 3: Plan ----
 	t.Log("Step 3: Plan")
 	outBuf.Reset()
-	rootCmd.SetArgs([]string{"plan"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("plan failed: %v", err)
-	}
+	t.Setenv("AETHER_AGENT_DELEGATE", "0")
+	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+	writeFreshTerritorySnapshot199(t, downstream, time.Now().UTC().Add(-time.Minute))
+	acceptStagedPlanningCandidate200(t, downstream)
 
-	// Verify phases generated (plan with existing plan returns existing)
+	// Verify the exact accepted candidate activated buildable phases.
 	assertPhaseCount(t, downstream, 1)
 	t.Log("Step 3: PASSED -- plan generated")
 
@@ -287,16 +320,29 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 	outBuf.Reset()
 
 	// For seal to succeed, all phases must be marked completed. If the plan
-	// has more than one phase and we only built phase 1, we need to mark the
-	// remaining phases as completed. We'll force-seal to bypass blockers.
+	// has more than one phase and we only built phase 1, mark the remaining
+	// phases completed so the verified (non-forced) seal route can run.
 	var preSealState colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &preSealState); err != nil {
 		t.Fatalf("load pre-seal state: %v", err)
 	}
-
-	// Mark all phases completed so seal can proceed
+	// Model the accepted downstream work as completed with its verification
+	// evidence. A verified seal intentionally refuses a merely relabelled plan:
+	// every task and each persisted gate must support the completion claim.
 	for i := range preSealState.Plan.Phases {
 		preSealState.Plan.Phases[i].Status = colony.PhaseCompleted
+		for j := range preSealState.Plan.Phases[i].Tasks {
+			preSealState.Plan.Phases[i].Tasks[j].Status = colony.TaskCompleted
+		}
+	}
+	for index := range preSealState.Plan.Revisions {
+		if preSealState.Plan.Revisions[index].ID == preSealState.Plan.ActiveRevisionID {
+			preSealState.Plan.Revisions[index].Phases = clonePhases(preSealState.Plan.Phases)
+		}
+	}
+	preSealState.GateResults = []colony.GateResultEntry{
+		{Name: "verification_steps_passed", Passed: true, Detail: "downstream verification completed", Timestamp: time.Now().UTC().Format(time.RFC3339)},
+		{Name: "implementation_evidence", Passed: true, Detail: "completed downstream tasks recorded", Timestamp: time.Now().UTC().Format(time.RFC3339)},
 	}
 	preSealState.State = colony.StateREADY
 	preSealState.CurrentPhase = len(preSealState.Plan.Phases)
@@ -304,18 +350,21 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 		t.Fatalf("save pre-seal state: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"seal", "--force"})
+	// D-04's confirmation gate (198-03): pre-record the answer, the same
+	// way an owner running seal twice (ask, then confirm) would.
+	autoRecordSealConfirmationForTest(t, store)
+
+	rootCmd.SetArgs([]string{"seal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("seal failed: %v", err)
 	}
-
 	// Verify colony sealed
 	var sealedState colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &sealedState); err != nil {
 		t.Fatalf("load sealed state: %v", err)
 	}
 	if sealedState.State != colony.StateCOMPLETED {
-		t.Errorf("state after seal = %s, want COMPLETED", sealedState.State)
+		t.Errorf("state after seal = %s, want COMPLETED; output:\n%s", sealedState.State, outBuf.String())
 	}
 	if sealedState.Milestone != "Crowned Anthill" {
 		t.Errorf("milestone after seal = %q, want Crowned Anthill", sealedState.Milestone)
@@ -331,7 +380,7 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 	t.Log("Step 7: Entomb")
 	outBuf.Reset()
 
-	rootCmd.SetArgs([]string{"entomb"})
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("entomb failed: %v", err)
 	}

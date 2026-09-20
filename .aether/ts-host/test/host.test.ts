@@ -76,6 +76,23 @@ describe("host integration", () => {
     ]);
   });
 
+  it("plan passes preset to Go CLI and does not mark it unknown", () => {
+    const parsed = parseArgs([
+      "node", "host.js",
+      "plan",
+      "--preset", "fast",
+    ]);
+
+    assert.deepStrictEqual(parsed.unknownFlags, []);
+
+    const args = buildHostGoArgs(parsed)!;
+
+    assert.deepStrictEqual(args, [
+      "plan", "--plan-only",
+      "--preset", "fast",
+    ]);
+  });
+
   it("plan passes equals-form depth flags to Go CLI", () => {
     const parsed = parseArgs([
       "node", "host.js",

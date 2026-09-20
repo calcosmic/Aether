@@ -37,7 +37,6 @@ var yamlToRuntimeName = map[string]string{
 	"patrol":         "patrol-check",
 	"pheromones":     "pheromone-display",
 	"profile":        "profile-read",
-	"resume":         "resume-colony",
 	"shelf":          "shelf-list",
 }
 
@@ -709,5 +708,58 @@ func TestAliasMapCompleteness(t *testing.T) {
 
 	if len(missing) > 0 {
 		t.Errorf("%d YAML commands have no runtime mapping (missing alias?): %v", len(missing), missing)
+	}
+}
+
+// TestBuildCommandYAMLCoherentJobsParity holds the two `.aether/` canonical
+// sources for the build lifecycle — the YAML command source and the Codex
+// build-cycle skill it names in `codex_orchestration.skill` — to the same
+// coherent-job contract the Codex guide and the wrappers carry. The three
+// surfaces are asserted against one shared definition
+// (buildCoherentJobFieldAnchors and friends, cmd/command_guide_test.go), so a
+// change landing on the YAML alone fails here rather than shipping a canonical
+// contract that no platform implements.
+func TestBuildCommandYAMLCoherentJobsParity(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	surfaces := map[string]string{
+		".aether/commands/build.yaml": filepath.Join(repoRoot, ".aether", "commands", "build.yaml"),
+		".aether/skills/colony/" + commandGuideSkillBuildCycle + "/SKILL.md": filepath.Join(
+			repoRoot, ".aether", "skills", "colony", commandGuideSkillBuildCycle, "SKILL.md"),
+	}
+
+	names := make([]string, 0, len(surfaces))
+	for name := range surfaces {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	yamlText := ""
+	for _, name := range names {
+		content, err := os.ReadFile(surfaces[name])
+		if err != nil {
+			t.Fatalf("read %s: %v", surfaces[name], err)
+		}
+		text := string(content)
+		if strings.HasSuffix(name, "build.yaml") {
+			yamlText = text
+		}
+		assertBuildCoherentJobContract(t, name, text)
+	}
+
+	// The drift guard is the mechanism that keeps the other four surfaces
+	// honest, so it must name every surface this contract spans. A guard
+	// that forgets one of them is how a stale platform ships.
+	for _, surface := range []string{
+		"Claude/OpenCode wrappers",
+		"the Codex skill",
+		"cmd/command_guide.go",
+	} {
+		if !strings.Contains(yamlText, surface) {
+			t.Errorf(".aether/commands/build.yaml: drift_guard no longer names %q", surface)
+		}
 	}
 }

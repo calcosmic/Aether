@@ -1,0 +1,13 @@
+{
+  "version": "1.0.80",
+  "channel": "stable",
+  "source_revision": "24d630d3f2a7aeb2c394a3891be9e27ae14b9a33",
+  "binary": "/Users/callumcowie/.local/bin/aether",
+  "sha256": "f37ff12b06d4f2243111b9c51e91d5132c011b6d4c79c1ef560ed432846da7d0",
+  "version_check": "passed",
+  "integrity": "5/5 passed",
+  "consumer_setup_update": "passed",
+  "rollback": "/private/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-routing-hotfix-bvhesw_b/stable-rollback",
+  "evidence_root": "/private/var/folders/pj/fn0nrs6s1zj_pm7s486lnnz40000gn/T/aether-routing-hotfix-bvhesw_b",
+  "public_github_npm_release": false
+}

@@ -3,7 +3,7 @@ name: aether-keeper
 description: "Use this agent to maintain project knowledge, extract architectural patterns, and manage institutional wisdom. Invoked during Documentation Sprint and Deep Research patterns when the colony needs knowledge synthesis. Do NOT use for implementation (use aether-builder) or code review (use aether-auditor)."
 tools: Read, Write, Edit, Bash, Grep, Glob
 color: blue
-model: inherit
+model: sonnet
 ---
 
 <role>
@@ -115,7 +115,7 @@ Return structured JSON at task completion:
   "ant_name": "{your name}",
   "caste": "keeper",
   "task_id": "{task_id}",
-  "status": "completed" | "failed" | "blocked",
+  "status": "completed" | "completed_no_change" | "failed" | "blocked",
   "summary": "What was accomplished in plain terms",
   "patterns_archived": [
     {"name": "pattern-name", "path": "patterns/architecture/pattern-name.md", "status": "new"}
