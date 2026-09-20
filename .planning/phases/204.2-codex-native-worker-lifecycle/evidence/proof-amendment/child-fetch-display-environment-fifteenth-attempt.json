@@ -1,0 +1,228 @@
+{
+  "schema_version": "phase204.2-child-fetch-attempt/v1",
+  "recorded_at": "2026-09-20T00:47:53.161378+00:00",
+  "attempt": 15,
+  "source_revision": "922feaf93976c23efd834145f2ff539e3ee9c7c2",
+  "snapshot_revision": "e0131e29959e93d2226a75952879ee5a8621270b",
+  "focused_summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-batch-presentation-repair-2jfrjcgb/summary.json",
+    "sha256": "sha256:4749d9052838d57a31a2f3b8c6afcb4cc2f6c624d32de6cbc974961037d7db2a"
+  },
+  "focused_result": {
+    "families": 24,
+    "normal_pass": 1394,
+    "race_pass": 1394,
+    "fail": 0,
+    "skip": 0
+  },
+  "summary": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/summary.json",
+    "sha256": "sha256:aeeac29313be6a9f60fc7bc1ae65295229c2dc16d4609944c6d93a8e9b4295d7"
+  },
+  "runner": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/run-live-batch-presentation-repair-integrated.PENDING.py",
+    "sha256": "sha256:77106d7ce470606d2b3f95c1fb0040d30050b575a0c9152d3c0bbf0bc9d31283"
+  },
+  "config": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/config.READY.json",
+    "sha256": "sha256:3fd7475fb22bd5592070141874f38f72f1cb11be0bef4ee43197bd61eb4e6e8d"
+  },
+  "integrated_admission": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/preflight.json",
+    "sha256": "sha256:21ba221e2cfa81e0ff4e59124a10e47b5e5905afef31fa0e34414264268a58c0"
+  },
+  "original_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/capture/native-ordinary-396735060/receipt.json",
+    "sha256": "sha256:7e301dcd7d5f4cb72d4216e13eb72da076335438507b2229ba582bb672588cc5"
+  },
+  "derived_receipt": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/derived-ordinary.json",
+    "sha256": "sha256:56f5a03b6434495d7bad9b2cb4c60fd501af1832fa80cc645ceaf26757ce6b83"
+  },
+  "original_outcome": "incomplete",
+  "derived_outcome": "incomplete",
+  "reason": "parent writes or unclassified operations prevent child-only attribution: parent_substitution=true parent=[unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether status /bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether status unclassified code-mode command: env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json /bin/zsh -lc env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json unclassified code-mode command: env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json --execution-wave 11 /bin/zsh -lc env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json --execution-wave 11 unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/child-terminal.jsonl /bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/child-terminal.jsonl unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file .aether/data/build/phase-1/attempts/attempt-20260920T003908.872192000Z-29612.completion.json /bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file .aether/data/build/phase-1/attempts/attempt-20260920T003908.872192000Z-29612.completion.json] child=[]",
+  "observed_flags": {
+    "child_checks_passed": true,
+    "child_edit_observed": true,
+    "parent_substitution": true,
+    "runtime_credit_observed": true,
+    "child_terminal_corroborated": true,
+    "source_event_corroborated": true,
+    "temporary_auth_removed": true
+  },
+  "child_unclassified_operations": null,
+  "parent_unclassified_commands": [
+    "unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether status",
+    "/bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether status",
+    "unclassified code-mode command: env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json",
+    "/bin/zsh -lc env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json",
+    "unclassified code-mode command: env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json --execution-wave 11",
+    "/bin/zsh -lc env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/manifest-envelope.json --execution-wave 11",
+    "unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/child-terminal.jsonl",
+    "/bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file /Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/normal/tmp/aether-worker-request-native-live-649667918/child-terminal.jsonl",
+    "unclassified code-mode command: env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file .aether/data/build/phase-1/attempts/attempt-20260920T003908.872192000Z-29612.completion.json",
+    "/bin/zsh -lc env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file .aether/data/build/phase-1/attempts/attempt-20260920T003908.872192000Z-29612.completion.json"
+  ],
+  "fallback_auth_cleanup": {
+    "errors": [],
+    "purpose": "fixture-local credential cleanup only; never workflow proof",
+    "removed_paths": []
+  },
+  "runs": {
+    "live": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeWorkerFreshHost$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-json",
+        "-timeout",
+        "60m"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-batch-presentation-repair-2jfrjcgb/repo",
+      "elapsed_seconds": 433.1253686670025,
+      "exit_code": 1,
+      "bound_seconds": 3700,
+      "stopped_reason": null,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/live.stdout",
+        "sha256": "sha256:0d0803fcad61c3eddaeadf3b12ff7741ad85f46894eed08279108f33e78ad719"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/live.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cleanup": {
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "before_wait_processes": [],
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_process_count": 115
+      }
+    },
+    "replay": {
+      "argv": [
+        "/Users/callumcowie/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.5.darwin-arm64/bin/go",
+        "test",
+        "-p",
+        "1",
+        "./cmd",
+        "-run",
+        "^TestCodexNativeQualificationReceiptReplay$",
+        "-parallel",
+        "1",
+        "-count=1",
+        "-timeout",
+        "180s",
+        "-json"
+      ],
+      "cwd": "/Users/callumcowie/.aether-backups/phase204-2-collector/proof-tests-batch-presentation-repair-2jfrjcgb/repo",
+      "elapsed_seconds": 6.452478291997977,
+      "exit_code": 1,
+      "bound_seconds": 300,
+      "stopped_reason": null,
+      "stdout": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/replay.stdout",
+        "sha256": "sha256:ba7e16a6f8e0857f530699ead91f2ac1992b7c58955a407f29c5c93cad4884b8"
+      },
+      "stderr": {
+        "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/replay.stderr",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cleanup": {
+        "purpose": "owned resource cleanup only; never host acknowledgement or no-post-ACK-write proof",
+        "before_wait_processes": [],
+        "errors": [],
+        "remaining_pids": [],
+        "remaining_zombie_pids": [],
+        "signals": [],
+        "tracked_process_count": 4
+      }
+    }
+  },
+  "preserved_activation_schema_refusal": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/activation-schema-failure.json",
+    "sha256": "sha256:8696cdba160175d368184dc3f0fcd53d54d20b389e1235332f34396c9a4a072d"
+  },
+  "preserved_activation_refusal_relocation": {
+    "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/activation-schema-failure.relocation.json",
+    "sha256": "sha256:3cf708d1989b854614a21425ab4200a5e266650bf69a9e603c23705dcc510ffd"
+  },
+  "passed": false,
+  "phase_complete": false,
+  "requirements_completed": [],
+  "next": "Trace exact display environment prefixes against parent coordination grammar and actual runtime effects before any reviewed correction; preserve failed outcomes and require fresh focused/live qualification.",
+  "source_mapping": {
+    "child_id": "01a0bc42-9b12-7960-857f-cf5b821aa8d5",
+    "child_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/capture/native-ordinary-396735060/home/.codex/sessions/2026/09/20/rollout-2026-09-20T02-41-16-01a0bc42-9b12-7960-857f-cf5b821aa8d5.jsonl",
+      "sha256": "sha256:e9bc5dca810dd9207b4a483b2dc431015741a4742d8a16e2d3d2f4942c2abb68"
+    },
+    "parent_events": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/capture/native-ordinary-396735060/parent-events.jsonl",
+      "sha256": "sha256:a2c83d1a950280d5ef11530cc9bff6c62bb1a35f140f036a8b4e1e2ac5b14a5f"
+    },
+    "parent_rollout": {
+      "path": "/Users/callumcowie/.aether-backups/phase204-2-collector/child-fetch-live-batch-presentation-repair-_xqu0453/capture/native-ordinary-396735060/home/.codex/sessions/2026/09/20/rollout-2026-09-20T02-38-33-01a0bc40-1b18-7700-9181-6d6071985b90.jsonl",
+      "sha256": "sha256:8c963759313ce783e47db897613316e7d28ef70d695e6d489c9d7a65188f638d"
+    },
+    "turn_id": "01a0bc40-1b52-7d40-b05b-0c63cc8a3521",
+    "display_commands": [
+      {
+        "operation": "status",
+        "call_line": 44,
+        "event_line": 46,
+        "output_line": 47,
+        "exit_code": 0,
+        "output_bytes": 3712
+      },
+      {
+        "operation": "spawn-plan",
+        "call_line": 76,
+        "event_line": 78,
+        "output_line": 79,
+        "exit_code": 0,
+        "output_bytes": 1215
+      },
+      {
+        "operation": "wave-start",
+        "call_line": 81,
+        "event_line": 83,
+        "output_line": 84,
+        "exit_code": 0,
+        "output_bytes": 420
+      },
+      {
+        "operation": "worker-complete",
+        "call_line": 244,
+        "event_line": 246,
+        "output_line": 247,
+        "exit_code": 0,
+        "output_bytes": 20
+      },
+      {
+        "operation": "closeout",
+        "call_line": 274,
+        "event_line": 276,
+        "output_line": 277,
+        "exit_code": 0,
+        "output_bytes": 7080
+      }
+    ],
+    "interpretation": "Five unique parent command events at the exact fixture cwd (file:// command-event cwd normalizes to that path), completed exit0. Each correlated output contains one untouched stdout block equal to aggregated_output. Ten unclassified entries represent five wrappers plus their normalized shell forms. The existing parent grammar accepts bare display assignments but not the leading env form."
+  },
+  "bootstrap_plaintext": {
+    "status": "unverified",
+    "reason": "Initial launch payload exports remain encrypted; neither plaintext equality nor changed bytes can be inferred. Existing fetched-context/ACK evidence and predicates remain separate and unchanged.",
+    "predicate_changed": false
+  }
+}

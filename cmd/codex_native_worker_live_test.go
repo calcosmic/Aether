@@ -3729,6 +3729,9 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 	if !ok {
 		return false
 	}
+	if words[0] == "env" {
+		return nativeParentDisplayEnvCommand(words)
+	}
 	for len(words) > 0 && (strings.HasPrefix(words[0], "AETHER_OUTPUT_MODE=") || strings.HasPrefix(words[0], "AETHER_FORCE_COLOR=")) {
 		words = words[1:]
 	}
@@ -3858,6 +3861,44 @@ func nativeParentCoordinationCommand(r *codexNativeLiveReceipt, command []string
 		case "status", "pheromones", "command-guide", "ceremony", "spawn-log", "spawn-complete":
 			return true
 		}
+	}
+	return false
+}
+
+// Only literal display settings may prefix these existing parent render commands.
+// This does not unwrap env for coordinator, lifecycle, child work or test calls.
+func nativeParentDisplayEnvCommand(words []string) bool {
+	if len(words) == 0 || words[0] != "env" {
+		return false
+	}
+	words = words[1:]
+	seen := map[string]bool{}
+	for len(words) > 0 && strings.Contains(words[0], "=") {
+		key, value, _ := strings.Cut(words[0], "=")
+		if seen[key] || !((key == "AETHER_OUTPUT_MODE" && (value == "json" || value == "visual")) || (key == "AETHER_FORCE_COLOR" && (value == "0" || value == "1"))) {
+			return false
+		}
+		seen[key] = true
+		words = words[1:]
+	}
+	if len(seen) == 0 || len(words) < 2 || words[0] != "aether" {
+		return false
+	}
+	if words[1] == "status" {
+		return len(words) == 2
+	}
+	if len(words) < 7 || words[1] != "ceremony" || words[3] != "--workflow" || words[4] != "build" || words[6] == "" || strings.HasPrefix(words[6], "-") {
+		return false
+	}
+	switch words[2] {
+	case "spawn-plan":
+		return len(words) == 7 && words[5] == "--manifest-file"
+	case "wave-start":
+		return len(words) == 9 && words[5] == "--manifest-file" && words[7] == "--execution-wave" && regexp.MustCompile(`^[0-9]+$`).MatchString(words[8])
+	case "worker-complete":
+		return len(words) == 7 && words[5] == "--worker-file"
+	case "closeout":
+		return len(words) == 7 && words[5] == "--completion-file"
 	}
 	return false
 }

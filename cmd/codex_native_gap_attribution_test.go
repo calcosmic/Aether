@@ -373,6 +373,7 @@ func TestCodexNativeGapCapturedAttribution(t *testing.T) {
 }
 
 func TestCodexNativeGapParentCoordination(t *testing.T) {
+	t.Run("literal-display-env", nativeParentDisplayEnvControls)
 	for _, wrapper := range []string{"direct", "output-projection", "json-result", "output-exit", "all-output", "all-json"} {
 		modes := []string{"valid", "file_uri", "actual_command_failure", "missing", "wrong_thread", "wrong_turn", "wrong_cwd", "wrong_argv", "reused_event", "duplicate_call", "missing_output", "wrong_output_call", "wrong_output_turn", "failed_script"}
 		if wrapper == "output-exit" {
@@ -471,6 +472,108 @@ func TestCodexNativeGapParentCoordination(t *testing.T) {
 				nativeInspectParentEvents(&r, raw)
 				if r.ParentSubstitution != (mode != "valid" && mode != "file_uri" && mode != "actual_command_failure") || r.ChecksPassed {
 					t.Fatalf("mode %s classification: %+v", mode, r.ParentUnclassified)
+				}
+			})
+		}
+	}
+}
+
+func nativeParentDisplayEnvControls(t *testing.T) {
+	commands := []string{
+		"env AETHER_OUTPUT_MODE=visual aether status",
+		"env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file /coord/manifest-envelope.json",
+		"env AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /coord/manifest-envelope.json --execution-wave 11",
+		"env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file /coord/child-terminal.jsonl",
+		"env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file .aether/data/build/phase-1/completion.json",
+	}
+	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
+	for _, command := range commands {
+		if !nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}, "/fixture") {
+			t.Fatalf("literal renderer rejected: %s", command)
+		}
+		if nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}, "/other") || nativeChildCommandAllowed(r, []string{"/bin/zsh", "-lc", command}) {
+			t.Fatalf("renderer escaped parent fixture-only classification: %s", command)
+		}
+	}
+	for _, prefix := range []string{"AETHER_OUTPUT_MODE=json", "AETHER_OUTPUT_MODE=visual", "AETHER_FORCE_COLOR=0", "AETHER_FORCE_COLOR=1", "AETHER_OUTPUT_MODE=json AETHER_FORCE_COLOR=0", "AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual"} {
+		t.Run("value/"+prefix, func(t *testing.T) {
+			if !nativeParentCoordinationCommand(&r, []string{"/bin/sh", "-c", "env " + prefix + " aether status"}, "/fixture") {
+				t.Fatal("accepted display value rejected")
+			}
+		})
+	}
+	for _, command := range []string{
+		"env aether status", "env -i AETHER_OUTPUT_MODE=visual aether status", "env -u PATH AETHER_OUTPUT_MODE=visual aether status", "env -S 'AETHER_OUTPUT_MODE=visual aether status'", "env -- AETHER_OUTPUT_MODE=visual aether status",
+		"env PATH=/other AETHER_OUTPUT_MODE=visual aether status", "env LD_PRELOAD=/other AETHER_OUTPUT_MODE=visual aether status", "env DYLD_INSERT_LIBRARIES=/other AETHER_OUTPUT_MODE=visual aether status", "env HOME=/other AETHER_OUTPUT_MODE=visual aether status", "env GOCACHE=/other AETHER_OUTPUT_MODE=visual aether status",
+		"env AETHER_OUTPUT_MODE=other aether status", "env AETHER_OUTPUT_MODE= aether status", "env AETHER_FORCE_COLOR=true aether status", "env AETHER_FORCE_COLOR=2 aether status", "env AETHER_OUTPUT_MODE=visual AETHER_OUTPUT_MODE=json aether status", "env AETHER_FORCE_COLOR=1 AETHER_FORCE_COLOR=1 aether status",
+		"AETHER_OUTPUT_MODE=json env AETHER_OUTPUT_MODE=visual aether status", "env AETHER_OUTPUT_MODE=visual env AETHER_FORCE_COLOR=1 aether status", "env AETHER_OUTPUT_MODE=visual /other/aether status", "/usr/bin/env AETHER_OUTPUT_MODE=visual aether status", "env AETHER_OUTPUT_MODE=visual command aether status", "env AETHER_OUTPUT_MODE=visual 'aether status'",
+		"env AETHER_OUTPUT_MODE=visual", "env AETHER_OUTPUT_MODE=visual aether", "env AETHER_OUTPUT_MODE=visual aether status AETHER_FORCE_COLOR=1", "env AETHER_OUTPUT_MODE=visual aether status --output /tmp/output", "env AETHER_OUTPUT_MODE=visual aether build 1", "env AETHER_OUTPUT_MODE=visual aether pause", "env AETHER_OUTPUT_MODE=visual aether resume", "env AETHER_OUTPUT_MODE=visual aether spawn-log", "env AETHER_OUTPUT_MODE=visual aether codex-native-worker context-ack --request /request", "env AETHER_OUTPUT_MODE=visual go test ./... -json -count=1", "env AETHER_OUTPUT_MODE=visual gofmt -w clamp.go", "env AETHER_OUTPUT_MODE=visual python3 /coord context-observe", "env AETHER_OUTPUT_MODE=visual cat clamp.go",
+		"env AETHER_OUTPUT_MODE=visual aether status; touch clamp.go", "env AETHER_OUTPUT_MODE=visual aether status && go test ./...", "env AETHER_OUTPUT_MODE=visual aether status > clamp.go", "env AETHER_OUTPUT_MODE=$(touch clamp.go) aether status", "env AETHER_OUTPUT_MODE=visual aether $(echo status)",
+		"env AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file /coord/manifest-envelope.json", "env AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file /coord/manifest-envelope.json", "env AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file -other", "env AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --manifest-file /coord/result.json", "env AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file /coord/result.json --write", "env AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /coord/manifest-envelope.json --execution-wave $(date)", "env AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file /coord/manifest-envelope.json --execution-wave -1",
+	} {
+		t.Run("reject/"+command, func(t *testing.T) {
+			if nativeParentCoordinationCommand(&r, []string{"/bin/zsh", "-lc", command}, "/fixture") {
+				t.Fatalf("display prefix admitted unsafe/outside command: %s", command)
+			}
+		})
+	}
+	for index, command := range commands {
+		for _, mode := range []string{"valid", "file-uri", "failed-command", "wrong-thread", "wrong-turn", "wrong-cwd", "wrong-argv", "missing-event", "duplicate-event", "missing-output", "wrong-output-call", "wrong-output-turn", "duplicate-call", "incomplete-script", "prefix-mutation"} {
+			t.Run("raw/"+strconv.Itoa(index)+"/"+mode, func(t *testing.T) {
+				var raw []byte
+				add := func(value any) { b, _ := json.Marshal(value); raw = append(raw, append(b, '\n')...) }
+				add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "parent", "cwd": "/fixture"}})
+				selected := command
+				if mode == "prefix-mutation" {
+					selected = strings.Replace(command, "env ", "env PATH=/other ", 1)
+				}
+				input := "const r = await tools.exec_command({cmd:" + strconv.Quote(selected) + ",workdir:\"/fixture\"}); text(r.output);"
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": "call", "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				add(call)
+				if mode == "duplicate-call" {
+					add(call)
+				}
+				thread, turn, cwd := "parent", "turn", "/fixture"
+				switch mode {
+				case "file-uri":
+					cwd = "file:///fixture"
+				case "wrong-thread":
+					thread = "other"
+				case "wrong-turn":
+					turn = "other"
+				case "wrong-cwd":
+					cwd = "/other"
+				case "wrong-argv":
+					selected = "aether status"
+				}
+				status, exit := "completed", 0
+				if mode == "failed-command" {
+					status, exit = "failed", 1
+				}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": "display", "status": status, "command": []string{"/bin/zsh", "-lc", selected}, "cwd": cwd, "exit_code": exit, "aggregated_output": "display only\n"}}}
+				if mode != "missing-event" {
+					add(event)
+				}
+				if mode == "duplicate-event" {
+					add(event)
+				}
+				outputCall, outputTurn, header := "call", "turn", "Script completed\n"
+				switch mode {
+				case "wrong-output-call":
+					outputCall = "other"
+				case "wrong-output-turn":
+					outputTurn = "other"
+				case "incomplete-script":
+					header = "Script running\n"
+				}
+				if mode != "missing-output" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": outputCall, "output": []any{map[string]any{"type": "input_text", "text": header}, map[string]any{"type": "input_text", "text": "display only\n"}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": outputTurn}}})
+				}
+				r := codexNativeLiveReceipt{SchemaVersion: "codex-native-tracer/v2", SessionID: "parent", FixtureRoot: "/fixture"}
+				nativeInspectParentEvents(&r, raw)
+				allowed := mode == "valid" || mode == "file-uri" || mode == "failed-command"
+				if r.ParentSubstitution == allowed || r.ChecksPassed || r.ChildEditObserved || r.CreditObserved {
+					t.Fatalf("mode=%s parent=%v checks=%v edit=%v credit=%v unclassified=%v", mode, r.ParentSubstitution, r.ChecksPassed, r.ChildEditObserved, r.CreditObserved, r.ParentUnclassified)
 				}
 			})
 		}
