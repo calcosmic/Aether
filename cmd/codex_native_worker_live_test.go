@@ -3087,6 +3087,269 @@ func nativeCodeModeResult(w nativeCodeModeWire) (int, string, bool) {
 	return *result.Exit, result.Output, true
 }
 
+// Watcher ledger bookkeeping is explicitly requested by the build brief. It is
+// neither a source edit nor test proof. Only the pinned runtime's bounded CLI,
+// observed event/result and retained owned ledger may classify the operation.
+type nativeWatcherFinding struct {
+	Severity    string `json:"severity"`
+	Title       string `json:"title,omitempty"` // Runtime ignores this descriptive field.
+	File        string `json:"file,omitempty"`
+	Line        int    `json:"line,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Description string `json:"description"`
+	Suggestion  string `json:"suggestion,omitempty"`
+}
+
+type nativeWatcherLedgerCommand struct {
+	Domain, AgentName, Findings string
+	Help                        bool
+}
+
+func nativeWatcherLedgerWords(r codexNativeLiveReceipt, command string) (nativeWatcherLedgerCommand, bool) {
+	var result nativeWatcherLedgerCommand
+	if r.Scenario != "review" || r.Caste != "watcher" || r.WorkerName == "" || r.TaskID != "verification-watcher-"+strings.ToLower(r.WorkerName) || !filepath.IsAbs(r.FixtureRoot) || r.CandidatePath != filepath.Join(filepath.Dir(r.FixtureRoot), "bin", "aether") {
+		return result, false
+	}
+	words, ok := nativeSimpleShellWords(command)
+	if !ok || len(words) < 3 || words[0] != r.CandidatePath || words[1] != "review-ledger-write" {
+		return result, false
+	}
+	if len(words) == 3 && words[2] == "--help" {
+		result.Help = true
+		return result, true
+	}
+	if len(words) != 10 && len(words) != 12 {
+		return result, false
+	}
+	flags := map[string]string{}
+	for i := 2; i < len(words); i += 2 {
+		key := words[i]
+		if _, found := flags[key]; found {
+			return result, false
+		}
+		switch key {
+		case "--domain", "--phase", "--findings", "--agent", "--agent-name":
+		default:
+			return result, false
+		}
+		flags[key] = words[i+1]
+	}
+	if (flags["--domain"] != "testing" && flags["--domain"] != "quality") || flags["--phase"] != "1" || flags["--agent"] != "watcher" || len(flags["--findings"]) == 0 || len(flags["--findings"]) > 64*1024 {
+		return result, false
+	}
+	if name, found := flags["--agent-name"]; found && name != r.WorkerName {
+		return result, false
+	}
+	result.Domain, result.AgentName, result.Findings = flags["--domain"], flags["--agent-name"], flags["--findings"]
+	return result, true
+}
+
+// Reject duplicate fields at every depth, non-JSON tails and excessive nesting.
+// Decoding remains data-only; nothing here evaluates shell or JavaScript.
+func nativeWatcherStrictJSON(raw []byte, target any) bool {
+	if len(raw) > 256*1024 {
+		return false
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var value func(int) bool
+	value = func(depth int) bool {
+		if depth > 16 {
+			return false
+		}
+		token, err := d.Token()
+		if err != nil {
+			return false
+		}
+		delim, compound := token.(json.Delim)
+		if !compound {
+			return true
+		}
+		switch delim {
+		case '{':
+			seen := map[string]bool{}
+			for d.More() {
+				key, err := d.Token()
+				name, ok := key.(string)
+				if err != nil || !ok || seen[name] {
+					return false
+				}
+				seen[name] = true
+				if !value(depth + 1) {
+					return false
+				}
+			}
+		case '[':
+			for d.More() {
+				if !value(depth + 1) {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+		end, err := d.Token()
+		return err == nil && ((delim == '{' && end == json.Delim('}')) || (delim == '[' && end == json.Delim(']')))
+	}
+	if !value(0) {
+		return false
+	}
+	if _, err := d.Token(); err != io.EOF {
+		return false
+	}
+	d = json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	return d.Decode(target) == nil
+}
+
+func nativeWatcherOwnedBytes(r codexNativeLiveReceipt, path string) ([]byte, bool) {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil || resolved != path {
+		return nil, false
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, false
+	}
+	raw, err := r.readEvidence(path)
+	return raw, err == nil
+}
+
+func nativeWatcherLedgerResult(r codexNativeLiveReceipt, c nativeWatcherLedgerCommand, exit int, output string) bool {
+	candidate, ok := nativeWatcherOwnedBytes(r, r.CandidatePath)
+	if !ok || r.CandidateSHA256 == "" || lifecycleDigest(candidate) != r.CandidateSHA256 || nativeValidateFixtureBaselines(r) != nil {
+		return false
+	}
+	for _, name := range []string{"clamp_test.go", "go.mod"} {
+		if _, ok := nativeWatcherOwnedBytes(r, filepath.Join(r.FixtureRoot, name)); !ok {
+			return false
+		}
+	}
+	source, ok := nativeWatcherOwnedBytes(r, filepath.Join(r.FixtureRoot, "clamp.go"))
+	if !ok || r.FinalSource == "" || string(source) != r.FinalSource {
+		return false
+	}
+	if c.Help {
+		return exit == 0 && strings.Contains(output, "Write findings to a domain review ledger\n") && strings.Contains(output, "Usage:\n  aether review-ledger-write [flags]")
+	}
+	// The production parser returns this exact refusal before append/save. A
+	// schema rejection by our stricter success decoder is not that runtime error.
+	var runtimeFindings []struct {
+		Severity, File, Category, Description, Suggestion string
+		Line                                              int
+	}
+	if json.Unmarshal([]byte(c.Findings), &runtimeFindings) != nil {
+		var refused struct {
+			OK    *bool  `json:"ok"`
+			Error string `json:"error"`
+			Code  int    `json:"code"`
+		}
+		return exit == 1 && nativeWatcherStrictJSON([]byte(output), &refused) && refused.OK != nil && !*refused.OK && refused.Error == "invalid --findings JSON" && refused.Code == 1
+	}
+	var findings []nativeWatcherFinding
+	if exit != 0 || !nativeWatcherStrictJSON([]byte(c.Findings), &findings) || len(findings) == 0 || len(findings) > 50 {
+		return false
+	}
+	var envelope struct {
+		OK     *bool `json:"ok"`
+		Result struct {
+			Written *bool                      `json:"written"`
+			Domain  string                     `json:"domain"`
+			Total   int                        `json:"total"`
+			Summary colony.ReviewLedgerSummary `json:"summary"`
+		} `json:"result"`
+	}
+	if !nativeWatcherStrictJSON([]byte(output), &envelope) || envelope.OK == nil || !*envelope.OK || envelope.Result.Written == nil || !*envelope.Result.Written || envelope.Result.Domain != c.Domain || envelope.Result.Total < len(findings) {
+		return false
+	}
+	ledgerRaw, ok := nativeWatcherOwnedBytes(r, filepath.Join(r.FixtureRoot, ".aether", "data", "reviews", c.Domain, "ledger.json"))
+	if !ok {
+		return false
+	}
+	var ledger colony.ReviewLedgerFile
+	if !nativeWatcherStrictJSON(ledgerRaw, &ledger) || envelope.Result.Total > len(ledger.Entries) || ledger.Summary != colony.ComputeSummary(ledger.Entries) {
+		return false
+	}
+	end := envelope.Result.Total
+	start := end - len(findings)
+	if colony.ComputeSummary(ledger.Entries[:end]) != envelope.Result.Summary {
+		return false
+	}
+	prefix := "tst"
+	if c.Domain == "quality" {
+		prefix = "qlt"
+	}
+	for i, f := range findings {
+		e := ledger.Entries[start+i]
+		if e.ID != colony.FormatEntryID(prefix, 1, colony.NextEntryIndex(ledger.Entries[:start+i], prefix, 1)) || e.Phase != 1 || e.PhaseName != "" || e.Agent != "watcher" || e.AgentName != c.AgentName || e.Status != "open" || e.ResolvedAt != nil || string(e.Severity) != strings.ToUpper(f.Severity) || e.File != f.File || e.Line != f.Line || e.Category != f.Category || e.Description != f.Description || e.Suggestion != f.Suggestion {
+			return false
+		}
+		if _, err := time.Parse(time.RFC3339, e.GeneratedAt); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func nativeCorroboratedWatcherLedger(r codexNativeLiveReceipt, raw []byte, callID string) (string, bool) {
+	var commands []nativeRecordedShellCommand
+	var c nativeWatcherLedgerCommand
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var w nativeCodeModeWire
+		if json.Unmarshal(line, &w) == nil && w.Type == "response_item" && w.Payload.Type == "custom_tool_call" && w.Payload.CallID == callID {
+			var ok bool
+			commands, ok = nativeCodeModeCommands(w.Payload.Input, r.FixtureRoot)
+			if !ok || len(commands) != 1 || !nativeSameCwd(commands[0].Cwd, r.FixtureRoot) {
+				return "", false
+			}
+			c, ok = nativeWatcherLedgerWords(r, commands[0].Command)
+			if !ok {
+				return "", false
+			}
+		}
+	}
+	if len(commands) != 1 || !nativeCorroboratedBatch(raw, r.ChildID, callID, commands) || !nativeCorroboratedBatchResults(raw, callID, commands) {
+		return "", false
+	}
+	active := false
+	eventID := ""
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		var w nativeCodeModeWire
+		_ = json.Unmarshal(line, &w)
+		if w.Type == "response_item" && w.Payload.CallID == callID {
+			if w.Payload.Type == "custom_tool_call" {
+				active = true
+			}
+			if w.Payload.Type == "custom_tool_call_output" {
+				active = false
+			}
+		}
+		var e nativeHostEvent
+		if !active || json.Unmarshal(line, &e) != nil || e.Type != "event_msg" || e.Payload.Type != "item_completed" {
+			continue
+		}
+		i := e.Payload.Item
+		if i.Type == "FileChange" {
+			return "", false
+		}
+		if i.Type == "CommandExecution" {
+			if i.ExitCode == nil || !nativeWatcherLedgerResult(r, c, *i.ExitCode, i.Output) {
+				return "", false
+			}
+			eventID = i.ID
+		}
+	}
+	return eventID, eventID != ""
+}
+
+func nativeFixtureSmoke(words []string) bool {
+	return len(words) == 6 && words[0] == "go" && words[1] == "test" && words[2] == "-run" && words[3] == "^$" && words[4] == "-count=1" && words[5] == "./..."
+}
+
+func nativeFixtureInspectionExtra(words []string) bool {
+	return (len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--stat") || (len(words) == 3 && words[0] == "go" && words[1] == "list" && words[2] == "./...")
+}
+
 func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 	r.ChildEditObserved, r.ChecksPassed = false, false
 	r.TerminalCorroborated, r.SourceEventCorroborated = false, false
@@ -3104,6 +3367,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 		projected      bool
 	}
 	pendingChecks := map[string]pendingCheck{}
+	ledgerEvents := map[string]bool{}
 	callCounts, outputCounts := map[string]int{}, map[string]int{}
 	commandEventCounts := map[string]int{}
 	for _, line := range bytes.Split(raw, []byte{'\n'}) {
@@ -3153,6 +3417,10 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 			if json.Unmarshal(line, &wire) == nil && childTurns[wire.Payload.Metadata.TurnID] {
 				p := wire.Payload
 				if p.Type == "custom_tool_call" && (p.Name == "exec" || strings.HasSuffix(p.Name, ".exec")) {
+					if eventID, ok := nativeCorroboratedWatcherLedger(*r, raw, p.CallID); ok {
+						ledgerEvents[eventID] = true
+						continue
+					}
 					if nativeCorroboratedLiteralPatch(*r, raw, p.CallID) {
 						continue
 					}
@@ -3160,7 +3428,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 					fullBatchResults := nativeReadOnlyBatchFullResults(p.Input)
 					_, _, concatenated := nativeReadOnlyBatchConcatenation(p.Input)
 					_, exitOutput := nativeCodeModeExitOutputProjection(p.Input, r.FixtureRoot)
-					inspectionChain, longDate := false, false
+					inspectionChain, longDate, extraInspection := false, false, false
 					needsCommandEvent := exitOutput || fullBatchResults || concatenated || regexp.MustCompile(`^\s*const\s+\[`).MatchString(p.Input)
 					for _, command := range commands {
 						// A semicolon inspection chain is one actual invocation,
@@ -3171,6 +3439,8 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						// event per operand. Require its exact child/cwd event.
 						words, literal := nativeSimpleShellWords(command.Command)
 						longDate = longDate || (literal && nativeLongDateWords(words))
+						extraInspection = extraInspection || (literal && (nativeFixtureInspectionExtra(words) || nativeFixtureSmoke(words)))
+						needsCommandEvent = needsCommandEvent || extraInspection
 						needsCommandEvent = needsCommandEvent || longDate
 						needsCommandEvent = needsCommandEvent || (literal && len(words) > 4 && words[0] == "sed" && words[1] == "-n")
 					}
@@ -3182,7 +3452,7 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 						if ok && concatenated {
 							ok = nativeCorroboratedBatchConcatenation(raw, p.CallID, commands)
 						}
-						if ok && (fullBatchResults || (longDate && !exitOutput && !concatenated)) {
+						if ok && (fullBatchResults || ((longDate || extraInspection) && !exitOutput && !concatenated)) {
 							ok = nativeCorroboratedBatchResults(raw, p.CallID, commands)
 						}
 					}
@@ -3261,6 +3531,9 @@ func nativeInspectChildEvents(r *codexNativeLiveReceipt, raw []byte) {
 				}
 			}
 		case "CommandExecution":
+			if ledgerEvents[i.ID] {
+				continue
+			}
 			words, _ := nativeFixtureShellWords(i.Command)
 			if len(words) >= 2 && words[0] == "go" && words[1] == "test" {
 				checkEpoch++
@@ -4092,6 +4365,10 @@ func nativeChildInspectionWords(r codexNativeLiveReceipt, raw string, words []st
 	if len(words) == 0 {
 		return false
 	}
+	// Exact formatting/listing operations do not create test proof.
+	if len(words) == 3 && words[0] == "git" && words[1] == "diff" && words[2] == "--stat" {
+		return true
+	}
 	// Preserve argv boundaries: 'git status' is one executable name, not git
 	// followed by its status subcommand. Quoting individual words is harmless.
 	if (len(words) == 1 && words[0] == "pwd") ||
@@ -4166,7 +4443,7 @@ func nativeChildCommandAllowed(r codexNativeLiveReceipt, command []string) bool 
 	if nativeChildInspectionWords(r, command[2], words) {
 		return true
 	}
-	if nativeChildFetchCommandAllowed(r, words) || nativeAssignedFixtureCommand(r, command) {
+	if nativeFixtureSmoke(words) || nativeFixtureInspectionExtra(words) || nativeChildFetchCommandAllowed(r, words) || nativeAssignedFixtureCommand(r, command) {
 		return true
 	}
 	joined := strings.Join(words, " ")
@@ -4674,20 +4951,55 @@ func nativeCodeModeCommands(input, defaultCwd string) ([]nativeRecordedShellComm
 	// Multiple calls are allowed only as a full sequence of this same grammar.
 	// A missing final semicolon is admitted only at EOF, never between calls.
 	var result []nativeRecordedShellCommand
-	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\((\{[\s\S]*?\})\)\)(?:;\s*|\s*$)`)
-	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\((\{[\s\S]*?\})\);\s*text\(([A-Za-z_][A-Za-z0-9_]*)\)(?:;\s*|\s*$)`)
+	direct := regexp.MustCompile(`^\s*text\(await\s+tools\.exec_command\(`)
+	assigned := regexp.MustCompile(`^\s*const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*await\s+tools\.exec_command\(`)
 	for strings.TrimSpace(input) != "" {
-		object := ""
-		end := 0
-		if m := direct.FindStringSubmatchIndex(input); m != nil {
-			object = input[m[2]:m[3]]
-			end = m[1]
-		} else if m := assigned.FindStringSubmatchIndex(input); m != nil && input[m[2]:m[3]] == input[m[6]:m[7]] {
-			object = input[m[4]:m[5]]
-			end = m[1]
+		prefix, name := 0, ""
+		if m := direct.FindStringIndex(input); m != nil {
+			prefix = m[1]
+		} else if m := assigned.FindStringSubmatchIndex(input); m != nil {
+			prefix = m[1]
+			name = input[m[2]:m[3]]
 		} else {
 			return nil, false
 		}
+		// Find the literal object's end without treating braces or apparent calls
+		// inside quoted JSON/shell payloads as JavaScript structure.
+		literal := nativeCommandLiteral{input: input[prefix:]}
+		if !literal.take('{') {
+			return nil, false
+		}
+		closed := false
+		for literal.pos < len(literal.input) {
+			c := literal.input[literal.pos]
+			if c == '\'' || c == '"' {
+				if _, ok := literal.quoted(); !ok {
+					return nil, false
+				}
+				continue
+			}
+			literal.pos++
+			if c == '{' {
+				return nil, false
+			}
+			if c == '}' {
+				closed = true
+				break
+			}
+		}
+		if !closed {
+			return nil, false
+		}
+		object := input[prefix : prefix+literal.pos]
+		suffix := `^\)\)(?:;\s*|\s*$)`
+		if name != "" {
+			suffix = `^\);\s*text\(` + regexp.QuoteMeta(name) + `\)(?:;\s*|\s*$)`
+		}
+		m := regexp.MustCompile(suffix).FindStringIndex(input[prefix+literal.pos:])
+		if m == nil {
+			return nil, false
+		}
+		end := prefix + literal.pos + m[1]
 		command, ok := nativeLiteralCommandObject(object, defaultCwd)
 		if !ok {
 			return nil, false

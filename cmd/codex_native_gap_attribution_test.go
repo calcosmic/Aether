@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // Exercise the very same pure resolver embedded in the disposable coordinator.
@@ -848,6 +850,7 @@ func TestCodexNativeGapSelectedSkillDelivery(t *testing.T) {
 }
 
 func TestCodexNativeGapRecordedFailedRefusal(t *testing.T) {
+	nativeWatcherLedgerControls(t)
 	for _, mode := range []string{"failed", "wrong_thread", "wrong_cwd", "duplicate", "zero_exit", "wrong_operation"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
@@ -1905,6 +1908,7 @@ func nativeObservedNamedReadOnlyBatch(t *testing.T) {
 }
 
 func TestCodexNativeObservedFixtureInspections(t *testing.T) {
+	nativeWatcherAuxiliaryControls(t)
 	t.Run("single-invocation-semicolon", nativeObservedSemicolonInspection)
 	t.Run("shared-inspection-atoms", nativeSharedInspectionAtoms)
 	r := codexNativeLiveReceipt{FixtureRoot: "/fixture"}
@@ -2463,5 +2467,279 @@ func nativeSharedInspectionAtoms(t *testing.T) {
 		if !nativeChildCommandAllowed(r, []string{"/bin/sh", "-c", strings.Repeat("pwd"+separator, 7) + "pwd"}) {
 			t.Fatal("eight atom boundary rejected")
 		}
+	}
+}
+
+// Synthetic complete child streams: the fixture candidate is only a pinned
+// byte file. No subprocess is executed and no ledger write is simulated as a
+// source edit or successful assigned test.
+func nativeWatcherLedgerControls(t *testing.T) {
+	modes := []string{"testing", "quality", "no-agent-name", "embedded-json", "invalid-json-refusal", "help", "no-prior", "wrong-count", "wrong-summary", "ledger-summary-drift", "duplicate-output-field", "too-many-findings", "candidate-drift", "tests-symlink", "wrong-candidate", "wrong-cwd", "wrong-role", "wrong-domain", "wrong-phase", "wrong-worker", "wrong-thread", "wrong-turn", "missing-event", "duplicate-event", "wrong-output", "wrong-exit", "missing-output", "extra-output", "duplicate-call", "later-edit", "interleaved-edit", "later-failed-test", "source-drift", "tests-drift", "module-drift", "ledger-drift", "ledger-symlink", "ledger-missing", "duplicate-field", "duplicate-flag", "extra-flag", "failed-write", "wrong-refusal", "valid-json-refused"}
+	for _, mode := range modes {
+		t.Run("watcher-bookkeeping/"+mode, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture := filepath.Join(root, "repository")
+			candidate := filepath.Join(root, "bin", "aether")
+			write := func(path string, raw []byte) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(candidate, []byte("pinned synthetic runtime"))
+			write(filepath.Join(fixture, "clamp.go"), []byte("unchanged reviewed source"))
+			write(filepath.Join(fixture, "clamp_test.go"), []byte("protected tests"))
+			write(filepath.Join(fixture, "go.mod"), []byte("protected module"))
+			r := codexNativeLiveReceipt{Scenario: "review", Caste: "watcher", WorkerName: "Keen-6", TaskID: "verification-watcher-keen-6", FixtureRoot: fixture, CandidatePath: candidate, CandidateSHA256: lifecycleDigest([]byte("pinned synthetic runtime")), BaselineTestsSHA256: lifecycleDigest([]byte("protected tests")), BaselineModuleSHA256: lifecycleDigest([]byte("protected module")), FinalSource: "unchanged reviewed source", ChildID: "child", BoundHostSessionID: "parent"}
+			domain := "testing"
+			if mode == "quality" {
+				domain = "quality"
+			}
+			description := "Actual independently observed checks"
+			if mode == "embedded-json" {
+				description = "quoted \"JSON\" }; text(r); is literal data"
+			}
+			findingsRaw, _ := json.Marshal([]nativeWatcherFinding{{Severity: "info", Title: "Summary", Description: description}})
+			findings := string(findingsRaw)
+			prefix := "tst"
+			if domain == "quality" {
+				prefix = "qlt"
+			}
+			entry := colony.ReviewLedgerEntry{ID: prefix + "-1-001", Phase: 1, Agent: "watcher", AgentName: "Keen-6", GeneratedAt: "2026-09-20T12:00:00Z", Status: "open", Severity: colony.ReviewSeverityInfo, Description: description}
+			if mode == "no-agent-name" {
+				entry.AgentName = ""
+			}
+			ledger := colony.ReviewLedgerFile{Entries: []colony.ReviewLedgerEntry{entry}}
+			ledger.Summary = colony.ComputeSummary(ledger.Entries)
+			ledgerPath := filepath.Join(fixture, ".aether", "data", "reviews", domain, "ledger.json")
+			ledgerRaw, _ := json.Marshal(ledger)
+			write(ledgerPath, ledgerRaw)
+			outRaw, _ := json.Marshal(map[string]any{"ok": true, "result": map[string]any{"written": true, "domain": domain, "total": 1, "summary": ledger.Summary}})
+			output := string(outRaw) + "\n"
+			exit := 0
+			if mode == "invalid-json-refusal" || mode == "wrong-refusal" {
+				findings = `{"verification_passed":true}`
+				exit = 1
+				output = "{\"ok\":false,\"error\":\"invalid --findings JSON\",\"code\":1}\n"
+			}
+			if mode == "wrong-refusal" {
+				output = "{\"ok\":false,\"error\":\"failed to save ledger\",\"code\":1}\n"
+			}
+			if mode == "valid-json-refused" {
+				exit = 1
+				output = "{\"ok\":false,\"error\":\"invalid --findings JSON\",\"code\":1}\n"
+			}
+			if mode == "duplicate-field" {
+				findings = `[{"severity":"info","description":"first","description":"Actual independently observed checks"}]`
+			}
+			if mode == "too-many-findings" {
+				many := make([]nativeWatcherFinding, 51)
+				data, _ := json.Marshal(many)
+				findings = string(data)
+			}
+			command := candidate + " review-ledger-write --domain " + domain + " --phase 1 --findings '" + findings + "' --agent watcher --agent-name Keen-6"
+			if mode == "no-agent-name" {
+				command = strings.TrimSuffix(command, " --agent-name Keen-6")
+			}
+			if mode == "help" {
+				command = candidate + " review-ledger-write --help"
+				output = "Write findings to a domain review ledger\n\nUsage:\n  aether review-ledger-write [flags]\n"
+			}
+			switch mode {
+			case "wrong-count":
+				output = strings.Replace(output, `"total":1`, `"total":2`, 1)
+			case "wrong-summary":
+				output = strings.Replace(output, `"open":1`, `"open":0`, 1)
+			case "duplicate-output-field":
+				output = strings.Replace(output, `"ok":true`, `"ok":false,"ok":true`, 1)
+			case "candidate-drift":
+				write(candidate, []byte("untrusted replacement"))
+			case "tests-symlink":
+				path := filepath.Join(fixture, "clamp_test.go")
+				if err := os.Rename(path, path+".saved"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(path+".saved", path); err != nil {
+					t.Fatal(err)
+				}
+			case "wrong-candidate":
+				command = strings.Replace(command, candidate, "/other/aether", 1)
+			case "wrong-role":
+				r.Caste = "builder"
+			case "wrong-domain":
+				command = strings.Replace(command, "--domain testing", "--domain security", 1)
+			case "wrong-phase":
+				command = strings.Replace(command, "--phase 1", "--phase 2", 1)
+			case "wrong-worker":
+				command = strings.Replace(command, "--agent-name Keen-6", "--agent-name Other", 1)
+			case "duplicate-flag":
+				command += " --phase 1"
+			case "extra-flag":
+				command += " --dir /other"
+			case "failed-write":
+				exit = 1
+			case "source-drift":
+				write(filepath.Join(fixture, "clamp.go"), []byte("mutated source"))
+			case "tests-drift":
+				write(filepath.Join(fixture, "clamp_test.go"), []byte("mutated tests"))
+			case "module-drift":
+				write(filepath.Join(fixture, "go.mod"), []byte("mutated module"))
+			case "ledger-summary-drift":
+				write(ledgerPath, []byte(strings.Replace(string(ledgerRaw), `"open":1`, `"open":0`, 1)))
+			case "ledger-drift":
+				ledger.Entries[0].Agent = "builder"
+				data, _ := json.Marshal(ledger)
+				write(ledgerPath, data)
+			case "ledger-missing":
+				if err := os.Remove(ledgerPath); err != nil {
+					t.Fatal(err)
+				}
+			case "ledger-symlink":
+				if err := os.Rename(ledgerPath, ledgerPath+".saved"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(ledgerPath+".saved", ledgerPath); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var raw []byte
+			add := func(v any) {
+				data, err := json.Marshal(v)
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw = append(raw, append(data, '\n')...)
+			}
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": fixture, "agent_role": "aether-" + r.Caste}})
+			trip := func(id, cmd, text string, code int, mutate bool) {
+				args, _ := json.Marshal(map[string]any{"cmd": cmd, "workdir": fixture})
+				input := "const r = await tools.exec_command(" + string(args) + "); text(r);\n"
+				call := map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": id, "input": input, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}}
+				add(call)
+				if mutate && mode == "duplicate-call" {
+					add(call)
+				}
+				thread, turn, cwd, status := "child", "turn", fixture, "completed"
+				if code != 0 {
+					status = "failed"
+				}
+				if mutate {
+					if mode == "wrong-thread" {
+						thread = "foreign"
+					}
+					if mode == "wrong-turn" {
+						turn = "foreign"
+					}
+					if mode == "wrong-cwd" {
+						cwd = "/other"
+					}
+				}
+				event := map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": thread, "turn_id": turn, "item": map[string]any{"type": "CommandExecution", "id": id + "-event", "status": status, "command": []string{"/bin/sh", "-c", cmd}, "cwd": cwd, "exit_code": code, "aggregated_output": text}}}
+				if !mutate || mode != "missing-event" {
+					add(event)
+				}
+				if mutate && mode == "duplicate-event" {
+					add(event)
+				}
+				if mutate && mode == "interleaved-edit" {
+					add(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child", "turn_id": "turn", "item": map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}}}})
+				}
+				if mutate && mode == "wrong-output" {
+					text += "forged"
+				}
+				if mutate && mode == "wrong-exit" {
+					code++
+				}
+				result, _ := json.Marshal(map[string]any{"exit_code": code, "output": text})
+				blocks := []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(result)}}
+				if mutate && mode == "extra-output" {
+					blocks = append(blocks, map[string]any{"type": "input_text", "text": "extra"})
+				}
+				if !mutate || mode != "missing-output" {
+					add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": blocks, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+				}
+			}
+			green := "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n"
+			if mode != "no-prior" {
+				trip("green", "go test ./... -json -count=1", green, 0, false)
+			}
+			trip("ledger", command, output, exit, true)
+			if mode == "later-edit" {
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child", "turn_id": "turn", "item": map[string]any{"type": "FileChange", "status": "completed", "changes": map[string]any{}}}})
+			}
+			if mode == "later-failed-test" {
+				trip("red", "go test ./...", "FAIL", 1, false)
+			}
+			nativeInspectChildEvents(&r, raw)
+			want := mode == "testing" || mode == "quality" || mode == "no-agent-name" || mode == "embedded-json" || mode == "invalid-json-refusal" || mode == "help"
+			if r.ChecksPassed != want {
+				t.Fatalf("checks=%v want=%v unknown=%v", r.ChecksPassed, want, r.ChildUnclassified)
+			}
+			if want && len(r.ChildUnclassified) != 0 {
+				t.Fatalf("legitimate bookkeeping unclassified: %v", r.ChildUnclassified)
+			}
+			if r.ChildEditObserved {
+				t.Fatal("bookkeeping created source edit proof")
+			}
+		})
+	}
+}
+
+func nativeWatcherAuxiliaryControls(t *testing.T) {
+	for _, command := range []string{"git diff --stat", "go list ./...", "go test -run '^$' -count=1 ./..."} {
+		if !nativeChildCommandAllowed(codexNativeLiveReceipt{FixtureRoot: "/fixture"}, []string{"/bin/sh", "-c", command}) {
+			t.Fatalf("bounded command rejected %s", command)
+		}
+		if nativeAssignedFixtureCommand(codexNativeLiveReceipt{}, []string{"/bin/sh", "-c", command}) {
+			t.Fatalf("auxiliary command created assigned test proof %s", command)
+		}
+	}
+	for _, command := range []string{"git diff --stat --output=/tmp/file", "git diff --stat /other", "go list -m all", "go list /other/...", "go list ./... && go test ./...", "go test -run TestClamp -count=1 ./...", "go test -run '^$' -count=1 ./...; touch x", "go test -run '^$' -count=1 -exec /tmp/tool ./..."} {
+		if nativeChildCommandAllowed(codexNativeLiveReceipt{FixtureRoot: "/fixture"}, []string{"/bin/sh", "-c", command}) {
+			t.Fatalf("unbounded auxiliary accepted %s", command)
+		}
+	}
+	for _, mode := range []string{"smoke-only", "green-then-smoke", "green-then-failed-smoke", "smoke-then-green", "failed-smoke-then-green"} {
+		t.Run("zero-selection/"+mode, func(t *testing.T) {
+			r := codexNativeLiveReceipt{ChildID: "child", BoundHostSessionID: "parent", FixtureRoot: "/fixture"}
+			var raw []byte
+			add := func(v any) { b, _ := json.Marshal(v); raw = append(raw, append(b, '\n')...) }
+			add(map[string]any{"type": "session_meta", "payload": map[string]any{"id": "child", "parent_thread_id": "parent", "cwd": "/fixture", "agent_role": "aether-builder"}})
+			trip := func(id, command, output string, exit int) {
+				arg, _ := json.Marshal(map[string]any{"cmd": command, "workdir": "/fixture"})
+				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call", "name": "exec", "call_id": id, "input": "const r=await tools.exec_command(" + string(arg) + "); text(r);", "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+				status := "completed"
+				if exit != 0 {
+					status = "failed"
+				}
+				add(map[string]any{"type": "event_msg", "payload": map[string]any{"type": "item_completed", "thread_id": "child", "turn_id": "turn", "item": map[string]any{"type": "CommandExecution", "id": id + "-event", "status": status, "command": []string{"/bin/sh", "-c", command}, "cwd": "/fixture", "exit_code": exit, "aggregated_output": output}}})
+				result, _ := json.Marshal(map[string]any{"exit_code": exit, "output": output})
+				add(map[string]any{"type": "response_item", "payload": map[string]any{"type": "custom_tool_call_output", "call_id": id, "output": []any{map[string]any{"type": "input_text", "text": "Script completed\n"}, map[string]any{"type": "input_text", "text": string(result)}}, "internal_chat_message_metadata_passthrough": map[string]any{"turn_id": "turn"}}})
+			}
+			green := func() {
+				trip("green", "go test ./... -json -count=1", "{\"Action\":\"run\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\",\"Test\":\"TestClamp\"}\n{\"Action\":\"pass\",\"Package\":\"example.invalid/nativefixture\"}\n", 0)
+			}
+			if strings.HasPrefix(mode, "green-") {
+				green()
+			}
+			exit := 0
+			if strings.Contains(mode, "failed") {
+				exit = 1
+			}
+			trip("smoke", "go test -run '^$' -count=1 ./...", "ok example.invalid/nativefixture [no tests to run]", exit)
+			if strings.HasSuffix(mode, "then-green") {
+				green()
+			}
+			nativeInspectChildEvents(&r, raw)
+			if r.ChecksPassed != strings.HasSuffix(mode, "then-green") || len(r.ChildUnclassified) != 0 {
+				t.Fatalf("checks=%v unclassified=%v", r.ChecksPassed, r.ChildUnclassified)
+			}
+		})
 	}
 }
