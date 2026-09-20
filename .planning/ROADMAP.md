@@ -44,9 +44,11 @@
 
 **Sequencing:** Restoration is the milestone. The executable Classic corpus is built alongside visible restoration, not as a separate planning gate. Owner-watched proof is the final phase, after the product slices are usable.
 
-For dummies: Phases 199-204 restored the colony. Phases 204.1-204.5 now make the ant workflows work properly in Codex. The remaining Phase 205 walkthrough tests the qualified result with Callum.
+For dummies: Phases 199-204 restored the colony. Phase 204.1 made the nine core ant workflows work as Codex skills. Phases 204.2-204.5 are parked (2026-09-20); the remaining Phase 205 walkthrough tests the result with Callum after a slim Claude-side trial.
 
 **Scope amendment — 2026-09-16:** The owner moved Codex `$ant-*` naming and behavioral parity ahead of the remaining Phase 205 acceptance work. Five inserted phases own 16 new requirements. The earlier later-milestone deferral is superseded. [Sequencing and evidence rules](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md).
+
+**Scope amendment — 2026-09-20:** Phases 204.2-204.5 are parked (cost/time, not defect); the proven direct-dispatch route becomes the Codex default behind an opt-in switch for the parked native bridge. Supersedes the 2026-09-16 sequencing. [Decision record](decisions/2026-09-20-park-codex-native-lifecycle.md).
 
 ### Mandatory Classic-to-Go synthesis protocol
 
@@ -71,11 +73,11 @@ Each phase writes a `CLASSIC-SYNTHESIS.md` or an equivalently explicit phase res
 - [x] **Phase 203 — Biological Runtime** (completed 2026-09-14)
 - [x] **Phase 204 — Learning Governor** (completed 2026-09-15)
 - [x] **Phase 204.1 — Codex Ant Skill Surface** (INSERTED 2026-09-16) (completed 2026-09-16)
-- [ ] **Phase 204.2 — Codex Native Worker Lifecycle** (INSERTED 2026-09-16)
-- [ ] **Phase 204.3 — Codex Workflow Parity** (INSERTED 2026-09-16)
-- [ ] **Phase 204.4 — Governed Recruitment and Recovery** (INSERTED 2026-09-16)
-- [ ] **Phase 204.5 — Codex Parity Proof and Acceptance Handoff** (INSERTED 2026-09-16)
-- [ ] **Phase 205 — Owner Acceptance and Restoration Seal** — remaining walkthrough follows Phase 204.5
+- [ ] **Phase 204.2 — Codex Native Worker Lifecycle** (INSERTED 2026-09-16) — PARKED 2026-09-20 (see decisions/2026-09-20-…)
+- [ ] **Phase 204.3 — Codex Workflow Parity** (INSERTED 2026-09-16) — PARKED 2026-09-20 (see decisions/2026-09-20-…)
+- [ ] **Phase 204.4 — Governed Recruitment and Recovery** (INSERTED 2026-09-16) — PARKED 2026-09-20 (see decisions/2026-09-20-…)
+- [ ] **Phase 204.5 — Codex Parity Proof and Acceptance Handoff** (INSERTED 2026-09-16) — PARKED 2026-09-20 (see decisions/2026-09-20-…)
+- [ ] **Phase 205 — Owner Acceptance and Restoration Seal** — follows the slim Claude trial (2026-09-20 decision)
 
 ## Phase Details
 

@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.28
 milestone_name: Classic Colony Restoration
-status: executing
-stopped_at: Phase204.2 Plan25 executing: 9f9194e6 listing repair passes 24 families normal/race (780 each). Eighth ordinary/replay incomplete after client usage limit. Owner reports quota reset and authorizes fresh admitted ordinary capture; all-three delivery remains pending.
-last_updated: "2026-09-19T17:20:58.525720+00:00"
-last_activity: 2026-09-19 -- Phase 204.2 execution started
+status: paused
+stopped_at: Phase 204.2 PARKED 2026-09-20 at Plan 25 (see decisions/2026-09-20-park-codex-native-lifecycle.md). Next work is publishing 1.0.82 with the direct-dispatch Codex route as default, then a slim Claude-side trial.
+last_updated: "2026-09-20T00:00:00+00:00"
+last_activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
 progress:
   total_phases: 13
   completed_phases: 8
@@ -30,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (codex-native-worker-lifecycle) — EXECUTING
-Next phase: 204.2 mandatory delivery and recovery qualification
-Status: Executing Phase 204.2
-Plan: 25 of 26 — Tasks 2–3 in progress; Plans 21–23 still pending
-Last activity: 2026-09-19 -- Phase 204.2 execution started
+Phase: 204.2 (codex-native-worker-lifecycle) — PARKED at Plan 25 (2026-09-20 decision)
+Next phase: Publish 1.0.82 (direct-dispatch Codex route as default, native bridge opt-in), then the slim Claude trial
+Status: Paused — Phase 204.2-204.5 parked, not cancelled
+Plan: 25 of 26 — parked mid-plan; see decisions/2026-09-20-park-codex-native-lifecycle.md for what is kept
+Last activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
 
 ## Performance Metrics
 
