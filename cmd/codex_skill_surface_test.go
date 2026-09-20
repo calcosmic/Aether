@@ -127,6 +127,7 @@ func TestCodexAntSkillInstallTracer(t *testing.T) {
 }
 
 func TestCodexNativeInstalledBuildGuidance(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	home := t.TempDir()
 	if ok, output := runAntSkillInstall(t, home); !ok {
 		t.Fatalf("install: %s", output)

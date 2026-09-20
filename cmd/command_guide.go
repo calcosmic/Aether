@@ -121,7 +121,10 @@ func buildCommandGuide(command, platform string) (commandGuideResult, error) {
 
 func adaptCommandGuideDefinitionForPlatform(command, platform string, def commandGuideDefinition) commandGuideDefinition {
 	if command == "build" && platform == "codex" {
-		return codexNativeBuildCommandGuide(def)
+		if codexNativeBuildOptedIn() {
+			return codexNativeBuildCommandGuide(def)
+		}
+		return codexDirectBuildCommandGuide(def)
 	}
 	if platform == "codex" || def.Literal {
 		return def
@@ -188,6 +191,69 @@ func codexNativeBuildCommandGuide(def commandGuideDefinition) commandGuideDefini
 	}
 	def.PostSteps = post
 	def.DriftGuards = append(def.DriftGuards, "Native records do not grant completion credit; only the existing Go finalizer does. Missing host capability or child evidence is incomplete, never simulated success.")
+	return def
+}
+
+// codexDirectBuildCommandGuide is the default Codex build route: the Go
+// runtime dispatches Codex workers itself and finalizes the phase in one
+// call. It reuses the shared catalog's proven steps by prefix rather than
+// inventing new prose, and never mutates the shared def it is given.
+func codexDirectBuildCommandGuide(def commandGuideDefinition) commandGuideDefinition {
+	keptPrefixes := []string{
+		"Use `$ant-build` ",
+		"Run `AETHER_OUTPUT_MODE=visual aether status` ",
+		"Coherent jobs:",
+		"Propose a grouping only",
+		"Read `job_decisions` ",
+		"Read `queen_execution_policy.spawn_budget` ",
+		"If provider dispatch is unavailable",
+		"Task receipts:",
+		"An accepted task receipt",
+	}
+	rewrite := func(step string) string {
+		step = strings.ReplaceAll(step, "<phase> --plan-only`", "<phase>`")
+		step = strings.ReplaceAll(step, "from the dispatch manifest", "from the build result")
+		return step
+	}
+
+	var kept []string
+	for _, step := range def.PreSteps {
+		for _, prefix := range keptPrefixes {
+			if strings.HasPrefix(step, prefix) {
+				kept = append(kept, rewrite(step))
+				break
+			}
+		}
+	}
+
+	singleLauncherStep := "The `aether build <phase>` run is the only launcher for this route. Do not pass `--plan-only`, do not spawn host sub-agents or Task/subagent panels, use no separate finalizer step, and never hand-write `.aether/data`."
+	checkinTruthStep := "`checkin_requested`, `checkin_reason`, and `checkin_summary` exist only on a `--plan-only` manifest, and `--checkin` pauses only there (the both-flags refusal still applies); a direct build dispatches without a blocking check-in. Relay `blocker_advisory` and `blocker_advisory_question` verbatim and never answer for the owner."
+
+	var preSteps []string
+	for _, step := range kept {
+		preSteps = append(preSteps, step)
+		if strings.HasPrefix(step, "Run `AETHER_OUTPUT_MODE=visual aether status` ") {
+			preSteps = append(preSteps, singleLauncherStep, checkinTruthStep)
+		}
+	}
+
+	var postSteps []string
+	postSteps = append(postSteps, "Relay the runtime's visual output as-is; do not re-render ceremonies or summarize over it.")
+	for _, step := range def.PostSteps {
+		if strings.HasPrefix(step, "After the JSON finalizer succeeds") {
+			continue
+		}
+		postSteps = append(postSteps, step)
+	}
+
+	driftGuards := append([]string(nil), def.DriftGuards...)
+	driftGuards = append(driftGuards, "The native Codex worker bridge (`codexNativeBuildCommandGuide`) is experimental and parked; do not use it or mix its steps into this route without the exact `AETHER_CODEX_NATIVE_BUILD=1` opt-in.")
+
+	def.Intent = "Run the Go runtime build directly: the runtime selects the team, dispatches Codex workers itself, and finalizes the phase. Relay its output; never hand-write state."
+	def.PreSteps = preSteps
+	def.RunCommand = "AETHER_OUTPUT_MODE=visual aether build <phase>"
+	def.PostSteps = postSteps
+	def.DriftGuards = driftGuards
 	return def
 }
 

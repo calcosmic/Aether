@@ -244,6 +244,22 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow colonize --complet
 
 ## Build Flow
 
+### Default Codex route: direct runtime build
+
+1. Run `AETHER_OUTPUT_MODE=visual aether status` and surface active REDIRECT,
+   FOCUS, and FEEDBACK signals compactly.
+2. Run `AETHER_OUTPUT_MODE=visual aether build <phase>` once, without
+   `--plan-only`. The Go runtime is the single launcher: it selects the team,
+   dispatches Codex workers itself, and finalizes the phase in one call.
+3. This route never stops for a blocking check-in; relay `blocker_advisory`
+   and `blocker_advisory_question` verbatim if the runtime returns them, and
+   never answer for the owner.
+4. Relay the runtime's visual output as-is; if `recovery_job` is set, relay
+   the exact `recovery_command`.
+5. Route first to `aether continue`.
+
+### Wrapper manifest route
+
 1. Run `AETHER_OUTPUT_MODE=visual aether status`.
 2. Surface active REDIRECT, FOCUS, and FEEDBACK signals compactly.
 3. Run the Go runtime manifest command:
@@ -298,7 +314,14 @@ aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner
 AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
-8. For Codex build, use the non-launching native bridge. The host's native
+### Experimental native bridge (only when AETHER_CODEX_NATIVE_BUILD=1)
+
+Phase 204.2 (the native Codex worker lifecycle below) is parked and
+unqualified. Steps 8-17 below apply only when the operator has explicitly
+set `AETHER_CODEX_NATIVE_BUILD=1`; without it, use the direct runtime build
+route above instead.
+
+8. For an opted-in Codex build, use the non-launching native bridge. The host's native
    `spawn_agent` is the sole launcher; never invoke a provider subprocess or
    `internal-worker-adapter` for the same assignment. Keep the runtime-selected
    team and execution waves; a small job can use one Builder plus checks.

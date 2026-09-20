@@ -859,10 +859,20 @@ func checkCodexSkillSurface(root string) (int, []sourceCheckIssue) {
 		{"oracle", "oracle", "aether-colony-research"},
 		{"colonize", "colonize-finalize", "aether-colony-build-cycle"},
 		{"plan", "plan-finalize", "aether-colony-build-cycle"},
-		{"build", "build-finalize", "aether-colony-build-cycle"},
+		{"build", "build", "aether-colony-build-cycle"},
 		{"continue", "continue", "aether-colony-build-cycle"},
 		{"swarm", "swarm-finalize", "aether-colony-build-cycle"},
 		{"seal", "seal-finalize", "aether-colony-build-cycle"},
+	}
+	if codexNativeBuildOptedIn() {
+		// The native Codex worker bridge (Phase 204.2) is parked; only with
+		// its explicit opt-in does the build row still expect the native
+		// finalize runtime route.
+		for i := range contracts {
+			if contracts[i].command == "build" {
+				contracts[i].runtime = "build-finalize"
+			}
+		}
 	}
 	byName := map[string]contract{}
 	for _, want := range contracts {

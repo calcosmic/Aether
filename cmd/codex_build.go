@@ -2964,7 +2964,10 @@ func buildCodexBuildManifest(root string, state colony.ColonyState, phase colony
 	var contextDecisionIDs []string
 	var contextScope *codexNativeContextScope
 	contextProtocol := ""
-	if planOnly && buildHostPlatform() == "codex" && buildExecutionOwner(dispatchMode, planOnly) == "host-queen" {
+	if codexNativeBuildOptedIn() && planOnly && buildHostPlatform() == "codex" && buildExecutionOwner(dispatchMode, planOnly) == "host-queen" {
+		// The native Codex worker bridge (Phase 204.2) is parked behind this
+		// opt-in. An empty protocol here keeps generic provider dispatch
+		// available (see validateBuildWorkerProviderLane, cmd/build_worker_run.go:45-50).
 		contextProtocol = codexNativeContextProtocolChildFetch
 	}
 	if planOnly {

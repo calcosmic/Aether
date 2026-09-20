@@ -15,6 +15,15 @@ import (
 
 const codexNativeContextProtocolChildFetch = "child-fetch/v1"
 
+// Phase 204.2 (native Codex worker lifecycle) is parked. Its guide, skill text
+// and manifest protocol pin stay in the tree but are reachable only with this
+// explicit opt-in. Only the exact value "1" enables it.
+const codexNativeBuildOptInEnv = "AETHER_CODEX_NATIVE_BUILD"
+
+func codexNativeBuildOptedIn() bool {
+	return strings.TrimSpace(os.Getenv(codexNativeBuildOptInEnv)) == "1"
+}
+
 type codexNativePrompt struct {
 	Prompt      string
 	SHA256      string

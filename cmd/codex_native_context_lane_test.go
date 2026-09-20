@@ -30,6 +30,7 @@ func nativeContextLaneManifestForTest(t *testing.T) (string, codexBuildManifest)
 		t.Fatal(err)
 	}
 	t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 	if err != nil {
 		t.Fatal(err)

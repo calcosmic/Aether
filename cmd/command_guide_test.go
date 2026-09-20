@@ -118,6 +118,7 @@ func TestOracleGuideCarriesBroadScopeTimeoutGuard(t *testing.T) {
 }
 
 func TestLifecycleGuidesCarryOrchestratorBoundaryGuidance(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	for _, command := range []string{"colonize", "plan", "build", "continue", "seal"} {
 		guide, err := buildCommandGuide(command, "codex")
 		if err != nil {
@@ -157,6 +158,7 @@ func TestLifecycleGuidesSurfaceSpawnBudgetReasons(t *testing.T) {
 }
 
 func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	tests := map[string][]string{
 		"colonize": {
 			"aether host colonize",
@@ -212,6 +214,7 @@ func TestCodexLifecycleGuidesRequireVisibleWorkerActivity(t *testing.T) {
 }
 
 func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	for _, surface := range []struct{ command, platform string }{
 		{"colonize", "codex"}, {"plan", "codex"}, {"continue", "codex"}, {"seal", "codex"},
 		{"build", "claude"}, {"build", "opencode"},
@@ -253,6 +256,7 @@ func TestLifecycleGuidesDocumentApprovedTempCompletionContract(t *testing.T) {
 }
 
 func TestCodexHostBackedGuidesUseTypeScriptHostSpine(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	tests := map[string]struct {
 		required []string
 		retired  []string
@@ -423,6 +427,7 @@ func TestWrapperSourcesUseTypeScriptHostManifestSpine(t *testing.T) {
 }
 
 func TestCodexLifecycleYamlAndGuidesAgreeOnWorkerActivity(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
@@ -1116,6 +1121,7 @@ func TestCodexGeneratedShimsIncludeCommandGuideSkills(t *testing.T) {
 }
 
 func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "")
 	shims := map[string]codexSkillShim{}
 	for _, shim := range codexSkillShims() {
 		if _, exists := shims[shim.Name]; exists {
@@ -1128,7 +1134,7 @@ func TestCodexGeneratedCommandShimsCoverIntelligentCommands(t *testing.T) {
 	}
 	for _, expected := range codexAntGuideExpectations {
 		if expected.command == "build" {
-			expected.runtime = "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by codex-native-worker stage>"
+			expected.runtime = "AETHER_OUTPUT_MODE=visual aether build <phase>"
 		}
 		t.Run(expected.command, func(t *testing.T) {
 			name := "ant-" + expected.command
@@ -1181,6 +1187,7 @@ func resolveInstalledCodexGuideSupport(skillPath, text string) error {
 }
 
 func TestCodexAntSkillGuideSupport(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "")
 	home := t.TempDir()
 	if ok, output := runAntSkillInstall(t, home); !ok {
 		t.Fatalf("install failed: %s", output)
@@ -1196,7 +1203,7 @@ func TestCodexAntSkillGuideSupport(t *testing.T) {
 	}
 	for _, expected := range codexAntGuideExpectations {
 		if expected.command == "build" {
-			expected.runtime = "AETHER_OUTPUT_MODE=json aether build-finalize <phase> --completion-file <Go-owned completion_path returned by codex-native-worker stage>"
+			expected.runtime = "AETHER_OUTPUT_MODE=visual aether build <phase>"
 		}
 		t.Run(expected.command, func(t *testing.T) {
 			var output bytes.Buffer
@@ -1701,4 +1708,15 @@ func TestCommandGuideBuildCoherentJobsContract(t *testing.T) {
 			assertBuildCoherentJobContract(t, "command-guide build --platform "+platform, strings.Join(parts, "\n"))
 		})
 	}
+	t.Run("codex-native-opt-in", func(t *testing.T) {
+		t.Setenv(codexNativeBuildOptInEnv, "1")
+		guide, err := buildCommandGuide("build", "codex")
+		if err != nil {
+			t.Fatalf("buildCommandGuide(build, codex): %v", err)
+		}
+		parts := append([]string{}, guide.PreSteps...)
+		parts = append(parts, guide.Intent, guide.RunCommand)
+		parts = append(parts, guide.PostSteps...)
+		assertBuildCoherentJobContract(t, "command-guide build --platform codex (native opt-in)", strings.Join(parts, "\n"))
+	})
 }

@@ -121,6 +121,7 @@ func TestCodexNativeChildFetchFactoryAndLegacy(t *testing.T) {
 	t.Run("new-native-default", func(t *testing.T) {
 		root := setupExternalBuildAttemptTest(t)
 		t.Setenv("AETHER_ACTIVE_PLATFORM", "codex")
+		t.Setenv(codexNativeBuildOptInEnv, "1")
 		result, _, _, _, err := runCodexBuildPlanOnly(root, 1, nil)
 		if err != nil {
 			t.Fatal(err)

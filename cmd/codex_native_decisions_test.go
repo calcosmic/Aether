@@ -603,6 +603,7 @@ func TestCodexNativeDecisionTerminalHandoff(t *testing.T) {
 	}
 }
 func TestCodexNativeDecisionGuideContract(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	for _, platform := range []string{"codex", "claude", "opencode"} {
 		t.Run(platform, func(t *testing.T) {
 			guide, err := buildCommandGuide("build", platform)

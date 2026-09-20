@@ -722,6 +722,7 @@ func TestCodexNativeWorkerArrivalOrder(t *testing.T) {
 }
 
 func TestCodexNativeBuildGuidePlatformIsolation(t *testing.T) {
+	t.Setenv(codexNativeBuildOptInEnv, "1")
 	baseline := map[string]commandGuideResult{}
 	for _, platform := range []string{"codex", "claude", "opencode", "opencode", "codex", "claude", "codex"} {
 		guide, err := buildCommandGuide("build", platform)
