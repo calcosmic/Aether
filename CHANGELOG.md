@@ -5,6 +5,28 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.82] - 2026-09-20
+
+### Added
+
+- **Codex gets the nine `$ant-*` skills.** They were built in Phase 204.1 but had
+  never been published; this is the first release that installs them.
+
+### Changed
+
+- **Codex builds use the proven direct route by default.** `$ant-build` runs
+  `aether build <phase>` and the Go runtime starts the Codex workers itself. The
+  unfinished native-helper bridge (Phase 204.2, parked 2026-09-20) stays in the
+  tree and is reachable only with `AETHER_CODEX_NATIVE_BUILD=1`. A direct Codex
+  build has no blocking team check-in; the runtime prints its own heads-up when a
+  forced reviewer or an owner question is pending.
+
+### Fixed
+
+- Carries the 1.0.80/1.0.81 local repairs into the main line: reviewer result
+  schema, dependency-gated waves, honest timeout figures, accurate rollback
+  message, superseded blocked closeouts, and host-pinned worker platform.
+
 ## [1.0.79] - 2026-09-16
 
 ### Changed
