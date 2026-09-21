@@ -1568,18 +1568,51 @@ func repositoryDirtyDigest(root string) (string, error) {
 		if pauseOwnedRepositoryPath(path) {
 			continue
 		}
-		absolute := filepath.Join(root, filepath.FromSlash(path))
-		content, readErr := os.ReadFile(absolute)
-		digest := lifecycleTransactionMissingDigest
-		if readErr == nil {
-			digest = lifecycleDigest(content)
-		} else if !os.IsNotExist(readErr) {
-			return "", readErr
+		digest, digestErr := pauseDirtyPathDigest(filepath.Join(root, filepath.FromSlash(path)))
+		if digestErr != nil {
+			return "", digestErr
 		}
 		records = append(records, line+"\x00"+digest)
 	}
 	sort.Strings(records)
 	return lifecycleDigest([]byte(strings.Join(records, "\n"))), nil
+}
+
+// pauseDirtyPathDigest fingerprints one changed path WITHOUT following it. A
+// shortcut (symlink) is recorded as the shortcut itself -- the text it points
+// at, which is also what git stores -- never as whatever lies behind it: a
+// shortcut to a folder used to fail the whole pause with "is a directory", and
+// a shortcut to a file outside the project used to pull that file's bytes into
+// the fingerprint. A folder (git reports a nested repository as one path) is
+// recorded as a folder. A path that has gone is the existing missing digest.
+func pauseDirtyPathDigest(absolute string) (string, error) {
+	info, err := os.Lstat(absolute)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return lifecycleTransactionMissingDigest, nil
+		}
+		return "", err
+	}
+	switch mode := info.Mode(); {
+	case mode&os.ModeSymlink != 0:
+		target, linkErr := os.Readlink(absolute)
+		if linkErr != nil {
+			return "", linkErr
+		}
+		return lifecycleDigest([]byte("symlink\x00" + target)), nil
+	case mode.IsDir():
+		return lifecycleDigest([]byte("directory")), nil
+	case !mode.IsRegular():
+		return lifecycleDigest([]byte("special\x00" + mode.Type().String())), nil
+	}
+	content, err := os.ReadFile(absolute)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return lifecycleTransactionMissingDigest, nil
+		}
+		return "", err
+	}
+	return lifecycleDigest(content), nil
 }
 
 func pausePorcelainPath(line string) string {
