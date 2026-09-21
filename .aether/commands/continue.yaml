@@ -92,6 +92,8 @@ guardrails:
   - "Do NOT hand-render any visual that `aether ceremony` already renders (spawn-plan, wave-start, worker-complete, closeout)."
   - "Do NOT paraphrase or gesture at \"it's safe to clear your context now\", and do NOT route the user to `/ant-resume`; that guidance is runtime-owned and must never appear in wrapper prose."
   - "If docs and runtime disagree, runtime wins."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."
 follow_up:
   advance: "Guide the user first to `/ant-build N+1`, with `aether build <next_phase>` remaining the runtime source of truth beneath the wrapper."
   blocked: "Guide the user through the runtime-surfaced recovery command first; only route back to `/ant-continue` when the runtime has no more specific recovery step."

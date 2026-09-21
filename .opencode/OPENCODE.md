@@ -4,6 +4,17 @@
 
 > **Note:** For Claude Code-specific rules (the other platform), see `../CLAUDE.md`
 
+## Relaying the Runtime's Screen
+
+When a wrapper runs the `aether` CLI in its picture-drawing output mode
+(`AETHER_OUTPUT_MODE=visual`), the runtime already drew the screen the owner
+needs to see — the assistant's job is to relay it, not summarise it. Every
+wrapper step that runs a visual command carries this instruction nearby: show
+the output to the owner unchanged, in a fenced text block, from the first
+banner line (the line drawn with `━━`) to the end, leaving out any running
+commentary above that line; after it, add at most two short sentences of your
+own, and never restate or replace the screen.
+
 ## How Development Works
 
 ```

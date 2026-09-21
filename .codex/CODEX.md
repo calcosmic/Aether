@@ -160,7 +160,7 @@ Do not reinterpret a literal passthrough command as a vague workflow request.
 For lifecycle shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...`
 unless the user explicitly wants JSON. Preserve exact arguments. Do not preface
 literal passthrough execution with repo archaeology or skill narration; the CLI
-output is primary, with at most one short sentence of extra explanation.
+output is primary — show the CLI's screen unchanged, then at most two short sentences of extra explanation.
 
 ### Agent Definitions (TOML Format)
 

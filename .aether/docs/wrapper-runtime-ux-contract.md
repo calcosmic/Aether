@@ -221,6 +221,33 @@ cmd/codex_visuals.go             ← Visual renderer (authoritative presentation
 The current repo does not check in a wrapper generator. The maintained contract
 is YAML-backed manual sync plus automated parity and provenance tests.
 
+## Delivering the screen to the owner
+
+The runtime draws the screen (banners, spawn plans, closeouts, status
+dashboards) through `cmd/codex_visuals.go` and `cmd/ceremony_cmd.go`, but a
+screen the runtime drew inside a tool call reaches the owner only if the
+wrapper relays it. Prior releases left this implicit, and the owner reported
+seeing nothing where a screen should have appeared
+(`.planning/field-reports/2026-09-14-cosmic-seal-entomb-lifecycle.md` §3).
+Release 1.0.88 makes the relay a declared, tested requirement rather than an
+assumption:
+
+- Every wrapper step that runs `AETHER_OUTPUT_MODE=visual` carries two
+  sentences nearby, byte-identical across the wrapper and its owning YAML's
+  `guardrails:` list (see `relayCardSentence` and `screenFormatSentence` in
+  `cmd/seal_wrapper_accuracy_test.go`): relay the runtime's own output
+  unchanged, and show it in a fenced text block from the first banner line
+  (`━━`) to the end, leaving out running commentary above it and adding at
+  most two short sentences of the assistant's own after.
+- This is the program's own rendered screen, and it must be shown. It is a
+  different thing from raw provider stdout/stderr (anti-pattern 8 above),
+  which must never be pasted to the owner regardless of this rule.
+- `TestEveryWrapperThatDrawsAScreenRelaysIt` (`cmd/seal_wrapper_accuracy_test.go`)
+  is the structural guard: it globs every wrapper on both platforms, fails on
+  any `AETHER_OUTPUT_MODE=visual` step lacking the relay pair nearby, and
+  fails if any wrapper still carries an instruction that told the assistant
+  to compress or paraphrase the screen instead of showing it.
+
 ## Enforcement
 
 - Tests in `cmd/codex_visuals_test.go` verify visual output correctness

@@ -22,6 +22,8 @@ Run:
 AETHER_OUTPUT_MODE=visual aether queen-compose $ARGUMENTS
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 Then summarize the generated or updated local QUEEN.md path and the sections the runtime wrote.
 
 ### If `$ARGUMENTS` is empty

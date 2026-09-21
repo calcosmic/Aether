@@ -80,3 +80,5 @@ guardrails:
   - "Wrappers return visual output unchanged and never parse it into authority claims."
   - "Live skill inventory stays nested below maintenance; root-level skill list, diff, and cache commands remain deleted."
   - "Do not add a Codex-native $ant-* command surface in this milestone."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

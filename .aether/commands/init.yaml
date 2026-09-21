@@ -72,3 +72,5 @@ guardrails:
   - "If docs and runtime disagree, runtime wins."
   - "Promoted shelf entries are recorded as colony todos by `aether init`, never appended to a session or state file by the wrapper. The promotion itself happens inside that `aether init` call via `--promote-shelf` / `--dismiss-shelf`, after consent -- the wrapper never runs `shelf-promote-batch` or `shelf-dismiss-batch`, so a cancel or a failed init leaves the shelf untouched."
   - "Approved pheromones are written with `aether pheromone-write` only after `aether init` returns success, so a cancelled or failed init persists nothing."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

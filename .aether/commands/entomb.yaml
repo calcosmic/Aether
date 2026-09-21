@@ -11,3 +11,4 @@ guardrails:
   - "Do not copy archive bytes, do not parse visual output, do not clear or write active state, and do not fabricate verification from this command spec."
   - "Never invoke entomb from the seal workflow; it remains a separately chosen owner action."
   - "If docs and runtime disagree, runtime wins."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

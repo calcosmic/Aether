@@ -59,7 +59,7 @@ This wrapper never reads or writes, by hand: colony state, session files, and ph
 
 **Reads:** `aether status` output (phase progress, colony health, active signals).
 
-1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals.
+1. Run `AETHER_OUTPUT_MODE=visual aether status` to see current colony state, phase progress, and active signals. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 2. Keep that runtime context in view while framing the phase.
 
 **Stop conditions:** None — this stage only observes; it never blocks the build.
@@ -267,6 +267,8 @@ Render the runtime-owned spawn ceremony:
 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 **Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
 
 ## Blocker Heads-Up
@@ -315,6 +317,8 @@ Passing `--checkin` and `--no-checkin` together is refused by name before anythi
 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`, `result.waived`, `result.waive_commands`.
 For a blocking check-in only, before asking the owner to approve the team, run `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>`. Display `result.approval_card` verbatim in a fenced text block in the visible conversation immediately before the approval choices; a collapsed tool result or a generic sentence about the team is not enough. The card names each worker, its assignment and wave, and the required reviewers that run afterward. Keep the runtime roster unchanged. If an older runtime has no `approval_card`, render the visual team-checkin ceremony and relay its roster visibly before asking. Read `result.optional`, `result.waived`, and `result.waive_commands` for the existing trim/decline flow.
 
@@ -358,13 +362,13 @@ Respect `execution_plan`: serial steps stay serial; parallel steps may spawn tog
 
 For each manifest wave:
 
-1. Render `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+1. Render `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1 --phase <phase_id>` before each worker, using the trusted numeric `phase_id` parsed into cross-stage state — never raw `$ARGUMENTS`, which may also contain build options. `--phase` lets the runtime close the forced-reviewer decline window the moment dispatch begins, so a later `decision-answer` call cannot silently drop a reviewer the owner never declined.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.
 5. The worker's prompt = `dispatch_manifest.context_capsule` (read once, prepended verbatim) + the brief read VERBATIM from `dispatch.brief_path` — the routine channel every plan-only dispatch carries — falling back to inline `dispatch.brief` only on the rare dispatch where the runtime could not write the file + `dispatch.skill_section` when present + the newest `decision-answer` `prompt_section` when one exists (runtime-rendered owner steering). Nothing else, nothing invented.
 6. After each worker returns, run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
-7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`.
+7. Write that one terminal result to a temporary worker JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow build --worker-file <worker_file>`. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 8. After the wave's workers return: collect `handoff.open_decisions` from their terminal results. For each question not already answered this build (compare normalized text), ask the user (AskUserQuestion, at most 4 per wave; carry extras to the next boundary). Every question gets the option "Let the colony proceed on its current assumption" — an unanswered question never blocks the build. For each real answer, record it: `AETHER_OUTPUT_MODE=json aether decision-answer --question "<q>" --answer "<a>" --phase <n>` and keep the returned `prompt_section`. For every LATER wave's workers, append the newest `prompt_section` verbatim after `dispatch.skill_section` — it is runtime-rendered owner steering, delivered exactly like the capsule and brief.
 
 **Stop conditions:** All workers in a wave fail — do not continue to the next wave; failed dependencies cascade into work built on broken foundations.
@@ -394,6 +398,8 @@ Then render the user-facing closeout:
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow build --completion-file <Go-owned completion_path>
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 Read the finalizer's own answer instead of assuming a job finished whole:
 

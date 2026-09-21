@@ -101,6 +101,8 @@ guardrails:
   - "Do NOT hand-render any visual that `aether ceremony` already renders (spawn plans, wave starts, worker completions, closeouts, caste legends); invoke the renderer and narrate around it."
   - "Do NOT reintroduce the retired `colony_depth` vocabulary (light/standard/deep/full); the live vocabulary is `--verification-depth <light|standard|heavy>`."
   - "If docs and runtime disagree, runtime wins."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."
 follow_up:
   verify: "Offer `/ant-continue` as the recommended pick in the end-of-build choice, with `aether continue` as the runtime source of truth — never run it unasked."
   inspect: "Run `aether status` if you want to inspect progress before advancing."

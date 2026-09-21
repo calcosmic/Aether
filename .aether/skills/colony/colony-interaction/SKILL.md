@@ -33,7 +33,7 @@ no-interview, or no-orchestration execution.
 - Do not inspect repo files first unless the command itself fails and you need evidence to explain that failure.
 - Do not ask for extra confirmation for read-only or maintenance commands the user explicitly named.
 - If the command itself fails or needs unavailable arguments, report the concrete CLI issue and the exact follow-up command.
-- After the command returns, keep your own wrapper to one short sentence at most. The CLI output is the primary result.
+- After the command returns, show the CLI's screen unchanged, then at most two short sentences of your own. The CLI output is the primary result.
 
 ## Mandatory Touchpoints
 

@@ -6,10 +6,9 @@ description: "🔮 Run the autonomous Oracle loop through the Aether CLI runtime
 
 Use the Go `aether` CLI as the source of truth.
 
-- Execute `AETHER_OUTPUT_MODE=visual aether oracle "$ARGUMENTS"` directly only for `status`, `stop`, or when the user explicitly asks to skip refinement.
+- Execute `AETHER_OUTPUT_MODE=visual aether oracle "$ARGUMENTS"` directly only for `status`, `stop`, or when the user explicitly asks to skip refinement. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 - For inspection or control, prefer `aether oracle status` and `aether oracle stop`.
 - Do not describe legacy loop control files or shell-managed orchestration from this command spec.
-- Report the CLI result directly.
 
 ## Intent Refinement
 
@@ -74,14 +73,12 @@ Before any tokens burn on the loop, record the synthesized brief. The runtime
 renders the approval panel — do not hand-draw it:
 
 ```bash
-AETHER_OUTPUT_MODE=visual aether oracle brief \
-  --topic "<one-line topic>" \
-  --core-question "<the single question the loop must answer>" \
-  --context "<why now, what decision this feeds>" \
-  --success-criteria "<what a done answer contains>" \
-  --success-criteria "<another criterion>" \
+AETHER_OUTPUT_MODE=visual aether oracle brief --topic "<one-line topic>" \
+  --core-question "<the single question the loop must answer>" --context "<why now, what decision this feeds>" \
+  --success-criteria "<what a done answer contains>" --success-criteria "<another criterion>" \
   --depth <depth> --confidence-target <percent> --template <template> --dry-run
 ```
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 Show the rendered panel and ask: **approve**, **edit** (revise a field and
 re-present), or **cancel**. Maximum 2 edit rounds — after the second, run with
@@ -109,6 +106,8 @@ Start from the approved brief and stream its progress:
 ```bash
 AETHER_OUTPUT_MODE=visual aether oracle --from-brief --background --follow
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 `--from-brief` takes the topic, depth, accuracy target, sources and output shape
 from the approved brief, and **fails if no brief has been approved** — that
@@ -179,6 +178,8 @@ or run an explicit quick triage first:
 ```bash
 AETHER_OUTPUT_MODE=visual aether oracle --depth quick --confidence-target <percent> --template <template> "<focused triage prompt>"
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 If the shell/tool call times out, immediately inspect the runtime state:
 

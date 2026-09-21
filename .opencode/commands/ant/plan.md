@@ -100,6 +100,8 @@ Before dispatch, render the runtime-owned spawn ceremony from the saved manifest
 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 Use the returned Scout identity, caste, task ID, agent type, permissions, and brief verbatim. Read `plan_manifest.context_capsule` once and prepend it verbatim to that brief. Do not widen permissions, set background execution, or add owner steering. Record the visible lifecycle around the platform worker:
 
 ```bash
