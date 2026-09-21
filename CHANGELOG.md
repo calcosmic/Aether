@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pause fingerprint followed each unsaved shortcut and tried to read the folder
   behind it as a file. Shortcuts are now recorded as shortcuts and never
   followed, and a project folder nested inside another no longer breaks it.
+- **Planning no longer gets stuck after you correct a specification.** If a
+  planning attempt was waiting on a helper when you approved a corrected
+  specification, every later `/ant-plan` went back to that attempt and was
+  refused again, with no command to move past it. Planning now starts a fresh
+  attempt against the specification you have approved; the old attempt's
+  records are kept.
 - **A note left in a folder that has never had a project now shows on the
   status screen.**
 
