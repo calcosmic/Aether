@@ -264,7 +264,7 @@ Before spawning workers, inspect `result.dispatch_manifest` for `orchestrator_bo
 Render the runtime-owned spawn ceremony:
 
 ```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>
 ```
 
 **Stop conditions:** None — this stage only renders; the plan was already fixed in Dispatch Manifest.
@@ -312,7 +312,7 @@ Passing `--checkin` and `--no-checkin` together is refused by name before anythi
 1. Render the runtime-owned check-in card:
 
 ```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony team-checkin --workflow build --manifest-file <manifest_file>
 ```
 
 2. Fetch the same card as data: `AETHER_OUTPUT_MODE=json aether ceremony team-checkin --workflow build --manifest-file <manifest_file>` and read `result.required`, `result.optional`, `result.reasons`, `result.waived`, `result.waive_commands`.
@@ -358,7 +358,7 @@ Respect `execution_plan`: serial steps stay serial; parallel steps may spawn tog
 
 For each manifest wave:
 
-1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+1. Render `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow build --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1 --phase <phase_id>` before each worker, using the trusted numeric `phase_id` parsed into cross-stage state — never raw `$ARGUMENTS`, which may also contain build options. `--phase` lets the runtime close the forced-reviewer decline window the moment dispatch begins, so a later `decision-answer` call cannot silently drop a reviewer the owner never declined.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.

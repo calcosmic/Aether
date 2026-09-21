@@ -6052,6 +6052,15 @@ func colorizeCaste(caste, text string) string {
 	return "\x1b[" + color + "m" + text + "\x1b[0m"
 }
 
+// shouldUseANSIColors decides whether to emit ANSI escape codes, separately
+// from shouldRenderVisualOutput (which decides whether to draw the rich
+// screen at all). A screen can be drawn in AETHER_OUTPUT_MODE=visual while
+// piped into something that is not a real terminal -- a chat tool call, a
+// captured log, a file -- and colour codes pasted into such a place are junk
+// characters, not colour. Order: NO_COLOR always wins and turns colour off;
+// an explicit force (AETHER_FORCE_COLOR=1 or CLICOLOR_FORCE) always wins and
+// turns colour on; json output never carries colour; otherwise colour is on
+// only when stdout is a real terminal.
 func shouldUseANSIColors() bool {
 	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" {
 		return false
@@ -6063,7 +6072,7 @@ func shouldUseANSIColors() bool {
 	if mode == "json" {
 		return false
 	}
-	return shouldRenderVisualOutput(stdout)
+	return isTerminalWriter(stdout)
 }
 
 func humanizeDispatchMode(mode string) string {

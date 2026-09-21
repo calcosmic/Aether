@@ -558,20 +558,28 @@ var specialistCommandSurfaceHashes = map[string]string{
 	// addition only -- oracle.md's intent-refinement/brief/run/promote flow
 	// and swarm.md's manifest/spawn/finalize ceremony contract (asserted by
 	// TestSwarmWrapperCeremonyContract) are unchanged.
-	".claude/commands/ant/oracle.md": "93a47b261303991f6eb01802ecec5178ec6461a8171f3368a29998b753129504",
-	".claude/commands/ant/swarm.md":  "c2e775263e5063d1e2ccd7d4d75fc69ef4408dc37e8554c288e49fb5382883a2",
+	// oracle.md and swarm.md hashes updated 2026-09-21 (1.0.88 relay-the-card
+	// Part A): the wrapper's ceremony spawn-plan/wave-start lines drop the
+	// AETHER_FORCE_COLOR=1 prefix, since shouldUseANSIColors() no longer
+	// forces colour into a non-terminal writer -- the prefix was needed only
+	// while AETHER_OUTPUT_MODE=visual alone forced colour into a pipe.
+	// Content removal only; no other wording changed.
+	".claude/commands/ant/oracle.md": "90ef30663497b6a1f183f8d09b7c5874b7c831ab65c2cc0a8ac74383bd6e8b4c",
+	".claude/commands/ant/swarm.md":  "e1b8b73c0e6d001ca577373d051d0704d11c64fbb0dd08c7040b4d14ec815aa7",
 	// Phase 198.2 plan 01 (WIRE-01): colonize wrappers now prepend the colony
 	// memory capsule from the manifest, on all three hand-maintained copies.
 	// Behaviour, tools and flow are otherwise unchanged; the capsule block is
 	// the only edit, and the two copies below stay byte-identical.
-	".claude/commands/ant/colonize.md":      "f512474c4d81037d2c047b70d3a2aa9fb4dfc5d36cd55ab247f15d57ee35dd4e",
+	// colonize.md hashes updated 2026-09-21 (1.0.88 relay-the-card Part A):
+	// same AETHER_FORCE_COLOR=1 prefix removal as oracle.md/swarm.md above.
+	".claude/commands/ant/colonize.md":      "07e7e11f0e00fae14deea363da5c4e5552192c9205a9a5f129438543ce03d050",
 	".claude/commands/ant/council.md":       "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	".opencode/commands/ant/chaos.md":       "16f24da7ea50ec125ca5e754ea7f7c0c8a06aed3a8d2e7f8d4f128a1b71115a0",
 	".opencode/commands/ant/archaeology.md": "fada154f485134084ec39eccdf129f0bc2d4b0750e5d055e22620f060c3bc2ba",
 	".opencode/commands/ant/dream.md":       "06158585eeafe94748086c871b02f7a9c2aa8165a8cd0409dcc98663fc94609e",
-	".opencode/commands/ant/oracle.md":      "93a47b261303991f6eb01802ecec5178ec6461a8171f3368a29998b753129504",
-	".opencode/commands/ant/swarm.md":       "c2e775263e5063d1e2ccd7d4d75fc69ef4408dc37e8554c288e49fb5382883a2",
-	".opencode/commands/ant/colonize.md":    "f512474c4d81037d2c047b70d3a2aa9fb4dfc5d36cd55ab247f15d57ee35dd4e",
+	".opencode/commands/ant/oracle.md":      "90ef30663497b6a1f183f8d09b7c5874b7c831ab65c2cc0a8ac74383bd6e8b4c",
+	".opencode/commands/ant/swarm.md":       "e1b8b73c0e6d001ca577373d051d0704d11c64fbb0dd08c7040b4d14ec815aa7",
+	".opencode/commands/ant/colonize.md":    "07e7e11f0e00fae14deea363da5c4e5552192c9205a9a5f129438543ce03d050",
 	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the
 	// worker response contract gained completed_no_change as a first-class

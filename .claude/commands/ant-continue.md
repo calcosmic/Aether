@@ -172,14 +172,14 @@ resolution. Rerun `after_discuss_next` after resolution.
 Render the runtime-owned heavy-review ceremony:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow continue --manifest-file <manifest_file>
 ```
 
 Spawn reviewers as visible live Task/subagent panels. Do not set `run_in_background`. Each reviewer's prompt = `continue_manifest.context_capsule` (read once from the manifest, not per-dispatch, reused for every reviewer this continue run spawns — it already carries every active pheromone signal; do not prepend `pheromone_section`, which the runtime no longer populates) prepended VERBATIM ahead of each dispatch's own runtime-provided `brief`, then `dispatch.skill_section` appended when present. Nothing else, nothing invented.
 
 For each heavy-review wave:
 
-1. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
+1. Render `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow continue --manifest-file <manifest_file> --execution-wave "<execution_wave>"`.
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1` before each reviewer.
 3. Spawn the matching platform agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`. Keep `{name}` in it: the worker name is what this phase's token record joins a transcript row to a worker on, so a shortened label reports the whole run as costing nothing.

@@ -33,7 +33,7 @@ func TestBuildWrapperCeremonyContract(t *testing.T) {
 		"temporary manifest file outside `.aether/data/`",
 		"result.dispatch_manifest",
 		"## Runtime Spawn Ceremony",
-		"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
+		"AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest_file>",
 		"Do not set `run_in_background`",
 		"Do NOT run `aether host build` from this wrapper",
 		"Do NOT run `aether build --synthetic` after real",

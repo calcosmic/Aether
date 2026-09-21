@@ -19,9 +19,9 @@ wrapper_contract:
     3. Parse `result.seal_manifest`.
     4. Before rendering spawn ceremonies or spawning final-review workers, inspect `result.orchestrator_boundary_guidance` and the matching manifest `orchestrator_boundary_guidance`. If it is active or `next` is `aether discuss`, stop the seal flow, show its summary, route to `aether discuss`, tell the user to rerun `after_discuss_next`, and request a fresh plan-only manifest after the answer is resolved. Do not reuse the pre-discuss manifest.
     5. Dispatch the listed final-review workers through the host platform.
-    6. Render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>` so the final-review stack appears before live reviewers.
+    6. Render `AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>` so the final-review stack appears before live reviewers.
     7. Use visible live Task/subagent panels as the final-review ceremony. Do not set `run_in_background`, do not describe reviewers as background agents, and do not replace the live stack with a markdown worker table.
-    8. Before each manifest wave, render `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave <execution_wave>`.
+    8. Before each manifest wave, render `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal --manifest-file <manifest_file> --execution-wave <execution_wave>`.
     9. Call `aether spawn-log` before each worker and `aether spawn-complete` after each terminal result.
     10. Write per-reviewer JSON and the final completion JSON under `${TMPDIR:-/tmp}/aether-seal-<run>/seal-completion.json`; never write wrapper result artifacts under `.aether/data`.
     11. After each terminal reviewer result, write that one result to an approved temp JSON file and render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <worker_file>`.

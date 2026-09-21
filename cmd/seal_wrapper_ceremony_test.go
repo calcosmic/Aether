@@ -27,8 +27,8 @@ func TestSealWrapperCeremonyContract(t *testing.T) {
 				"aether host seal $ARGUMENTS",
 				"result.seal_manifest",
 				"temporary manifest file outside `.aether/data/`",
-				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>",
-				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal",
+				"AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow seal --manifest-file <manifest_file>",
+				"AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow seal",
 				// 205-04: the wrapper no longer promises a fixed reviewer trio.
 				// The reviewer claim itself is held to the runtime by
 				// TestSealWrapperReviewClaimMatchesTheRuntime; this contract only

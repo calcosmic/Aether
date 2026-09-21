@@ -29,7 +29,7 @@ If the runtime reports an existing survey, follow the runtime recovery guidance 
 Before spawning surveyors, render the runtime-owned old-style survey ceremony:
 
 ```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest_file>
 ```
 
 This output is display-only; do not parse it as state.
@@ -50,7 +50,7 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 For each dispatch in `colonize_manifest.dispatches`:
 
 1. Before each manifest wave, render:
-   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow colonize --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+   `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow colonize --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
 2. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.

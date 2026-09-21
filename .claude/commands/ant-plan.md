@@ -97,7 +97,7 @@ The selected preset authorizes routine read-only phase research and later weakes
 Before dispatch, render the runtime-owned spawn ceremony from the saved manifest:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest_file>
 ```
 
 Use the returned Scout identity, caste, task ID, agent type, permissions, and brief verbatim. Read `plan_manifest.context_capsule` once and prepend it verbatim to that brief. Do not widen permissions, set background execution, or add owner steering. Record the visible lifecycle around the platform worker:
