@@ -25,11 +25,11 @@ requirement is unmet (CLAUDE.md, Definition of Done). "Proof" names that command
 
 ### Screens reach the owner (Phase 206)
 
-- [ ] **UED-01** — Every menu command that draws a screen tells the chat to show it unchanged. Proof: `TestEveryWrapperThatDrawsAScreenRelaysIt`.
-- [ ] **UED-02** — In a chat where a menu command was used, a reply that hides the screen is sent back once, never twice, and the check changes nothing on disk. Proof: `TestStopHookSendsBackAReplyThatHidTheScreen`, `TestStopHookNeverBlocksTwice`, `TestStopHookScreenCheckDoesNotMutate`.
-- [ ] **UED-03** — A screen printed for a chat carries no colour escape codes. Proof: `TestPipedVisualOutputCarriesNoEscapeCodes`.
-- [ ] **UED-04** — Start-up, code survey and helper cards are in the guarded look. Proof: `TestEveryOrdinaryScreenIsMeasuredForVoice` with eleven families.
-- [ ] **UED-05** — The program hands its screen to Claude Code to show directly (hook `systemMessage`), and the owner has judged it on his own screen. Proof: a real-chat run asserting the informational message carries the banner lines; owner sign-off recorded.
+- [x] **UED-01** — Every menu command that draws a screen tells the chat to show it unchanged. Proof: `TestEveryWrapperThatDrawsAScreenRelaysIt`.
+- [x] **UED-02** — In a chat where a menu command was used, a reply that hides the screen is sent back once, never twice, and the check changes nothing on disk. Proof: `TestStopHookSendsBackAReplyThatHidTheScreen`, `TestStopHookNeverBlocksTwice`, `TestStopHookScreenCheckDoesNotMutate`.
+- [x] **UED-03** — A screen printed for a chat carries no colour escape codes. Proof: `TestPipedVisualOutputCarriesNoEscapeCodes`.
+- [x] **UED-04** — Start-up, code survey and helper cards are in the guarded look. Proof: `TestEveryOrdinaryScreenIsMeasuredForVoice` with eleven families.
+- [x] **UED-05** — The program hands its screen to Claude Code to show directly (hook `systemMessage`), and the owner has judged it on his own screen. Proof: a real-chat run asserting the informational message carries the banner lines; owner sign-off recorded.
 - [ ] **UED-06** — A permanent status line shows phase, task and next command. Proof: a test that the shipped settings register it and that its output comes from the shared what-next decision.
 
 ### A messy practice project gates releases (Phase 207)

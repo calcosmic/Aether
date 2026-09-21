@@ -1060,12 +1060,12 @@ Plans:
 4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
 5. Proven in real chats in a scratch project, not only in tests.
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 206-01-PLAN.md — The direct route: a hook hands a drawn screen straight to the owner, and the finish check stops demanding a screen that already arrived whole (wave 1)
+- [x] 206-01-PLAN.md — The direct route: a hook hands a drawn screen straight to the owner, and the finish check stops demanding a screen that already arrived whole (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

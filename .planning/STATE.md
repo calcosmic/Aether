@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
 current_phase: 206
-current_phase_name: screens-reach-the-owner
-status: active
-stopped_at: Phase 206 planned 2026-09-21 -- 2 plans in 2 waves (direct screen route, then status line + real-chat proof + owner look); release 1.0.88 published; next is /gsd-execute-phase 206
-last_updated: "2026-09-21T21:00:39.917Z"
-last_activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
-last_activity_desc: Phase 206 planned; next is execute
-state_head: 3b5c2ed9543e448bb82c28d445be8dd544a44fe8
+current_phase_name: Screens Reach the Owner
+status: executing
+stopped_at: Completed 206-01-PLAN.md
+last_updated: "2026-09-21T21:35:13.582Z"
+last_activity: 2026-09-21
+last_activity_desc: Phase 206 execution started
+state_head: b70f1175f28e44271075112932cd713458c19f13
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -25,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 206 — Screens Reach the Owner (v1.29 Use It Every Day; one rule: no new features, no new strict rules)
+**Current focus:** Phase 206 — Screens Reach the Owner
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 206 (screens-reach-the-owner) — READY TO EXECUTE
+Phase: 206 (Screens Reach the Owner) — EXECUTING
 Next phase: 207 (messy practice project as the release gate)
 Status: Ready to execute
-Plan: 0 of 2
-Last activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
+Plan: 2 of 2
+Last activity: 2026-09-21 — Phase 206 execution started
 
 ## Performance Metrics
 
@@ -207,6 +207,7 @@ Last activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
 | Phase 202 P15 | 75min | 3 tasks | 18 files |
 | Phase 202 P16 | 55min | 3 tasks | 10 files |
 | Phase 202 P17 | 40min | 3 tasks | 6 files |
+| Phase 206 P01 | 40min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -651,6 +652,8 @@ Last activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
 - [Phase 204]: WINDOWS.md rows with status fixed seed the regression-fixture bank, so closing a ledger entry obliges a bank regeneration (`go test ./cmd -run '^TestSeededBankUpdate$' -update-bank`) plus a real guard for each new fixture; the unguarded floor is a two-sided ratchet and is never raised.
 - [Phase 204]: Fixture dates the compiled binary reads must derive from the wall clock; in-process fixtures pin the candidate clock instead. Two families of literal September dates crossed the seven-day candidate window mid-phase and turned fifteen tests red with no code change.
 - [Phase 204.1-204.5]: Owner moved canonical Codex ant skills and behavioral parity into v1.28 before remaining Phase 205 acceptance (2026-09-16); prior later-milestone deferral is superseded. — Five inserted phases own ANT-01..16; preserve completed 205 evidence and original inventory, and qualify the changed candidate before any owner walkthrough.
+- [Phase 206]: Committed fixture represents a genuine top-level owner chat turn (agent_id/agent_type removed); direct route and backstop share one decision function, AST-enforced
+- [Phase 206]: screenRelayBlockReason stays quiet only when directScreenDelivery reports complete delivery AND directScreenRouteRegistered reads true from the project's own settings
 
 ### Pending Todos
 
@@ -772,9 +775,9 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-19T16:57:36.492768+00:00
-Stopped at: Phase204.2 Plan25 executing: 9f9194e6 listing repair passes 24 families normal/race (780 each). Eighth ordinary/replay incomplete after client usage limit. Owner reports quota reset and authorizes fresh admitted ordinary capture; all-three delivery remains pending.
-Resume file: .planning/phases/204.2-codex-native-worker-lifecycle/204.2-25-CHECKPOINT.md
+Last session: 2026-09-21T21:35:13.561Z
+Stopped at: Completed 206-01-PLAN.md
+Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
 
