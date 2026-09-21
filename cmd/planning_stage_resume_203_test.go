@@ -305,7 +305,12 @@ func resolvePlanningStageResumeForTest(t *testing.T, root string) (*planningStag
 	var resume *planningStageResume
 	err := withPlanningMutationSession(root, "test-resolve-resume", func(session *planningMutationSession) error {
 		var inner error
-		resume, inner = resolvePlanningStageResume(session)
+		// Resolve against the specification the fixture's run was made for
+		// (planningStageResumeTestParkedRun seeds it from the same helper), so
+		// these tests keep asking what they always asked: is the parked run
+		// found? TestParkedRunAgainstASupersededSpecificationIsNotResumed
+		// covers the other half.
+		resume, inner = resolvePlanningStageResume(session, planningStageTestState(planningStageScoutReady).Specification)
 		return inner
 	})
 	return resume, err
