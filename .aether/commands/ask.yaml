@@ -10,6 +10,6 @@ ceremony_contract:
 guardrails:
   - "Answer only from the briefing's content; when the colony has no record, say so plainly instead of inventing."
   - "Do not spawn workers for an ask — the briefing already holds the colony's memory; spawning adds latency and no information."
-  - "If the question is about the CODE rather than the colony, say so and point to `/ant-quick`, which dispatches a read-only scout at the repo."
+  - "If the question is about the CODE rather than the colony, run `AETHER_OUTPUT_MODE=visual aether quick --question \"$ARGUMENTS\"` (a read-only scout at the repo) and report its answer -- do not merely point the user at `/ant-quick`."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."
