@@ -508,3 +508,130 @@ func TestDirectRouteAndTheBackstopUseOneDecision(t *testing.T) {
 		t.Errorf("directScreenMessageCapBytes is referenced by %d function(s) in the package, want exactly 1 -- a second copy of the length rule is how the direct route and the backstop drift apart", capReferencingFuncs)
 	}
 }
+
+// TestDirectRouteHookIsRegistered is modelled directly on
+// TestSessionStartHookIsRegistered (cmd/hook_session_start_test.go): the
+// registration is read out of the shipped settings file itself, and the
+// command it names must be a command the program actually has.
+func TestDirectRouteHookIsRegistered(t *testing.T) {
+	settings := readShippedHookSettings(t)
+
+	entries, ok := settings.Hooks["PostToolUse"]
+	if !ok || len(entries) == 0 {
+		t.Fatal(".claude/settings.json registers no PostToolUse hook at all, so the direct route never runs")
+	}
+
+	covered := false
+	sawTimeout := false
+	for _, entry := range entries {
+		names := false
+		for _, h := range entry.Hooks {
+			if strings.TrimSpace(h.Command) == "aether hook-post-tool-use" {
+				names = true
+				if h.Timeout > 0 {
+					sawTimeout = true
+				}
+			}
+		}
+		if !names {
+			continue
+		}
+		for _, matcher := range strings.Split(entry.Matcher, "|") {
+			if strings.TrimSpace(matcher) == "Bash" {
+				covered = true
+			}
+		}
+	}
+
+	if !covered {
+		t.Fatal("no PostToolUse entry runs `aether hook-post-tool-use` against Bash -- the command is registered with cobra but nothing fires it")
+	}
+	if !sawTimeout {
+		t.Error("the PostToolUse hook entry carries no timeout; a hook that can hang blocks every Bash tool call")
+	}
+
+	target, _, err := rootCmd.Find([]string{"hook-post-tool-use"})
+	if err != nil || target == nil || target == rootCmd {
+		t.Fatal("`aether hook-post-tool-use` is registered in .claude/settings.json but is not a registered command")
+	}
+}
+
+// TestDirectRouteInstallsWithoutDisturbingOtherHooks proves the shipped
+// settings merge (mergeClaudeSettings, cmd/settings_merge.go) installs the
+// direct route into a downstream project without deleting that project's own
+// foreign hooks or top-level keys, and that merging twice is idempotent.
+func TestDirectRouteInstallsWithoutDisturbingOtherHooks(t *testing.T) {
+	root, err := findRepoRoot()
+	if err != nil {
+		t.Fatalf("findRepoRoot: %v", err)
+	}
+	template, err := os.ReadFile(filepath.Join(root, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("read shipped settings: %v", err)
+	}
+
+	foreign := []byte(`{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {"type": "command", "command": "some-foreign-tool --check", "timeout": 5}
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": ["Bash(echo:*)"]
+  }
+}`)
+
+	merged, err := mergeClaudeSettings(template, foreign)
+	if err != nil {
+		t.Fatalf("mergeClaudeSettings: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(merged, &parsed); err != nil {
+		t.Fatalf("merged settings is not valid JSON: %v", err)
+	}
+
+	hooks, _ := parsed["hooks"].(map[string]interface{})
+	postToolUse, _ := hooks["PostToolUse"].([]interface{})
+
+	sawForeign := false
+	sawDirectRoute := false
+	for _, raw := range postToolUse {
+		entry, _ := raw.(map[string]interface{})
+		innerHooks, _ := entry["hooks"].([]interface{})
+		for _, rawInner := range innerHooks {
+			inner, _ := rawInner.(map[string]interface{})
+			command, _ := inner["command"].(string)
+			switch command {
+			case "some-foreign-tool --check":
+				sawForeign = true
+			case "aether hook-post-tool-use":
+				sawDirectRoute = true
+			}
+		}
+	}
+	if !sawForeign {
+		t.Error("merging the direct route's settings deleted a foreign PostToolUse hook entry")
+	}
+	if !sawDirectRoute {
+		t.Error("merging did not install the direct route's PostToolUse entry")
+	}
+
+	permissions, _ := parsed["permissions"].(map[string]interface{})
+	if permissions == nil {
+		t.Error("merging deleted the foreign top-level permissions block")
+	}
+
+	mergedTwice, err := mergeClaudeSettings(template, merged)
+	if err != nil {
+		t.Fatalf("second mergeClaudeSettings: %v", err)
+	}
+	if string(mergedTwice) != string(merged) {
+		t.Errorf("merging twice is not idempotent.\nfirst:\n%s\nsecond:\n%s", merged, mergedTwice)
+	}
+}

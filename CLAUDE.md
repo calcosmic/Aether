@@ -277,6 +277,73 @@ asks twice in a row, it never fires for Aether's
 own background helpers, and if it cannot make sense of what happened it always
 lets the reply through rather than guessing wrong.*
 
+### The screen reaches the owner directly (v1.29, Phase 206)
+
+The Stop-hook checkpoint above catches a hidden screen after the fact, at the
+cost of a model turn (the chat's own thinking and reply) and a told-off
+reply. Phase 206 adds a second, earlier path that skips that cost entirely: a
+new hidden command, `aether hook-post-tool-use`, runs after every Bash tool
+call and, when that Bash command drew one of Aether's screens, hands the
+screen straight to Claude Code (the chat program itself) as a `systemMessage`
+-- a field Claude Code shows directly to the owner without asking the model
+to summarise or retype anything. No model turn is spent and there is nothing
+for the chat to paste. Proven against a real captured payload (a genuine
+`aether hook-post-tool-use` invocation, captured live from an actual
+`AETHER_OUTPUT_MODE=visual aether status` run) by
+`TestDirectRouteHandsTheScreenToTheOwner`; the cases where nothing is owed --
+a non-Bash tool, a command asking for machine-readable output instead of a
+drawn screen, a tool response carrying no screen at all -- produce no output
+whatsoever, locked by `TestDirectRouteStaysQuietWhenThereIsNoScreen`.
+
+A screen can be longer than the chat platform's own per-message limit
+(10,000 characters). When that happens, the message arrives as the screen's
+own LAST whole lines, behind one plain sentence saying the top was left out
+and that the chat has still been asked to show the rest -- never a line cut
+in half, never a character split in the middle of a multi-byte symbol (the
+bar character, a helper emoji). Locked by `TestDirectRouteNeverCutsALineInHalf`.
+The message is always valid text a chat program can display, even when the
+screen itself carries an invalid byte sequence somewhere in it -- locked by
+`TestDirectRouteMessageIsValidJSONForEveryScreen`.
+
+The Stop-hook checkpoint (the "backstop" above) is not replaced by any of
+this -- it is still what catches a screen this new route could not deliver.
+It stops asking the chat to paste a screen back in ONLY once two things are
+both true: the whole screen provably already arrived through the direct
+route, and this project's own settings have the direct route installed. An
+unregistered project, or a screen that only partly arrived, is asked for
+exactly as before. Locked by `TestBackstopStaysQuietWhenTheScreenAlreadyArrived`
+and `TestBackstopStillFiresWhenOnlyPartOfTheScreenArrived`. Both surfaces --
+the new direct route and the existing backstop -- reach the exact same one
+decision function rather than keeping their own separate copies of this
+logic, which is how two surfaces in this repository have drifted apart
+before; a second copy fails `TestDirectRouteAndTheBackstopUseOneDecision`.
+
+The route is off in every case the Stop-hook checkpoint is already off in:
+for one of Aether's own spawned helpers, and for a platform-reported
+sub-agent (a helper Claude Code itself reports as not being the owner's own
+top-level chat) -- locked by `TestDirectRouteIsSkippedForHelpersAndWorkers`.
+The owner's existing off switch, `AETHER_SCREEN_RELAY=off`, turns this route
+off too, not only the backstop -- locked by `TestDirectRouteOffSwitchStopsIt`.
+The route reads its own stdin payload and writes nothing anywhere -- no
+colony state, no marker file, no tracer -- unless the operator has separately
+switched on the existing raw-payload capture used to build test fixtures;
+locked by `TestDirectRouteWritesNothing`. The shipped settings
+(`.claude/settings.json`) register the route against Bash tool calls with a
+timeout, naming a command the program actually has, locked by
+`TestDirectRouteHookIsRegistered`; installing that registration into a
+project that already has its own hooks never disturbs them, locked by
+`TestDirectRouteInstallsWithoutDisturbingOtherHooks`.
+
+*For dummies: when a shell command draws one of Aether's screens, the chat
+program itself now shows you that screen right away, without spending a turn
+"thinking" about it or asking you to trust a summary. If the screen is too
+long to fit in one message, you get its last part plus a plain sentence
+saying so, never a half-cut line. The older safety net from Phase 205 (the
+one that sends a reply back if it hid a screen) is still there underneath --
+it only stays quiet once it can prove you already got the whole thing. This
+new path is off wherever the older one already was: for Aether's own
+background helpers, and if you've switched screen relaying off yourself.*
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users
