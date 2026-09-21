@@ -346,22 +346,35 @@ func screenRelayDisabledByEnv() bool {
 // open on every ambiguous or unreadable case -- no transcript path, an
 // unreadable or unrecognised transcript, no owed screen, an empty reply, and
 // AETHER_SCREEN_RELAY=off all return "" (allow) rather than guessing. This
-// function and owedScreenBanners never write anything; the Stop hook stays
+// function and owedScreenFrom never write anything; the Stop hook stays
 // read-only.
+//
+// Phase 206 (UED-05) adds one guard before the per-line comparison: if the
+// direct route is registered in this project's own settings AND
+// directScreenDelivery reports the owed screen would arrive WHOLE, the owner
+// has already seen it -- asking the chat to paste it again is exactly the
+// told-off-for-nothing the owner objected to. Every other case (not
+// registered, or the screen would only arrive in part) falls through to the
+// existing comparison, unchanged.
 func screenRelayBlockReason(input claudeHookInput) string {
 	if screenRelayDisabledByEnv() {
 		return ""
 	}
-	owed := owedScreenBanners(input.TranscriptPath)
-	if len(owed) == 0 {
+	owed := owedScreenFrom(input.TranscriptPath)
+	if len(owed.Banners) == 0 {
 		return ""
 	}
 	reply := strings.TrimSpace(input.LastAssistantMessage)
 	if reply == "" {
 		return ""
 	}
+
+	if _, complete, deliver := directScreenDelivery(owed.Command, owed.Screen); deliver && complete && directScreenRouteRegistered(input.Cwd) {
+		return ""
+	}
+
 	normalizedReply := normalizeScreenWhitespace(reply)
-	for _, line := range owed {
+	for _, line := range owed.Banners {
 		if !strings.Contains(normalizedReply, line) {
 			return stopHookScreenRelayReason
 		}
@@ -455,11 +468,23 @@ func sessionUsesAntCommands(lines []string) bool {
 	return false
 }
 
-// owedScreenBanners reads a real Claude Code transcript and returns the
-// whitespace-normalised banner lines of the screen the current turn owes the
-// owner, or nil when nothing is owed, the session never used one of
-// Aether's own `/ant-…` menu commands, or the transcript cannot be read or
-// understood.
+// owedScreen is what a transcript's current turn owes the owner: the
+// whitespace-normalised banner lines (for the existing per-line comparison),
+// plus -- Phase 206 (UED-05) additions -- the shell command that drew the
+// screen and the screen's own raw tool-result text, both needed by
+// directScreenDelivery to decide whether the direct route would have
+// delivered it whole. A zero-value owedScreen means nothing is owed, exactly
+// as a nil slice did before this type existed.
+type owedScreen struct {
+	Banners []string
+	Command string
+	Screen  string
+}
+
+// owedScreenFrom reads a real Claude Code transcript and returns what the
+// current turn owes the owner, or a zero-value owedScreen when nothing is
+// owed, the session never used one of Aether's own `/ant-…` menu commands,
+// or the transcript cannot be read or understood.
 //
 // "The current turn" is everything from the LAST genuine human prompt
 // onward. A transcript line is a genuine human prompt when its role is
@@ -474,14 +499,14 @@ func sessionUsesAntCommands(lines []string) bool {
 // precedes its own result), and keeps the LAST one whose command ran Aether
 // in visual mode and whose output drew at least one banner line
 // (isAetherBannerLine, shared with the renderer that draws them).
-func owedScreenBanners(transcriptPath string) []string {
+func owedScreenFrom(transcriptPath string) owedScreen {
 	transcriptPath = strings.TrimSpace(transcriptPath)
 	if transcriptPath == "" {
-		return nil
+		return owedScreen{}
 	}
 	data, err := os.ReadFile(transcriptPath)
 	if err != nil {
-		return nil
+		return owedScreen{}
 	}
 
 	lines := strings.Split(string(data), "\n")
@@ -491,7 +516,7 @@ func owedScreenBanners(transcriptPath string) []string {
 	// happens to run `aether status` in visual mode -- e.g. piped through
 	// grep -- is never owed a relayed screen.
 	if !sessionUsesAntCommands(lines) {
-		return nil
+		return owedScreen{}
 	}
 
 	entries := make([]transcriptEntry, len(lines))
@@ -531,10 +556,10 @@ func owedScreenBanners(transcriptPath string) []string {
 	}
 
 	if turnStart == -1 {
-		return nil
+		return owedScreen{}
 	}
 
-	var owed []string
+	var result owedScreen
 	for i := turnStart; i < len(entries); i++ {
 		if !parsed[i] {
 			continue
@@ -555,13 +580,14 @@ func owedScreenBanners(transcriptPath string) []string {
 			if !known || !isAetherVisualCommand(command) {
 				continue
 			}
-			banners := bannerLinesIn(toolResultText(block.Content))
+			screenText := toolResultText(block.Content)
+			banners := bannerLinesIn(screenText)
 			if len(banners) > 0 {
-				owed = banners
+				result = owedScreen{Banners: banners, Command: command, Screen: screenText}
 			}
 		}
 	}
-	return owed
+	return result
 }
 
 // isGenuineUserPrompt distinguishes a human-typed prompt from a tool result
