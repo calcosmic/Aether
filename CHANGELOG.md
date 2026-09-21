@@ -5,6 +5,22 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.85] - 2026-09-21
+
+### Fixed
+
+- **Planning no longer dead-ends when the map of the code is out of date.**
+  The automatic map refresh told its survey helpers to write into a temporary
+  folder that the write-protection rule did not allow, and the helpers' own
+  instructions told them to refuse any folder but one. Both now agree with
+  what the program orders, and a check feeds every path the refresh orders to
+  the real rule so the two cannot drift apart again.
+- **Archiving a finished project no longer fails when the project has both of
+  its context notes.** Two different files were being saved into the archive
+  under the same name. The project-level one now has its own name.
+- **Running the test suite no longer writes a flag titled "test" into the real
+  project data.** One smoke test was not pointed at its temporary folder.
+
 ## [1.0.84] - 2026-09-21
 
 ### Added
