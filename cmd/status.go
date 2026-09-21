@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -36,6 +37,10 @@ var statusCmd = &cobra.Command{
 		state, err := loadActiveColonyStateReadOnly()
 		if err != nil {
 			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
+				if archived := peekArchivedShellForStatus(); archived != nil {
+					writeVisualOutput(stdout, renderArchivedProjectStatusVisual(archived.ArchiveReference.ID))
+					return nil
+				}
 				writeVisualOutput(stdout, renderNoColonyStatusVisual())
 				return nil
 			}
@@ -125,6 +130,46 @@ func renderNoColonyStatusVisual() string {
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
 		`Run `+"`aether lay-eggs`"+` first if this repo has not been set up for Aether yet.`,
+	))
+	return b.String()
+}
+
+// peekArchivedShellForStatus reads COLONY_STATE.json byte-level (the same
+// read-only loader init_cmd.go uses to inspect existing state) and returns
+// the decoded state only when it is exactly the archived-shell shape
+// colonyStateIsArchivedShell defines. It changes nothing on disk. A missing
+// file, a decode error, or any state that is not that exact shape returns
+// nil, so callers fall back to today's plain "no colony initialized" wording.
+func peekArchivedShellForStatus() *colony.ColonyState {
+	if store == nil {
+		return nil
+	}
+	statePath := filepath.Join(store.BasePath(), "COLONY_STATE.json")
+	state, _, err := loadColonyStateWithCompatibilityRepairReadOnlyFromPath(statePath)
+	if err != nil {
+		return nil
+	}
+	if !colonyStateIsArchivedShell(state) {
+		return nil
+	}
+	return &state
+}
+
+// renderArchivedProjectStatusVisual is what `aether status` shows for a
+// finished project that was archived and cleared -- distinct from a
+// never-used repository, which keeps renderNoColonyStatusVisual's wording
+// unchanged.
+func renderArchivedProjectStatusVisual(archiveID string) string {
+	var b strings.Builder
+	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
+	b.WriteString(visualDividerStr())
+	archiveID = strings.TrimSpace(archiveID)
+	if archiveID == "" {
+		archiveID = "unnamed archive"
+	}
+	b.WriteString(fmt.Sprintf("Your last project here is finished and archived (%s). Nothing is active.\n", archiveID))
+	b.WriteString(renderNextUp(
+		`Run ` + "`aether init \"goal\"`" + ` to start the next project.`,
 	))
 	return b.String()
 }

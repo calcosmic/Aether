@@ -124,6 +124,10 @@ func TestStatusNamesAnArchivedProject(t *testing.T) {
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("entomb failed: %v", err)
 		}
+		// runRealLifecycleToSealForTest forces JSON output mode internally
+		// (forceJSONOutputModeForTest); re-assert visual mode for the status
+		// call below.
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
 		var buf bytes.Buffer
 		stdout = &buf

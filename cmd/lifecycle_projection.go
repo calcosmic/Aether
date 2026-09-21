@@ -307,7 +307,11 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 	// state or lifecycle-evidence source is ambiguous recovery, not emptiness.
 	if facts.State.Source.Provenance == LifecycleFactMissing ||
 		(strings.TrimSpace(facts.Identity.Value.Goal) == "" && len(progress.Phases) == 0 && progress.CurrentPhase < 1 && facts.State.Source.Provenance == LifecycleFactConfirmed) {
-		return lifecycleActionFromCandidate("initialize", candidateInit, "No colony goal is active in this repository.", evidence), []LifecycleActionChoice{
+		initializeReason := "No colony goal is active in this repository."
+		if colonyStateIsArchivedShell(state) {
+			initializeReason = "The last project here is finished and archived; no goal is active. Start the next one."
+		}
+		return lifecycleActionFromCandidate("initialize", candidateInit, initializeReason, evidence), []LifecycleActionChoice{
 			lifecycleChoiceFromCandidate("status", candidateStatus, "Inspect this repository without changing it."),
 			lifecycleChoiceFromCandidate("history", candidateHistory, "Review any retained activity before starting."),
 		}, colony.OutcomeKindNoChange, closure, colony.RecoveryProvenanceUnknown

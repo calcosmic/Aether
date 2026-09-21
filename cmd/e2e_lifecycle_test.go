@@ -255,8 +255,12 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	}
 
 	answer := resolveNextAction(loadNextActionInputForCommand(""))
-	if answer.Command != "initialize" {
-		t.Errorf("closing action after entomb = %q, want %q\nreason: %s", answer.Command, "initialize", answer.Recommendation)
+	if answer.Projection == nil || answer.Projection.NextAction.ID != "initialize" {
+		gotID := ""
+		if answer.Projection != nil {
+			gotID = answer.Projection.NextAction.ID
+		}
+		t.Errorf("closing action id after entomb = %q, want %q\nreason: %s", gotID, "initialize", answer.Recommendation)
 	}
 
 	// Verify the archived chamber's own COLONY_STATE.json still contains the

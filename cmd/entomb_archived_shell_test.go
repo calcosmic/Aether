@@ -106,8 +106,12 @@ func TestArchivedShellFromOlderVersionReadsAsStartNew(t *testing.T) {
 	}
 
 	answer := resolveNextAction(loadNextActionInputForCommand(""))
-	if answer.Command != "initialize" {
-		t.Errorf("closing action = %q, want %q\nreason: %s", answer.Command, "initialize", answer.Recommendation)
+	if answer.Projection == nil || answer.Projection.NextAction.ID != "initialize" {
+		gotID := ""
+		if answer.Projection != nil {
+			gotID = answer.Projection.NextAction.ID
+		}
+		t.Errorf("closing action id = %q, want %q\nreason: %s", gotID, "initialize", answer.Recommendation)
 	}
 
 	var resumeOut bytes.Buffer
@@ -185,8 +189,12 @@ func TestArchivedShellToleranceIsNarrow(t *testing.T) {
 			}
 
 			answer := resolveNextAction(loadNextActionInputForCommand(""))
-			if answer.Command == "initialize" {
-				t.Errorf("closing action = %q for mutation %q, want anything but %q", answer.Command, test.name, "initialize")
+			gotID := ""
+			if answer.Projection != nil {
+				gotID = answer.Projection.NextAction.ID
+			}
+			if gotID == "initialize" {
+				t.Errorf("closing action id = %q for mutation %q, want anything but %q", gotID, test.name, "initialize")
 			}
 		})
 	}
