@@ -1126,6 +1126,15 @@ func contextHealthFromInput(in nextActionInput, state colony.ColonyState) nextAc
 	if colonyStateIsArchivedShell(state) {
 		return nextActionContextVerdict{Health: contextHealthSafe, Reason: contextReasonHandoffSaved}
 	}
+	// A quick job (or question) run with no project set up in the folder
+	// has nothing in flight and no handover to write either -- there is no
+	// project, so warning the owner not to close the chat yet because a
+	// handover note has not been written to disk would be false noise.
+	// Scoped to the quick command specifically: no other command's closing
+	// card changes.
+	if in.NoColony && strings.TrimSpace(in.LastCommand) == "quick" {
+		return nextActionContextVerdict{Health: contextHealthSafe, Reason: contextReasonHandoffSaved}
+	}
 	if !in.HandoffExists {
 		return nextActionContextVerdict{Health: contextHealthKeep, Reason: contextReasonHandoffMissing}
 	}

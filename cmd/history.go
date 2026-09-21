@@ -520,7 +520,7 @@ func lifecycleHistoryRowFromEpisode(entry colonyEpisodeEntry) LifecycleHistoryRo
 	return LifecycleHistoryRow{
 		Timestamp:      timestamp,
 		Event:          colonyEpisodeKindLabel(entry.Kind) + ": " + entry.Subject,
-		Actor:          "Unknown",
+		Actor:          emptyFallback(strings.TrimSpace(entry.Actor), "Unknown"),
 		Result:         "Outcome: " + outcome,
 		Category:       lifecycleHistoryCategoryEpisode,
 		EvidenceKind:   "episode",

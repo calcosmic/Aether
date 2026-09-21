@@ -421,6 +421,16 @@ type quickAttemptRecord struct {
 	Summary     string                 `json:"summary,omitempty"`
 	Evidence    []string               `json:"evidence,omitempty"`
 	Files       []string               `json:"files,omitempty"`
+	// CheckArtifacts lists files the project's own checks left behind (e.g.
+	// a compiled binary) -- reported, never deleted, and never folded into
+	// Files (a check artifact is not the helper's own change).
+	CheckArtifacts []string `json:"check_artifacts,omitempty"`
+	// WorkerName and Caste name the one helper this attempt dispatched, so
+	// the shared episode lineage (colonyEpisodeIndexEntry) can show an
+	// actor instead of "Unknown" -- the same information every other
+	// episode source already carries.
+	WorkerName string `json:"worker_name,omitempty"`
+	Caste      string `json:"caste,omitempty"`
 }
 
 // newQuickAttempt opens one attempt for a quick request. The ID is a plain,
@@ -554,6 +564,8 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	// request's own attempt, before dispatch -- no check-in pause is ever
 	// added for a single worker with nothing pending.
 	attempt.recordDispatch(workerName, "scout", "dispatched")
+	attempt.WorkerName = workerName
+	attempt.Caste = "scout"
 	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
 		TaskID: "quick.scout",
 		Goal:   "Answer a lightweight user question about the current repository or Aether context.",
@@ -684,22 +696,97 @@ func quickFileContentHash(path string) string {
 // output). A path present in either snapshot with a different hash, a path
 // newly dirty, or a path that WAS dirty and is no longer (e.g. reverted or
 // deleted back to clean) all count -- something happened to it.
+// quickRuntimeOwnedPathPrefixes are repo-relative path prefixes the
+// program itself owns and writes as ordinary bookkeeping -- colony data,
+// lock files, the TS host's own installed copy, in-flight update
+// transactions, and worktree scratch space. A path under one of these
+// never counts as a real change, no matter what a snapshot diff sees.
+var quickRuntimeOwnedPathPrefixes = []string{
+	".aether/data/",
+	".aether/locks/",
+	".aether/ts-host/",
+	".aether-transactions/",
+	".claude/worktrees/",
+}
+
+// quickBootstrapManagedPaths are the exact repo-relative files Aether's own
+// first-run bootstrap and lazy host install can create -- sometimes DURING
+// dispatch itself, inside the real worker CLI's own subprocess start-up,
+// which no before/after snapshot ordering alone can see coming (moving the
+// "before" snapshot earlier does not help once the write happens inside
+// Invoke()). A path in this set is never attributed to the helper merely
+// by APPEARING (absent before dispatch, present after) -- but if it
+// already existed before dispatch and its content changes, or it
+// disappears, that is a real, helper-attributable change and IS reported;
+// once a folder is already bootstrapped, a genuine edit to one of these
+// files is never silently swallowed.
+var quickBootstrapManagedPaths = map[string]bool{
+	".claude/settings.json":   true,
+	".codex/CODEX.md":         true,
+	".opencode/OPENCODE.md":   true,
+	"AGENTS.md":               true,
+	".aether/QUEEN.md":        true,
+	".aether/WHAT-IS-THIS.md": true,
+}
+
+// quickBootstrapManagedPathPrefixes is the directory-shaped counterpart of
+// quickBootstrapManagedPaths -- a whole rules directory the bootstrap
+// installs, not one named file.
+var quickBootstrapManagedPathPrefixes = []string{
+	".claude/rules/",
+}
+
+func quickIsRuntimeOwnedPath(path string) bool {
+	for _, prefix := range quickRuntimeOwnedPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func quickIsBootstrapManagedPath(path string) bool {
+	if quickBootstrapManagedPaths[path] {
+		return true
+	}
+	for _, prefix := range quickBootstrapManagedPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// quickRealChangedFiles derives the real changed-file set from two
+// snapshots. A runtime-owned path (quickIsRuntimeOwnedPath) never counts.
+// A bootstrap-managed path (quickIsBootstrapManagedPath) counts only when
+// it already existed before dispatch and genuinely changed or disappeared
+// -- never merely for appearing, since Aether's own bootstrap can create
+// it. Every other path counts on appearing, changing, or disappearing.
 func quickRealChangedFiles(before, after map[string]string) []string {
 	changed := map[string]bool{}
-	consider := func(path string) {
-		if strings.HasPrefix(path, ".aether/data/") {
+	consider := func(path string, appeared bool) {
+		if quickIsRuntimeOwnedPath(path) {
+			return
+		}
+		if appeared && quickIsBootstrapManagedPath(path) {
 			return
 		}
 		changed[path] = true
 	}
 	for path, hash := range after {
-		if beforeHash, ok := before[path]; !ok || beforeHash != hash {
-			consider(path)
+		beforeHash, existedBefore := before[path]
+		if !existedBefore {
+			consider(path, true)
+			continue
+		}
+		if beforeHash != hash {
+			consider(path, false)
 		}
 	}
 	for path := range before {
 		if _, ok := after[path]; !ok {
-			consider(path)
+			consider(path, false)
 		}
 	}
 	out := make([]string, 0, len(changed))
@@ -747,6 +834,8 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	// request's own attempt, before dispatch -- no check-in pause is ever
 	// added for a single worker with nothing pending.
 	attempt.recordDispatch(workerName, "builder", "dispatched")
+	attempt.WorkerName = workerName
+	attempt.Caste = "builder"
 	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
 		TaskID: "quick.job",
 		Goal:   "Do one small job in this repository, directly -- not a plan, not a survey, the actual change.",
@@ -823,18 +912,40 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	}
 	checksOutcome := quickChecksPassed
 	var checkEvidence []string
+	var checkArtifacts []string
 	if len(filesChanged) > 0 {
+		// A check must never leave files behind attributed to the helper --
+		// the Go fallback build command, for one, writes a binary into the
+		// project. Snapshot around the checks call too, separately from the
+		// helper's own before/after pair above, so anything the CHECKS
+		// create is reported as a check artifact (never deleted, never
+		// counted as the helper's change).
+		checksBeforeSnapshot, checksSnapshotOK := quickWorkingTreeSnapshot(root)
 		var checkErr error
 		checksOutcome, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
 		if checkErr != nil {
 			checksOutcome = quickChecksFailed
 			checkEvidence = append(checkEvidence, checkErr.Error())
 		}
+		if checksSnapshotOK {
+			if checksAfterSnapshot, afterOK := quickWorkingTreeSnapshot(root); afterOK {
+				alreadyAttributed := map[string]bool{}
+				for _, f := range filesChanged {
+					alreadyAttributed[f] = true
+				}
+				for _, path := range quickRealChangedFiles(checksBeforeSnapshot, checksAfterSnapshot) {
+					if !alreadyAttributed[path] {
+						checkArtifacts = append(checkArtifacts, path)
+					}
+				}
+			}
+		}
 	}
 	attempt.Verdict = quickWorkVerdict(filesChanged, checksOutcome)
 	attempt.Summary = strings.TrimSpace(workerResult.Summary)
 	attempt.Evidence = checkEvidence
 	attempt.Files = filesChanged
+	attempt.CheckArtifacts = checkArtifacts
 	attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 
 	// A quick job must never stop the project: recordDispatchWorkerOutcome's
@@ -880,6 +991,7 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 		"check_evidence":    checkEvidence,
 		"checks_status":     checksOutcome,
 		"changes_confirmed": changesConfirmed,
+		"check_artifacts":   checkArtifacts,
 	}, nil
 }
 
@@ -983,6 +1095,28 @@ func quickChecksStatusWords(status string) string {
 	}
 }
 
+// renderQuickCappedFileList prints up to 10 paths, one per line through
+// voiceLine, then a plain "and N more" line -- never one giant joined
+// line. The full list always stays available in the JSON result and the
+// saved attempt record; only the screen is capped.
+func renderQuickCappedFileList(files []string) string {
+	const maxShown = 10
+	var b strings.Builder
+	shown := files
+	if len(shown) > maxShown {
+		shown = shown[:maxShown]
+	}
+	for _, f := range shown {
+		b.WriteString(voiceLine("files", f))
+		b.WriteString("\n")
+	}
+	if remaining := len(files) - len(shown); remaining > 0 {
+		b.WriteString(voiceLine("files", fmt.Sprintf("and %d more", remaining)))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 func renderQuickVisual(result map[string]interface{}) string {
 	isJob := stringValue(result["mode"]) == "quick-job"
 	var b strings.Builder
@@ -1011,14 +1145,20 @@ func renderQuickVisual(result map[string]interface{}) string {
 
 	files, hasFiles := result["files"].([]string)
 	if hasFiles && len(files) > 0 {
-		b.WriteString(voiceLine("files", fmt.Sprintf("Files changed: %s", strings.Join(files, ", "))))
+		b.WriteString(voiceLine("files", fmt.Sprintf("Files changed (%d):", len(files))))
 		b.WriteString("\n")
+		b.WriteString(renderQuickCappedFileList(files))
 	}
 	if isJob && hasFiles && len(files) > 0 {
 		if confirmed, ok := result["changes_confirmed"].(bool); ok && !confirmed {
 			b.WriteString(voiceLine("warning", "This folder is not a project under version control, so which files actually changed could not be independently confirmed -- the helper's own report is all there is to go on."))
 			b.WriteString("\n")
 		}
+	}
+	if artifacts, ok := result["check_artifacts"].([]string); ok && len(artifacts) > 0 {
+		b.WriteString(voiceLine("warning", fmt.Sprintf("The checks left these files behind (%d), not the helper's own change:", len(artifacts))))
+		b.WriteString("\n")
+		b.WriteString(renderQuickCappedFileList(artifacts))
 	}
 
 	if status := stringValue(result["checks_status"]); status != "" {

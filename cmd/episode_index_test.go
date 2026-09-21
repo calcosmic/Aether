@@ -622,3 +622,26 @@ func TestStatusHistoryAndWatchShareOneLineage(t *testing.T) {
 		t.Fatalf("history row cost block does not match the ledger authority's own block:\nhistory:\n%s\nwant:\n%s", historyRow.Cost, wantCostBlock)
 	}
 }
+
+// TestQuickEpisodeEntryNamesItsActor is release 1.0.85's real-run fix: a
+// quick attempt's history row named "Actor: Unknown" even though the
+// attempt dispatched exactly one named helper. The episode entry (and the
+// history row built from it) should name that helper instead.
+func TestQuickEpisodeEntryNamesItsActor(t *testing.T) {
+	record := quickAttemptRecord{
+		ID:         "quick-actor-test",
+		Question:   "fix the typo",
+		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+		WorkerName: "Forge-4",
+		Caste:      "builder",
+		Verdict:    colony.WorkOutcomeSuccess,
+	}
+	entry := quickAttemptIndexEntryFrom(record, "quick/attempts/quick-actor-test.json")
+	if entry.Actor != "Forge-4 (builder)" {
+		t.Fatalf("entry.Actor = %q, want %q", entry.Actor, "Forge-4 (builder)")
+	}
+	row := lifecycleHistoryRowFromEpisode(entry)
+	if row.Actor != "Forge-4 (builder)" {
+		t.Fatalf("row.Actor = %q, want %q", row.Actor, "Forge-4 (builder)")
+	}
+}

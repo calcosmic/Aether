@@ -512,3 +512,207 @@ func TestQuickInvokeErrorLogsOnce(t *testing.T) {
 		t.Fatalf("category = %q, want %q", mf.Entries[0].Category, middenCategoryQuickFailed)
 	}
 }
+
+// TestQuickChecksArtifactsAreReportedNotAttributed is release 1.0.85's
+// fourth review fix: a check command can leave a build artifact behind
+// (the Go fallback's `go build ./...` writes a binary named after the
+// module). That file must be reported as a check artifact, on its own
+// line, and must never be attributed to the helper's own changes.
+func TestQuickChecksArtifactsAreReportedNotAttributed(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	chdirForTest190_05(t, root)
+	gitInitForTest(t, root)
+
+	origInvoker := newQuickWorkerInvoker
+	newQuickWorkerInvoker = func() codex.WorkerInvoker { return &fileChangingWorkerInvoker{} }
+	t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+	origChecks := runQuickDeterministicChecks
+	runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
+		if err := os.WriteFile(filepath.Join(root, "trial"), []byte("binary"), 0755); err != nil {
+			t.Fatalf("simulate a check artifact: %v", err)
+		}
+		return quickChecksPassed, []string{"go build ./...: passed"}, nil
+	}
+	t.Cleanup(func() { runQuickDeterministicChecks = origChecks })
+
+	result, err := runQuickJob("fix the typo", 2*time.Second)
+	if err != nil {
+		t.Fatalf("runQuickJob: %v", err)
+	}
+
+	artifacts, _ := result["check_artifacts"].([]string)
+	foundArtifact := false
+	for _, a := range artifacts {
+		if strings.Contains(a, "trial") {
+			foundArtifact = true
+		}
+	}
+	if !foundArtifact {
+		t.Fatalf("expected the checks' own artifact (trial) to be reported under check_artifacts, got %v (result=%v)", artifacts, result)
+	}
+
+	files, _ := result["files"].([]string)
+	for _, f := range files {
+		if strings.Contains(f, "trial") {
+			t.Fatalf("the check's own artifact (trial) must never be attributed to the helper's changes, got files=%v", files)
+		}
+	}
+}
+
+// bootstrapAndFileWritingWorkerInvoker simulates a real dispatch: it writes
+// the helper's own real edit (rel) AND, if bootstrapPaths is non-empty,
+// simulates Aether's own first-run bootstrap / lazy host install writing
+// those paths too -- DURING dispatch, exactly like the real invoker's
+// subprocess start-up can, and reports none of them.
+type bootstrapAndFileWritingWorkerInvoker struct {
+	root           string
+	rel            string
+	bootstrapPaths []string
+}
+
+func (i *bootstrapAndFileWritingWorkerInvoker) IsAvailable(ctx context.Context) bool { return true }
+func (i *bootstrapAndFileWritingWorkerInvoker) ValidateAgent(path string) error      { return nil }
+func (i *bootstrapAndFileWritingWorkerInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	for _, rel := range i.bootstrapPaths {
+		full := filepath.Join(i.root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		if err := os.WriteFile(full, []byte("bootstrapped\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+	}
+	if i.rel != "" {
+		full := filepath.Join(i.root, i.rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			return codex.WorkerResult{}, err
+		}
+		if err := os.WriteFile(full, []byte("package main\n"), 0644); err != nil {
+			return codex.WorkerResult{}, err
+		}
+	}
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "edited it",
+		// Deliberately empty -- reports nothing; disk truth is what matters.
+	}, nil
+}
+
+// TestQuickNeverAttributesBootstrapFilesToTheHelper is release 1.0.85's
+// real-run fix: on a fresh repo, Aether's own first-run bootstrap and lazy
+// host install can create files (.claude/settings.json, .claude/rules,
+// .codex/CODEX.md, .opencode/OPENCODE.md, AGENTS.md, .aether/QUEEN.md,
+// .aether/WHAT-IS-THIS.md) during dispatch itself -- those must never be
+// attributed to the helper merely by appearing. But once a folder is
+// already bootstrapped, a helper's own genuine edit to one of those exact
+// files must still be reported.
+func TestQuickNeverAttributesBootstrapFilesToTheHelper(t *testing.T) {
+	bootstrapCreated := []string{
+		".claude/settings.json", ".claude/rules/aether-colony.md",
+		".codex/CODEX.md", ".opencode/OPENCODE.md", "AGENTS.md",
+		".aether/QUEEN.md", ".aether/WHAT-IS-THIS.md",
+		".aether/locks/store.lock", ".aether/ts-host/dist/index.js",
+		".aether-transactions/update-2026/locks/a.lock",
+		".claude/worktrees/phase-1/notes.md",
+	}
+
+	t.Run("fresh repo: only the real edit is reported", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		chdirForTest190_05(t, root)
+		gitInitForTest(t, root)
+
+		origInvoker := newQuickWorkerInvoker
+		newQuickWorkerInvoker = func() codex.WorkerInvoker {
+			return &bootstrapAndFileWritingWorkerInvoker{root: root, rel: "main.go", bootstrapPaths: bootstrapCreated}
+		}
+		t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+		origChecks := runQuickDeterministicChecks
+		runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
+			return quickChecksPassed, nil, nil
+		}
+		t.Cleanup(func() { runQuickDeterministicChecks = origChecks })
+
+		result, err := runQuickJob("edit main.go", 2*time.Second)
+		if err != nil {
+			t.Fatalf("runQuickJob: %v", err)
+		}
+		files, _ := result["files"].([]string)
+		if len(files) != 1 || files[0] != "main.go" {
+			t.Fatalf("expected changed files to be exactly [main.go], got %v", files)
+		}
+	})
+
+	t.Run("already bootstrapped: a genuine edit to a bootstrap-managed file is reported", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		chdirForTest190_05(t, root)
+		gitInitForTest(t, root)
+
+		// Bootstrap already ran in an earlier session.
+		settingsPath := filepath.Join(root, ".claude", "settings.json")
+		if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+			t.Fatalf("mkdir .claude: %v", err)
+		}
+		if err := os.WriteFile(settingsPath, []byte(`{"hooks":{}}`), 0644); err != nil {
+			t.Fatalf("write pre-existing settings.json: %v", err)
+		}
+
+		origInvoker := newQuickWorkerInvoker
+		newQuickWorkerInvoker = func() codex.WorkerInvoker {
+			return &bootstrapAndFileWritingWorkerInvoker{root: root, rel: ".claude/settings.json"}
+		}
+		t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+		origChecks := runQuickDeterministicChecks
+		runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
+			return quickChecksPassed, nil, nil
+		}
+		t.Cleanup(func() { runQuickDeterministicChecks = origChecks })
+
+		result, err := runQuickJob("update the hook settings", 2*time.Second)
+		if err != nil {
+			t.Fatalf("runQuickJob: %v", err)
+		}
+		files, _ := result["files"].([]string)
+		found := false
+		for _, f := range files {
+			if strings.Contains(f, ".claude/settings.json") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected a genuine edit to an already-bootstrapped .claude/settings.json to be reported, got files=%v", files)
+		}
+	})
+}
+
+// TestQuickWithNoProjectClosingCardIsSafe is release 1.0.85's real-run fix:
+// a quick job or question run with no project set up in the folder used to
+// print "Don't close this chat yet -- the handover note ... has not been
+// written to disk" -- false noise, since there is no project and nothing
+// to hand over. Scoped to the quick command only.
+func TestQuickWithNoProjectClosingCardIsSafe(t *testing.T) {
+	in := nextActionInput{LastCommand: "quick", NoColony: true}
+	verdict := contextHealthFromInput(in, colony.ColonyState{})
+	if verdict.Health != contextHealthSafe {
+		t.Fatalf("Health = %q, want %q (no project, nothing to hand over)", verdict.Health, contextHealthSafe)
+	}
+
+	// Another command with no project is unaffected -- only quick's card
+	// changes.
+	other := nextActionInput{LastCommand: "status", NoColony: true, HandoffExists: false}
+	otherVerdict := contextHealthFromInput(other, colony.ColonyState{})
+	if otherVerdict.Health != contextHealthKeep {
+		t.Fatalf("a non-quick command's no-project verdict changed: Health = %q, want %q", otherVerdict.Health, contextHealthKeep)
+	}
+}

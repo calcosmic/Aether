@@ -89,6 +89,11 @@ type colonyEpisodeEntry struct {
 	EndedAt        time.Time            `json:"ended_at"`
 	Cost           colonyEpisodeCostRef `json:"cost"`
 	Path           string               `json:"path"`
+	// Actor names who did the work, when the source records it -- e.g. a
+	// quick job's own dispatched helper. Empty when the source carries no
+	// such identity; the history row then falls back to "Unknown" exactly
+	// as before this field existed.
+	Actor string `json:"actor,omitempty"`
 }
 
 // colonyEpisodeIndex is loadColonyEpisodeIndex's whole result: the ordered
@@ -560,7 +565,22 @@ func quickAttemptIndexEntryFrom(record quickAttemptRecord, rel string) colonyEpi
 		StartedAt:      startedAt,
 		EndedAt:        endedAt,
 		Path:           rel,
+		Actor:          quickAttemptActor(record),
 	}
+}
+
+// quickAttemptActor names the one helper a quick attempt dispatched (e.g.
+// "Forge-4 (builder)"), the same identity recordDispatch already carried --
+// so a history row shows who did the work instead of "Unknown".
+func quickAttemptActor(record quickAttemptRecord) string {
+	name := strings.TrimSpace(record.WorkerName)
+	if name == "" {
+		return ""
+	}
+	if caste := strings.TrimSpace(record.Caste); caste != "" {
+		return fmt.Sprintf("%s (%s)", name, caste)
+	}
+	return name
 }
 
 // quickAttemptIndexStanding resolves a quick attempt's standing through the
