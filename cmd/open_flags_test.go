@@ -248,3 +248,34 @@ func TestWriteCarriedFlagsFileIsAtomicAndRefusesNonRegularFiles(t *testing.T) {
 		}
 	})
 }
+
+// TestStatusListsOpenFlagsWithNoProject covers the folder that has never had
+// a project: a quick job or the owner can raise a flag there, so the status
+// screen must list it (found in the 1.0.86 real-use check: the note was saved
+// and showed under the flags command, but not on status).
+func TestStatusListsOpenFlagsWithNoProject(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	root := t.TempDir()
+	t.Setenv("AETHER_ROOT", root)
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+	rootCmd.SetArgs([]string{"flag", "come back and add a farewell message", "--type", "note"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("flag: %v", err)
+	}
+
+	resetRootCmd(t)
+	buf.Reset()
+	rootCmd.SetArgs([]string{"status"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "come back and add a farewell message") {
+		t.Fatalf("status with no project does not list the open note:\n%s", output)
+	}
+}
