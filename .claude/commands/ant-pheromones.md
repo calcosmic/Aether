@@ -6,9 +6,9 @@ description: "🎯 View and manage active pheromone signals"
 
 Use the Go `aether` CLI as the source of truth.
 
-- Use `AETHER_OUTPUT_MODE=visual aether pheromones` to inspect the active steering surface.
-- If `$ARGUMENTS` names one signal type, route to `AETHER_OUTPUT_MODE=visual aether pheromones --type <FOCUS|REDIRECT|FEEDBACK>`.
-- If `$ARGUMENTS` asks to clear stale signals, run `AETHER_OUTPUT_MODE=json aether signal-housekeeping` and summarize the runtime result in one short sentence.
+- Use `AETHER_OUTPUT_MODE=visual aether pheromones` to inspect the active steering surface. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+- If `$ARGUMENTS` names one signal type, route to `AETHER_OUTPUT_MODE=visual aether pheromones --type <FOCUS|REDIRECT|FEEDBACK>`. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+- If `$ARGUMENTS` asks to clear stale signals, run `AETHER_OUTPUT_MODE=json aether signal-housekeeping` and report the result.
 - If `$ARGUMENTS` asks to expire one signal, run `AETHER_OUTPUT_MODE=json aether pheromone-expire --id <signal_id>`.
 - **Adjusting signals is a multiple-choice conversation, not a memory test.**
   After showing the display, if the user wants to change steering (or asked

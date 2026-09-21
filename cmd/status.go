@@ -131,6 +131,15 @@ func renderNoColonyStatusVisual() string {
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
 	b.WriteString(visualDividerStr())
 	b.WriteString("No colony initialized in this repo.\n")
+	// A flag can exist with no project: a quick job that failed its checks
+	// raises one, and the owner can leave a note for later anywhere. With
+	// none open this screen is byte-identical to before.
+	if store != nil {
+		if section := renderOpenFlagsSection(store); section != "" {
+			b.WriteString("\n")
+			b.WriteString(section)
+		}
+	}
 	b.WriteString(renderNextUp(
 		`Run `+"`aether init \"goal\"`"+` to start a colony.`,
 		`Run `+"`aether lay-eggs`"+` first if this repo has not been set up for Aether yet.`,

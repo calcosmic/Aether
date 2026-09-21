@@ -38,7 +38,12 @@ func TestCodexBuildGuideNativeOptInIsUnchanged(t *testing.T) {
 	}
 	sum := sha256.Sum256(b)
 	got := hex.EncodeToString(sum[:])
-	const wantDigest = "a00b386a91ae0773dfda16ad9eb8427a713c444a942c56b466f65ac3f5d3da81"
+	// Re-pinned in 1.0.88. The one and only change to the parked native guide
+	// was removing the `AETHER_FORCE_COLOR=1 ` prefix from its two ceremony
+	// render commands (git diff of cmd/command_guide.go shows nothing else):
+	// forced colour put escape codes into screens a chat now shows to the
+	// owner. Previous digest: a00b386a91ae0773dfda16ad9eb8427a713c444a942c56b466f65ac3f5d3da81.
+	const wantDigest = "69e79d0415a6226e5789dcd8abe1bb05b957d0080918edfd96f9d7e8a7430bed"
 	if got != wantDigest {
 		t.Fatalf("native build guide changed since it was parked: digest = %s, want %s", got, wantDigest)
 	}

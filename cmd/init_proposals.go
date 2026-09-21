@@ -106,7 +106,7 @@ func computeInitProposals(repoRoot, goal string, priorColony bool) []initProposa
 		if fileCount >= initProposalWalkCap {
 			countNote = fmt.Sprintf("%d+ files", initProposalWalkCap)
 		}
-		colonize.Reason = fmt.Sprintf("This folder already holds %s (%s) — mapping it first gives the colony a real picture before planning. (recommended)", what, countNote)
+		colonize.Reason = fmt.Sprintf("This folder already holds %s (%s) — mapping it first gives the colony (project) a real picture before planning. (recommended)", what, countNote)
 		ranked = []initProposal{colonize, discuss, plan}
 	case goalIsBroad:
 		discuss.Reason = "The goal is broad — a few clarifying choices now will make the plan much sharper. (recommended)"
@@ -131,8 +131,8 @@ func renderInitProposals(proposals []initProposal) string {
 	var b strings.Builder
 	b.WriteString("\n🧭 Next Moves — nothing runs until you choose:\n")
 	for i, p := range proposals {
-		fmt.Fprintf(&b, "  %d. %s — `%s`\n", i+1, p.Label, p.Command)
-		fmt.Fprintf(&b, "     └── %s\n", p.Reason)
+		fmt.Fprintf(&b, "  %d. %s\n", i+1, voiceLine("decision", fmt.Sprintf("%s — `%s`", p.Label, p.Command)))
+		fmt.Fprintf(&b, "     └── %s\n", voiceLine("evidence", p.Reason))
 	}
 	return b.String()
 }

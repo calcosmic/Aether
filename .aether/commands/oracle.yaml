@@ -62,6 +62,8 @@ guardrails:
   - "`aether oracle status` only reports; it never repairs. When it flags a stale controller, `aether oracle recover` is the command that clears it."
   - "In a detected Codex, Claude Code, or OpenCode session, use the same host for workers. If its dispatcher is unavailable, stop with the runtime diagnostic; switch providers only through an explicit AETHER_WORKER_PLATFORM override."
   - "Do not fake Oracle worker completion; if no real dispatcher is available, surface the runtime error and preserve the Oracle workspace."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."
 follow_up:
   persistence: "After oracle completes, suggest persisting high-value findings as pheromone signals (aether pheromone-write) or hive wisdom (aether hive-store). User approves each suggestion."
   research_document: "A completed run saves its write-up to `.aether/research/<date>-<slug>.md`, which survives later runs. Use `aether research list` to browse saved research and `aether oracle save` to keep a run that stopped early. Point a colony at one with `aether init --research <path> \"<goal>\"` or `aether plan --research <path>`, then confirm delivery with `aether plan --print-brief`."

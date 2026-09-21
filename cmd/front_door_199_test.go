@@ -138,8 +138,13 @@ func TestFrontDoorInitFiveStages(t *testing.T) {
 		t.Fatalf("init: %v", err)
 	}
 	got := output.String()
+	// Stage 1's heading carries a plain-English gloss of the invented word
+	// "Queen" since 1.0.88 (the start-up screen joined the guarded look, which
+	// requires such a word to be explained where it first appears), so it is
+	// matched by its opening rather than its exact closing bars. The five
+	// stages and their order are what this contract protects.
 	stages := []string{
-		"── 1. Queen opening ──",
+		"── 1. Queen opening",
 		"── 2. Setup ──",
 		"── 3. Accepted intent ──",
 		"── 4. Territory ──",

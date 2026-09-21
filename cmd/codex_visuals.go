@@ -696,6 +696,34 @@ func renderBanner(emoji, title string) string {
 	return fmt.Sprintf("━━ %s %s ━━\n", emoji, spacedTitle(title))
 }
 
+// isAetherBannerLine reports whether a single line of rendered output is one
+// of renderBanner's own banner lines -- "━━ <emoji> <S P A C E D   T I T L E>
+// ━━" -- as opposed to the plain divider line (all ━ characters, no leading
+// "━━ " marker) that renderBanner's callers usually print immediately below
+// it. It is the ONE shared predicate for what a banner line looks like:
+// TestBannerPredicateMatchesTheRenderer asserts every renderBanner output's
+// first line satisfies it, and the Stop-hook screen check (cmd/hook_cmds.go)
+// reuses it to decide which lines of a captured screen the owner is owed --
+// so the renderer and the checkpoint cannot silently drift apart.
+func isAetherBannerLine(line string) bool {
+	// Two header shapes are drawn: renderBanner's two-bar `━━ … ━━` and the
+	// helper cards' three-bar `━━━ … ━━━` (renderOldStyleCeremonyHeader). Both
+	// are "two or more bars, a space, a title, a space, two or more bars"; a
+	// line made only of bars (the divider) has no title and is not a banner.
+	trimmed := strings.TrimSpace(line)
+	inner := strings.TrimLeft(trimmed, "━")
+	leading := len([]rune(trimmed)) - len([]rune(inner))
+	rest := strings.TrimRight(inner, "━")
+	trailing := len([]rune(inner)) - len([]rune(rest))
+	if leading < 2 || trailing < 2 {
+		return false
+	}
+	if !strings.HasPrefix(rest, " ") || !strings.HasSuffix(rest, " ") {
+		return false
+	}
+	return strings.TrimSpace(rest) != ""
+}
+
 func renderAetherWordmark() string {
 	wordmark := strings.Trim(aetherWordmark, "\n")
 	if loaded := loadVisualsConfig(); loaded != nil && loaded.AetherWordmark != "" {
@@ -1223,26 +1251,24 @@ func renderInitVisual(goal, scope, sessionID, dataDir string, charter *colony.Ch
 // shared by the standalone charter display and the init birth ceremony.
 func renderCharterFields(ch colony.Charter) string {
 	var b strings.Builder
-	b.WriteString("  Intent:      ")
-	b.WriteString(emptyFallback(ch.Intent, "(none)"))
+	// Each field line carries its own glyph via voiceLine -- the label
+	// text and its alignment are unchanged (still "Intent:      value"
+	// etc.), so every existing Contains-based assertion on a field's
+	// label+value still matches; only the leading two-space indent is now
+	// a glyph instead.
+	b.WriteString(voiceLine("requirement", "Intent:      "+emptyFallback(ch.Intent, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Vision:      ")
-	b.WriteString(emptyFallback(ch.Vision, "(none)"))
+	b.WriteString(voiceLine("decision", "Vision:      "+emptyFallback(ch.Vision, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Governance:  ")
-	b.WriteString(emptyFallback(ch.Governance, "(none)"))
+	b.WriteString(voiceLine("requirement", "Governance:  "+emptyFallback(ch.Governance, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Goals:       ")
-	b.WriteString(emptyFallback(ch.Goals, "(none)"))
+	b.WriteString(voiceLine("goal", "Goals:       "+emptyFallback(ch.Goals, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Tech Stack:  ")
-	b.WriteString(emptyFallback(ch.TechStack, "(none)"))
+	b.WriteString(voiceLine("files", "Tech Stack:  "+emptyFallback(ch.TechStack, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Key Risks:   ")
-	b.WriteString(emptyFallback(ch.KeyRisks, "(none)"))
+	b.WriteString(voiceLine("warning", "Key Risks:   "+emptyFallback(ch.KeyRisks, "(none)")))
 	b.WriteString("\n")
-	b.WriteString("  Constraints: ")
-	b.WriteString(emptyFallback(ch.Constraints, "(none)"))
+	b.WriteString(voiceLine("avoid", "Constraints: "+emptyFallback(ch.Constraints, "(none)")))
 	b.WriteString("\n")
 	return b.String()
 }
@@ -1352,12 +1378,11 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	dispatchMode := strings.TrimSpace(stringValue(result["dispatch_mode"]))
 	requiresFinalizer, _ := result["requires_finalizer"].(bool)
 	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
-		b.WriteString("Territory survey manifest ready.\n")
+		b.WriteString(voiceLine("status", "Territory survey manifest ready.") + "\n")
 	} else {
-		b.WriteString("Territory survey complete.\n")
+		b.WriteString(voiceLine("status", "Territory survey complete.") + "\n")
 	}
-	b.WriteString("Root: ")
-	b.WriteString(stringValue(result["root"]))
+	b.WriteString(voiceLine("files", "Root: "+stringValue(result["root"])))
 	b.WriteString("\n")
 	b.WriteString("Primary type: ")
 	b.WriteString(emptyFallback(stringValue(result["detected_type"]), "unknown"))
@@ -1372,15 +1397,15 @@ func renderColonizeVisual(result map[string]interface{}) string {
 	b.WriteString(renderCSV(stringSliceValue(result["domains"]), "none detected"))
 	b.WriteString("\n")
 	if stats, ok := result["stats"].(map[string]interface{}); ok {
-		b.WriteString(fmt.Sprintf("Files: %d across %d directories\n", intValue(stats["files"]), intValue(stats["directories"])))
+		b.WriteString(voiceLine("files", fmt.Sprintf("Files: %d across %d directories", intValue(stats["files"]), intValue(stats["directories"]))))
+		b.WriteString("\n")
 	}
 	if surveyDir := strings.TrimSpace(stringValue(result["survey_dir"])); surveyDir != "" {
-		b.WriteString("Survey: ")
-		b.WriteString(surveyDir)
+		b.WriteString(voiceLine("files", "Survey: "+surveyDir))
 		b.WriteString("\n")
 	}
 	if warning := strings.TrimSpace(stringValue(result["survey_warning"])); warning != "" {
-		b.WriteString("Survey Warning\n")
+		b.WriteString(voiceLine("warning", "Survey Warning") + "\n")
 		b.WriteString("  - ")
 		b.WriteString(warning)
 		b.WriteString("\n")
@@ -1395,8 +1420,7 @@ func renderColonizeVisual(result map[string]interface{}) string {
 				dispatchMode = "synthetic"
 			}
 		}
-		b.WriteString("Dispatch: ")
-		b.WriteString(humanizeDispatchMode(dispatchMode))
+		b.WriteString(voiceLine("status", "Dispatch: "+humanizeDispatchMode(dispatchMode)))
 		b.WriteString("\n")
 		if hasRealData {
 			b.WriteString("\nSurveyors\n")
@@ -1419,11 +1443,10 @@ func renderColonizeVisual(result map[string]interface{}) string {
 		b.WriteString(contract)
 	}
 	if files := stringSliceValue(result["survey_files"]); len(files) > 0 {
-		b.WriteString("\nReports\n")
+		b.WriteString("\n" + voiceLine("files", "Reports") + "\n")
 		b.WriteString(renderIndentedList(files))
 	}
-	b.WriteString("\nCoordination: ")
-	b.WriteString(displayDataPath("spawn-tree.txt"))
+	b.WriteString("\n" + voiceLine("artifact", "Coordination: "+displayDataPath("spawn-tree.txt")))
 	b.WriteString("\n")
 	if requiresFinalizer || dispatchMode == "agent-delegate" || dispatchMode == "plan-only" {
 		// This run only prepared the work; the platform running it does the
@@ -6052,6 +6075,15 @@ func colorizeCaste(caste, text string) string {
 	return "\x1b[" + color + "m" + text + "\x1b[0m"
 }
 
+// shouldUseANSIColors decides whether to emit ANSI escape codes, separately
+// from shouldRenderVisualOutput (which decides whether to draw the rich
+// screen at all). A screen can be drawn in AETHER_OUTPUT_MODE=visual while
+// piped into something that is not a real terminal -- a chat tool call, a
+// captured log, a file -- and colour codes pasted into such a place are junk
+// characters, not colour. Order: NO_COLOR always wins and turns colour off;
+// an explicit force (AETHER_FORCE_COLOR=1 or CLICOLOR_FORCE) always wins and
+// turns colour on; json output never carries colour; otherwise colour is on
+// only when stdout is a real terminal.
 func shouldUseANSIColors() bool {
 	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" {
 		return false
@@ -6063,7 +6095,7 @@ func shouldUseANSIColors() bool {
 	if mode == "json" {
 		return false
 	}
-	return shouldRenderVisualOutput(stdout)
+	return isTerminalWriter(stdout)
 }
 
 func humanizeDispatchMode(mode string) string {

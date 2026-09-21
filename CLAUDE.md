@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.87
+> **Current Version:** v1.0.88
 > **Last Updated:** 2026-08-17
 
 > ## READ THIS BEFORE YOU WRITE ANYTHING TO THE OWNER
@@ -26,7 +26,7 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.87 |
+| Version | v1.0.88 |
 | Slash commands | 64 (Claude) + 64 (OpenCode); Codex uses nine public ant skills + native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
@@ -87,7 +87,7 @@ Do not reinterpret a literal passthrough command as a vague workflow request.
 For lifecycle shell execution, prefer `AETHER_OUTPUT_MODE=visual aether ...`
 unless the user explicitly wants JSON. Preserve exact arguments. Do not preface
 literal passthrough execution with repo archaeology or skill narration; the CLI
-output is primary, with at most one short sentence of extra explanation.
+output is primary — show the CLI's screen unchanged, then at most two short sentences of extra explanation.
 
 ## Definition of Done
 
@@ -230,6 +230,52 @@ Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key r
 - Wrappers may add colony framing and narration but must not mutate state
 - Wrappers must not duplicate verification or gating logic
 - Codex visuals come from the runtime renderer; public skill instructions follow runtime command guides
+
+### Delivering the Screen: the Stop-hook checkpoint (Phase 205 Part C)
+
+A wrapper can ask the assistant to relay the screen Aether just drew, but a
+request is not a mechanism -- the assistant can still finish its reply without
+showing it. `aether hook-stop` (`hookStopCmd`, `cmd/hook_cmds.go`) now makes a
+second, independent check every time the assistant tries to stop, run strictly
+AFTER the existing lifecycle check declines to block: it reads the real
+transcript of the current turn, finds the last Bash call that ran Aether in
+visual mode and drew at least one banner line (`━━ … ━━`, the same
+`isAetherBannerLine` predicate `renderBanner` itself is checked against), and
+blocks once, with a plain-English reason, if the reply never showed every one
+of those banner lines. The check applies ONLY in a session where the owner
+has actually used one of Aether's own `/ant-…` menu commands (detected from
+the real `<command-name>/ant-…</command-name>` tag Claude Code itself records
+for a typed slash command) -- a developer piping
+`AETHER_OUTPUT_MODE=visual aether status` through grep in an ad-hoc debug
+session is never in scope, however visual its output looks. The owner can
+also switch the whole check off with `AETHER_SCREEN_RELAY=off`. The lifecycle
+check still wins when both would block -- one project state, one answer. The
+check fails open on every unreadable or unrecognised transcript, an empty
+reply, or no owed screen at all, and it never writes anything; it is skipped
+entirely for a Stop event belonging to an Aether-spawned worker or a
+platform-reported sub-agent, since the hook exists to catch the OWNER walking
+past a screen, not a helper. Locked by
+`TestStopHookSendsBackAReplyThatHidTheScreen`,
+`TestStopHookAllowsAReplyThatShowsTheScreen`,
+`TestStopHookOnlyAppliesWhereMenuCommandsAreUsed`,
+`TestStopHookOffSwitchDisablesTheScreenCheck`, `TestStopHookNeverBlocksTwice`,
+`TestStopHookIgnoresHelpersAndWorkers`,
+`TestStopHookFailsOpenOnAnUnknownTranscript`,
+`TestStopHookLifecycleBlockStillWins`,
+`TestStopHookScreenCheckDoesNotMutate`, and
+`TestBannerPredicateMatchesTheRenderer` (`cmd/stop_hook_screen_test.go`,
+fixtures captured from real Claude Code sessions under
+`cmd/testdata/stop-hook/`, including a real `/ant-status` session).
+
+*For dummies: if Aether draws you a screen (a status board, a finished-phase
+card) after you used one of its own `/ant-…` commands, and the chat's reply
+never actually shows it to you, the program itself notices and sends the
+reply back once, asking it to paste the screen in before finishing. It never
+fires in an ordinary developer session that never used a `/ant-…` command,
+and you can turn the whole thing off with `AETHER_SCREEN_RELAY=off`. It never
+asks twice in a row, it never fires for Aether's
+own background helpers, and if it cannot make sense of what happened it always
+lets the reply through rather than guessing wrong.*
 
 ### Queen-Owned Orchestration
 
@@ -1503,6 +1549,48 @@ Aether supports two parallel execution strategies, selected at colony init:
 
 ---
 
+## Planning evidence
+
+A research helper (Scout) can register a genuinely new finding on a second or
+later planning pass. It submits only what it found -- a kind, an origin (a
+URL/source name, or a repository path), a plain summary/excerpt, and the
+applicable planning dimensions. It never computes a SHA-256 content hash, an
+ID, or an excerpt digest for that finding, and if it sends one anyway, Go
+ignores and recomputes it -- a fingerprint supplied by an untrusted helper
+proves nothing about the content behind it. Go derives the hash/ID/digest and
+the finding's scope (goal, session, specification revision, base plan
+revision) itself from the current run's own authority, reads a claimed
+repository path from disk under the approved evidence roots (never trusting
+submitted content for it), and hashes the submitted excerpt for an outside
+source. The prior "restates the frontier" and duplicate-content refusals still
+apply once the honest address is derived.
+
+Before this fix, `normalizePlanningScoutStageContent`
+(`cmd/codex_plan_finalize.go`) routed the helper's `new_evidence` through the
+same trusted path used to reload Aether's own already-hashed, already-written
+artifact, so a helper's claimed hash was accepted at face value -- and because
+a Scout genuinely cannot compute a SHA-256 digest, a second or later planning
+pass could never register new evidence at all, on the Claude lane. Locked by
+`TestScoutNewEvidenceNeedsNoFingerprintFromTheHelper` (source-shaped evidence
+with no hashes is accepted, catalogued with a program-derived address and
+scope, and a later plan revision may cite it),
+`TestHelperSuppliedFingerprintIsNeverTrusted` (a wrong hash is recomputed
+rather than honoured, a claimed repository path is always read from disk with
+submitted content ignored, and a path outside the approved roots is refused
+by name), and `TestRestatedEvidenceIsStillRefused` (evidence whose derived
+address equals a frontier entry is still refused).
+
+*For dummies: a helper that goes looking for more information on a second
+pass can now actually report what it found, because it is no longer asked to
+do something it cannot do -- fake a cryptographic fingerprint for its own
+finding. It just describes what it found in plain terms, and the program
+works out the exact technical address for that finding itself, the same way
+it always has for evidence gathered on the first pass. If the helper claims a
+fingerprint anyway, the program quietly ignores the claim and works out the
+real one instead of trusting it.*
+
+---
+
 ## Live Colony, Swarm, and Oracle (v1.28)
 
 Phase 202 restored three owner-visible screens on top of one shared, durable
@@ -1623,16 +1711,22 @@ beneath it. `aether plan`, `aether discuss`, `aether spec`, `aether status`,
 closes every command now open each content line with a small symbol naming
 what kind of line it is (a goal, a phase, a warning, a finished task...), the
 same symbol system the live colony view (`aether watch`) already used.
-Nothing here is a one-time paint job: every one of the eight ordinary screens
-is registered into one shared list (the "voice corpus"), and a named check
-fails if a future screen is ever added without carrying the look, or if an
-existing screen's look quietly fades back to plain text.
+The release that shows the owner every screen it draws (1.0.88) widened this
+to the first two screens a brand-new project ever sees and the cards drawn
+while helpers are sent out: `aether init` (starting a project), `aether
+colonize` (surveying the existing code), and the four `aether ceremony`
+cards (spawn-plan, wave-start, worker-complete, closeout) — eleven screen
+families in total. Nothing here is a one-time paint job: every one of the
+eleven ordinary screens is registered into one shared list (the "voice
+corpus"), and a named check fails if a future screen is ever added without
+carrying the look, or if an existing screen's look quietly fades back to
+plain text.
 
 **The corpus knows which screens are supposed to be voiced, and notices if
-one goes missing.** Eight screen families are named once; a fresh screen
-family — say a ninth ordinary lifecycle screen added later — that is never
-registered is caught by name, not discovered later by an owner. Locked by
-`TestEveryOrdinaryScreenIsMeasuredForVoice`.
+one goes missing.** Eleven screen families are named once; a fresh screen
+family — say a twelfth ordinary lifecycle screen added later — that is
+never registered is caught by name, not discovered later by an owner.
+Locked by `TestEveryOrdinaryScreenIsMeasuredForVoice`.
 
 **Every registered screen is measured, not eyeballed.** A number derived from
 the actual Classic-era screens (a "reference figure" computed from real
@@ -1666,13 +1760,14 @@ that class of mistake is now closed at its one true source (the writer, not
 the reader), and a structural check refuses any future code from bypassing
 that source. Locked by `TestLifecycleEventSentenceTypeCannotBeBypassed`.
 
-*For dummies: every screen you actually look at day to day — planning,
-asking a question, checking status, building, finishing a phase, sealing a
-project — now carries the Classic look back: a little symbol at the start of
-each line telling you what kind of information it is, worded in plain
-English, never a raw code where a sentence belongs. And it can't quietly fade
-away again — six separate checks fail the moment any of that stops being
-true.*
+*For dummies: every screen you actually look at day to day — starting a
+project, surveying the existing code, planning, asking a question, checking
+status, building (including the cards it shows while sending out helpers),
+finishing a phase, sealing a project — now carries the Classic look back: a
+little symbol at the start of each line telling you what kind of information
+it is, worded in plain English, never a raw code where a sentence belongs.
+And it can't quietly fade away again — six separate checks fail the moment
+any of that stops being true.*
 
 ---
 
@@ -1959,4 +2054,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.87 — 2026-09-21*
+*Updated for Aether v1.0.88 — 2026-09-21*

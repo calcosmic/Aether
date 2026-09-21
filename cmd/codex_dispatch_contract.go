@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -378,11 +379,9 @@ func renderDispatchContract(raw interface{}) string {
 	}
 	if fallback := strings.TrimSpace(stringValue(contract["fallback_behavior"])); fallback != "" {
 		b.WriteString("  - Fallback: ")
-		b.WriteString(fallback)
+		b.WriteString(plainEnglishDispatchFallback(fallback))
 		if visibility := stringSliceValue(contract["fallback_visibility"]); len(visibility) > 0 {
-			b.WriteString(" Visibility: ")
-			b.WriteString(strings.Join(visibility, ", "))
-			b.WriteString(".")
+			b.WriteString(fmt.Sprintf(" %d internal field(s) are recorded automatically so a fallback can be diagnosed later.", len(visibility)))
 		}
 		b.WriteString("\n")
 	}
@@ -414,6 +413,25 @@ func renderDispatchContract(raw interface{}) string {
 	}
 
 	return b.String()
+}
+
+// dispatchFallbackKeyEqualsValueRe matches an internal "key=value" fragment
+// (e.g. "dispatch_mode=fallback") embedded inside an otherwise plain-English
+// policy sentence.
+var dispatchFallbackKeyEqualsValueRe = regexp.MustCompile(`\b[a-zA-Z_][a-zA-Z0-9_]*=([a-zA-Z_][a-zA-Z0-9_]*)\b`)
+
+// plainEnglishDispatchFallback rewrites the owner-facing copy of a dispatch
+// contract's fallback-behavior sentence so no bare "key=value" bookkeeping
+// pair reaches the screen: "emit dispatch_mode=fallback and synthesize..."
+// reads as "switch to a fallback mode and synthesize...". The underlying
+// contract["fallback_behavior"] JSON string a wrapper reads back is
+// untouched -- this only changes what the owner is shown.
+func plainEnglishDispatchFallback(fallback string) string {
+	return dispatchFallbackKeyEqualsValueRe.ReplaceAllStringFunc(fallback, func(match string) string {
+		parts := dispatchFallbackKeyEqualsValueRe.FindStringSubmatch(match)
+		value := strings.ReplaceAll(parts[1], "_", " ")
+		return "a " + value + " mode"
+	})
 }
 
 func maxDuration(values ...time.Duration) time.Duration {

@@ -134,8 +134,8 @@ aether host plan --preset <fast|balanced|deep|exhaustive>
 8. Render the runtime-owned spawn and wave ceremony for the current manifest:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow plan --manifest-file <manifest file>
+AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow plan --manifest-file <manifest file> --execution-wave <execution_wave>
 ```
 
 9. Dispatch exactly the one current stage as a visible live Task/subagent
@@ -220,7 +220,7 @@ aether host colonize <args>
 4. Render the runtime-owned survey ceremony:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest file>
 ```
 
 5. Dispatch the runtime-specified Surveyor workers through the host platform
@@ -311,7 +311,7 @@ aether build --job-proposal '{"name":"templates","task_ids":["2","3","4"],"owner
 7. Render the user-facing spawn ceremony:
 
 ```bash
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow build --manifest-file <manifest file>
 ```
 
 ### Experimental native bridge (only when AETHER_CODEX_NATIVE_BUILD=1)

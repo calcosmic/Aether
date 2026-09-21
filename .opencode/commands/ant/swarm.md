@@ -24,6 +24,8 @@ If the user provides no problem description, keep live visibility direct:
 AETHER_OUTPUT_MODE=visual aether swarm --watch
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 Do not request a manifest for watch mode.
 
 ## Swarm Manifest
@@ -45,8 +47,10 @@ If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hos
 Before spawning swarm workers, render the runtime-owned old-style bug-destroyer ceremony:
 
 ```
-AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow swarm --manifest-file <manifest_file>
+AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow swarm --manifest-file <manifest_file>
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 This output is display-only; do not parse it as state.
 
@@ -66,7 +70,7 @@ The visible live Task/subagent stack is part of the Aether ceremony.
 For each dispatch in `swarm_manifest.dispatches`:
 
 1. Before each manifest wave, render:
-   `AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow swarm --manifest-file <manifest_file> --execution-wave "{execution_wave}"`
+   `AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow swarm --manifest-file <manifest_file> --execution-wave "{execution_wave}"` Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 2. Run:
    `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Swarm" --caste "{caste}" --name "{name}" --task "{task}" --depth 1`
 3. Spawn the matching platform agent using `subagent_type="{agent_name}"` or the platform equivalent.
@@ -76,7 +80,7 @@ For each dispatch in `swarm_manifest.dispatches`:
 7. After each worker returns, run:
    `AETHER_OUTPUT_MODE=json aether spawn-complete --name "{name}" --status "{status}" --summary "{summary}"`
 8. Write that one terminal result to a temporary worker JSON file and render:
-   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow swarm --worker-file <worker_file>`
+   `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow swarm --worker-file <worker_file>` Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 Preserve the runtime wave order:
 
@@ -136,6 +140,8 @@ Render the user-facing closeout after the JSON finalizer succeeds:
 ```
 AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow swarm --completion-file <completion_file>
 ```
+
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 ## After Swarm
 

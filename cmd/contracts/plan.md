@@ -150,6 +150,17 @@ Specification and base-plan bindings, and input frontier. It may propose only
 `material_decision_candidates`. It cannot propose scores, semantic plan
 content, stops, candidates, acceptance, activation, or state mutations.
 
+Each `new_evidence` entry submits only what the Scout actually found: `kind`,
+`origin` (a URL or other outside source name) or `repository_path`, a plain
+`summary`/excerpt of what it observed, and the applicable planning dimensions.
+The Scout never computes `content_hash`, `id`, or `excerpt_digest` -- it cannot
+produce a genuine SHA-256 digest, and any such value it sends is ignored and
+recomputed, never trusted. Go derives the content hash, ID, excerpt digest, and
+scope (goal, session, specification revision, base plan revision) itself: a
+`repository_path` is read from disk under the approved evidence roots, never
+from submitted content, and an outside source is hashed from the submitted
+excerpt.
+
 On success Go returns `stage_receipt`, the normalized `scout_artifact`, admitted
 evidence, remaining gaps, and exactly one current boundary: `decision_cards`,
 `route_stage_manifest`, or `successor_specification` approval/reconciliation.

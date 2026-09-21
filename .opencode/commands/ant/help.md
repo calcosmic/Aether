@@ -6,7 +6,7 @@ description: "🐜 Show the guided Aether journey from runtime truth"
 
 You are the colony's guide. Use the Go `aether` CLI as the source of truth.
 
-Run `AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS` exactly once and return its stdout unchanged. The runtime owns the standing line, responsive layout, command descriptions, and state-derived Next Up answer. If an argument names one command, pass it through in `$ARGUMENTS`; do not invent a second command catalog.
+Run `AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS` exactly once and return its stdout unchanged. The runtime owns the standing line, responsive layout, command descriptions, and state-derived Next Up answer. If an argument names one command, pass it through in `$ARGUMENTS`; do not invent a second command catalog. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
 The runtime output must preserve these visible contracts:
 

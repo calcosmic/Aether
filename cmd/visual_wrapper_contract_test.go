@@ -64,8 +64,8 @@ func TestLifecycleWrappersRenderRuntimeCeremonySurfaces(t *testing.T) {
 			}
 			text := string(content)
 			for _, want := range []string{
-				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow " + workflow,
-				"AETHER_FORCE_COLOR=1 AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow " + workflow,
+				"AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow " + workflow,
+				"AETHER_OUTPUT_MODE=visual aether ceremony wave-start --workflow " + workflow,
 				"AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow " + workflow,
 			} {
 				if !strings.Contains(text, want) {

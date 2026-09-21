@@ -305,7 +305,15 @@ func resolvePlanningStageResumeForTest(t *testing.T, root string) (*planningStag
 	var resume *planningStageResume
 	err := withPlanningMutationSession(root, "test-resolve-resume", func(session *planningMutationSession) error {
 		var inner error
-		resume, inner = resolvePlanningStageResume(session)
+		// Resolve against the specification the parked run on disk was made
+		// for, read from that run's own durable stage file, so these tests
+		// keep asking what they always asked -- is the parked run found? --
+		// whichever fixture built it. (A fixed fixture value here silently
+		// turned two second-round tests into "is a DIFFERENT specification's
+		// run found?", which the 1.0.88 superseded-specification rule rightly
+		// answers no.) TestParkedRunAgainstASupersededSpecificationIsNotResumed
+		// covers the other half.
+		resume, inner = resolvePlanningStageResume(session, parkedRunSpecificationForTest(t, session))
 		return inner
 	})
 	return resume, err
@@ -428,4 +436,25 @@ func TestAbandonedFirstPassScoutIsNotResumed(t *testing.T) {
 	if resume != nil {
 		t.Fatalf("an abandoned first-pass Scout run was treated as resumable (%q); it holds no authorized work", resume.RunID)
 	}
+}
+
+// parkedRunSpecificationForTest returns the specification binding recorded by
+// the first planning run found on disk, or the zero binding when there is none.
+func parkedRunSpecificationForTest(t *testing.T, session *planningMutationSession) planningStageSpecificationBinding {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(session.DataRoot(), "planning"))
+	if err != nil {
+		return planningStageSpecificationBinding{}
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		state, err := loadPlanningStageStateInSession(session, entry.Name())
+		if err != nil || strings.TrimSpace(state.RunID) == "" {
+			continue
+		}
+		return state.Specification
+	}
+	return planningStageSpecificationBinding{}
 }

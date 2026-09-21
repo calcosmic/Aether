@@ -21,7 +21,7 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 			path: ".aether/skills/colony/colony-interaction/SKILL.md",
 			required: []string{
 				"Do not announce skill usage, intent interpretation, or a preflight summary before running the command.",
-				"After the command returns, keep your own wrapper to one short sentence at most.",
+				"After the command returns, show the CLI's screen unchanged, then at most two short sentences of your own.",
 			},
 		},
 		{
@@ -42,14 +42,14 @@ func TestCodexLiteralCommandGuidanceStaysMinimal(t *testing.T) {
 			path: ".aether/templates/codex-md-template.md",
 			required: []string{
 				"Do not preface\nliteral passthrough execution with repo archaeology or skill narration",
-				"output is primary, with at most one short sentence of extra explanation.",
+				"output is primary — show the CLI's screen unchanged, then at most two short sentences of extra explanation.",
 			},
 		},
 		{
 			path: ".aether/templates/agents-md-template.md",
 			required: []string{
 				"Do not preface\nliteral passthrough execution with repo archaeology or skill narration",
-				"output is primary, with at most one short sentence of extra explanation.",
+				"output is primary — show the CLI's screen unchanged, then at most two short sentences of extra explanation.",
 			},
 		},
 	}

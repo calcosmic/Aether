@@ -25,6 +25,8 @@ Run:
 AETHER_OUTPUT_MODE=visual aether bump-version $ARGUMENTS
 ```
 
+Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
+
 If the runtime rejects the version or reports no change, stop and report that output directly. Do not hand-edit `.aether/version.json` or `npm/package.json` before the runtime succeeds.
 
 ## Release Follow-Up

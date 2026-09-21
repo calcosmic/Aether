@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -682,13 +680,16 @@ func quickWorkingTreeSnapshot(root string) (map[string]string, bool) {
 // quickFileContentHash hashes a file's current content, or reports
 // "missing" for a path that no longer exists (e.g. a worker deleted it) so
 // that a delete still registers as a change relative to any earlier hash.
+//
+// It shares pause's pauseDirtyPathDigest so there is one rule for
+// fingerprinting a changed path: a shortcut (symlink) is recorded as the
+// shortcut itself and never followed, and a folder is recorded as a folder.
 func quickFileContentHash(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
+	digest, err := pauseDirtyPathDigest(path)
+	if err != nil || digest == lifecycleTransactionMissingDigest {
 		return "missing"
 	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	return digest
 }
 
 // quickRealChangedFiles derives the real changed-file set from two

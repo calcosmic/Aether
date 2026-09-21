@@ -2049,7 +2049,7 @@ func runCodexPlanPlanOnlyInSession(session *planningMutationSession, state colon
 	// to be submitted. --refresh stays the deliberate way to abandon an
 	// in-flight run and start over.
 	if !opts.Refresh {
-		resume, resumeErr := resolvePlanningStageResume(session)
+		resume, resumeErr := resolvePlanningStageResume(session, approvedSpecification.Binding)
 		if resumeErr != nil {
 			return nil, resumeErr
 		}
@@ -4891,7 +4891,34 @@ func renderStagedResultContract(stage planningStageManifest, planningDir string)
 	b.WriteString("\n")
 	if stage.ExpectedCaste == planningStageCasteRouteSetter {
 		b.WriteString(renderRouteProofLinkRule())
+	} else {
+		b.WriteString(renderScoutNewEvidenceRule())
 	}
+	return b.String()
+}
+
+// renderScoutNewEvidenceRule tells the Scout the one entry shape new_evidence
+// accepts. Before this existed the brief named the field and nothing else, so
+// a Scout either sent nothing or tried to supply a content fingerprint it has
+// no tool to compute -- and the finalizer refused it, which meant a second
+// planning pass could never change a plan (downstream report, 2026-09-21).
+// TestScoutMinimalWireEvidenceIsAcceptedEndToEnd proves the literal shape
+// described here is accepted.
+func renderScoutNewEvidenceRule() string {
+	kinds := make([]string, 0, 1)
+	kinds = append(kinds, string(colony.PlanningEvidenceResearch))
+	dimensions := make([]string, 0, len(colony.PlanningDimensions()))
+	for _, dimension := range colony.PlanningDimensions() {
+		dimensions = append(dimensions, string(dimension))
+	}
+	var b strings.Builder
+	b.WriteString("- Each `new_evidence` entry is an object with exactly two parts: `reference` and `summary`. ")
+	b.WriteString("Inside `reference` send `kind` (use \"" + strings.Join(kinds, "\", \"") + "\" for documentation or other outside sources), ")
+	b.WriteString("either `origin` (the URL or source name) or `repository_path` (a file in this repository), ")
+	b.WriteString("and `applicable_dimensions` (one or more of: " + strings.Join(dimensions, ", ") + "). ")
+	b.WriteString("`summary` is a plain-language excerpt of what you actually observed.\n")
+	b.WriteString("- Do not send `id`, `content_hash`, `excerpt_digest`, a locator, timestamps or scope fields. You cannot compute a fingerprint and you are not asked to: Aether derives all of them itself, reads a `repository_path` from disk itself, and ignores any value you supply for them.\n")
+	b.WriteString("- New evidence must be something this planning run has not already used; restating earlier evidence is refused.\n")
 	return b.String()
 }
 

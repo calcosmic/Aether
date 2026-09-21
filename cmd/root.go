@@ -267,6 +267,17 @@ var rootCmd = &cobra.Command{
 				return fmt.Errorf("failed to inspect repository store: %w", err)
 			}
 			if !exists {
+				// A flag can exist with no project (a quick job or the owner
+				// raised one). The flag command already created the data
+				// folder then, so opening the store mutates nothing new, and
+				// status can list what is waiting.
+				exists, err = repository.DataFileExists(pendingDecisionsFile)
+				if err != nil {
+					_ = repository.Close()
+					return fmt.Errorf("failed to inspect repository store: %w", err)
+				}
+			}
+			if !exists {
 				_ = repository.Close()
 				return nil
 			}

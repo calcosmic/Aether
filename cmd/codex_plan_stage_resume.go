@@ -66,7 +66,7 @@ func (r planningStageResume) nextCommandHint() string {
 // corrupt in-flight run returns an error: a run that says it is waiting on a
 // worker whose authorization cannot be loaded must not be silently replaced by
 // a second run, because that is the stray-run bug this function exists to fix.
-func resolvePlanningStageResume(session *planningMutationSession) (*planningStageResume, error) {
+func resolvePlanningStageResume(session *planningMutationSession, approved planningStageSpecificationBinding) (*planningStageResume, error) {
 	runID := ""
 	if seed, ok := loadPlanningIterationState(); ok {
 		runID = strings.TrimSpace(seed.PlanningRunID)
@@ -79,7 +79,7 @@ func resolvePlanningStageResume(session *planningMutationSession) (*planningStag
 		// Keying the resume solely off the pointer would leave exactly the
 		// stuck colonies this exists to rescue still stuck, so fall back to
 		// the per-run stage files, which ARE durable.
-		discovered, err := discoverParkedPlanningRun(session)
+		discovered, err := discoverParkedPlanningRun(session, approved)
 		if err != nil {
 			return nil, err
 		}
@@ -97,6 +97,11 @@ func resolvePlanningStageResume(session *planningMutationSession) (*planningStag
 		return nil, err
 	}
 	if strings.TrimSpace(stageState.RunID) == "" {
+		return nil, nil
+	}
+	if planningRunIsSuperseded(stageState, approved) {
+		// Nothing to resume: the caller starts a fresh run bound to the
+		// specification the owner has approved now.
 		return nil, nil
 	}
 
@@ -277,7 +282,18 @@ func planningStageResumeWorkerSpec(caste string) (planningWorkerSpec, bool) {
 // rather than picking a favourite. Starting the wrong run is precisely the
 // stray-run damage this whole path exists to prevent, so ambiguity falls back
 // to the ordinary "start a run" behaviour the caller already has.
-func discoverParkedPlanningRun(session *planningMutationSession) (string, error) {
+// planningRunIsSuperseded reports a run made against a specification that is
+// no longer the approved one. Such a run can never finish: every finalizer
+// refuses a result whose specification binding is not the approved binding. It
+// is history, not work in progress -- its records stay on disk untouched, but
+// it must not be resumed and must not count as parked, or every `aether plan`
+// walks back into the same refusal (a downstream project was refused nine
+// times this way after its owner corrected and re-approved the specification).
+func planningRunIsSuperseded(state planningStageState, approved planningStageSpecificationBinding) bool {
+	return !samePlanningScoutSpecification(state.Specification, approved)
+}
+
+func discoverParkedPlanningRun(session *planningMutationSession, approved planningStageSpecificationBinding) (string, error) {
 	// The session's own data root, not the global store: the session IS the
 	// authority here, and depending on a package-level store made discovery
 	// silently do nothing whenever that global was not bound.
@@ -300,6 +316,11 @@ func discoverParkedPlanningRun(session *planningMutationSession) (string, error)
 			continue
 		}
 		if strings.TrimSpace(state.RunID) == "" {
+			continue
+		}
+		if planningRunIsSuperseded(state, approved) {
+			// A superseded run is not a candidate, so it can never make the
+			// one live run look ambiguous either.
 			continue
 		}
 		if planningStageAwaitsAWorker(session, state) {

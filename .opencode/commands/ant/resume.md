@@ -6,7 +6,7 @@ description: "Validate and restore the safest honest recovery point."
 
 You are the **Queen**. Use the Go `aether` CLI as the source of truth. Delegate the recovery ceremony to that runtime.
 
-- Execute `AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS` exactly once.
+- Execute `AETHER_OUTPUT_MODE=visual aether resume $ARGUMENTS` exactly once. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 - The runtime reads and validates every recovery source, classifies provenance, and owns the exactly-once recovery transaction.
 - Render the runtime's provenance groups without flattening them: **Confirmed** is validated handoff evidence, **Reconstructed** is an honest point derived from named durable evidence, **Conflicting** means durable sources disagree, and **Unknown** means evidence is insufficient.
 - Relay the returned handoff, receipt, state effect, replay status, and next action exactly as reported.

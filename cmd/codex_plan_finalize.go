@@ -2124,21 +2124,36 @@ func normalizePlanningScoutStageContent(root string, header planningRunHeader, m
 		}
 	}
 
-	seenNew := make(map[string]struct{}, len(result.NewEvidence))
-	for _, record := range result.NewEvidence {
-		if _, duplicate := seenNew[record.Reference.ID]; duplicate {
-			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence repeats %q", record.Reference.ID)
-		}
-		seenNew[record.Reference.ID] = struct{}{}
-		if _, restated := allowedBindings[record.Reference.ID]; restated {
-			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q restates the prior frontier", record.Reference.ID)
-		}
+	// The Scout helper cannot compute a SHA-256 content hash, and a hash it
+	// claims anyway proves nothing about the content behind it. Every
+	// new_evidence entry is therefore always treated as an untrusted source:
+	// scope comes only from this run's own header/manifest authority, a
+	// repository path is always read from disk (never from submitted
+	// content), and content_hash/id/excerpt_digest are never read from the
+	// submission at all -- collectPlanningEvidence derives them fresh.
+	newEvidenceScope := planningEvidenceScope{
+		GoalID:                  header.GoalID,
+		SessionID:               header.SessionID,
+		SpecificationRevisionID: manifest.Specification.RevisionID,
+		PlanRevisionID:          manifest.BasePlanRevisionID,
 	}
-	newCatalogue, err := collectPlanningEvidence(planningEvidenceCollectionRequest{RepositoryRoot: root, Existing: result.NewEvidence})
+	newSources := make([]planningEvidenceSource, 0, len(result.NewEvidence))
+	for index, submitted := range result.NewEvidence {
+		source, err := planningScoutNewEvidenceSourceFromSubmission(submitted, newEvidenceScope)
+		if err != nil {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new_evidence[%d]: %w", index, err)
+		}
+		newSources = append(newSources, source)
+	}
+	newCatalogue, err := collectPlanningEvidence(planningEvidenceCollectionRequest{
+		RepositoryRoot: root,
+		ApprovedRoots:  []string{"."},
+		Sources:        newSources,
+	})
 	if err != nil {
 		return planningScoutStageResult{}, false, fmt.Errorf("validate Scout new evidence: %w", err)
 	}
-	if len(newCatalogue) != len(result.NewEvidence) {
+	if len(newCatalogue) != len(newSources) {
 		return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence contains duplicate content addresses")
 	}
 	for _, record := range newCatalogue {
@@ -2148,6 +2163,9 @@ func normalizePlanningScoutStageContent(root string, header planningRunHeader, m
 		}
 		if !ref.Fresh || !ref.Admissible {
 			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q is not fresh and admissible", ref.ID)
+		}
+		if _, restated := allowedBindings[ref.ID]; restated {
+			return planningScoutStageResult{}, false, fmt.Errorf("Scout new evidence %q restates the prior frontier", ref.ID)
 		}
 		allowedBindings[ref.ID] = ref.ContentHash
 		allowedReferences[ref.ID] = ref
@@ -2242,6 +2260,63 @@ func normalizePlanningScoutStageContent(root string, header planningRunHeader, m
 	sort.Slice(candidates, func(left, right int) bool { return candidates[left].StableID < candidates[right].StableID })
 	result.DecisionCandidates = candidates
 	return result, material, nil
+}
+
+// planningScoutNewEvidenceSourceFromSubmission converts one Scout-submitted
+// new_evidence entry into an untrusted planningEvidenceSource. It reads only
+// the metadata fields a Scout brief actually asks for (kind, origin or
+// repository path, applicable dimensions, and a summary/excerpt); Reference
+// and Locator are read only for that plain metadata, never for their
+// content_hash, id, or excerpt_digest, which this function does not look at
+// at all -- collectPlanningEvidence always derives those fresh. A repository
+// path is left for collectPlanningEvidence to read from disk itself; any
+// content the helper supplied alongside a repository path is ignored because
+// it is never copied into the source.
+func planningScoutNewEvidenceSourceFromSubmission(submitted planningEvidenceRecord, scope planningEvidenceScope) (planningEvidenceSource, error) {
+	kind := submitted.Reference.Kind
+	if kind == "" {
+		kind = submitted.Locator.Kind
+	}
+	repositoryPath := strings.TrimSpace(submitted.Reference.RepositoryPath)
+	if repositoryPath == "" {
+		repositoryPath = strings.TrimSpace(submitted.Locator.RepositoryPath)
+	}
+	origin := strings.TrimSpace(submitted.Reference.Origin)
+	if origin == "" {
+		origin = strings.TrimSpace(submitted.Locator.Origin)
+	}
+	sourceRevision := strings.TrimSpace(submitted.Reference.SourceRevision)
+	if sourceRevision == "" {
+		sourceRevision = strings.TrimSpace(submitted.Locator.SourceRevision)
+	}
+	observedAt := submitted.Reference.ObservedAt
+
+	source := planningEvidenceSource{
+		Kind:                 kind,
+		Origin:               origin,
+		RepositoryPath:       repositoryPath,
+		Scope:                scope,
+		ApplicableDimensions: submitted.Reference.ApplicableDimensions,
+		State:                planningEvidenceSourceCurrent,
+	}
+	if repositoryPath == "" {
+		excerpt := strings.TrimSpace(submitted.Summary)
+		if excerpt == "" {
+			return planningEvidenceSource{}, fmt.Errorf("an outside source requires a non-empty excerpt")
+		}
+		source.Content = []byte(excerpt)
+		if sourceRevision == "" {
+			sourceRevision = planningEvidenceSourceRevision("scout-evidence", source.Content)
+		}
+	} else if sourceRevision == "" {
+		sourceRevision = planningEvidenceSourceRevision("scout-repository-evidence", []byte(repositoryPath))
+	}
+	source.SourceRevision = sourceRevision
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	source.ObservedAt = observedAt
+	return source, nil
 }
 
 func validatePlanningScoutCitationIDs(label string, ids []string, allowed map[string]string) error {

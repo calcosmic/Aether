@@ -30,9 +30,52 @@
 - ⏹ **v1.25 Switch It On** — Phases 160-171 (superseded by v1.26)
 - ✅ **v1.26 Intelligent Orchestration** — Phases 172-191.1 (shipped 2026-08-22) — [Archive](milestones/v1.26-ROADMAP.md)
 - ✅ **v1.27 The Queen Decides, the Program Checks** — Phases 193-198.3 (shipped 2026-09-02) — [Archive](milestones/v1.27-ROADMAP.md)
-- 🧭 **v1.28 Classic Colony Restoration** — active milestone; approved Phases 199-205 — [Requirements](REQUIREMENTS.md)
+- ⏸ **v1.28 Classic Colony Restoration** — Phases 199-204.1 shipped; 204.2-204.5 parked 2026-09-20; Phase 205 superseded by v1.29 (2026-09-21) — [Requirements](REQUIREMENTS.md)
+- 🧭 **v1.29 Use It Every Day** — active milestone; Phases 206-210 — [Decision](decisions/2026-09-21-v1.29-use-it-every-day.md)
 
 ## Phases
+
+### v1.29 Use It Every Day
+
+**Status:** Approved by the owner 2026-09-21. **One rule: no new features and no new strict rules.**
+**Done means:** the owner takes one real piece of work from start to finish in each of his real
+projects without pasting a bug into the Aether chat. **Stopping rule:** more than about one blocker
+a week after Phase 210 ends investment in the full framework (see the decision record).
+Each phase is small; its proof is a real run in a real chat; one review round.
+
+- [ ] **Phase 206 — Screens Reach the Owner.** Ship 1.0.88 (every menu command tells the chat to
+  show the program's screen unchanged; a finish checkpoint sends a chat back once if it hid the
+  screen; no colour codes into a chat; start-up, survey and helper cards join the guarded look).
+  Then the direct route: a hook that hands the program's screen to Claude Code as a message shown
+  straight to the owner (`systemMessage`, verified 2026-09-21), with the owner judging how it looks
+  on his own screen, and a permanent status line (phase, task, next command). Proof: real chats in
+  a scratch project show the screens unchanged.
+- [ ] **Phase 207 — A Messy Practice Project Is the Release Gate.** A practice project built by a
+  committed script with the traps real projects have (a shortcut to a folder, a shortcut loop, two
+  names differing only by letter case, a nested project, long folder names, an out-of-date code
+  map, a specification corrected mid-planning, leftover junk data, unsaved changes). The whole
+  journey runs through a real chat: start, survey, discuss, specification, plan twice, build,
+  check, pause, resume, finish, archive, start again. Assertions are on files produced and commands
+  the chat ran, never on wording; three trials; failures sorted into flaky and real; money and turn
+  caps; hooks and menu commands must be loaded. Proof: the journey catches each of 2026-09-21's six
+  blockers when its fix is removed.
+- [ ] **Phase 208 — Never a Dead End.** Every place the program refuses is listed and sorted: a
+  refusal that does not protect against losing work becomes a warning that carries on. Every
+  refusal that stays names the one command that gets past it, as a required field a test enforces,
+  and the journey runs each printed command. A failed check adds tasks and carries on. Status is
+  worked out from what is on disk, and when records disagree the less-finished one is believed. A
+  parking-lot file holds review findings this change did not cause. Known items: the status card
+  advises `aether midden-review`, which has no menu command and uses an unexplained invented word;
+  a failure whose text the safety filter rejects is logged as "could not be safely recorded", which
+  tells the owner nothing; a refusal log and a one-command report bundle, with "report it, do not
+  patch Aether" written into every refusal so chats in other projects stop editing Aether's source.
+- [ ] **Phase 209 — A Light Default Path.** One entry command; the program picks small or big from
+  the size of the change, says why, and moves a job back up to planning if "small" turns out wrong.
+  One planning pass by default. Discuss, specification approval and deeper planning rounds become
+  things the owner asks for. About six menu commands visible, the rest behind an advanced setting.
+  Owner decides the details before building (this changes how Aether behaves for him).
+- [ ] **Phase 210 — Two-Week Freeze.** The owner uses Aether in his real projects. Only bugs he
+  hits are fixed. Ends with the done-means check and the stopping rule.
 
 ### v1.28 Classic Colony Restoration
 
@@ -997,6 +1040,92 @@ Plans:
 **Wave 10** *(blocked on Wave 9 completion)*
 
 - [ ] 205-18-PLAN.md — Owner acceptance and the restoration seal (wave 10)
+
+### Phase 206: Screens Reach the Owner
+
+**Goal:** The owner sees the program's own screens in the chat, every time, unchanged.
+
+**Depends on:** nothing; release 1.0.88 carries the first four requirements.
+
+**Requirements:** UED-01..06
+
+**Success criteria:**
+
+1. Every menu command that draws a screen tells the chat to show it unchanged, and a test fails if any command loses that instruction.
+2. In a chat where a menu command was used, a reply that hides the screen is sent back once, never twice, and the check changes nothing on disk.
+3. A screen printed for a chat carries no colour escape codes; start-up, code survey and helper cards are in the guarded look.
+4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
+5. Proven in real chats in a scratch project, not only in tests.
+
+**Plans:** 0 plans
+
+### Phase 207: A Messy Practice Project Is the Release Gate
+
+**Goal:** Dead ends are found by an automated journey through a deliberately messy project before the owner finds them.
+
+**Depends on:** Phase 206
+
+**Requirements:** UED-07..09
+
+**Success criteria:**
+
+1. A committed script builds the practice project with every trap named in the milestone section.
+2. The whole journey runs through a real chat with hooks and menu commands loaded; it asserts on files produced and commands run, never on wording; three trials; failures sorted into flaky and real; money and turn caps.
+3. With each of the six 2026-09-21 fixes reverted in turn, the journey fails at that step.
+4. The journey is the gate for every release from here on.
+
+**Plans:** 0 plans
+
+### Phase 208: Never a Dead End
+
+**Goal:** The program warns and carries on unless work could be lost, and every refusal that remains says how to get past it.
+
+**Depends on:** Phase 207 (the journey finds the refusals and proves the fixes)
+
+**Requirements:** UED-10..15
+
+**Success criteria:**
+
+1. Every refusal is listed and sorted; one that does not protect against losing work is a warning that carries on.
+2. Every refusal that stays names the one command that gets past it, enforced by a test, and the journey runs each printed command.
+3. A failed check adds tasks and carries on; status is worked out from what is on disk and the less-finished record is believed.
+4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
+5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
+
+**Plans:** 0 plans
+
+### Phase 209: A Light Default Path
+
+**Goal:** Ordinary work takes goal, one planning pass, build, check; everything heavier is something the owner asks for.
+
+**Depends on:** Phase 208; the owner's decisions on the details before planning
+
+**Requirements:** UED-16..18
+
+**Success criteria:**
+
+1. One entry command; the program picks small or big from the size of the change, says why, and moves a job back up to planning when small was wrong.
+2. One planning pass by default; discuss, specification approval and deeper rounds are opt-in.
+3. About six menu commands visible by default, the rest behind an advanced setting.
+4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
+
+**Plans:** 0 plans
+
+### Phase 210: Two-Week Freeze
+
+**Goal:** The owner uses Aether for real work and only what he hits is fixed.
+
+**Depends on:** Phases 206-209
+
+**Requirements:** UED-19, UED-20
+
+**Success criteria:**
+
+1. The owner completes one real piece of work from start to finish in each of his real projects without pasting a bug into the Aether chat.
+2. Every blocker hit during the fortnight is counted and reported.
+3. The stopping rule in the decision record is applied honestly.
+
+**Plans:** 0 plans
 
 ## Milestone Traceability
 

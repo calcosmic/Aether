@@ -676,7 +676,11 @@ func renderLifecycleCloseoutFromResult(result map[string]interface{}, platform s
 func lifecycleCloseoutSlotLabel(slot LifecycleCloseoutSlot) string {
 	switch slot {
 	case LifecycleCloseoutColony:
-		return "Colony"
+		// "Colony (project)" explains "colony" inline (repoInventedWords
+		// cue: "project") the first time each lifecycle closeout screen
+		// says it -- this heading is shared across every lifecycle
+		// command, so the check has to pass wherever it appears.
+		return "Colony (project)"
 	case LifecycleCloseoutParticipants:
 		return "Participants"
 	case LifecycleCloseoutWhatHappened:

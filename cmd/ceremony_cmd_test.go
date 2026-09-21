@@ -154,9 +154,9 @@ func TestCeremonySpawnPlanRendersQueenFrameAndSkillCards(t *testing.T) {
 
 	for _, want := range []string{
 		"👑🐜 Queen Orchestration",
-		"mode=plan-only",
-		"owner=host-wrapper",
-		"platform=codex",
+		"Mode: plan-only",
+		"Owner: host-wrapper",
+		"Platform: codex",
 		"Recommendation: standard — phase has implementation and verification risk",
 		"Skill Cards: 3 matched across 2 worker(s)",
 		"Brick-79: build-discipline, typescript (1 colony, 1 domain)",

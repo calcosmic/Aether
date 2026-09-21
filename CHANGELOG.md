@@ -5,6 +5,50 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.88] - 2026-09-21
+
+### Changed
+
+- **You now see Aether's screens, every time.** The program has always drawn
+  its banners, symbols, progress bars and what-next cards, but inside a chat
+  they were folded away behind "Ran 1 shell command" and the chat described
+  them in its own words instead. Every menu command that draws a screen now
+  tells the chat to show it to you unchanged, from the first banner line to
+  the end, and then add at most two sentences of its own. The lines that told
+  the chat to keep it to two sentences, or to just report the result, are gone.
+- **It is enforced, not just asked for.** In a chat where an `/ant-…` command
+  has been used, if the chat tries to finish without showing the screen Aether
+  just drew, Aether stops it once and tells it to show the screen. It never
+  does this twice in one reply, it lets the chat through whenever anything is
+  unclear, and it changes nothing on disk. Setting `AETHER_SCREEN_RELAY=off`
+  turns it off.
+- **Screens printed for a chat no longer carry invisible colour codes**, which
+  would show up as junk characters when pasted. A real terminal still gets
+  colour.
+- **Project start-up, the code survey, and the cards drawn while helpers are
+  sent out now have the same symbol-led look as the other screens**, in plain
+  English, and are covered by the checks that stop that look fading.
+
+### Fixed
+
+- **A second planning round can now change the plan.** A research helper had
+  to hand back new findings with a cryptographic fingerprint it has no tool to
+  compute, so every later round was refused. Helpers now hand in only what
+  they found; the program computes the fingerprint itself and never trusts one
+  a helper supplies. The helper's instructions now say exactly what to send.
+- **Pausing no longer fails in a project that has shortcuts to folders.** The
+  pause fingerprint followed each unsaved shortcut and tried to read the folder
+  behind it as a file. Shortcuts are now recorded as shortcuts and never
+  followed, and a project folder nested inside another no longer breaks it.
+- **Planning no longer gets stuck after you correct a specification.** If a
+  planning attempt was waiting on a helper when you approved a corrected
+  specification, every later `/ant-plan` went back to that attempt and was
+  refused again, with no command to move past it. Planning now starts a fresh
+  attempt against the specification you have approved; the old attempt's
+  records are kept.
+- **A note left in a folder that has never had a project now shows on the
+  status screen.**
+
 ## [1.0.87] - 2026-09-21
 
 ### Fixed

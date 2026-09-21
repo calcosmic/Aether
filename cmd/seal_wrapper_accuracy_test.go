@@ -209,6 +209,15 @@ func TestSealWrapperTripletStaysIdentical(t *testing.T) {
 // card the runtime drew must reach the owner's chat.
 const relayCardSentence = "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
 
+// screenFormatSentence is relayCardSentence's companion instruction (added
+// for release 1.0.88, "the owner sees Aether's screens, every time"): it
+// tells the assistant exactly how to relay the card -- verbatim, in a fenced
+// text block, from the first banner line onward, with the running commentary
+// above it left out and at most two short sentences of the assistant's own
+// added after. Every wrapper step that carries relayCardSentence must also
+// carry this sentence nearby.
+const screenFormatSentence = "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."
+
 // visualModeLinesWithoutNearbyRelay parses wrapperText for every step that
 // runs the runtime in picture-drawing (AETHER_OUTPUT_MODE=visual) mode and
 // returns the 1-based line numbers of any such step with no relay
@@ -261,7 +270,16 @@ func yamlGuardrails(t *testing.T, path string) []string {
 // step that runs AETHER_OUTPUT_MODE=visual is followed by a relay
 // instruction, and that all four files' relay sentences are byte-identical
 // to each other and to both runtime source YAMLs.
+//
+// This used to be its own top-level test; it is now also run as a subtest of
+// TestEveryWrapperThatDrawsAScreenRelaysIt (release 1.0.88 generalised this
+// check to every wrapper, not only seal/entomb), and is kept reachable under
+// this exact name so existing CLAUDE.md/doc references to it stay valid.
 func TestSealAndEntombWrappersRelayTheCard(t *testing.T) {
+	testSealAndEntombWrappersRelayTheCard(t)
+}
+
+func testSealAndEntombWrappersRelayTheCard(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
 		t.Fatalf("failed to find repo root: %v", err)
@@ -317,5 +335,166 @@ func TestEntombWrapperTripletStaysIdentical(t *testing.T) {
 	}
 	if string(claudeBytes) != string(opencodeBytes) {
 		t.Fatalf("entomb.md drifted between the Claude and OpenCode copies -- these two files are hand-maintained with no generator and must stay byte-identical")
+	}
+}
+
+// wrapperScreenSkipList names the command base names release 1.0.88
+// deliberately leaves untouched: discuss and spec render their cards from
+// JSON (no AETHER_OUTPUT_MODE=visual screen to relay), and ask, interpret,
+// and skill-create run no runtime-drawn screen at all -- ask's one
+// AETHER_OUTPUT_MODE=visual call answers a code question conversationally
+// through `aether quick`, not a banner-drawn card.
+var wrapperScreenSkipList = map[string]bool{
+	"discuss":      true,
+	"spec":         true,
+	"ask":          true,
+	"interpret":    true,
+	"skill-create": true,
+}
+
+// wrapperFightingPhrases are the instructions release 1.0.88 retired because
+// they told the assistant to compress or paraphrase runtime output instead
+// of relaying the screen the runtime drew -- exactly the fighting behaviour
+// the relay sentence exists to stop. None of these may appear in any
+// hand-maintained wrapper file any more.
+var wrapperFightingPhrases = []string{
+	"Keep any wrapper summary to at most 2 short sentences.",
+	"Report the CLI result directly.",
+	"summarize the runtime result in one short sentence",
+	"Relay the runtime's Next Up answer without adding a competing menu or interpretation.",
+}
+
+// visualModeLinesWithoutNearbyFormat mirrors visualModeLinesWithoutNearbyRelay
+// but checks for screenFormatSentence, relayCardSentence's companion
+// instruction on exactly how to relay the card.
+func visualModeLinesWithoutNearbyFormat(wrapperText string) []int {
+	const proximity = 6
+	lines := strings.Split(wrapperText, "\n")
+	var missing []int
+	for i, line := range lines {
+		if !strings.Contains(line, "AETHER_OUTPUT_MODE=visual") {
+			continue
+		}
+		found := false
+		for j := i; j < len(lines) && j < i+proximity; j++ {
+			if strings.Contains(lines[j], screenFormatSentence) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, i+1)
+		}
+	}
+	return missing
+}
+
+// wrapperScreenCommandNames globs every hand-maintained Claude-platform
+// wrapper and returns the base command names (without the .md extension)
+// that are not on wrapperScreenSkipList -- the glob keeps this test honest
+// against a future new command rather than a hand-typed list going stale.
+func wrapperScreenCommandNames(t *testing.T, repoRoot string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repoRoot, ".claude", "commands", "ant"))
+	if err != nil {
+		t.Fatalf("read .claude/commands/ant: %v", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		base := strings.TrimSuffix(e.Name(), ".md")
+		if wrapperScreenSkipList[base] {
+			continue
+		}
+		names = append(names, base)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TestEveryWrapperThatDrawsAScreenRelaysIt generalises
+// TestSealAndEntombWrappersRelayTheCard (release 1.0.88, "the owner sees
+// Aether's screens, every time") to every command wrapper on both platforms,
+// not only seal and entomb: every AETHER_OUTPUT_MODE=visual step must carry
+// both relayCardSentence and its companion screenFormatSentence nearby, the
+// owning YAML's guardrails must carry the same two sentences byte-identical,
+// and none of the wrapperFightingPhrases -- instructions that told the
+// assistant to compress the screen instead of showing it -- may remain
+// anywhere in a wrapper file.
+func TestEveryWrapperThatDrawsAScreenRelaysIt(t *testing.T) {
+	t.Run("TestSealAndEntombWrappersRelayTheCard", testSealAndEntombWrappersRelayTheCard)
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	platformDirs := map[string]string{
+		"claude":   filepath.Join(repoRoot, ".claude", "commands", "ant"),
+		"opencode": filepath.Join(repoRoot, ".opencode", "commands", "ant"),
+	}
+
+	for _, name := range wrapperScreenCommandNames(t, repoRoot) {
+		name := name
+		t.Run(name, func(t *testing.T) {
+			var sawVisualLine bool
+			for platform, dir := range platformDirs {
+				path := filepath.Join(dir, name+".md")
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatalf("read %s: %v", path, err)
+				}
+				text := string(data)
+				if !strings.Contains(text, "AETHER_OUTPUT_MODE=visual") {
+					continue
+				}
+				sawVisualLine = true
+				if missing := visualModeLinesWithoutNearbyRelay(text); len(missing) > 0 {
+					t.Errorf("[%s] %s runs AETHER_OUTPUT_MODE=visual at line(s) %v with no relay sentence nearby", platform, path, missing)
+				}
+				if missing := visualModeLinesWithoutNearbyFormat(text); len(missing) > 0 {
+					t.Errorf("[%s] %s runs AETHER_OUTPUT_MODE=visual at line(s) %v with no screen-format sentence nearby", platform, path, missing)
+				}
+				for _, phrase := range wrapperFightingPhrases {
+					if strings.Contains(text, phrase) {
+						t.Errorf("[%s] %s still carries the retired instruction %q", platform, path, phrase)
+					}
+				}
+			}
+			if !sawVisualLine {
+				// Nothing to relay -- e.g. a pure pheromone-signal command
+				// with no runtime-drawn screen. Fighting phrases still must
+				// not appear on such a wrapper, so check them here too.
+				for platform, dir := range platformDirs {
+					path := filepath.Join(dir, name+".md")
+					data, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatalf("read %s: %v", path, err)
+					}
+					text := string(data)
+					for _, phrase := range wrapperFightingPhrases {
+						if strings.Contains(text, phrase) {
+							t.Errorf("[%s] %s still carries the retired instruction %q", platform, path, phrase)
+						}
+					}
+				}
+				return
+			}
+
+			yamlPath := filepath.Join(repoRoot, ".aether", "commands", name+".yaml")
+			if _, err := os.Stat(yamlPath); err != nil {
+				t.Errorf("no runtime source YAML at %s for a wrapper that draws a screen", yamlPath)
+				return
+			}
+			guardrails := yamlGuardrails(t, yamlPath)
+			if !containsString(guardrails, relayCardSentence) {
+				t.Errorf("%s guardrails do not carry the exact relay sentence: %q", yamlPath, relayCardSentence)
+			}
+			if !containsString(guardrails, screenFormatSentence) {
+				t.Errorf("%s guardrails do not carry the exact screen-format sentence: %q", yamlPath, screenFormatSentence)
+			}
+		})
 	}
 }
