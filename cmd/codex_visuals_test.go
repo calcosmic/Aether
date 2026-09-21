@@ -650,7 +650,11 @@ func TestColonizeVisualOutputShowsDispatchContractDetails(t *testing.T) {
 		effectiveSurveyorDispatchTimeout(0).String() + " worker max",
 		"One surveyor timing out does not reduce sibling surveyor budgets",
 		"authenticated platform dispatcher",
-		"dispatch_mode, survey_warning, provider_diagnostics, artifact_source",
+		// The Classic-voice pass rewrote this line so the owner is never
+		// shown the raw internal field names it used to list verbatim
+		// (rawStateTokenLeaks, cmd/classic_voice_corpus_test.go); it now
+		// says how many fields are recorded, in plain words, instead.
+		"4 internal field(s) are recorded automatically",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("colonize visual output missing %q\n%s", want, output)
