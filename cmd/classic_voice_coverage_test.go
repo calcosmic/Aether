@@ -20,14 +20,19 @@ import (
 	"testing"
 )
 
-// voiceScreenFamilies is the eight required screen families the roadmap's
-// second criterion lists: plan, discuss, spec, status, build, continue,
-// seal, and the what-next card. A registered screen belongs to a family
-// when its name carries the family as a prefix -- allowing a family to
-// register several named variants (e.g. "build" and "build-partial") under
-// one family.
+// voiceScreenFamilies is the eleven required screen families: the original
+// eight the roadmap's second criterion lists -- plan, discuss, spec,
+// status, build, continue, seal, and the what-next card -- plus the three
+// "the owner sees Aether's screens" Part D added: init (project start-up),
+// colonize (the code survey), and ceremony (the cards drawn while helpers
+// are sent out: spawn-plan, wave-start, worker-complete, closeout). A
+// registered screen belongs to a family when its name carries the family
+// as a prefix -- allowing a family to register several named variants
+// (e.g. "build" and "build-partial", or "ceremony-spawn-plan" and
+// "ceremony-closeout") under one family.
 var voiceScreenFamilies = []string{
 	"plan", "discuss", "spec", "status", "build", "continue", "seal", "what-next",
+	"init", "colonize", "ceremony",
 }
 
 // missingVoiceFamilies reports every family in families with no registered
