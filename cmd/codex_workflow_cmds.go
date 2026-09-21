@@ -1769,6 +1769,11 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride, review
 		return nil
 	}
 
+	// The finish is committed; the changelog entry is a courtesy written after
+	// it and can never fail or undo it. A replayed finish finds its own marker
+	// and writes nothing twice.
+	changelog := writeProjectChangelogEntry(root, state, transactionResult.Outcome, transactionResult.TransactionID, now)
+
 	result := map[string]interface{}{
 		"sealed": true, "outcome_kind": transactionResult.Outcome.OutcomeKind,
 		"disposition": transactionResult.Outcome.Disposition, "seal_outcome": transactionResult.Outcome,
@@ -1783,7 +1788,17 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride, review
 	} else {
 		result["milestone"] = "Crowned Anthill"
 	}
-	outputWorkflow(result, RenderSealOutcome(transactionResult))
+	result["changelog"] = changelog
+	visual := RenderSealOutcome(transactionResult)
+	switch {
+	case changelog.Written && changelog.Created:
+		visual += "\n" + voiceLine("history", "Started a changelog for this folder and recorded this project in it (CHANGELOG.md).") + "\n"
+	case changelog.Written:
+		visual += "\n" + voiceLine("history", "Recorded this project in the changelog (CHANGELOG.md).") + "\n"
+	case changelog.Problem != "" && !changelog.AlreadyPresent:
+		visual += "\n" + voiceLine("history", "The changelog was not updated: "+changelog.Problem+". The project is still marked finished.") + "\n"
+	}
+	outputWorkflow(result, visual)
 	return nil
 }
 
