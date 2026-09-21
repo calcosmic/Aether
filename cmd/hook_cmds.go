@@ -43,6 +43,13 @@ type claudeHookInput struct {
 	// fabricate: the runtime reads it from the platform, not from anything
 	// a wrapper typed.
 	TranscriptPath string `json:"transcript_path"`
+	// ToolResponse is a Phase 206 (UED-05) addition, read by the PostToolUse
+	// direct-screen route. The field name was confirmed by the real captured
+	// payload committed at cmd/testdata/post-tool-use/status-screen-payload.json
+	// (a genuine `aether hook-post-tool-use` invocation fired by Claude Code's
+	// own PostToolUse hook after a real Bash tool call), not assumed from
+	// documentation.
+	ToolResponse json.RawMessage `json:"tool_response"`
 }
 
 const postResumeStopGracePeriod = 15 * time.Minute
@@ -1062,6 +1069,7 @@ func ensureSessionSummary(state colony.ColonyState, commandName, suggestedNext, 
 
 func init() {
 	rootCmd.AddCommand(hookPreToolUseCmd)
+	rootCmd.AddCommand(hookPostToolUseCmd)
 	rootCmd.AddCommand(hookStopCmd)
 	rootCmd.AddCommand(hookPreCompactCmd)
 	rootCmd.AddCommand(hookSessionStartCmd)
