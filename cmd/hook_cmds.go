@@ -471,11 +471,17 @@ func hookToolTargetPath(toolInput map[string]interface{}) string {
 //     surveyor behavioral restriction names this directory.
 //   - /.aether/data/worker-debug/   — D-04: worker debug artifacts a worker
 //     is told to persist for diagnostics.
+//   - /.aether/data/territory-candidates/ — cmd/codex_workflow_cmds.go:214
+//     stages every territory-refresh dispatch output under
+//     <transaction-id>/survey/ here, and codex_colonize_finalize.go promotes
+//     them into .aether/data/survey/. Without this entry the runtime orders a
+//     surveyor to write a path its own hook then blocks.
 var sanctionedDataWritePrefixes = []string{
 	"/.aether/data/planning/",
 	"/.aether/data/phase-research/",
 	"/.aether/data/survey/",
 	"/.aether/data/worker-debug/",
+	"/.aether/data/territory-candidates/",
 }
 
 func protectedHookWriteReason(target, cwd string) string {
@@ -493,7 +499,7 @@ func protectedHookWriteReason(target, cwd string) string {
 	}
 	switch {
 	case strings.Contains(slash, "/.aether/data/"):
-		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits. Sanctioned scratch subpaths (planning/, phase-research/, survey/, worker-debug/) are writable."
+		return "Protected colony state path. Update `.aether/data/*` through the `aether` CLI, not direct edits. Sanctioned scratch subpaths (planning/, phase-research/, survey/, worker-debug/, territory-candidates/) are writable."
 	case strings.Contains(slash, "/.aether/dreams/"):
 		return "Protected dream journal path. Do not edit `.aether/dreams/` from a worker."
 	case strings.HasPrefix(base, ".env"):

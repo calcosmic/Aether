@@ -43,7 +43,8 @@ overwritten** by `aether update`, `aether publish`, or any automated operation.
 | `.aether/locks/` | File locks | Concurrency control state |
 
 **Sanctioned scratch subpaths:** `.aether/data/planning/`, `.aether/data/phase-research/`,
-`.aether/data/survey/`, and `.aether/data/worker-debug/` are exempt from the
+`.aether/data/survey/`, `.aether/data/worker-debug/`, and
+`.aether/data/territory-candidates/` are exempt from the
 blanket protection above — a worker following its own task brief is expected
 to write here (e.g. a scout persisting phase research, a surveyor persisting
 territory survey artifacts). `protectedHookWriteReason`
@@ -68,6 +69,7 @@ under `.aether/data/`, sanctioned or not.
 | `phase-research/` | Phase domain research written by a scout (sanctioned scratch subpath, worker-writable) |
 | `survey/` | Territory survey results (sanctioned scratch subpath, worker-writable) |
 | `worker-debug/` | Worker debug artifacts for diagnostics (sanctioned scratch subpath, worker-writable) |
+| `territory-candidates/` | Territory-refresh staging a surveyor writes before `colonize-finalize` promotes it into `survey/` (sanctioned scratch subpath, worker-writable) |
 | `session.json` | Current session metadata |
 | `handoffs/worker-handoffs.json` | Worker relay notes |
 
@@ -91,7 +93,8 @@ create or overwrite:
 The update command must never overwrite, delete, or modify:
 
 1. Any file in `.aether/data/` — including the sanctioned scratch subpaths
-   (`planning/`, `phase-research/`, `survey/`, `worker-debug/`). Those
+   (`planning/`, `phase-research/`, `survey/`, `worker-debug/`,
+   `territory-candidates/`). Those
    subpaths are worker-writable via the `PreToolUse` hook allowlist, but that
    is a separate protection domain from this update-safety guarantee: `aether
    update`/`aether publish` never touch any file under `.aether/data/`,

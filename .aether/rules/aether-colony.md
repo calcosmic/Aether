@@ -163,7 +163,7 @@ Workers are assigned to castes based on task type:
 | `.aether/checkpoints/` | Session checkpoints |
 | `.aether/locks/` | File locks |
 
-**Sanctioned scratch subpaths** — a worker following its own task brief may write here; `protectedHookWriteReason` in `cmd/hook_cmds.go` allows exactly these four directory segments and nothing else under `.aether/data/`:
+**Sanctioned scratch subpaths** — a worker following its own task brief may write here; `protectedHookWriteReason` in `cmd/hook_cmds.go` allows exactly these five directory segments and nothing else under `.aether/data/`:
 
 | Path | A worker writes here when |
 |------|---------------------------|
@@ -171,6 +171,7 @@ Workers are assigned to castes based on task type:
 | `.aether/data/phase-research/` | A scout writes phase domain research (`renderPhaseResearchBrief`) |
 | `.aether/data/survey/` | A surveyor writes territory survey artifacts |
 | `.aether/data/worker-debug/` | Persisting worker debug artifacts for diagnostics |
+| `.aether/data/territory-candidates/` | A surveyor stages a territory refresh; `colonize-finalize` promotes it into `survey/` |
 
 ## Colony State
 

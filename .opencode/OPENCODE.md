@@ -83,7 +83,7 @@ Aether Repo (this repo)
 | `.aether/` (system files) | Source of truth for workers.md, utils, docs | → `~/.aether/system/` |
 | `.aether/data/` | Colony state | **NEVER touched, except the sanctioned scratch subpaths below** |
 
-**Sanctioned scratch subpaths:** `.aether/data/planning/`, `.aether/data/phase-research/`, `.aether/data/survey/`, and `.aether/data/worker-debug/` are where a worker following its own task brief is expected to write (e.g. a scout persisting phase research). **This is conduct, not a sandbox on OpenCode** — unlike Claude Code, OpenCode has no `PreToolUse` hook registration enforcing it; `cmd/hook_cmds.go`'s `sanctionedDataWritePrefixes` allowlist is Claude-Code-enforced only. Everything else under `.aether/data/` stays off-limits by convention.
+**Sanctioned scratch subpaths:** `.aether/data/planning/`, `.aether/data/phase-research/`, `.aether/data/survey/`, `.aether/data/worker-debug/`, and `.aether/data/territory-candidates/` are where a worker following its own task brief is expected to write (e.g. a scout persisting phase research). **This is conduct, not a sandbox on OpenCode** — unlike Claude Code, OpenCode has no `PreToolUse` hook registration enforcing it; `cmd/hook_cmds.go`'s `sanctionedDataWritePrefixes` allowlist is Claude-Code-enforced only. Everything else under `.aether/data/` stays off-limits by convention.
 
 ---
 

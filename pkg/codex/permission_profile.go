@@ -89,7 +89,7 @@ func behavioralRestrictionsForCaste(caste string) []string {
 	case "probe":
 		return []string{"write test files only; do not modify project source"}
 	case "surveyor_disciplines", "surveyor_nest", "surveyor_pathogens", "surveyor_provisions":
-		return []string{"write survey artifacts under .aether/data/survey only"}
+		return []string{"write survey artifacts only to the survey output paths named in your dispatch brief: .aether/data/survey, or the .aether/data/territory-candidates staging directory during a territory refresh"}
 	case "scout":
 		return []string{"write phase research artifacts under .aether/data/phase-research only"}
 	case "chronicler":
