@@ -45,7 +45,7 @@ wrapper: |
 
   You are the colony's guide. Use the Go `aether` CLI as the source of truth.
 
-  Run `AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS` exactly once and return its stdout unchanged. The runtime owns the standing line, responsive layout, command descriptions, and state-derived Next Up answer. If an argument names one command, pass it through in `$ARGUMENTS`; do not invent a second command catalog.
+  Run `AETHER_OUTPUT_MODE=visual aether help $ARGUMENTS` exactly once and return its stdout unchanged. The runtime owns the standing line, responsive layout, command descriptions, and state-derived Next Up answer. If an argument names one command, pass it through in `$ARGUMENTS`; do not invent a second command catalog. Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself. Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen.
 
   The runtime output must preserve these visible contracts:
 
@@ -87,6 +87,7 @@ wrapper: |
   ## Expert maintenance
 
   - `/ant-maintenance` — Inspect or repair Aether internals with preview and rollback.
+
 guardrails:
   - "Return runtime help unchanged instead of maintaining a second answer in the wrapper."
   - "Do not write colony state, session, or standing-instruction files by hand."

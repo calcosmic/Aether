@@ -1162,17 +1162,29 @@ func TestShouldRenderVisualOutputTTYOverride(t *testing.T) {
 func TestColorizeCasteUsesANSIForVisualOutput(t *testing.T) {
 	saveGlobals(t)
 
+	// stdout is a buffer here, i.e. NOT a terminal -- the same situation as a
+	// chat running the command inside a tool call. Since 1.0.88 visual mode
+	// alone no longer forces colour into such a writer: the escape codes are
+	// junk characters once the screen is pasted into a reply. Colour is still
+	// available on request.
 	var buf bytes.Buffer
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	t.Setenv("NO_COLOR", "")
+	t.Setenv("AETHER_FORCE_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "")
 
+	if got := colorizeCaste("builder", "builder"); got != "builder" {
+		t.Fatalf("visual mode into a non-terminal must stay plain, got %q", got)
+	}
+
+	t.Setenv("AETHER_FORCE_COLOR", "1")
 	got := colorizeCaste("builder", "builder")
 	if !strings.Contains(got, "\x1b[33m") {
-		t.Fatalf("expected ANSI-highlighted builder caste text, got %q", got)
+		t.Fatalf("expected ANSI-highlighted builder caste text when colour is forced, got %q", got)
 	}
 	if !strings.Contains(got, "builder") || !strings.Contains(got, "\x1b[0m") {
-		t.Fatalf("expected ANSI-highlighted builder label, got %q", got)
+		t.Fatalf("expected ANSI-highlighted builder label when colour is forced, got %q", got)
 	}
 }
 
@@ -1183,15 +1195,22 @@ func TestShouldUseANSIColorsUsesVisualModeOrForce(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	t.Setenv("NO_COLOR", "")
+	t.Setenv("AETHER_FORCE_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "")
 
-	if !shouldUseANSIColors() {
-		t.Fatal("expected visual mode to allow ANSI colors for caste highlighting")
+	if shouldUseANSIColors() {
+		t.Fatal("visual mode into a non-terminal writer must not emit ANSI colours")
 	}
 
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	t.Setenv("AETHER_FORCE_COLOR", "1")
 	if !shouldUseANSIColors() {
 		t.Fatal("expected AETHER_FORCE_COLOR to override ANSI detection")
+	}
+
+	t.Setenv("NO_COLOR", "1")
+	if shouldUseANSIColors() {
+		t.Fatal("NO_COLOR must win over AETHER_FORCE_COLOR")
 	}
 }
 
