@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.28
-milestone_name: Classic Colony Restoration
-status: paused
-stopped_at: Phase 204.2 PARKED 2026-09-20 at Plan 25 (see decisions/2026-09-20-park-codex-native-lifecycle.md). Next work is publishing 1.0.82 with the direct-dispatch Codex route as default, then a slim Claude-side trial.
-last_updated: "2026-09-20T00:00:00+00:00"
-last_activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
+milestone: v1.29
+milestone_name: Use It Every Day
+status: active
+stopped_at: Phase 206 in progress 2026-09-21 -- release 1.0.88 assembled and in its full test run; direct screen route and status line still to build. See decisions/2026-09-21-v1.29-use-it-every-day.md.
+last_updated: "2026-09-21T00:00:00+00:00"
+last_activity: 2026-09-21 -- v1.29 Use It Every Day approved by the owner; Phase 206 started
 progress:
   total_phases: 13
   completed_phases: 8
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 204.2 — codex-native-worker-lifecycle
+**Current focus:** Phase 206 — Screens Reach the Owner (v1.29 Use It Every Day; one rule: no new features, no new strict rules)
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
