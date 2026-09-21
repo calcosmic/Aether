@@ -323,9 +323,9 @@ phases of work.
   you before it's marked complete**, closing a gap where a seal could be
   recorded without a clear owner confirmation.
 - **The `aether pause` command is now the standard name** for stopping work
-  at a safe point (the older `pause-colony` name still works as an alias),
-  and running `aether update` now restores that alias automatically if it
-  ever goes missing.
+  at a safe point (the older, longer name still works as an alias), and
+  running `aether update` now restores that alias automatically if it ever
+  goes missing.
 
 ### Fixed
 
