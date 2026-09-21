@@ -706,12 +706,22 @@ func renderBanner(emoji, title string) string {
 // reuses it to decide which lines of a captured screen the owner is owed --
 // so the renderer and the checkpoint cannot silently drift apart.
 func isAetherBannerLine(line string) bool {
+	// Two header shapes are drawn: renderBanner's two-bar `━━ … ━━` and the
+	// helper cards' three-bar `━━━ … ━━━` (renderOldStyleCeremonyHeader). Both
+	// are "two or more bars, a space, a title, a space, two or more bars"; a
+	// line made only of bars (the divider) has no title and is not a banner.
 	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(trimmed, "━━ ") || !strings.HasSuffix(trimmed, " ━━") {
+	inner := strings.TrimLeft(trimmed, "━")
+	leading := len([]rune(trimmed)) - len([]rune(inner))
+	rest := strings.TrimRight(inner, "━")
+	trailing := len([]rune(inner)) - len([]rune(rest))
+	if leading < 2 || trailing < 2 {
 		return false
 	}
-	inner := strings.TrimSuffix(strings.TrimPrefix(trimmed, "━━ "), " ━━")
-	return strings.TrimSpace(inner) != ""
+	if !strings.HasPrefix(rest, " ") || !strings.HasSuffix(rest, " ") {
+		return false
+	}
+	return strings.TrimSpace(rest) != ""
 }
 
 func renderAetherWordmark() string {

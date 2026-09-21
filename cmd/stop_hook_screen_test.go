@@ -435,3 +435,32 @@ func TestBannerPredicateMatchesTheRenderer(t *testing.T) {
 		t.Error("an empty line must not satisfy isAetherBannerLine")
 	}
 }
+
+// TestBannerPredicateMatchesTheCardHeaderToo covers the second banner shape
+// the program draws. The cards shown while helpers are sent out (spawn plan,
+// wave start, finished summary) open with a THREE-bar header from
+// renderOldStyleCeremonyHeader, not renderBanner's two-bar one. When the
+// predicate knew only the two-bar shape, the biggest screens an owner sees
+// (the finished card of a build or a check) owed nothing, and an earlier
+// two-bar screen from the same reply was demanded in their place.
+func TestBannerPredicateMatchesTheCardHeaderToo(t *testing.T) {
+	for _, title := range []string{"Spawn Plan", "Wave 1", "Build Complete"} {
+		header := strings.TrimRight(renderOldStyleCeremonyHeader("🔨", title), "\n")
+		if !isAetherBannerLine(header) {
+			t.Errorf("isAetherBannerLine did not recognise the card header %q", header)
+		}
+		if got := bannerLinesIn("running commentary\n" + header + "\nbody line\n"); len(got) != 1 {
+			t.Errorf("bannerLinesIn found %d banner(s) in a card headed %q, want 1", len(got), header)
+		}
+	}
+	for _, notABanner := range []string{
+		"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+		"━━━ ━━━",
+		"── Stage ──",
+		"━ one bar is not a banner ━",
+	} {
+		if isAetherBannerLine(notABanner) {
+			t.Errorf("isAetherBannerLine wrongly accepted %q", notABanner)
+		}
+	}
+}
