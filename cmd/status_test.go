@@ -105,6 +105,81 @@ func TestStatusNoColonyVisual(t *testing.T) {
 	}
 }
 
+// TestStatusNamesAnArchivedProject is release 1.0.83's A4: a finished,
+// archived project (the real thing `aether entomb` writes, not a hand-typed
+// approximation) must read on `aether status` as "finished and archived",
+// with next-up advice to start the next one -- never as an empty, never-used
+// repository. A never-used repo (no state file at all) keeps today's exact
+// wording, unchanged.
+func TestStatusNamesAnArchivedProject(t *testing.T) {
+	t.Run("archived project", func(t *testing.T) {
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		// Pin the platform explicitly: the real lifecycle flow below sets
+		// AETHER_ACTIVE_PLATFORM=codex for its plan step, which would
+		// otherwise leak into this status call's platform detection.
+		t.Setenv("AETHER_PLATFORM", "claude")
+
+		runRealLifecycleToSealForTest(t)
+		rootCmd.SetArgs([]string{"entomb", "--confirm"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("entomb failed: %v", err)
+		}
+		// runRealLifecycleToSealForTest forces JSON output mode internally
+		// (forceJSONOutputModeForTest); re-assert visual mode for the status
+		// call below.
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+		var buf bytes.Buffer
+		stdout = &buf
+		defer func() { stdout = os.Stdout }()
+
+		rootCmd.SetArgs([]string{"status"})
+		defer rootCmd.SetArgs([]string{})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("status returned error: %v", err)
+		}
+
+		output := buf.String()
+		for _, want := range []string{"finished and archived", "/ant-init"} {
+			if !strings.Contains(output, want) {
+				t.Errorf("archived status output missing %q\n%s", want, output)
+			}
+		}
+	})
+
+	t.Run("never-used repo is unchanged", func(t *testing.T) {
+		t.Setenv("AETHER_OUTPUT_MODE", "visual")
+		t.Setenv("AETHER_PLATFORM", "codex")
+		var buf bytes.Buffer
+		stdout = &buf
+		defer func() { stdout = os.Stdout }()
+
+		tmpDir := t.TempDir()
+		dataDir := tmpDir + "/.aether/data"
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		origRoot := os.Getenv("AETHER_ROOT")
+		os.Setenv("AETHER_ROOT", tmpDir)
+		defer os.Setenv("AETHER_ROOT", origRoot)
+
+		rootCmd.SetArgs([]string{"status"})
+		defer rootCmd.SetArgs([]string{})
+
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("status returned error: %v", err)
+		}
+
+		output := buf.String()
+		for _, want := range []string{"📊", "C O L O N Y   S T A T U S", "No colony initialized in this repo.", "$ant-init", "aether lay-eggs"} {
+			if !strings.Contains(output, want) {
+				t.Errorf("visual no-colony status missing %q\n%s", want, output)
+			}
+		}
+	})
+}
+
 func TestStatusOutput(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	var buf bytes.Buffer

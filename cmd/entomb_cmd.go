@@ -1750,9 +1750,13 @@ func resetColonyStateForEntomb(state colony.ColonyState) colony.ColonyState {
 	state.SessionID = nil
 	state.InitializedAt = nil
 	state.BuildStartedAt = nil
-	state.Plan.GeneratedAt = nil
-	state.Plan.Confidence = nil
-	state.Plan.Phases = []colony.Phase{}
+	// Whole-struct replacement (rather than clearing named fields one at a
+	// time) is deliberate: it is what makes a future field added to
+	// colony.Plan and never wired into this reset fail
+	// TestEntombResetLeavesNoPlanAuthority by name instead of silently
+	// surviving into an archived shell.
+	state.Plan = colony.Plan{Phases: []colony.Phase{}}
+	state.Specification = nil
 	state.Memory.PhaseLearnings = []colony.PhaseLearning{}
 	state.Memory.Decisions = []colony.Decision{}
 	state.Memory.Instincts = []colony.Instinct{}

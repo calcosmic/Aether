@@ -157,6 +157,142 @@ func TestFullLifecycleInDownstreamRepo(t *testing.T) {
 }
 
 func testFullLifecycleInDownstreamRepo(t *testing.T) {
+	downstream, sealedState := runRealLifecycleToSealForTest(t)
+	_ = sealedState
+
+	// ---- Step 7: Entomb ----
+	t.Log("Step 7: Entomb")
+	var outBuf bytes.Buffer
+	stdout = &outBuf
+	stderr = &outBuf
+
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb failed: %v", err)
+	}
+
+	// Verify archive created
+	chambersDir := filepath.Join(downstream, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("no chamber archive created")
+	}
+
+	// Verify chamber contains required files
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+	requiredFiles := []string{"manifest.json", "COLONY_STATE.json", "CROWNED-ANTHILL.md", "colony-archive.xml"}
+	for _, name := range requiredFiles {
+		path := filepath.Join(chamberDir, name)
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("missing required chamber file %s: %v", name, err)
+		}
+	}
+
+	// Verify colony state reset after entomb (store still points at the
+	// downstream repo's data dir, set up by runRealLifecycleToSealForTest).
+	var entombedState colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &entombedState); err != nil {
+		t.Fatalf("load state after entomb: %v", err)
+	}
+	if entombedState.State != colony.StateIDLE {
+		t.Errorf("state after entomb = %s, want IDLE", entombedState.State)
+	}
+	if entombedState.Goal != nil && *entombedState.Goal != "" {
+		t.Errorf("goal after entomb = %v, want nil/empty", entombedState.Goal)
+	}
+	t.Log("Step 7: PASSED -- colony entombed")
+
+	// ---- Step 8: A finished, archived project must read the same way on
+	// every closing surface -- no plan/spec residue, confirmed provenance,
+	// and "initialize" everywhere, never "resume". ----
+	t.Log("Step 8: Archived project reads as finished, not damaged")
+
+	if entombedState.Specification != nil {
+		t.Errorf("entombed state Specification = %+v, want nil", entombedState.Specification)
+	}
+	if entombedState.Plan.AcceptancePolicy != "" {
+		t.Errorf("entombed state Plan.AcceptancePolicy = %q, want empty", entombedState.Plan.AcceptancePolicy)
+	}
+	if entombedState.Plan.ActiveRevisionID != "" {
+		t.Errorf("entombed state Plan.ActiveRevisionID = %q, want empty", entombedState.Plan.ActiveRevisionID)
+	}
+	if entombedState.Plan.PendingCandidateID != "" {
+		t.Errorf("entombed state Plan.PendingCandidateID = %q, want empty", entombedState.Plan.PendingCandidateID)
+	}
+	if len(entombedState.Plan.Candidates) != 0 {
+		t.Errorf("entombed state Plan.Candidates = %d, want 0", len(entombedState.Plan.Candidates))
+	}
+	if len(entombedState.Plan.Revisions) != 0 {
+		t.Errorf("entombed state Plan.Revisions = %d, want 0", len(entombedState.Plan.Revisions))
+	}
+	if entombedState.ArchiveReference == nil {
+		t.Error("entombed state ArchiveReference = nil, want non-nil")
+	}
+
+	// Guard the fixture itself: the PRE-entomb (sealed) state must have
+	// carried real plan authority and a specification, or this test could
+	// silently become vacuous if the real flow stops producing them.
+	if sealedState.Plan.ActiveRevisionID == "" {
+		t.Fatal("fixture guard: pre-entomb sealed state had empty Plan.ActiveRevisionID")
+	}
+	if len(sealedState.Plan.Revisions) == 0 {
+		t.Fatal("fixture guard: pre-entomb sealed state had no Plan.Revisions")
+	}
+	if sealedState.Specification == nil {
+		t.Fatal("fixture guard: pre-entomb sealed state had a nil Specification")
+	}
+
+	root := resolveAetherRootPath()
+	facts, err := loadLifecycleFacts(root, store, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("loadLifecycleFacts after entomb: %v", err)
+	}
+	if facts.State.Source.Provenance != LifecycleFactConfirmed {
+		t.Errorf("facts.State.Source.Provenance after entomb = %q, want %q", facts.State.Source.Provenance, LifecycleFactConfirmed)
+	}
+
+	answer := resolveNextAction(loadNextActionInputForCommand(""))
+	if answer.Projection == nil || answer.Projection.NextAction.ID != "initialize" {
+		gotID := ""
+		if answer.Projection != nil {
+			gotID = answer.Projection.NextAction.ID
+		}
+		t.Errorf("closing action id after entomb = %q, want %q\nreason: %s", gotID, "initialize", answer.Recommendation)
+	}
+
+	// Verify the archived chamber's own COLONY_STATE.json still contains the
+	// full pre-entomb plan/spec evidence -- nothing is lost, only cleared
+	// from the active record.
+	var archivedChamberState colony.ColonyState
+	chamberStateStore, err := storage.NewStore(chamberDir)
+	if err != nil {
+		t.Fatalf("open chamber store: %v", err)
+	}
+	if err := chamberStateStore.LoadJSON("COLONY_STATE.json", &archivedChamberState); err != nil {
+		t.Fatalf("load archived chamber state: %v", err)
+	}
+	if len(archivedChamberState.Plan.Revisions) == 0 {
+		t.Error("archived chamber COLONY_STATE.json lost Plan.Revisions")
+	}
+	if archivedChamberState.Specification == nil {
+		t.Error("archived chamber COLONY_STATE.json lost Specification")
+	}
+	t.Log("Step 8: PASSED -- archived project reads as finished everywhere")
+
+	t.Log("=== Full Lifecycle in Downstream Repo: ALL 8 STEPS PASSED ===")
+}
+
+// runRealLifecycleToSealForTest drives the real init -> plan acceptance ->
+// build -> continue -> seal flow in a fresh downstream repository and returns
+// its root plus the sealed (pre-entomb) colony state. It is the one place
+// this shape of fixture is produced, so every test that needs a genuinely
+// sealed project -- rather than a hand-typed approximation of one -- gets it
+// from the runtime itself.
+func runRealLifecycleToSealForTest(t *testing.T) (string, colony.ColonyState) {
+	t.Helper()
 	saveGlobals(t)
 	resetRootCmd(t)
 	forceJSONOutputModeForTest(t)
@@ -376,49 +512,7 @@ func testFullLifecycleInDownstreamRepo(t *testing.T) {
 	}
 	t.Log("Step 6: PASSED -- colony sealed")
 
-	// ---- Step 7: Entomb ----
-	t.Log("Step 7: Entomb")
-	outBuf.Reset()
-
-	rootCmd.SetArgs([]string{"entomb", "--confirm"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("entomb failed: %v", err)
-	}
-
-	// Verify archive created
-	chambersDir := filepath.Join(downstream, ".aether", "chambers")
-	entries, err := os.ReadDir(chambersDir)
-	if err != nil {
-		t.Fatalf("read chambers dir: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Fatal("no chamber archive created")
-	}
-
-	// Verify chamber contains required files
-	chamberDir := filepath.Join(chambersDir, entries[0].Name())
-	requiredFiles := []string{"manifest.json", "COLONY_STATE.json", "CROWNED-ANTHILL.md", "colony-archive.xml"}
-	for _, name := range requiredFiles {
-		path := filepath.Join(chamberDir, name)
-		if _, err := os.Stat(path); err != nil {
-			t.Errorf("missing required chamber file %s: %v", name, err)
-		}
-	}
-
-	// Verify colony state reset after entomb
-	var entombedState colony.ColonyState
-	if err := store.LoadJSON("COLONY_STATE.json", &entombedState); err != nil {
-		t.Fatalf("load state after entomb: %v", err)
-	}
-	if entombedState.State != colony.StateIDLE {
-		t.Errorf("state after entomb = %s, want IDLE", entombedState.State)
-	}
-	if entombedState.Goal != nil && *entombedState.Goal != "" {
-		t.Errorf("goal after entomb = %v, want nil/empty", entombedState.Goal)
-	}
-	t.Log("Step 7: PASSED -- colony entombed")
-
-	t.Log("=== Full Lifecycle in Downstream Repo: ALL 7 STEPS PASSED ===")
+	return downstream, sealedState
 }
 
 // TestCreateDownstreamRepo verifies the helper creates a valid git repo.

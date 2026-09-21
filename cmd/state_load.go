@@ -190,7 +190,7 @@ func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
 		} else {
 			state.State = colony.StateIDLE
 		}
-		return state
+		return tolerateArchivedShellPlanResidue(state)
 	}
 
 	switch rawState {
@@ -232,7 +232,42 @@ func normalizeLegacyColonyState(state colony.ColonyState) colony.ColonyState {
 		}
 	}
 
+	return tolerateArchivedShellPlanResidue(state)
+}
+
+// tolerateArchivedShellPlanResidue is the one in-memory tolerance for a
+// colony state left on disk by a 1.0.79-1.0.82 binary: entomb wrote an
+// archived shell (no goal, no phases, nothing in flight) but a hand-kept
+// field list omitted the Phase 200 plan-authority fields and the
+// specification, so they survived uncleared and later failed the strict
+// planning reader ("active plan phases do not match active revision"),
+// making a finished, already-archived project read as damaged. It never
+// writes to disk -- callers already persist through their own safe writer,
+// and normalizeLegacyColonyState is documented as read-only -- and it only
+// ever applies to the exact archived-shell shape colonyStateIsArchivedShell
+// defines; a state with a goal, a phase, or no archive pointer is untouched.
+func tolerateArchivedShellPlanResidue(state colony.ColonyState) colony.ColonyState {
+	if !colonyStateIsArchivedShell(state) {
+		return state
+	}
+	state.Plan = colony.Plan{Phases: []colony.Phase{}}
+	state.Specification = nil
+	// The EvidencePolicy inference above ran against the pre-clear Plan; a
+	// cleared, zero-phase Plan re-infers to "not required" rather than
+	// whatever the pre-clear phases carried.
+	state.Plan.EvidencePolicy = inferredPlanEvidencePolicy(state.Plan)
 	return state
+}
+
+// colonyStateIsArchivedShell reports a finished project that was archived and
+// cleared: no goal, no phases, nothing in flight, and a pointer to its
+// archive. A shell in this exact shape is the ONLY tolerance this repository
+// grants for otherwise-invalid planning state (see B3 below); anything with a
+// goal, a phase, or no archive pointer is never waved through.
+func colonyStateIsArchivedShell(state colony.ColonyState) bool {
+	hasGoal := state.Goal != nil && strings.TrimSpace(*state.Goal) != ""
+	return !hasGoal && len(state.Plan.Phases) == 0 && state.CurrentPhase < 1 &&
+		state.State == colony.StateIDLE && state.ArchiveReference != nil
 }
 
 func isValidColonyLifecycleState(state colony.State) bool {

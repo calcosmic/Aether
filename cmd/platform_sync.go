@@ -505,6 +505,15 @@ func listMaintenanceRegularFiles(root string) ([]string, error) {
 		if path == root {
 			return nil
 		}
+		// Installed package folders are never synced (syncPathIgnored), and the
+		// runtime itself creates one in the hub when a host-backed command
+		// falls back to the hub's TS host (prepareTsHostForExec). npm always
+		// writes shortcut links under node_modules/.bin, so meeting one there
+		// is normal, not a tampered source tree: step over the whole folder
+		// rather than refusing the update. A link anywhere else still refuses.
+		if entry.IsDir() && entry.Name() == "node_modules" {
+			return filepath.SkipDir
+		}
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("maintenance sync: symbolic link is not an owned file: %s", path)
 		}

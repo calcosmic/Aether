@@ -268,6 +268,10 @@ func TestEntombTransaction199Success(t *testing.T) {
 	if state.State != colony.StateIDLE || state.Goal != nil || state.ArchiveReference == nil || state.ArchiveReference.ManifestDigest != result.ManifestDigest {
 		t.Fatalf("active state did not retain only the archive pointer: %+v", state)
 	}
+	if state.Specification != nil || state.Plan.AcceptancePolicy != "" || state.Plan.ActiveRevisionID != "" ||
+		state.Plan.PendingCandidateID != "" || len(state.Plan.Candidates) != 0 || len(state.Plan.Revisions) != 0 {
+		t.Fatalf("active state did not retain only the archive pointer -- plan/spec residue survived: %+v", state)
+	}
 	tombstone, err := os.ReadFile(filepath.Join(fixture.root, ".aether", "HANDOFF.md"))
 	if err != nil {
 		t.Fatal(err)

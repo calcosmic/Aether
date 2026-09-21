@@ -1001,6 +1001,10 @@ func standingFromInput(in nextActionInput, state colony.ColonyState) nextActionS
 	}
 
 	switch {
+	case colonyStateIsArchivedShell(state):
+		// No goal is saved for a finished-and-archived project; saying one is
+		// would be the card contradicting its own recommendation.
+		standing.Explanation = "The last project here is finished and archived. Nothing is active."
 	case standing.TotalPhases == 0:
 		standing.Explanation = "The goal is saved. No phases have been drawn up yet."
 	case standing.PhaseName != "":
@@ -1115,6 +1119,13 @@ func recoveryFromInput(in nextActionInput, state colony.ColonyState) nextActionR
 // change -- the whole point is that the claim is only made when the file that
 // makes it true has been seen.
 func contextHealthFromInput(in nextActionInput, state colony.ColonyState) nextActionContextVerdict {
+	// A finished-and-archived project has nothing in flight and no handover to
+	// write: its whole record sits in a digest-verified archive, which is the
+	// strongest form of "written down" this program has. Warning the owner not
+	// to close the chat there would be false.
+	if colonyStateIsArchivedShell(state) {
+		return nextActionContextVerdict{Health: contextHealthSafe, Reason: contextReasonHandoffSaved}
+	}
 	if !in.HandoffExists {
 		return nextActionContextVerdict{Health: contextHealthKeep, Reason: contextReasonHandoffMissing}
 	}

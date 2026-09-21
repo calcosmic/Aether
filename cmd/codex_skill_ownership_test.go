@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -235,7 +237,7 @@ func TestCodexAntSkillOwnership(t *testing.T) {
 func TestCodexAntSkillNewerInventory(t *testing.T) {
 	f := newMaintenanceMutation199Fixture(t)
 	future := antPayload(t)
-	future.SourceVersion = "1.0.80"
+	future.SourceVersion = antLaterVersion(t, 1)
 	future.Commands = append(future.Commands, "future")
 	rel := "ant-future/SKILL.md"
 	body := []byte("---\nname: ant-future\n---\nFuture content\n")
@@ -244,7 +246,7 @@ func TestCodexAntSkillNewerInventory(t *testing.T) {
 	antCommit(t, antPlan(t, f, "newer-producer", future))
 	// A compatible later payload that omits an unfamiliar entry cannot retire it.
 	next := antPayload(t)
-	next.SourceVersion = "1.0.81"
+	next.SourceVersion = antLaterVersion(t, 2)
 	antCommit(t, antPlan(t, f, "retain", next))
 	if got := mustReadLifecycleFixtureFile(t, filepath.Join(root, rel)); !bytes.Equal(got, body) {
 		t.Fatal("newer entry lost")
@@ -477,10 +479,29 @@ func TestCodexAntSkillPreview(t *testing.T) {
 		t.Fatalf("preview wrote journal: %v %v", entries, err)
 	}
 }
+
+// antLaterVersion returns the real source version with its patch number raised
+// by steps. These tests need "a version newer than the one being built"; a
+// typed literal such as "1.0.80" was only newer until the source passed it, and
+// the 1.0.82 release turned three of these tests red by calendar, not by code.
+func antLaterVersion(t *testing.T, steps int) string {
+	t.Helper()
+	current := antPayload(t).SourceVersion
+	parts := strings.Split(current, ".")
+	if len(parts) != 3 {
+		t.Fatalf("source version %q is not major.minor.patch", current)
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil {
+		t.Fatalf("source version %q has a non-numeric patch: %v", current, err)
+	}
+	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch+steps)
+}
+
 func antChangedPayload(t *testing.T) codexSkillPayload {
 	t.Helper()
 	p := antPayload(t)
-	p.SourceVersion = "1.0.80"
+	p.SourceVersion = antLaterVersion(t, 1)
 	p.Files[0].Content = append(append([]byte(nil), p.Files[0].Content...), []byte("\nUpdated instructions.\n")...)
 	p.Files[0].SHA256 = lifecycleDigest(p.Files[0].Content)
 	return p
