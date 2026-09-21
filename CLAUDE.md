@@ -1549,6 +1549,48 @@ Aether supports two parallel execution strategies, selected at colony init:
 
 ---
 
+## Planning evidence
+
+A research helper (Scout) can register a genuinely new finding on a second or
+later planning pass. It submits only what it found -- a kind, an origin (a
+URL/source name, or a repository path), a plain summary/excerpt, and the
+applicable planning dimensions. It never computes a SHA-256 content hash, an
+ID, or an excerpt digest for that finding, and if it sends one anyway, Go
+ignores and recomputes it -- a fingerprint supplied by an untrusted helper
+proves nothing about the content behind it. Go derives the hash/ID/digest and
+the finding's scope (goal, session, specification revision, base plan
+revision) itself from the current run's own authority, reads a claimed
+repository path from disk under the approved evidence roots (never trusting
+submitted content for it), and hashes the submitted excerpt for an outside
+source. The prior "restates the frontier" and duplicate-content refusals still
+apply once the honest address is derived.
+
+Before this fix, `normalizePlanningScoutStageContent`
+(`cmd/codex_plan_finalize.go`) routed the helper's `new_evidence` through the
+same trusted path used to reload Aether's own already-hashed, already-written
+artifact, so a helper's claimed hash was accepted at face value -- and because
+a Scout genuinely cannot compute a SHA-256 digest, a second or later planning
+pass could never register new evidence at all, on the Claude lane. Locked by
+`TestScoutNewEvidenceNeedsNoFingerprintFromTheHelper` (source-shaped evidence
+with no hashes is accepted, catalogued with a program-derived address and
+scope, and a later plan revision may cite it),
+`TestHelperSuppliedFingerprintIsNeverTrusted` (a wrong hash is recomputed
+rather than honoured, a claimed repository path is always read from disk with
+submitted content ignored, and a path outside the approved roots is refused
+by name), and `TestRestatedEvidenceIsStillRefused` (evidence whose derived
+address equals a frontier entry is still refused).
+
+*For dummies: a helper that goes looking for more information on a second
+pass can now actually report what it found, because it is no longer asked to
+do something it cannot do -- fake a cryptographic fingerprint for its own
+finding. It just describes what it found in plain terms, and the program
+works out the exact technical address for that finding itself, the same way
+it always has for evidence gathered on the first pass. If the helper claims a
+fingerprint anyway, the program quietly ignores the claim and works out the
+real one instead of trusting it.*
+
+---
+
 ## Live Colony, Swarm, and Oracle (v1.28)
 
 Phase 202 restored three owner-visible screens on top of one shared, durable
