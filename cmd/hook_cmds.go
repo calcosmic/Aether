@@ -230,9 +230,20 @@ func hookSpawnDenyReason(in claudeHookInput) string {
 	return ""
 }
 
+// hookStopCmd used to make exactly one decision: is the owner walking away
+// mid-phase. Phase 205 Part C adds a second, independent decision behind it:
+// did Aether draw a screen in this reply that the reply never showed. The two
+// never compete -- the lifecycle check runs first and, if it blocks, its
+// answer is the only one that matters (TestStopHookLifecycleBlockStillWins).
+// Only when the lifecycle check DECLINES to block -- including every path
+// that returns silently today: no store, an unreadable state file, a state
+// that is not EXECUTING/BUILT, a paused colony, a fresh resume -- does the
+// screen check get a turn. That "declines to block" set is deliberately wide
+// so a status screen read in a no-project folder is still owed even though no
+// colony has ever been started there.
 var hookStopCmd = &cobra.Command{
 	Use:    "hook-stop",
-	Short:  "Claude hook: prevent accidental stop mid-phase",
+	Short:  "Claude hook: prevent accidental stop mid-phase, and a shown screen",
 	Hidden: true,
 	Args:   cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -249,39 +260,320 @@ var hookStopCmd = &cobra.Command{
 		if isAetherSpawnedWorker() {
 			return nil
 		}
-		if store == nil {
+		// agent_id is the platform's own record that this Stop event belongs
+		// to a spawned sub-agent (a helper), not the owner's own top-level
+		// chat -- the same reasoning as the worker exemption just above, for
+		// the platform-reported case isAetherSpawnedWorker cannot see.
+		if strings.TrimSpace(input.AgentID) != "" {
 			return nil
 		}
 
-		var state colony.ColonyState
-		if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
-			return nil
-		}
-		if (state.State != colony.StateEXECUTING && state.State != colony.StateBUILT) || state.Paused {
-			return nil
-		}
-		if allowStopAfterRecentResume() {
-			return nil
+		if reason := lifecycleStopBlockReason(); reason != "" {
+			return emitHookBlock(reason)
 		}
 
-		phaseLabel := fmt.Sprintf("phase %d", state.CurrentPhase)
-		if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
-			phaseLabel = fmt.Sprintf("phase %d (%s)", state.CurrentPhase, state.Plan.Phases[state.CurrentPhase-1].Name)
+		if reason := screenRelayBlockReason(input); reason != "" {
+			logScreenRelayIntervention()
+			return emitHookBlock(reason)
 		}
 
-		if tracer != nil && state.RunID != nil {
-			_ = tracer.LogIntervention(*state.RunID, "hook.stop.block", "hook-cmd", map[string]interface{}{
-				"hook":       "stop",
-				"phase":      state.CurrentPhase,
-				"phaseLabel": phaseLabel,
-			})
-		}
-
-		return emitHookBlock(fmt.Sprintf(
-			"Aether is still in %s. Finish the lifecycle with `aether continue`, or run `aether pause` before stopping.",
-			phaseLabel,
-		))
+		return nil
 	},
+}
+
+// lifecycleStopBlockReason is the hook's original decision, unchanged in
+// behaviour and extracted only so hookStopCmd can run a second, independent
+// check after it. Every early return below is a path that must fall through
+// to the screen check rather than end the hook -- that is the whole point of
+// the extraction.
+func lifecycleStopBlockReason() string {
+	if store == nil {
+		return ""
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return ""
+	}
+	if (state.State != colony.StateEXECUTING && state.State != colony.StateBUILT) || state.Paused {
+		return ""
+	}
+	if allowStopAfterRecentResume() {
+		return ""
+	}
+
+	phaseLabel := fmt.Sprintf("phase %d", state.CurrentPhase)
+	if state.CurrentPhase > 0 && state.CurrentPhase <= len(state.Plan.Phases) {
+		phaseLabel = fmt.Sprintf("phase %d (%s)", state.CurrentPhase, state.Plan.Phases[state.CurrentPhase-1].Name)
+	}
+
+	if tracer != nil && state.RunID != nil {
+		_ = tracer.LogIntervention(*state.RunID, "hook.stop.block", "hook-cmd", map[string]interface{}{
+			"hook":       "stop",
+			"phase":      state.CurrentPhase,
+			"phaseLabel": phaseLabel,
+		})
+	}
+
+	return fmt.Sprintf(
+		"Aether is still in %s. Finish the lifecycle with `aether continue`, or run `aether pause` before stopping.",
+		phaseLabel,
+	)
+}
+
+// stopHookScreenRelayReason is the plain-English block reason for the screen
+// check, in ordinary words rather than repo jargon: no "banner", no
+// "renderer", no "transcript" -- just what happened and what to do about it.
+const stopHookScreenRelayReason = "Aether drew a screen in this reply and you did not show it. Show it now in a fenced text block, unchanged, from the first ━━ banner line to the end, then finish."
+
+// screenRelayBlockReason decides the second, independent question: did
+// Aether draw a screen in this turn that the reply never showed. It fails
+// open on every ambiguous or unreadable case -- no transcript path, an
+// unreadable or unrecognised transcript, no owed screen, and an empty reply
+// all return "" (allow) rather than guessing. This function and
+// owedScreenBanners never write anything; the Stop hook stays read-only.
+func screenRelayBlockReason(input claudeHookInput) string {
+	owed := owedScreenBanners(input.TranscriptPath)
+	if len(owed) == 0 {
+		return ""
+	}
+	reply := strings.TrimSpace(input.LastAssistantMessage)
+	if reply == "" {
+		return ""
+	}
+	normalizedReply := normalizeScreenWhitespace(reply)
+	for _, line := range owed {
+		if !strings.Contains(normalizedReply, line) {
+			return stopHookScreenRelayReason
+		}
+	}
+	return ""
+}
+
+// logScreenRelayIntervention records a screen-relay block the same way the
+// lifecycle block records itself, but only when both a tracer and a store
+// already exist -- this hook never creates one. A status screen read in a
+// project with no colony (store present, no COLONY_STATE.json, or a state
+// with no RunID) still blocks; it just has nothing to log the block against.
+func logScreenRelayIntervention() {
+	if tracer == nil || store == nil {
+		return
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		return
+	}
+	if state.RunID == nil {
+		return
+	}
+	_ = tracer.LogIntervention(*state.RunID, "hook.stop.screen-relay", "hook-cmd", map[string]interface{}{
+		"hook": "stop",
+	})
+}
+
+// transcriptEntry, transcriptContentBlock are the minimum shape
+// owedScreenBanners reads out of a real Claude Code transcript line. Unknown
+// fields are ignored by encoding/json, and every entry this function cannot
+// parse is skipped rather than treated as an error -- consistent with fail
+// open.
+type transcriptEntry struct {
+	Type    string `json:"type"`
+	Message struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	} `json:"message"`
+}
+
+type transcriptContentBlock struct {
+	Type      string          `json:"type"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Text      string          `json:"text"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+	Input     struct {
+		Command string `json:"command"`
+	} `json:"input"`
+}
+
+// owedScreenBanners reads a real Claude Code transcript and returns the
+// whitespace-normalised banner lines of the screen the current turn owes the
+// owner, or nil when nothing is owed or the transcript cannot be read or
+// understood.
+//
+// "The current turn" is everything from the LAST genuine human prompt
+// onward. A transcript line is a genuine human prompt when its role is
+// "user" and its content is either a plain string, or an array of content
+// blocks none of which is a tool_result -- a tool_result is the platform
+// relaying a tool's own output back to the model, and both shapes carry role
+// "user", so content shape is the only thing that tells them apart.
+//
+// Within the current turn, this walks every user-role tool_result block,
+// resolves its tool_use_id against the Bash tool_use call that produced it
+// (matched anywhere earlier in the same transcript -- a tool_use always
+// precedes its own result), and keeps the LAST one whose command ran Aether
+// in visual mode and whose output drew at least one banner line
+// (isAetherBannerLine, shared with the renderer that draws them).
+func owedScreenBanners(transcriptPath string) []string {
+	transcriptPath = strings.TrimSpace(transcriptPath)
+	if transcriptPath == "" {
+		return nil
+	}
+	data, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		return nil
+	}
+
+	lines := strings.Split(string(data), "\n")
+	entries := make([]transcriptEntry, len(lines))
+	parsed := make([]bool, len(lines))
+
+	// tool_use_id -> Bash command, gathered across the whole transcript: a
+	// tool_result always cites a tool_use from earlier in the same file.
+	bashCommands := map[string]string{}
+	turnStart := -1
+
+	for i, raw := range lines {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		var entry transcriptEntry
+		if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+			continue
+		}
+		entries[i] = entry
+		parsed[i] = true
+
+		if entry.Type == "assistant" && entry.Message.Role == "assistant" {
+			var blocks []transcriptContentBlock
+			if json.Unmarshal(entry.Message.Content, &blocks) == nil {
+				for _, block := range blocks {
+					if block.Type == "tool_use" && block.Name == "Bash" && block.ID != "" {
+						bashCommands[block.ID] = block.Input.Command
+					}
+				}
+			}
+		}
+
+		if entry.Type == "user" && entry.Message.Role == "user" && isGenuineUserPrompt(entry.Message.Content) {
+			turnStart = i
+		}
+	}
+
+	if turnStart == -1 {
+		return nil
+	}
+
+	var owed []string
+	for i := turnStart; i < len(entries); i++ {
+		if !parsed[i] {
+			continue
+		}
+		entry := entries[i]
+		if entry.Type != "user" || entry.Message.Role != "user" {
+			continue
+		}
+		var blocks []transcriptContentBlock
+		if json.Unmarshal(entry.Message.Content, &blocks) != nil {
+			continue
+		}
+		for _, block := range blocks {
+			if block.Type != "tool_result" || block.ToolUseID == "" {
+				continue
+			}
+			command, known := bashCommands[block.ToolUseID]
+			if !known || !isAetherVisualCommand(command) {
+				continue
+			}
+			banners := bannerLinesIn(toolResultText(block.Content))
+			if len(banners) > 0 {
+				owed = banners
+			}
+		}
+	}
+	return owed
+}
+
+// isGenuineUserPrompt distinguishes a human-typed prompt from a tool result
+// relayed back to the model -- both carry message.role "user" in a real
+// transcript, so content shape is the only signal. A plain non-empty string
+// is a genuine prompt. An array of content blocks is genuine only when none
+// of its blocks is a tool_result.
+func isGenuineUserPrompt(content json.RawMessage) bool {
+	var text string
+	if json.Unmarshal(content, &text) == nil {
+		return strings.TrimSpace(text) != ""
+	}
+	var blocks []transcriptContentBlock
+	if json.Unmarshal(content, &blocks) != nil || len(blocks) == 0 {
+		return false
+	}
+	for _, block := range blocks {
+		if block.Type == "tool_result" {
+			return false
+		}
+	}
+	return true
+}
+
+// toolResultText reads the text of a tool_result content block, which a real
+// transcript has shown in two shapes: a plain string (the common case for a
+// Bash result), or an array of blocks carrying a "text" field. Any other
+// shape yields "", which owedScreenBanners treats as no banners rather than
+// an error.
+func toolResultText(raw json.RawMessage) string {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+	var blocks []transcriptContentBlock
+	if json.Unmarshal(raw, &blocks) == nil {
+		var b strings.Builder
+		for _, block := range blocks {
+			if block.Type == "text" {
+				b.WriteString(block.Text)
+			}
+		}
+		return b.String()
+	}
+	return ""
+}
+
+// isAetherVisualCommand reports whether a Bash command is one that draws an
+// Aether screen worth owing to the owner: it invokes aether, asks for visual
+// output (AETHER_OUTPUT_MODE=visual, or a ceremony spawn/closeout screen, both
+// of which are visual by default), and was not explicitly run in JSON mode.
+func isAetherVisualCommand(command string) bool {
+	if strings.Contains(command, "AETHER_OUTPUT_MODE=json") {
+		return false
+	}
+	if !strings.Contains(command, "aether") {
+		return false
+	}
+	if strings.Contains(command, "AETHER_OUTPUT_MODE=visual") {
+		return true
+	}
+	return strings.Contains(command, "aether ceremony")
+}
+
+// bannerLinesIn returns the whitespace-normalised banner lines
+// (isAetherBannerLine) found in a rendered screen, in order.
+func bannerLinesIn(output string) []string {
+	var banners []string
+	for _, line := range strings.Split(output, "\n") {
+		if isAetherBannerLine(line) {
+			banners = append(banners, normalizeScreenWhitespace(line))
+		}
+	}
+	return banners
+}
+
+// normalizeScreenWhitespace collapses any run of whitespace (spaces, tabs,
+// newlines) to a single space and trims the ends, so a screen pasted with
+// different line wrapping or trailing spaces still matches.
+func normalizeScreenWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 var hookPreCompactCmd = &cobra.Command{

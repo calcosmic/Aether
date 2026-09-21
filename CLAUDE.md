@@ -231,6 +231,40 @@ Full contract documented in `.aether/docs/wrapper-runtime-ux-contract.md`. Key r
 - Wrappers must not duplicate verification or gating logic
 - Codex visuals come from the runtime renderer; public skill instructions follow runtime command guides
 
+### Delivering the Screen: the Stop-hook checkpoint (Phase 205 Part C)
+
+A wrapper can ask the assistant to relay the screen Aether just drew, but a
+request is not a mechanism -- the assistant can still finish its reply without
+showing it. `aether hook-stop` (`hookStopCmd`, `cmd/hook_cmds.go`) now makes a
+second, independent check every time the assistant tries to stop, run strictly
+AFTER the existing lifecycle check declines to block: it reads the real
+transcript of the current turn, finds the last Bash call that ran Aether in
+visual mode and drew at least one banner line (`━━ … ━━`, the same
+`isAetherBannerLine` predicate `renderBanner` itself is checked against), and
+blocks once, with a plain-English reason, if the reply never showed every one
+of those banner lines. The lifecycle check still wins when both would block --
+one project state, one answer. The check fails open on every unreadable or
+unrecognised transcript, an empty reply, or no owed screen at all, and it never
+writes anything; it is skipped entirely for a Stop event belonging to an
+Aether-spawned worker or a platform-reported sub-agent, since the hook exists
+to catch the OWNER walking past a screen, not a helper. Locked by
+`TestStopHookSendsBackAReplyThatHidTheScreen`,
+`TestStopHookAllowsAReplyThatShowsTheScreen`, `TestStopHookNeverBlocksTwice`,
+`TestStopHookIgnoresHelpersAndWorkers`,
+`TestStopHookFailsOpenOnAnUnknownTranscript`,
+`TestStopHookLifecycleBlockStillWins`,
+`TestStopHookScreenCheckDoesNotMutate`, and
+`TestBannerPredicateMatchesTheRenderer` (`cmd/stop_hook_screen_test.go`,
+fixtures captured from a real Claude Code session under
+`cmd/testdata/stop-hook/`).
+
+*For dummies: if Aether draws you a screen (a status board, a finished-phase
+card) and the chat's reply never actually shows it to you, the program itself
+notices and sends the reply back once, asking it to paste the screen in
+before finishing. It never asks twice in a row, it never fires for Aether's
+own background helpers, and if it cannot make sense of what happened it always
+lets the reply through rather than guessing wrong.*
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users

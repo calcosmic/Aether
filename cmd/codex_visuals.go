@@ -696,6 +696,24 @@ func renderBanner(emoji, title string) string {
 	return fmt.Sprintf("━━ %s %s ━━\n", emoji, spacedTitle(title))
 }
 
+// isAetherBannerLine reports whether a single line of rendered output is one
+// of renderBanner's own banner lines -- "━━ <emoji> <S P A C E D   T I T L E>
+// ━━" -- as opposed to the plain divider line (all ━ characters, no leading
+// "━━ " marker) that renderBanner's callers usually print immediately below
+// it. It is the ONE shared predicate for what a banner line looks like:
+// TestBannerPredicateMatchesTheRenderer asserts every renderBanner output's
+// first line satisfies it, and the Stop-hook screen check (cmd/hook_cmds.go)
+// reuses it to decide which lines of a captured screen the owner is owed --
+// so the renderer and the checkpoint cannot silently drift apart.
+func isAetherBannerLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "━━ ") || !strings.HasSuffix(trimmed, " ━━") {
+		return false
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(trimmed, "━━ "), " ━━")
+	return strings.TrimSpace(inner) != ""
+}
+
 func renderAetherWordmark() string {
 	wordmark := strings.Trim(aetherWordmark, "\n")
 	if loaded := loadVisualsConfig(); loaded != nil && loaded.AetherWordmark != "" {
