@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -476,5 +477,38 @@ func TestQuickBlockerNeverStopsTheProject(t *testing.T) {
 	}
 	if unresolvedQuickIssues != 1 {
 		t.Fatalf("expected exactly one unresolved issue row with source quick, got %d (decisions=%+v)", unresolvedQuickIssues, ff.Decisions)
+	}
+}
+
+// TestQuickInvokeErrorLogsOnce is release 1.0.85's third review fix: an
+// invoke error was logged twice -- once by recordDispatchWorkerOutcome
+// (category worker_failed, falsely attributed to "aether build") and once
+// by recordQuickFailureToMidden (category quick_failed, the correct
+// quick-specific record). Exactly one entry, with the correct category,
+// should reach the failure log.
+func TestQuickInvokeErrorLogsOnce(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	chdirForTest190_05(t, root)
+
+	wantErr := errors.New("builder invocation failed: connection refused")
+	origInvoker := newQuickWorkerInvoker
+	newQuickWorkerInvoker = func() codex.WorkerInvoker { return &failingWorkerInvoker{err: wantErr} }
+	t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+	if _, err := runQuickJob("do something", 2*time.Second); err == nil {
+		t.Fatal("expected runQuickJob to return the invoker's error")
+	}
+
+	mf, err := loadMiddenFile(store)
+	if err != nil {
+		t.Fatalf("load midden: %v", err)
+	}
+	if len(mf.Entries) != 1 {
+		t.Fatalf("expected exactly one failure-log entry, got %d: %+v", len(mf.Entries), mf.Entries)
+	}
+	if mf.Entries[0].Category != middenCategoryQuickFailed {
+		t.Fatalf("category = %q, want %q", mf.Entries[0].Category, middenCategoryQuickFailed)
 	}
 }

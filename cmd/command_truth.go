@@ -798,9 +798,12 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 		attempt.Dispatches[0].Status = "failed"
 		attempt.Verdict = colony.WorkOutcomeBlocker
 		attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		if recErr := recordDispatchWorkerOutcome(dispatch, codex.DispatchResult{WorkerName: workerName, Status: "failed", Error: err}); recErr != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not record quick job outcome: %v\n", recErr)
-		}
+		// Do NOT also call recordDispatchWorkerOutcome here: an invoke
+		// error never reached a real worker, so it has no handoff to
+		// persist, and its shared memory feed would additionally log this
+		// same failure a second time under category worker_failed,
+		// falsely attributed to "aether build". recordQuickFailureToMidden
+		// is the one, correctly-attributed record for this path.
 		recordQuickFailureToMidden(job, attempt.ID, err)
 		persistQuickAttempt(attempt)
 		return nil, err
