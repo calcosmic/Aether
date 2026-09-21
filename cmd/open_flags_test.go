@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -196,4 +198,53 @@ func TestArchivedProjectStatusListsOpenFlags(t *testing.T) {
 	if !strings.Contains(output, "deal with this after the archive") {
 		t.Errorf("archived-project status screen dropped an open note:\n%s", output)
 	}
+}
+
+// TestWriteCarriedFlagsFileIsAtomicAndRefusesNonRegularFiles proves
+// writeCarriedFlagsFile writes through a temp-file-plus-rename (so a
+// concurrent reader can never observe a half-written file) and refuses to
+// write through anything that is not an ordinary file -- the same guard
+// writeProjectChangelogEntry uses (cmd/project_changelog.go), since a
+// directory or a symlink at that path is not ours to replace.
+func TestWriteCarriedFlagsFileIsAtomicAndRefusesNonRegularFiles(t *testing.T) {
+	dataDir := t.TempDir()
+
+	kept := []colony.FlagEntry{{ID: "n1", Type: "note", Description: "a carried note"}}
+	if err := writeCarriedFlagsFile(dataDir, colony.FlagsFile{Version: "1.0"}, kept); err != nil {
+		t.Fatalf("writeCarriedFlagsFile: %v", err)
+	}
+
+	path := filepath.Join(dataDir, pendingDecisionsFile)
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Fatalf("read data dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".pending-decisions-") && strings.HasSuffix(entry.Name(), ".tmp") {
+			t.Errorf("a temp file was left behind after a successful write: %s", entry.Name())
+		}
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	var ff colony.FlagsFile
+	if err := json.Unmarshal(raw, &ff); err != nil {
+		t.Fatalf("decode written file: %v", err)
+	}
+	if len(ff.Decisions) != 1 || ff.Decisions[0].Description != "a carried note" {
+		t.Errorf("written file = %+v, want the one carried note", ff.Decisions)
+	}
+
+	t.Run("refuses a directory", func(t *testing.T) {
+		dirDataDir := t.TempDir()
+		dirPath := filepath.Join(dirDataDir, pendingDecisionsFile)
+		if err := os.Mkdir(dirPath, 0755); err != nil {
+			t.Fatalf("seed a directory at the target path: %v", err)
+		}
+		err := writeCarriedFlagsFile(dirDataDir, colony.FlagsFile{Version: "1.0"}, kept)
+		if err == nil {
+			t.Fatal("writeCarriedFlagsFile did not refuse a directory at the target path")
+		}
+	})
 }

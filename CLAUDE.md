@@ -1110,26 +1110,51 @@ under three headings -- blocking work, issues, for later -- up to five
 titles per heading, then "and N more". Locked by
 `TestStatusListsOpenFlagsByTitle` and `TestStatusFlagListIsCappedAndCounted`.
 
-**An owner's open issue or note survives into the next project.** A
-blocker would stop the new project's very first check, so it is never
-carried forward, and a clarification belongs only to the conversation that
-produced it. But an unresolved issue or note is the owner's own tracking,
-not the old project's conversation -- `aether init` used to delete the
-whole file unconditionally the moment a new project started, silently
-erasing the owner's own "deal with this later" notes along with everything
-else. It now keeps only unresolved issues and notes (with their old phase
-number cleared) and drops everything else, the same as before. Locked by
-`TestOpenNotesSurviveIntoTheNextProject` (the real init -> build -> seal ->
-archive -> init flow) and `TestCarriedFlagsNeverReachWorkerPromptsAsIntent`
-(a carried note or issue is never shown to a helper as if it were part of
-the old project's discussion).
+**One carry-forward rule, shared by init and entomb.**
+`filterCarriedFlags` (`cmd/open_flags.go`) decides, in exactly one place,
+which rows follow the owner into the next project: unresolved, typed
+exactly issue or note, and not a protected decision awaiting its own bound
+answer -- with the old phase number cleared, since that phase belonged to
+the finished project's plan. A blocker would stop the new project's very
+first check, so it never carries forward, and a clarification belongs only
+to the conversation that produced it. `aether init` and `aether entomb`
+both call this one function, so an owner's open note means the same thing
+at both points and the two can never quietly disagree. The result is
+written by one shared, atomic writer, `writeCarriedFlagsFile`: a temp file
+in the same directory then a rename, so a reader can never see a
+half-written file, and it refuses to write through anything that is not an
+ordinary file (the same guard `writeProjectChangelogEntry` uses in
+`cmd/project_changelog.go`) -- removing the file entirely when nothing
+survives the filter. Locked by
+`TestWriteCarriedFlagsFileIsAtomicAndRefusesNonRegularFiles`.
 
-**Archiving a project keeps its flags, live and filed away.** `aether
-entomb` archives a full copy of the finished project's flags into its
-chamber (locked by `TestArchiveHoldsTheFinishedProjectsFlags`) and, unlike
-most of the data it files away, leaves the live file in place rather than
-clearing it, so `aether status` keeps showing open items between the old
-project's archive and the next `aether init`.
+**`aether init` carries the owner's open issues and notes forward.**
+`aether init` used to delete the whole file unconditionally the moment a
+new project started, silently erasing the owner's own "deal with this
+later" notes along with everything else. It now applies the one
+carry-forward rule above. Locked by `TestOpenNotesSurviveIntoTheNextProject`
+(the real init -> build -> seal -> archive -> init flow) and
+`TestCarriedFlagsNeverReachWorkerPromptsAsIntent` (a carried note or issue
+is never shown to a helper as if it were part of the old project's
+discussion).
+
+**Archiving a project files everything away, but only carries the same two
+kinds forward live.** `aether entomb` archives a full, digest-verified copy
+of every row the finished project ever raised -- blockers and
+clarifications included -- into its chamber (this is the finished
+project's own permanent record). The live file is then restored to hold
+only the carried subset (the same rule `aether init` applies), never the
+whole thing: leaving a forced-finish blocker or a leftover clarification
+live past an archived project reproduced the exact dead-end this repo
+already fixed once (`cmd/entomb_archived_shell_test.go`, 1.0.83) -- an
+archived project whose closing decision read "resume" instead of "start a
+new project" -- and let an old clarification keep reaching a worker's
+prompt as CLARIFIED INTENT for anything run between projects, such as a
+quick job. Locked by `TestArchiveHoldsTheFinishedProjectsFlags` (the
+chamber holds the full record) and `TestArchivedProjectKeepsOnlyCarriedFlags`
+(the live file afterwards holds only the carried note and issue, the
+closing decision is "start fresh" not "resume", and colony-prime shows no
+leftover CLARIFIED INTENT from the finished project).
 
 *For dummies: a flag is something the program is tracking for you --
 something blocking progress, a known issue, or a note you left yourself to
@@ -1137,10 +1162,12 @@ come back to later. Before this, different screens could disagree about how
 many you had open, and starting a new project silently threw away every
 note you had left yourself. Now every screen agrees on the count, `aether
 status` shows you the actual titles (not just a number), and your own open
-issues and notes follow you into the next project instead of vanishing --
-only a blocker (which would stop the new project before it starts) and the
-old project's finished conversation are left behind, safely filed away in
-the archive either way.*
+issues and notes follow you into the next project instead of vanishing.
+Finishing and archiving a project keeps a full permanent copy of everything
+it ever flagged, filed away for the record -- but only your still-open
+issues and notes stay visible day to day; a blocker or an old back-and-forth
+question is safely filed away rather than left sitting there looking like
+it still needs your attention.*
 
 ---
 

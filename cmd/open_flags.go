@@ -126,19 +126,92 @@ func writeOpenFlagGroup(b *strings.Builder, glyphKind, heading string, entries [
 	}
 }
 
+// filterCarriedFlags is the ONE carry-forward rule, shared by `aether init`
+// and `aether entomb` so an owner's open note or issue means exactly the
+// same thing at both points and can never quietly drift apart. A blocker
+// would stop the new project's very first check, and a clarification, an
+// autopilot checkpoint, or any other protected decision belongs only to the
+// conversation that produced it -- none of those survive. An unresolved row
+// typed exactly "issue" or "note", and not a protected decision awaiting its
+// own bound answer (flagRequiresBoundDecisionAnswer), carries forward with
+// its phase number cleared, since that phase belonged to the finished
+// project's plan.
+func filterCarriedFlags(entries []colony.FlagEntry) []colony.FlagEntry {
+	kept := make([]colony.FlagEntry, 0, len(entries))
+	for _, flag := range entries {
+		if flag.Resolved {
+			continue
+		}
+		flagType := normalizedFlagType(flag.Type)
+		if flagType != "issue" && flagType != "note" {
+			continue
+		}
+		if flagRequiresBoundDecisionAnswer(flag) {
+			continue
+		}
+		flag.Phase = nil
+		kept = append(kept, flag)
+	}
+	return kept
+}
+
+// writeCarriedFlagsFile is the ONE writer for pending-decisions.json after
+// filtering: both `aether init` and `aether entomb` (via
+// restoreCarriedFlagsAfterEntomb) call it. When nothing survives the filter
+// it removes the file entirely, matching the old unconditional-delete
+// behaviour for the empty case. Otherwise it writes atomically -- a temp
+// file in the same directory, then a rename -- so a reader can never observe
+// a half-written file, and it refuses to write through anything that is not
+// an ordinary file (the same guard writeProjectChangelogEntry uses in
+// cmd/project_changelog.go): a symlink could point outside the project, and
+// a directory is not ours to replace.
+func writeCarriedFlagsFile(dataDir string, ff colony.FlagsFile, kept []colony.FlagEntry) error {
+	path := filepath.Join(dataDir, pendingDecisionsFile)
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not an ordinary file, refusing to write through it", pendingDecisionsFile)
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if len(kept) == 0 {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	ff.Decisions = kept
+	encoded, err := json.MarshalIndent(ff, "", "  ")
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	temp, err := os.CreateTemp(dataDir, ".pending-decisions-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	_, writeErr := temp.Write(encoded)
+	closeErr := temp.Close()
+	if writeErr == nil && closeErr == nil {
+		writeErr = os.Chmod(tempPath, 0o644)
+	}
+	if writeErr == nil && closeErr == nil {
+		writeErr = os.Rename(tempPath, path)
+	}
+	if writeErr != nil || closeErr != nil {
+		_ = os.Remove(tempPath)
+		if writeErr == nil {
+			writeErr = closeErr
+		}
+		return writeErr
+	}
+	return nil
+}
+
 // carryForwardOpenFlagsAcrossInit narrows what used to be an unconditional
 // delete of pending-decisions.json at the start of `aether init`
-// (RUNTIME-01, TestInitClearsPriorColonyDecisionResidue). A blocker would
-// stop the new project's very first check, and a clarification, an
-// autopilot checkpoint, or any other protected decision belongs only to the
-// conversation that produced it -- none of those survive. But an owner's
-// still-open issue or a "deal with this later" note is the owner's own
-// tracking, not the old project's conversation, and dropping it silently
-// used to erase it the moment the owner started the next project. Those two
-// kinds -- unresolved, typed exactly "issue" or "note", and not a protected
-// decision awaiting its own bound answer (flagRequiresBoundDecisionAnswer)
-// -- now carry forward, with their phase number cleared since it belonged to
-// the finished project's plan.
+// (RUNTIME-01, TestInitClearsPriorColonyDecisionResidue). See
+// filterCarriedFlags for the rule and writeCarriedFlagsFile for how the
+// result is written.
 //
 // Init's own mandatory pre-init backup (a few lines below this call in
 // init_cmd.go) already holds a full, unfiltered copy of the file, and a
@@ -161,36 +234,5 @@ func carryForwardOpenFlagsAcrossInit(dataDir string) error {
 		// new colony either.
 		return os.Remove(path)
 	}
-	kept := make([]colony.FlagEntry, 0, len(ff.Decisions))
-	for _, flag := range ff.Decisions {
-		if flag.Resolved {
-			continue
-		}
-		flagType := normalizedFlagType(flag.Type)
-		if flagType != "issue" && flagType != "note" {
-			continue
-		}
-		if flagRequiresBoundDecisionAnswer(flag) {
-			continue
-		}
-		flag.Phase = nil
-		kept = append(kept, flag)
-	}
-	if len(kept) == 0 {
-		return os.Remove(path)
-	}
-	ff.Decisions = kept
-	encoded, err := json.MarshalIndent(ff, "", "  ")
-	if err != nil {
-		return err
-	}
-	encoded = append(encoded, '\n')
-	// Written directly rather than through store.SaveJSON: the package-level
-	// `store` global is assigned to the NEW colony's store a few lines above
-	// this call in init_cmd.go, and this filter must run against the file
-	// already on disk before anything else touches it. filepath.Join with
-	// dataDir is the same path storage.Store itself resolves pending-
-	// decisions.json to, so this is the same file the store's own lock
-	// protects; os.WriteFile with 0644 is the same permission SaveJSON uses.
-	return os.WriteFile(path, encoded, 0644)
+	return writeCarriedFlagsFile(dataDir, ff, filterCarriedFlags(ff.Decisions))
 }
