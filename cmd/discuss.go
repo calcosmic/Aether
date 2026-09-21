@@ -762,7 +762,7 @@ func buildSettledDiscussDraftRequest(
 		if path == specificationProjectionRelativePath {
 			evidence = contextEvidence
 		}
-		add(&request.AffectedPublicPaths, "known-public-path-"+path, "Known owner-visible or public path affected by this contract: "+path, "", path, evidence)
+		add(&request.AffectedPublicPaths, specPublicPathLineage(path), "Known owner-visible or public path affected by this contract: "+path, "", path, evidence)
 	}
 	if len(request.AffectedPublicPaths) == 0 {
 		add(&request.AffectedPublicPaths, "specification-projection", "The owner-readable specification projection created by settled discussion.", "", specificationProjectionRelativePath, contextEvidence)
@@ -2153,4 +2153,22 @@ func detectDecisionConflicts(decisions []PendingDecision) []string {
 		return nil
 	}
 	return conflicts
+}
+
+const specPublicPathLineagePrefix = "known-public-path-"
+
+// specPublicPathLineage names the specification item for one affected public
+// path. A short path keeps the readable "known-public-path-<path>" lineage so
+// IDs in existing specifications never change. A path too long for the
+// 40-character canonical lineage cap (colony.CanonicalSpecItemID) is named by a
+// short digest of the path instead: before this, any entry point deeper than
+// about 22 characters made `aether discuss` refuse the whole project. The full
+// path is still carried on the item itself; only the ID is shortened.
+func specPublicPathLineage(path string) string {
+	readable := specPublicPathLineagePrefix + path
+	if _, err := colony.CanonicalSpecItemID(colony.SpecSectionAffectedPublicPaths, readable); err == nil {
+		return readable
+	}
+	digest := sha256.Sum256([]byte(filepath.ToSlash(strings.TrimSpace(path))))
+	return specPublicPathLineagePrefix + fmt.Sprintf("%x", digest[:6])
 }

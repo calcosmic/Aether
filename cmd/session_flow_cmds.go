@@ -244,6 +244,26 @@ var resumeColonyCmd = &cobra.Command{
 			return nil
 		}
 		writeLegacySessionRedirectNotice()
+		// A finished project that was archived and cleared has nothing to pick
+		// back up. Say so plainly, before any recovery machinery runs, rather
+		// than reporting its absent session as "conflicting recovery evidence".
+		// Read-only: nothing is validated, restored, or rewritten here.
+		if archived := peekArchivedShellForStatus(); archived != nil {
+			archiveID := "unnamed archive"
+			if archived.ArchiveReference != nil && strings.TrimSpace(archived.ArchiveReference.ID) != "" {
+				archiveID = strings.TrimSpace(archived.ArchiveReference.ID)
+			}
+			message := fmt.Sprintf("Your last project here is finished and archived (%s), so there is nothing to resume.", archiveID)
+			result := map[string]interface{}{
+				"resumed": false, "archived": true, "archive_id": archiveID,
+				"state_effect": colony.LifecycleStateEffectNone,
+				"outcome_kind": colony.OutcomeKindNoChange,
+				"message":      message,
+				"next":         `aether init "goal"`,
+			}
+			outputWorkflow(result, message+"\n"+renderNextUp("Run `aether init \"goal\"` to start the next project."))
+			return nil
+		}
 		outcome, err := resumeColonyAt(time.Now().UTC())
 		if err != nil {
 			renderRecoveryMenu("resume", err.Error(), []string{"aether status", "aether resume"})

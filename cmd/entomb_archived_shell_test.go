@@ -288,3 +288,60 @@ func setReflectFieldNonZeroForTest(t *testing.T, field reflect.Value) {
 		t.Fatalf("reflect: unhandled kind %s for colony.Plan field of type %s -- extend setReflectFieldNonZeroForTest", field.Kind(), field.Type())
 	}
 }
+
+// TestResumeOnAnArchivedProjectSaysThereIsNothingToResume covers the owner
+// typing `aether resume` in a folder whose last project is finished and
+// archived. Before this, resume answered "Recovery evidence is unknown" and
+// "Inspect the conflicting recovery evidence" -- alarming and wrong: nothing
+// conflicts, there is simply nothing to pick back up. Both the freshly
+// entombed shape and the older-version shape must get the same plain answer,
+// and resume must not rewrite the saved record to give it.
+func TestResumeOnAnArchivedProjectSaysThereIsNothingToResume(t *testing.T) {
+	for _, shape := range []string{"fresh", "older-version"} {
+		t.Run(shape, func(t *testing.T) {
+			var root string
+			if shape == "fresh" {
+				root, _ = runRealLifecycleToSealForTest(t)
+				rootCmd.SetArgs([]string{"entomb", "--confirm"})
+				if err := rootCmd.Execute(); err != nil {
+					t.Fatalf("entomb failed: %v", err)
+				}
+			} else {
+				root, _ = buildArchivedShellFromOlderVersionFixture(t)
+			}
+			statePath := filepath.Join(root, ".aether", "data", "COLONY_STATE.json")
+			before, err := os.ReadFile(statePath)
+			if err != nil {
+				t.Fatalf("read state: %v", err)
+			}
+
+			t.Setenv("AETHER_OUTPUT_MODE", "visual")
+			t.Setenv("AETHER_PLATFORM", "claude")
+			var out bytes.Buffer
+			stdout, stderr = &out, &out
+			defer func() { stdout, stderr = os.Stdout, os.Stderr }()
+			rootCmd.SetArgs([]string{"resume"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("resume failed: %v", err)
+			}
+			got := out.String()
+			for _, want := range []string{"finished and archived", "nothing to resume", "/ant-init"} {
+				if !strings.Contains(got, want) {
+					t.Errorf("resume on an archived project does not say %q:\n%s", want, got)
+				}
+			}
+			for _, forbidden := range []string{"conflicting", "malformed", "Recovery evidence is unknown", "Unresolved"} {
+				if strings.Contains(got, forbidden) {
+					t.Errorf("resume on an archived project still says %q:\n%s", forbidden, got)
+				}
+			}
+			after, err := os.ReadFile(statePath)
+			if err != nil {
+				t.Fatalf("re-read state: %v", err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Errorf("resume rewrote the archived project's saved record")
+			}
+		})
+	}
+}
