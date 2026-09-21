@@ -5,6 +5,17 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.87] - 2026-09-21
+
+### Fixed
+
+- **Archiving a finished project no longer fails when two of its files have
+  names that differ only by capital letters.** A project holding both
+  `HANDOFF.md` and the program's own `handoff.md` note had one silently
+  replace the other inside the archive on a Mac, and the archive check then
+  refused every attempt. Names are now compared ignoring capitals and the
+  clashing file is archived under its own name, so both are kept.
+
 ## [1.0.86] - 2026-09-21
 
 ### Added

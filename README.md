@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-64-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.86-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.87-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -120,7 +120,7 @@ npx --yes aether-colony@latest
 The npm package is meant to be a thin bootstrap wrapper: it downloads the
 matching Go release binary for your platform, installs it locally, and then
 runs `aether install` for you. Its version is meant to track the published
-Aether release, so `aether-colony@1.0.86` bootstraps Aether `1.0.86` — when
+Aether release, so `aether-colony@1.0.87` bootstraps Aether `1.0.87` — when
 npm has actually been republished to match.
 
 **It has not been, as of this writing.** The live npm package is stuck at
