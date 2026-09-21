@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -121,4 +124,73 @@ func writeOpenFlagGroup(b *strings.Builder, glyphKind, heading string, entries [
 	if extra := len(entries) - len(shown); extra > 0 {
 		fmt.Fprintf(b, "   - and %d more\n", extra)
 	}
+}
+
+// carryForwardOpenFlagsAcrossInit narrows what used to be an unconditional
+// delete of pending-decisions.json at the start of `aether init`
+// (RUNTIME-01, TestInitClearsPriorColonyDecisionResidue). A blocker would
+// stop the new project's very first check, and a clarification, an
+// autopilot checkpoint, or any other protected decision belongs only to the
+// conversation that produced it -- none of those survive. But an owner's
+// still-open issue or a "deal with this later" note is the owner's own
+// tracking, not the old project's conversation, and dropping it silently
+// used to erase it the moment the owner started the next project. Those two
+// kinds -- unresolved, typed exactly "issue" or "note", and not a protected
+// decision awaiting its own bound answer (flagRequiresBoundDecisionAnswer)
+// -- now carry forward, with their phase number cleared since it belonged to
+// the finished project's plan.
+//
+// Init's own mandatory pre-init backup (a few lines below this call in
+// init_cmd.go) already holds a full, unfiltered copy of the file, and a
+// successful `aether entomb` archives a full copy into its chamber before
+// init is ever reachable in the ordinary flow -- so narrowing this delete
+// rather than keeping it unconditional loses nothing recoverable.
+func carryForwardOpenFlagsAcrossInit(dataDir string) error {
+	path := filepath.Join(dataDir, pendingDecisionsFile)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var ff colony.FlagsFile
+	if err := json.Unmarshal(raw, &ff); err != nil {
+		// Malformed content carries nothing forward -- clear it exactly as
+		// the old unconditional delete did, so nothing broken leaks into the
+		// new colony either.
+		return os.Remove(path)
+	}
+	kept := make([]colony.FlagEntry, 0, len(ff.Decisions))
+	for _, flag := range ff.Decisions {
+		if flag.Resolved {
+			continue
+		}
+		flagType := normalizedFlagType(flag.Type)
+		if flagType != "issue" && flagType != "note" {
+			continue
+		}
+		if flagRequiresBoundDecisionAnswer(flag) {
+			continue
+		}
+		flag.Phase = nil
+		kept = append(kept, flag)
+	}
+	if len(kept) == 0 {
+		return os.Remove(path)
+	}
+	ff.Decisions = kept
+	encoded, err := json.MarshalIndent(ff, "", "  ")
+	if err != nil {
+		return err
+	}
+	encoded = append(encoded, '\n')
+	// Written directly rather than through store.SaveJSON: the package-level
+	// `store` global is assigned to the NEW colony's store a few lines above
+	// this call in init_cmd.go, and this filter must run against the file
+	// already on disk before anything else touches it. filepath.Join with
+	// dataDir is the same path storage.Store itself resolves pending-
+	// decisions.json to, so this is the same file the store's own lock
+	// protects; os.WriteFile with 0644 is the same permission SaveJSON uses.
+	return os.WriteFile(path, encoded, 0644)
 }

@@ -500,6 +500,7 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 			return err
 		}
 		kind := "runtime_data"
+		clearOnEntomb := true
 		switch archivePath {
 		case "session.json":
 			kind = "session"
@@ -507,6 +508,17 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 			kind = "seal_receipt"
 		case "seal/closure-evidence.json":
 			kind = "closure_evidence"
+		case pendingDecisionsFile:
+			// Flags and notes must carry forward across an archived project
+			// (owner ruling, plan 1.0.85 Part C3): a full copy is still
+			// archived into the chamber below like every other data file,
+			// but the live file is deliberately left in place so `aether
+			// status` keeps showing open items between projects, and so
+			// `aether init`'s own filter (carryForwardOpenFlagsAcrossInit)
+			// has something to carry an open issue or note forward from.
+			// Everything entomb clears elsewhere still clears normally.
+			kind = "pending_decisions"
+			clearOnEntomb = false
 		}
 		seenActual[actual], seenArchive[archivePath] = true, true
 		preflight.Sources = append(preflight.Sources, entombPreparedSource{
@@ -514,7 +526,7 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 				SourcePath: ".aether/data/" + archivePath, ArchivePath: archivePath,
 				Kind: kind, Required: true,
 			},
-			Actual: actual, Content: content, Clear: true,
+			Actual: actual, Content: content, Clear: clearOnEntomb,
 		})
 		return nil
 	})
@@ -1592,6 +1604,13 @@ func writeEntombManifest(chamberDir, chamberName string, state colony.ColonyStat
 	return os.WriteFile(filepath.Join(chamberDir, "manifest.json"), append(data, '\n'), 0644)
 }
 
+// copyEntombArtifacts has no production caller (confirmed by grep across
+// cmd/): the real entomb archive path is prepareEntombPreflight ->
+// appendEntombDataSources, which walks the whole .aether/data directory --
+// including pending-decisions.json -- rather than a fixed file list, and
+// verifies every copy against a digest manifest. This function's dataFiles
+// list is kept in sync anyway (plan 1.0.85 Part C3) so it does not silently
+// drift further from the live path if it is ever revived.
 func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 	dataFiles := []string{
 		"COLONY_STATE.json",
@@ -1599,6 +1618,7 @@ func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 		"session.json",
 		"activity.log",
 		"flags.json",
+		pendingDecisionsFile,
 		"constraints.json",
 		"spawn-tree.txt",
 		"spawn-runs.json",

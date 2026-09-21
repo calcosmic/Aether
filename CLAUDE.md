@@ -1081,6 +1081,69 @@ New agents integrated into continue.md:
 
 ---
 
+## Flags (Tracked Issues, Blockers, and Notes)
+
+A flag is a row in `.aether/data/pending-decisions.json` (repo word: "the
+shared decision store"; `flags.json` is only read as an older fallback). The
+same file also holds clarifications, boundary answers, and autopilot
+checkpoints -- rows that are not flags at all. There are three kinds of
+flag: a **blocker** (stops the project's checks from passing until it is
+resolved), an **issue** (tracked, does not stop anything), and a **note** (a
+"deal with this later" reminder the owner left).
+
+**One counting rule.** Before this, the status screen, `aether flags`, and
+the reconciliation report each re-derived their own idea of what an
+unrecognised row counts as, and could show different numbers for the exact
+same file. `classifyOpenFlags` (`cmd/open_flags.go`) is now the one place
+that decides: a clarification, a boundary answer, or anything else that
+isn't exactly a blocker/issue/note counts as none of the three, everywhere.
+Locked by `TestOpenFlagsHaveOneCountingRule`. (`aether flag-check-blockers`,
+an older diagnostic command, deliberately keeps its own separate legacy
+count for backward compatibility -- locked by
+`TestFlagCheckBlockersAndStatusShareSnapshot`.) `aether flag-resolve` also
+now reports the timestamp of the row it actually resolved, not always the
+first row in the file (`TestFlagResolveReportsTheResolvedRowsTimestamp`).
+
+**Status shows them by title, not just a count.** `aether status` (and the
+finished-project screen shown after `aether entomb`) now lists open flags
+under three headings -- blocking work, issues, for later -- up to five
+titles per heading, then "and N more". Locked by
+`TestStatusListsOpenFlagsByTitle` and `TestStatusFlagListIsCappedAndCounted`.
+
+**An owner's open issue or note survives into the next project.** A
+blocker would stop the new project's very first check, so it is never
+carried forward, and a clarification belongs only to the conversation that
+produced it. But an unresolved issue or note is the owner's own tracking,
+not the old project's conversation -- `aether init` used to delete the
+whole file unconditionally the moment a new project started, silently
+erasing the owner's own "deal with this later" notes along with everything
+else. It now keeps only unresolved issues and notes (with their old phase
+number cleared) and drops everything else, the same as before. Locked by
+`TestOpenNotesSurviveIntoTheNextProject` (the real init -> build -> seal ->
+archive -> init flow) and `TestCarriedFlagsNeverReachWorkerPromptsAsIntent`
+(a carried note or issue is never shown to a helper as if it were part of
+the old project's discussion).
+
+**Archiving a project keeps its flags, live and filed away.** `aether
+entomb` archives a full copy of the finished project's flags into its
+chamber (locked by `TestArchiveHoldsTheFinishedProjectsFlags`) and, unlike
+most of the data it files away, leaves the live file in place rather than
+clearing it, so `aether status` keeps showing open items between the old
+project's archive and the next `aether init`.
+
+*For dummies: a flag is something the program is tracking for you --
+something blocking progress, a known issue, or a note you left yourself to
+come back to later. Before this, different screens could disagree about how
+many you had open, and starting a new project silently threw away every
+note you had left yourself. Now every screen agrees on the count, `aether
+status` shows you the actual titles (not just a number), and your own open
+issues and notes follow you into the next project instead of vanishing --
+only a blocker (which would stop the new project before it starts) and the
+old project's finished conversation are left behind, safely filed away in
+the archive either way.*
+
+---
+
 ## Midden System (Failure Tracking)
 
 The midden tracks failures for colony learning:

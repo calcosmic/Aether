@@ -216,7 +216,7 @@ var initCmd = &cobra.Command{
 		// new goal with the previous project's decisions (RUNTIME-01, locked
 		// by TestInitClearsPriorColonyDecisionResidue).
 		_ = os.Remove(filepath.Join(dataDir, "session.json"))
-		_ = os.Remove(filepath.Join(dataDir, "pending-decisions.json"))
+		_ = carryForwardOpenFlagsAcrossInit(dataDir)
 		_ = os.Remove(filepath.Join(dataDir, "assumptions.json"))
 		_ = os.RemoveAll(filepath.Join(dataDir, "handoffs"))
 
