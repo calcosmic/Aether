@@ -27,7 +27,7 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
 [![commands](https://img.shields.io/badge/commands-64-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.83-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![colony](https://img.shields.io/badge/colony-v1.0.84-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -120,11 +120,11 @@ npx --yes aether-colony@latest
 The npm package is meant to be a thin bootstrap wrapper: it downloads the
 matching Go release binary for your platform, installs it locally, and then
 runs `aether install` for you. Its version is meant to track the published
-Aether release, so `aether-colony@1.0.83` bootstraps Aether `1.0.83` — when
+Aether release, so `aether-colony@1.0.84` bootstraps Aether `1.0.84` — when
 npm has actually been republished to match.
 
 **It has not been, as of this writing.** The live npm package is stuck at
-`1.0.22` while this source checkout is `1.0.83` — months and dozens of
+`1.0.22` while the source is many releases ahead (see the badge above) — months and dozens of
 releases behind. `npx aether-colony@latest` installs that stale behavior
 today, not current Aether. Use Option 1 below until npm is republished.
 
@@ -149,7 +149,7 @@ normal install path.
 
 `go install .../cmd/aether@latest` installs the newest *tagged* version, and
 the newest tag is currently `v1.0.43` (July 2026) — the same stale version as
-the GitHub Release. To get the current `1.0.83` state of this repository,
+the GitHub Release. To get the current state of this repository,
 clone it and publish from the checkout instead (this needs only Go; it builds
 the program and installs it in one step):
 
@@ -171,7 +171,7 @@ For maintainers, keep source-development isolated from the public runtime:
 **Option 2: Download from GitHub Releases (also currently behind)**
 
 Pre-built binaries for all platforms — no Go toolchain needed. **The newest
-published release is v1.0.43 (July 2026)**, also months behind this `1.0.83`
+published release is v1.0.43 (July 2026)**, also months behind this
 source checkout. Use it only if you deliberately want that older, frozen
 version; for current behavior, use Option 1 instead.
 
@@ -713,7 +713,7 @@ These commands manage the beginning and end of a colony's life.
 
 | Command | Description |
 |---------|-------------|
-| `/ant-seal` | Seal the colony with the Crowned Anthill milestone ceremony. Promotes colony wisdom to QUEEN.md, spawns a Sage for analytics, a Chronicler for documentation audit, exports XML archives, and writes CROWNED-ANTHILL.md. Flags: `--no-visual`. Coming in the next release (not yet in 1.0.83): sealing will also write a dated entry to the project's own CHANGELOG.md. |
+| `/ant-seal` | Seal the colony with the Crowned Anthill milestone ceremony. Promotes colony wisdom to QUEEN.md, spawns a Sage for analytics, a Chronicler for documentation audit, exports XML archives, and writes CROWNED-ANTHILL.md. Flags: `--no-visual`. Sealing also writes a dated entry (the goal and one line per phase) to the project's own CHANGELOG.md, creating the file if there is none. |
 | `/ant-entomb` | Archive a sealed colony into `.aether/chambers/`. Requires the colony to be sealed first. Copies all colony data, exports XML archives, records in eternal memory, and resets colony state for a fresh start. Flag: `--no-visual`. |
 | `/ant-update` | Update Aether system files from the global hub. Uses a transactional updater with checkpoint creation, safe sync, and automatic rollback on failure. Flag: `--force`. |
 
@@ -1229,7 +1229,7 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 ### 🎉 v1.0.80-1.0.83 -- First Real Trial Fixes
 
 - Fixed a finished-and-archived project reading as damaged, a long project path blocking the clarification step, the updater refusing after Aether's own helper-package installs, and the closing status/resume cards disagreeing about an archived project.
-- **Coming in the next release (not yet in 1.0.83):** sealing a project will also write a dated entry to that project's own CHANGELOG.md.
+- **v1.0.84:** sealing a project also writes a dated entry to that project's own CHANGELOG.md, and this README was corrected against the current program.
 
 ### 📅 Near-Term
 

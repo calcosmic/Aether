@@ -5,6 +5,26 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.84] - 2026-09-21
+
+### Added
+
+- **Marking a project finished now writes it into the project's changelog.**
+  A dated entry with the project's goal and one line per phase is added to
+  `CHANGELOG.md` in the project folder, newest first, and the file is created
+  if there is none. A project closed before every phase was finished says so
+  and marks the unfinished phases. Running the same finish twice adds nothing
+  twice, and a changelog problem can never stop or undo the finish itself.
+
+### Changed
+
+- **The README was corrected against the current program.** Install
+  instructions are honest about which routes are behind the source, the worked
+  example shows one helper per build instead of four, the live view is
+  described as one inline screen, commands and folders that no longer exist
+  are gone, reliability figures with no evidence behind them were removed, and
+  the history now reaches this release.
+
 ## [1.0.83] - 2026-09-21
 
 All four fixes came from the owner's first morning of real use.
