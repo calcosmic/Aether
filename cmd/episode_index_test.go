@@ -118,6 +118,26 @@ func writeEpisodeIndexAttemptFixture(t *testing.T, s *storage.Store, phase int, 
 	return record
 }
 
+// writeEpisodeIndexQuickFixture writes a quickAttemptRecord fixture
+// directly through the store, at the same relative path persistQuickAttempt
+// (cmd/command_truth.go) uses in production (quick/attempts/<id>.json).
+func writeEpisodeIndexQuickFixture(t *testing.T, s *storage.Store, id, question string, verdict colony.WorkOutcome, startedAt, completedAt time.Time) quickAttemptRecord {
+	t.Helper()
+	record := quickAttemptRecord{
+		ID:          id,
+		Mode:        "job",
+		Question:    question,
+		StartedAt:   startedAt.UTC().Format(time.RFC3339Nano),
+		CompletedAt: completedAt.UTC().Format(time.RFC3339Nano),
+		Verdict:     verdict,
+	}
+	rel := filepath.ToSlash(filepath.Join("quick", "attempts", id+".json"))
+	if err := s.SaveJSON(rel, record); err != nil {
+		t.Fatalf("write quick attempt fixture: %v", err)
+	}
+	return record
+}
+
 func TestEpisodeIndexCoversThreeRecordSources(t *testing.T) {
 	s, root := newEpisodeIndexTestStore(t)
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
@@ -125,13 +145,14 @@ func TestEpisodeIndexCoversThreeRecordSources(t *testing.T) {
 	writeEpisodeIndexSwarmFixture(t, s, "swarm-episode-index-1", "Fix flaky test", now.Add(-time.Hour), now, false)
 	writeEpisodeIndexResearchFixture(t, root, "index-research-1", "How should the index work?", "complete", now.Add(-2*time.Hour))
 	writeEpisodeIndexAttemptFixture(t, s, 202, "attempt-index-1", "Episode index", buildAttemptBuilt, now.Add(-3*time.Hour), now.Add(-2*time.Hour), nil)
+	writeEpisodeIndexQuickFixture(t, s, "quick-index-1", "rename the label", colony.WorkOutcomeSuccess, now.Add(-4*time.Hour), now.Add(-3*time.Hour))
 
 	idx, err := loadColonyEpisodeIndex(root, s)
 	if err != nil {
 		t.Fatalf("loadColonyEpisodeIndex: %v", err)
 	}
-	if len(idx.Entries) != 3 {
-		t.Fatalf("expected 3 entries, got %d: %+v", len(idx.Entries), idx.Entries)
+	if len(idx.Entries) != 4 {
+		t.Fatalf("expected 4 entries, got %d: %+v", len(idx.Entries), idx.Entries)
 	}
 	if len(idx.Unavailable) != 0 {
 		t.Fatalf("expected no unavailable sources, got %v", idx.Unavailable)
@@ -141,7 +162,7 @@ func TestEpisodeIndexCoversThreeRecordSources(t *testing.T) {
 	for _, entry := range idx.Entries {
 		kinds[entry.Kind] = true
 	}
-	for _, want := range []string{colonyEpisodeKindSwarm, colonyEpisodeKindOracleResearch, colonyEpisodeKindBuildAttempt} {
+	for _, want := range []string{colonyEpisodeKindSwarm, colonyEpisodeKindOracleResearch, colonyEpisodeKindBuildAttempt, colonyEpisodeKindQuick} {
 		if !kinds[want] {
 			t.Errorf("expected an entry of kind %q, got kinds %v", want, kinds)
 		}
@@ -229,7 +250,7 @@ func TestEpisodeIndexIsReadOnly(t *testing.T) {
 		t.Fatalf("loadColonyEpisodeIndex changed the colony data directory:\nbefore: %s\nafter:  %s", before, after)
 	}
 
-	// With all three sources absent, the index is empty and every source is
+	// With every source absent, the index is empty and every source is
 	// named unavailable.
 	emptyStore, emptyRoot := newEpisodeIndexTestStore(t)
 	idx, err := loadColonyEpisodeIndex(emptyRoot, emptyStore)
@@ -239,8 +260,8 @@ func TestEpisodeIndexIsReadOnly(t *testing.T) {
 	if len(idx.Entries) != 0 {
 		t.Fatalf("expected no entries with all sources absent, got %+v", idx.Entries)
 	}
-	if len(idx.Unavailable) != 3 {
-		t.Fatalf("expected all three sources named unavailable, got %v", idx.Unavailable)
+	if len(idx.Unavailable) != 4 {
+		t.Fatalf("expected all four sources named unavailable, got %v", idx.Unavailable)
 	}
 }
 
