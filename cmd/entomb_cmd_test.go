@@ -271,6 +271,104 @@ func TestEntombArchivesAndResetsSealedColony(t *testing.T) {
 	}
 }
 
+// TestEntombArchivesBothContextMDFiles is a regression fixture for the
+// archive-name collision between the repository-root "read this first"
+// document (.aether/CONTEXT.md) and the unrelated runtime data file that
+// happens to share its basename (.aether/data/CONTEXT.md). Both exist on a
+// normal active colony; before this fix, appendEntombDataSources claimed the
+// archive name "CONTEXT.md" for the data-root file, and
+// appendEntombRepositorySources then collided on the same fixed name for the
+// repository-root file, failing every entomb with `duplicate optional
+// archive path "CONTEXT.md"`. Confirms both files survive the archive under
+// distinct names with their own content intact.
+func TestEntombArchivesBothContextMDFiles(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	goal := "Ship release readiness"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeMeta,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Release",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Seal the colony", Status: colony.TaskCompleted}},
+				},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(aetherRoot, ".aether", "CONTEXT.md"):         "# Repository root context\n",
+		filepath.Join(dataDir, "CONTEXT.md"):                       "# Unrelated runtime data file\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON, got: %s", output)
+	}
+
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+
+	dataContext, err := os.ReadFile(filepath.Join(chamberDir, "CONTEXT.md"))
+	if err != nil {
+		t.Fatalf("expected archived data-root CONTEXT.md: %v", err)
+	}
+	if string(dataContext) != "# Unrelated runtime data file\n" {
+		t.Fatalf("archived CONTEXT.md content = %q, want the data-root file's content", dataContext)
+	}
+
+	repoContext, err := os.ReadFile(filepath.Join(chamberDir, "repository-context.md"))
+	if err != nil {
+		t.Fatalf("expected archived repository-root CONTEXT.md as repository-context.md: %v", err)
+	}
+	if string(repoContext) != "# Repository root context\n" {
+		t.Fatalf("archived repository-context.md content = %q, want the repository-root file's content", repoContext)
+	}
+}
+
 func TestEntomb_ReviewsArchive(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

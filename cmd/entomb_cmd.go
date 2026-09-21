@@ -527,7 +527,13 @@ func appendEntombRepositorySources(preflight *entombPreflight, seenActual, seenA
 		actual   string
 		kind     string
 	}{
-		{".aether/CONTEXT.md", "CONTEXT.md", filepath.Join(preflight.Root, ".aether", "CONTEXT.md"), "tombstone_context"},
+		// Archived as "repository-context.md", not "CONTEXT.md": the data-root
+		// walk in appendEntombDataSources already claims the archive name
+		// "CONTEXT.md" for .aether/data/CONTEXT.md (a distinct runtime data
+		// file with the same basename but different content/purpose). Both
+		// files exist on a normal active colony, so giving this one the same
+		// archive name collided in seenArchive and failed every entomb.
+		{".aether/CONTEXT.md", "repository-context.md", filepath.Join(preflight.Root, ".aether", "CONTEXT.md"), "tombstone_context"},
 	}
 	for _, item := range optionalFiles {
 		if seenActual[item.actual] {
