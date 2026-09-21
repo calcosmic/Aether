@@ -369,6 +369,117 @@ func TestEntombArchivesBothContextMDFiles(t *testing.T) {
 	}
 }
 
+// TestEntombArchivesNamesThatDifferOnlyByCase is the regression fixture for a
+// real downstream failure (M4L-AnalogWave-System, 2026-09-21): the project
+// held both .aether/HANDOFF.md and the runtime's .aether/data/handoff.md. The
+// duplicate-name check compared names exactly, so both were accepted, and on
+// a file system that ignores letter case the second overwrote the first in
+// the staged archive, failing every entomb with a digest mismatch.
+func TestEntombArchivesNamesThatDifferOnlyByCase(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	aetherRoot := os.Getenv("AETHER_ROOT")
+	if aetherRoot == "" {
+		t.Fatal("AETHER_ROOT not set by setupBuildFlowTest")
+	}
+
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &buf
+
+	goal := "Ship release readiness"
+	taskID := "task-1"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		ColonyVersion: 2,
+		Scope:         colony.ScopeMeta,
+		State:         colony.StateCOMPLETED,
+		CurrentPhase:  1,
+		Milestone:     "Crowned Anthill",
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{
+					ID:     1,
+					Name:   "Release",
+					Status: colony.PhaseCompleted,
+					Tasks:  []colony.Task{{ID: &taskID, Goal: "Seal the colony", Status: colony.TaskCompleted}},
+				},
+			},
+		},
+	})
+
+	for path, content := range map[string]string{
+		filepath.Join(aetherRoot, ".aether", "CROWNED-ANTHILL.md"): "# Crowned Anthill\n",
+		filepath.Join(aetherRoot, ".aether", "HANDOFF.md"):         "# Old handoff\n",
+		filepath.Join(dataDir, "handoff.md"):                       "# Runtime handoff note\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatalf("create parent for %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("write fixture %s: %v", path, err)
+		}
+	}
+
+	seedVerifiedEntombLifecycleAt(t, aetherRoot, dataDir)
+	rootCmd.SetArgs([]string{"entomb", "--confirm"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("entomb returned error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, `"entombed":true`) {
+		t.Fatalf("expected entomb success JSON, got: %s", output)
+	}
+
+	chambersDir := filepath.Join(aetherRoot, ".aether", "chambers")
+	entries, err := os.ReadDir(chambersDir)
+	if err != nil {
+		t.Fatalf("read chambers dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 chamber, got %d", len(entries))
+	}
+	chamberDir := filepath.Join(chambersDir, entries[0].Name())
+
+	// Both files must survive under names that are distinct even on a file
+	// system that ignores letter case (macOS default), each with its own
+	// content. Read the manifest rather than guessing the chosen name.
+	var manifest colony.ArchiveManifest
+	manifestBytes, err := os.ReadFile(filepath.Join(chamberDir, "manifest.json"))
+	if err != nil {
+		t.Fatalf("read archive manifest: %v", err)
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("parse archive manifest: %v", err)
+	}
+	folded := map[string]string{}
+	var dataNoteArchivePath string
+	for _, entry := range manifest.Entries {
+		key := strings.ToLower(entry.Path)
+		if other, clash := folded[key]; clash {
+			t.Fatalf("archive names %q and %q differ only by letter case", other, entry.Path)
+		}
+		folded[key] = entry.Path
+	}
+	for _, entry := range manifest.Entries {
+		content, readErr := os.ReadFile(filepath.Join(chamberDir, filepath.FromSlash(entry.Path)))
+		if readErr == nil && string(content) == "# Runtime handoff note\n" {
+			dataNoteArchivePath = entry.Path
+		}
+	}
+	if dataNoteArchivePath == "" {
+		t.Fatalf("the runtime data note (.aether/data/handoff.md) was not archived with its own content")
+	}
+	handoff, err := os.ReadFile(filepath.Join(chamberDir, "HANDOFF.md"))
+	if err != nil || string(handoff) != "# Old handoff\n" {
+		t.Fatalf("archived HANDOFF.md = %q (err %v), want the project handoff's own content", handoff, err)
+	}
+}
+
 func TestEntomb_ReviewsArchive(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)

@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -400,7 +401,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		if seenActual[actual] {
 			return fmt.Errorf("duplicate entomb source %q", actual)
 		}
-		if seenArchive[archived] {
+		if seenArchive[entombArchiveKey(archived)] {
 			return fmt.Errorf("duplicate entomb archive path %q", archived)
 		}
 		content, err := readEntombLiveFile(actual, input.Root, input.DataRoot)
@@ -410,7 +411,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		if err := verifyEntombClosureArtifact(logical, kind, content, outcome); err != nil {
 			return err
 		}
-		seenActual[actual], seenArchive[archived] = true, true
+		seenActual[actual], seenArchive[entombArchiveKey(archived)] = true, true
 		preflight.Sources = append(preflight.Sources, entombPreparedSource{
 			Manifest: entombArchiveSource{SourcePath: logical, ArchivePath: archived, Kind: kind, Required: true},
 			Actual:   actual, Content: content, Clear: clear,
@@ -430,7 +431,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		if seenActual[actual] {
 			return fmt.Errorf("duplicate entomb source %q", actual)
 		}
-		if seenArchive[archived] {
+		if seenArchive[entombArchiveKey(archived)] {
 			return fmt.Errorf("duplicate entomb archive path %q", archived)
 		}
 		content, err := readEntombLiveFile(actual, input.Root, input.DataRoot)
@@ -445,7 +446,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		if err := verifyEntombClosureArtifact(logical, "tombstone_input", content, outcome); err != nil {
 			return err
 		}
-		seenActual[actual], seenArchive[archived] = true, true
+		seenActual[actual], seenArchive[entombArchiveKey(archived)] = true, true
 		// Actual is left empty for a synthesised stand-in: there is no live
 		// file backing it, so verifyEntombLiveSources (which skips entries
 		// with an empty Actual) never tries to re-read a file that was never
@@ -500,7 +501,7 @@ func prepareEntombPreflight(input entombTransactionInput, state colony.ColonySta
 		Manifest: entombArchiveSource{SourcePath: xmlLogical, ArchivePath: "colony-archive.xml", Kind: "archive_xml", Required: true},
 		Content:  xmlBytes,
 	})
-	seenArchive["colony-archive.xml"] = true
+	seenArchive[entombArchiveKey("colony-archive.xml")] = true
 
 	if err := appendEntombDataSources(&preflight, seenActual, seenArchive); err != nil {
 		return entombPreflight{}, err
@@ -545,16 +546,19 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 		if !entry.Type().IsRegular() || seenActual[actual] {
 			return nil
 		}
-		archivePath := filepath.ToSlash(relative)
-		if seenArchive[archivePath] {
-			return fmt.Errorf("archive path %q collides while enumerating active data", archivePath)
-		}
+		dataRelative := filepath.ToSlash(relative)
+		// A runtime data file may share a name with a fixed archive entry, or
+		// differ from one only by letter case (.aether/data/handoff.md beside
+		// the project's HANDOFF.md). On a file system that ignores case the
+		// two would be one file in the archive and the second write would
+		// silently replace the first. Give the data file a distinct name.
+		archivePath := entombDistinctDataArchivePath(dataRelative, seenArchive)
 		content, err := readEntombLiveFile(actual, preflight.Root, preflight.DataRoot)
 		if err != nil {
 			return err
 		}
 		kind := "runtime_data"
-		switch archivePath {
+		switch dataRelative {
 		case "session.json":
 			kind = "session"
 		case "seal/receipt.json":
@@ -575,16 +579,36 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 			// the wrong source of truth).
 			kind = "pending_decisions"
 		}
-		seenActual[actual], seenArchive[archivePath] = true, true
+		seenActual[actual], seenArchive[entombArchiveKey(archivePath)] = true, true
 		preflight.Sources = append(preflight.Sources, entombPreparedSource{
 			Manifest: entombArchiveSource{
-				SourcePath: ".aether/data/" + archivePath, ArchivePath: archivePath,
+				SourcePath: ".aether/data/" + dataRelative, ArchivePath: archivePath,
 				Kind: kind, Required: true,
 			},
 			Actual: actual, Content: content, Clear: true,
 		})
 		return nil
 	})
+}
+
+// entombArchiveKey is the form archive names are compared in: letter case is
+// ignored, because the archive is written to file systems (macOS by default)
+// where two names differing only by case are the same file.
+func entombArchiveKey(archivePath string) string {
+	return strings.ToLower(filepath.ToSlash(archivePath))
+}
+
+// entombDistinctDataArchivePath returns the archive name for a runtime data
+// file: its own relative path when that is free, otherwise the same path with
+// "data-" put in front of the file name until it no longer clashes with any
+// name already claimed.
+func entombDistinctDataArchivePath(dataRelative string, seenArchive map[string]bool) string {
+	candidate := dataRelative
+	for seenArchive[entombArchiveKey(candidate)] {
+		dir, base := path.Split(candidate)
+		candidate = dir + "data-" + base
+	}
+	return candidate
 }
 
 func appendEntombRepositorySources(preflight *entombPreflight, seenActual, seenArchive map[string]bool) error {
@@ -613,10 +637,10 @@ func appendEntombRepositorySources(preflight *entombPreflight, seenActual, seenA
 		if err != nil {
 			return err
 		}
-		if seenArchive[item.archived] {
+		if seenArchive[entombArchiveKey(item.archived)] {
 			return fmt.Errorf("duplicate optional archive path %q", item.archived)
 		}
-		seenActual[item.actual], seenArchive[item.archived] = true, true
+		seenActual[item.actual], seenArchive[entombArchiveKey(item.archived)] = true, true
 		preflight.Sources = append(preflight.Sources, entombPreparedSource{
 			Manifest: entombArchiveSource{SourcePath: item.logical, ArchivePath: item.archived, Kind: item.kind, Required: true},
 			Actual:   item.actual, Content: content,
@@ -647,14 +671,14 @@ func appendEntombRepositorySources(preflight *entombPreflight, seenActual, seenA
 				return err
 			}
 			archivePath := filepath.ToSlash(relative)
-			if seenArchive[archivePath] {
+			if seenArchive[entombArchiveKey(archivePath)] {
 				return fmt.Errorf("duplicate repository archive path %q", archivePath)
 			}
 			content, err := readEntombLiveFile(actual, preflight.Root, preflight.DataRoot)
 			if err != nil {
 				return err
 			}
-			seenActual[actual], seenArchive[archivePath] = true, true
+			seenActual[actual], seenArchive[entombArchiveKey(archivePath)] = true, true
 			preflight.Sources = append(preflight.Sources, entombPreparedSource{
 				Manifest: entombArchiveSource{SourcePath: ".aether/" + archivePath, ArchivePath: archivePath, Kind: "retained_" + directory, Required: true},
 				Actual:   actual, Content: content,
