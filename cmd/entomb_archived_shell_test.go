@@ -330,7 +330,10 @@ func TestResumeOnAnArchivedProjectSaysThereIsNothingToResume(t *testing.T) {
 					t.Errorf("resume on an archived project does not say %q:\n%s", want, got)
 				}
 			}
-			for _, forbidden := range []string{"conflicting", "malformed", "Recovery evidence is unknown", "Unresolved"} {
+			// The shared what-next card must not make claims that are false for
+			// an archived project: no goal is saved, and nothing is in flight
+			// that closing the chat could lose.
+			for _, forbidden := range []string{"conflicting", "malformed", "Recovery evidence is unknown", "Unresolved", "The goal is saved", "Don't close this chat"} {
 				if strings.Contains(got, forbidden) {
 					t.Errorf("resume on an archived project still says %q:\n%s", forbidden, got)
 				}

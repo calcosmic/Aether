@@ -259,9 +259,11 @@ var resumeColonyCmd = &cobra.Command{
 				"state_effect": colony.LifecycleStateEffectNone,
 				"outcome_kind": colony.OutcomeKindNoChange,
 				"message":      message,
-				"next":         `aether init "goal"`,
 			}
-			outputWorkflow(result, message+"\n"+renderNextUp("Run `aether init \"goal\"` to start the next project."))
+			// The advice comes from the one shared decision, never a
+			// hand-typed command.
+			answer := closeLifecycleCommand(result, "resume", "", "")
+			outputWorkflow(result, message+"\n"+renderNextActionCard(answer))
 			return nil
 		}
 		outcome, err := resumeColonyAt(time.Now().UTC())

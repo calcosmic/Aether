@@ -38,7 +38,11 @@ var statusCmd = &cobra.Command{
 		if err != nil {
 			if shouldRenderVisualOutput(stdout) && strings.Contains(colonyStateLoadMessage(err), "No colony initialized") {
 				if archived := peekArchivedShellForStatus(); archived != nil {
-					writeVisualOutput(stdout, renderArchivedProjectStatusVisual(archived.ArchiveReference.ID))
+					// The advice comes from the one shared decision, never a
+					// hand-typed command: two screens naming different next
+					// steps is the defect this card exists to end.
+					answer := resolveNextAction(loadNextActionInputForCommand("status"))
+					writeVisualOutput(stdout, renderArchivedProjectStatusVisual(archived.ArchiveReference.ID, answer))
 					return nil
 				}
 				writeVisualOutput(stdout, renderNoColonyStatusVisual())
@@ -159,7 +163,7 @@ func peekArchivedShellForStatus() *colony.ColonyState {
 // finished project that was archived and cleared -- distinct from a
 // never-used repository, which keeps renderNoColonyStatusVisual's wording
 // unchanged.
-func renderArchivedProjectStatusVisual(archiveID string) string {
+func renderArchivedProjectStatusVisual(archiveID string, answer nextAction) string {
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("status"), "Colony Status"))
 	b.WriteString(visualDividerStr())
@@ -168,9 +172,7 @@ func renderArchivedProjectStatusVisual(archiveID string) string {
 		archiveID = "unnamed archive"
 	}
 	b.WriteString(fmt.Sprintf("Your last project here is finished and archived (%s). Nothing is active.\n", archiveID))
-	b.WriteString(renderNextUp(
-		`Run ` + "`aether init \"goal\"`" + ` to start the next project.`,
-	))
+	b.WriteString(renderNextActionCard(answer))
 	return b.String()
 }
 
