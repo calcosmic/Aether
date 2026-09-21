@@ -199,4 +199,4 @@ aether integrity
 aether update --force --download-binary
 ```
 
-*Updated for Aether v1.0.87 — 2026-09-21*
+*Updated for Aether v1.0.88 — 2026-09-21*
