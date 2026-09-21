@@ -705,6 +705,9 @@ var quickRuntimeOwnedPathPrefixes = []string{
 	".aether/data/",
 	".aether/locks/",
 	".aether/ts-host/",
+	".aether/dreams/",
+	".aether/oracle/",
+	".aether/checkpoints/",
 	".aether-transactions/",
 	".claude/worktrees/",
 }
@@ -720,6 +723,14 @@ var quickRuntimeOwnedPathPrefixes = []string{
 // disappears, that is a real, helper-attributable change and IS reported;
 // once a folder is already bootstrapped, a genuine edit to one of these
 // files is never silently swallowed.
+// This set is verified directly against the real writer
+// (ensureRepoLocalScaffold, cmd/platform_sync.go -- called for real by
+// init, lay-eggs, and update) by TestQuickClassifiesEveryFileTheRealBootstrapCreates,
+// which walks a fresh temp repository after running that function for real
+// and fails by name if it ever creates a file neither this map nor
+// quickRuntimeOwnedPathPrefixes accounts for -- so a future scaffold
+// addition is caught here rather than chased one leaked path at a time
+// after a real run.
 var quickBootstrapManagedPaths = map[string]bool{
 	".claude/settings.json":   true,
 	".codex/CODEX.md":         true,
@@ -727,6 +738,7 @@ var quickBootstrapManagedPaths = map[string]bool{
 	"AGENTS.md":               true,
 	".aether/QUEEN.md":        true,
 	".aether/WHAT-IS-THIS.md": true,
+	".aether/.gitignore":      true,
 }
 
 // quickBootstrapManagedPathPrefixes is the directory-shaped counterpart of
@@ -841,6 +853,7 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 		Goal:   "Do one small job in this repository, directly -- not a plan, not a survey, the actual change.",
 		Constraints: []string{
 			"This is one small job. If it turns out to be bigger than a small job, stop and say so plainly in your summary instead of doing a large amount of work.",
+			"Keep the effort proportionate to the job. For a change to wording, a label, a comment, a document or configuration, make the change and do not write new tests. Add or update a test only when the job changes how the code behaves, and then only the smallest test that proves it.",
 		},
 		Hints: []string{
 			fmt.Sprintf("The job: %s", job),

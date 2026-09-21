@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -714,5 +716,75 @@ func TestQuickWithNoProjectClosingCardIsSafe(t *testing.T) {
 	otherVerdict := contextHealthFromInput(other, colony.ColonyState{})
 	if otherVerdict.Health != contextHealthKeep {
 		t.Fatalf("a non-quick command's no-project verdict changed: Health = %q, want %q", otherVerdict.Health, contextHealthKeep)
+	}
+}
+
+// TestQuickClassifiesEveryFileTheRealBootstrapCreates runs the REAL
+// first-run scaffold writer (ensureRepoLocalScaffold, cmd/platform_sync.go
+// -- called for real by init, lay-eggs, and update) against a fresh temp
+// repository and asserts every file it actually creates is classified as
+// either runtime-owned (quickIsRuntimeOwnedPath) or bootstrap-managed
+// (quickIsBootstrapManagedPath). This is the single source of truth check
+// the plan asked for: a future scaffold file this test does not already
+// know about is caught by name here, rather than being chased one leaked
+// path at a time after a real run.
+func TestQuickClassifiesEveryFileTheRealBootstrapCreates(t *testing.T) {
+	root := t.TempDir()
+	aetherDir := filepath.Join(root, ".aether")
+	ensureRepoLocalScaffold(aetherDir)
+
+	var unclassified []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if !quickIsRuntimeOwnedPath(rel) && !quickIsBootstrapManagedPath(rel) {
+			unclassified = append(unclassified, rel)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk the real bootstrap's output: %v", err)
+	}
+	if len(unclassified) > 0 {
+		sort.Strings(unclassified)
+		t.Fatalf("the real first-run bootstrap created file(s) neither runtime-owned nor bootstrap-managed, so a quick job would wrongly attribute them to the helper: %v", unclassified)
+	}
+}
+
+// TestQuickJobBriefIsProportionate is release 1.0.85's PROPORTION fix: the
+// same one-word typo job took 44s in a real trial and 211s in a second,
+// because the builder is TDD-first by default and wrote a brand-new test
+// file to prove a spelling fix. The owner's bar for this command is "as
+// snappy as plain Claude" -- the job brief must tell the helper to keep
+// effort proportionate: no new tests for a wording/label/comment/doc/config
+// change, and only the smallest test when the job genuinely changes
+// behavior.
+func TestQuickJobBriefIsProportionate(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	chdirForTest190_05(t, root)
+
+	spy := &quickJobCaptureInvoker{result: codex.WorkerResult{Summary: "fixed the typo"}}
+	origInvoker := newQuickWorkerInvoker
+	newQuickWorkerInvoker = func() codex.WorkerInvoker { return spy }
+	t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+	if _, err := runQuickJob("fix the typo in the readme", 2*time.Second); err != nil {
+		t.Fatalf("runQuickJob: %v", err)
+	}
+	configs := spy.captured()
+	if len(configs) != 1 {
+		t.Fatalf("expected exactly one worker dispatch, got %d", len(configs))
+	}
+	want := "Keep the effort proportionate to the job. For a change to wording, a label, a comment, a document or configuration, make the change and do not write new tests. Add or update a test only when the job changes how the code behaves, and then only the smallest test that proves it."
+	if !strings.Contains(configs[0].TaskBrief, want) {
+		t.Fatalf("expected the job brief to carry the proportionate-effort constraint, got:\n%s", configs[0].TaskBrief)
 	}
 }
