@@ -10,7 +10,7 @@
 
 ### [aetherantcolony.com](https://aetherantcolony.com?utm_source=github&utm_medium=readme&utm_campaign=aether)
 
-Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 27 specialized worker castes communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes, and a "Synthetic SLA" verification loop mathematically drives reliability from ~80% model accuracy to 99.2%. The Hive Brain ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
+Aether is an open-source biomimetic AI colony that replaces deterministic agent frameworks with a self-organizing swarm. Instead of brittle DAGs where one failure crashes everything, 27 specialized worker castes (kinds of AI helper, each with one job) communicate through stigmergy — leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) that let the colony dynamically pivot without catastrophic failure. A built-in OODA loop treats errors as observations, not crashes: one Builder does the work by default, and a second reviewer joins only when the task touches a named risk (logins, payments, a release, deleting data, a database change), so verification scales with real risk instead of running a fixed loop on everything. The Hive Brain (shared memory across your projects) ensures knowledge compounds across sessions and projects — instincts extracted from real work are scored for trust, promoted to permanent memory, and shared colony-wide. The result: complex intelligence emerges from simple, localized rules, just like a real ant colony.
 
 <br>
 
@@ -26,8 +26,8 @@ Aether is an open-source biomimetic AI colony that replaces deterministic agent 
 [![Go Reference](https://pkg.go.dev/badge/github.com/calcosmic/Aether.svg)](https://pkg.go.dev/github.com/calcosmic/Aether)
 
 [![agents](https://img.shields.io/badge/agents-27-purple?style=flat-square)](https://github.com/calcosmic/Aether#key-features)
-[![commands](https://img.shields.io/badge/commands-60-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
-[![colony](https://img.shields.io/badge/colony-v1.0.83-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
+[![commands](https://img.shields.io/badge/commands-64-orange?style=flat-square)](https://github.com/calcosmic/Aether#command-reference)
+[![colony](https://img.shields.io/badge/colony-v1.0.84-gold?style=flat-square)](https://github.com/calcosmic/Aether/releases)
 
 <br>
 
@@ -78,16 +78,16 @@ Aether rejects all of these. It's an **Artificial Ecology** modeled on how real 
 
 Other approaches force LLMs to output and parse complex JSON schemas. One hallucinated bracket crashes the system. Aether abandons this entirely in favor of biological **stigmergy** — agents communicate indirectly by leaving plain-English Pheromone Signals (FOCUS, REDIRECT, FEEDBACK) in the environment. This "soft logic" steers the colony without catastrophic failures when unexpected edge cases arise.
 
-### The Synthetic SLA: Trading Tokens for Certainty
+### Right-Sized Verification, Not a Fixed Loop
 
-Standard approaches treat an LLM failure as a fatal exception. Aether acknowledges that no single inference is 100% accurate and wraps the colony in a **System of Inference**: a Watcher and Critic verify a Builder's output in a best-of-n loop. With a Best-of-3 consensus, system reliability jumps from ~80% model accuracy to **99.2%**. Aether intentionally burns more compute tokens to guarantee deterministic-grade certainty.
+Standard approaches either treat any LLM failure as fatal, or run the same fixed review loop on every task regardless of risk. Aether does neither: a routine build sends exactly one Builder — the worker who writes the code. A second reviewer joins only when the phase's own wording or its changed files name one of five specific risks (logins/credentials, payments, a release sign-off, deleting data, or a database migration), and that reviewer joins at the check step (`/ant-continue`), not the build itself. The program's own checks — does it build, do the tests pass, does it lint clean — run on every phase at every depth regardless of who else is sent. Only the owner, never the automatic Queen or autopilot, can decline a forced reviewer, and that decision is recorded.
 
 ### Platform-Enforced Discipline
 
-Other tools give agents a system prompt but let them access every tool. Aether physically removes capabilities to force discipline:
+Other tools give agents a system prompt but let them access every tool. Aether narrows what each caste (worker type) can do:
 
-- The **Auditor** and **Gatekeeper** have Write, Edit, and Bash tools **platform-revoked** — they cannot run commands or fix bugs, forcing purely static analysis
-- The **Tracker** (bug hunter) is forbidden from modifying files so it never contaminates the "crime scene"
+- The **Auditor** and **Gatekeeper** can read and grep the codebase, but their Write access is narrowed to their own findings ledger only — no Edit, no Bash. They cannot run commands or fix bugs, forcing purely static analysis
+- The **Tracker** (bug hunter) has Bash for investigation but a Write scoped only to its own bug-tracking ledger — it does not modify your source files
 
 ### Memory That Compounds
 
@@ -111,19 +111,24 @@ The colony genuinely gets smarter the more you use it — across sessions and ac
 
 ## 📦 Install
 
-**Option 0: npx bootstrap (easiest)**
+**Option 0: npx bootstrap (currently behind — read the warning first)**
 
 ```bash
 npx --yes aether-colony@latest
 ```
 
-This is the lowest-friction path for new users. The npm package is a thin
-bootstrap wrapper: it downloads the matching Go release binary for your
-platform, installs it locally, and then runs `aether install` for you. The npm
-package version intentionally matches the published Aether release version, so
-`aether-colony@1.0.83` bootstraps Aether `1.0.83`.
+The npm package is meant to be a thin bootstrap wrapper: it downloads the
+matching Go release binary for your platform, installs it locally, and then
+runs `aether install` for you. Its version is meant to track the published
+Aether release, so `aether-colony@1.0.84` bootstraps Aether `1.0.84` — when
+npm has actually been republished to match.
 
-**Option 1: Go binary**
+**It has not been, as of this writing.** The live npm package is stuck at
+`1.0.22` while the source is many releases ahead (see the badge above) — months and dozens of
+releases behind. `npx aether-colony@latest` installs that stale behavior
+today, not current Aether. Use Option 1 below until npm is republished.
+
+**Option 1: Go binary (build from a checkout for the current version)**
 
 ```bash
 go install github.com/calcosmic/Aether/cmd/aether@latest
@@ -142,14 +147,33 @@ That single command populates `~/.aether/` and the platform-specific agent
 directories from assets embedded in the Go binary. npm is not required for the
 normal install path.
 
+`go install .../cmd/aether@latest` installs the newest *tagged* version, and
+the newest tag is currently `v1.0.43` (July 2026) — the same stale version as
+the GitHub Release. To get the current state of this repository,
+clone it and publish from the checkout instead (this needs only Go; it builds
+the program and installs it in one step):
+
+```bash
+git clone https://github.com/calcosmic/Aether.git
+cd Aether
+go run ./cmd/aether publish --channel stable --binary-dest "$HOME/.local/bin"
+```
+
+Then run `aether update --force` in each project you use it from. See
+`.aether/docs/publish-update-runbook.md` for the full publish/update
+contract.
+
 For maintainers, keep source-development isolated from the public runtime:
 - stable/public: `aether` + `~/.aether/`
 - dev/source checkout: `aether-dev` + `~/.aether-dev/`
 - npm stays the stable/public bootstrap only
 
-**Option 2: Download from GitHub Releases**
+**Option 2: Download from GitHub Releases (also currently behind)**
 
-Pre-built binaries for all platforms — no Go toolchain needed.
+Pre-built binaries for all platforms — no Go toolchain needed. **The newest
+published release is v1.0.43 (July 2026)**, also months behind this
+source checkout. Use it only if you deliberately want that older, frozen
+version; for current behavior, use Option 1 instead.
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
@@ -178,6 +202,7 @@ aether lay-eggs
 # Codex CLI (direct executable route)
 aether init "Build X"
 aether discuss
+aether spec
 aether plan
 aether assumptions-analyze
 aether run --dry-run
@@ -193,6 +218,7 @@ aether seal
 # Claude Code / OpenCode
 /ant-init "Build X"
 /ant-discuss
+/ant-spec
 /ant-plan
 /ant-assumptions
 /ant-build 1
@@ -283,7 +309,9 @@ output is primary, with at most one short sentence of extra explanation.
 | **Autopilot** | `aether run` / `/ant-run` | Build-verify-advance loop with typed stops, morning queues, and normal endings |
 | **Skills** | 86 Skills | 55 colony + 31 domain knowledge modules for workers |
 | **Research** | Oracle + Scouts | Deep autonomous research before task decomposition |
-| **Quality Gates** | 6-phase verification before advancing |
+| **Quality Gates** | One Builder by default | A reviewer joins only for a named risk (credentials, payments, release, deletion, migration), at the check step; build/test/lint run on every phase regardless |
+| **Team & Jobs** | Check-in + Coherent Jobs | A one-worker build skips the pause; related tasks group into one job; a stuck helper can ask for backup via `aether recruit`, granted only by the program's own limits |
+| **Self-Improvement** | `aether improve` | Reports how the colony's own past suggestions performed; can trial one declared change at a time |
 | **Platforms** | Primary: Claude Code + OpenCode. Secondary: Codex CLI | Shared Go binary with platform-specific agents |
 
 ### 🐜 Worker Castes
@@ -330,7 +358,7 @@ output is primary, with at most one short sentence of extra explanation.
 | **Workers / Agents** | 27 specialized castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, Fixer, Porter, etc.) | User-defined roles with goals and backstories | Configurable assistant and user proxy agents | Nodes as functions or LangChain runnables |
 | **Commands / Control** | 64 slash commands on Claude/OpenCode + nine ant skills and `aether` CLI on Codex | Python SDK calls | Programmatic API | Python SDK + LangGraph Studio |
 | **Autopilot** | `/ant-run` on Claude/OpenCode, `aether run` on Codex | Sequential task execution, no built-in loop | No built-in loop | Can loop via graph cycles, not opinionated |
-| **Quality Gates** | 6-phase verification before advancing phases | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
+| **Quality Gates** | One Builder by default; a reviewer joins only for a named risk, at the check step; build/test/lint run every phase | Optional human-in-the-loop review | No built-in gates | Manual checkpoint implementation |
 | **Research** | Oracle + Scouts — autonomous deep research before task decomposition | No dedicated research agents | Group chat can approximate research | No built-in research pattern |
 | **Platform Support** | Primary: Claude Code + OpenCode. Secondary: Codex CLI | Any Python environment | Any Python environment | Any Python environment |
 
@@ -501,7 +529,7 @@ Only instincts scoring 0.80+ (trusted) or 0.90+ (canonical) are promoted to QUEE
 # Read trusted instincts for worker priming
 aether instinct-read-trusted --min-score 0.6
 
-# Run full curation (normally runs at /ant-seal)
+# Run full curation (also runs automatically at every /ant-continue check, not only at seal)
 aether curation-run --verbose
 
 # Read QUEEN.md wisdom
@@ -589,7 +617,7 @@ usage, findings, or blocker movement from newer data.
 ## 🔌 Works With
 
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 64 slash commands + 27 agent definitions
-- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 64 slash commands + 27 agent definitions
+- **[OpenCode](https://github.com/opencode-ai/opencode?utm_source=github&utm_medium=readme&utm_campaign=aether)** - primary platform, 64 slash commands + 28 agent definitions (the 27 worker castes plus one OpenCode-only routing helper)
 - **Codex CLI** - secondary platform, nine public ant skills, native `aether` lifecycle, `aether run`, `aether watch`, `aether oracle`, and 27 TOML agent definitions
 
 <div align="center">
@@ -626,10 +654,11 @@ These commands set up, initialize, and drive the core colony workflow from first
 | `/ant-init "<goal>"` | Initialize a colony with a goal. Scans the repo, generates a charter for approval, creates colony state. Supports `--no-visual`. |
 | `/ant-colonize` | Survey the codebase with 4 parallel scouts, producing 7 territory documents (PROVISIONS, TRAILS, BLUEPRINT, CHAMBERS, DISCIPLINES, SENTINEL-PROTOCOLS, PATHOGENS). Flags: `--no-visual`, `--force-resurvey`. |
 | `/ant-discuss` | Capture clarifications before planning. Stores clarification decisions in `pending-decisions.json` and emits `REDIRECT` pheromones for resolved hard constraints. |
+| `/ant-spec` | Draft, review, revise, and explicitly approve the owner-readable specification. Required before `/ant-plan` in the normal journey. |
 | `/ant-plan` | Generate or display a project plan. Uses an iterative research loop (scout + planner per iteration) to reach a confidence target. Flags: `--fast`, `--balanced`, `--deep`, `--exhaustive`, `--target <N>`, `--max-iterations <N>`, `--accept`, `--no-visual`. |
 | `/ant-assumptions` | Surface current plan assumptions, write `assumptions.json`, and auto-emit `FOCUS` / `FEEDBACK` pheromones from the analysis. |
-| `/ant-build <phase>` | Execute a phase with parallel workers. Loads and runs 5 build playbooks sequentially (prep, context, wave, verify, complete). Self-organizing emergence. |
-| `/ant-continue` | Verify completed build, reconcile state, and advance to the next phase. Runs 4 continue playbooks (verify, gates, advance, finalize). Enforces quality gates. |
+| `/ant-build <phase>` | Execute a phase. Sends one Builder by default; a reviewer joins only when the phase names one of five risks (credentials, payments, release sign-off, data deletion, database migration), and only at the next check step, never here. Shows a team check-in card before dispatch unless it is a single decision-free worker, in which case it shows the plan and proceeds without a pause (`--checkin` forces the pause anyway, `--no-checkin` always skips it). Related tasks that genuinely share files or depend on each other are grouped into one job for one worker. |
+| `/ant-continue` | Verify completed build, reconcile state, and advance to the next phase. Runs entirely inside the Go runtime with no manifest/playbook step by default; `--classic-ceremony` opts into the older heavy-review manifest path. Enforces quality gates and credits a task only once its claimed files are actually present in the project. |
 | `/ant-run` | Autopilot mode -- chains build and continue. Headless visual/runtime/lesson-backed-replan work queues for morning review; genuine failures stop; limits and completion end normally. Flags: `--max-phases N`, `--replan-interval N`, `--continue`, `--dry-run`, `--headless`, `--verbose`. |
 | `/ant-profile` | Read or refresh the behavioral profile. `profile-update` consolidates observations and promotes top `[profiled]` directives into `QUEEN.md`. |
 
@@ -661,7 +690,7 @@ These commands provide visibility into colony state, phase progress, flags, even
 | `/ant-flags` | List project flags (blockers, issues, notes). Flags: `--all`, `--type <blocker\|issue\|note>`, `--phase N`, `--resolve <id> "<msg>"`, `--ack <id>`. |
 | `/ant-flag "<title>"` | Create a new flag. Flags: `--type <blocker\|issue\|note>` (default: `issue`), `--phase N`. Blockers prevent phase advancement until resolved. |
 | `/ant-history` | Browse colony event history. Flags: `--type <TYPE>`, `--since <DATE>`, `--until <DATE>`, `--limit N` (default: 10). Dates accept ISO format or relative values like `1d`, `2h`. |
-| `/ant-watch` | Set up a tmux session with a 4-pane live dashboard (status, progress, spawn tree, activity log). Requires tmux. |
+| `/ant-watch` | Show one honest live screen in the terminal you're already in -- no tmux, no second window: a live cockpit while something is running, a replay of the most recent run once it finishes, or an idle card if nothing has run yet. Flags: `--interval`, `--once`. |
 | `/ant-maturity` | View colony maturity journey through 6 milestones (First Mound, Open Chambers, Brood Stable, Ventilated Nest, Sealed Chambers, Crowned Anthill) with ASCII art anthill and progress bar. |
 | `/ant-memory-details` | Drill-down view of colony memory -- wisdom entries by category from QUEEN.md, pending promotions, deferred proposals, and recent failures from the midden. |
 
@@ -673,7 +702,7 @@ Manage session state for handoff between conversations, so you can safely `/clea
 
 | Command | Description |
 |---------|-------------|
-| `/ant-pause` | Stop at a safe boundary and save one structured, resumable handoff. |
+| `/ant-pause` | Stop at a safe boundary and save one structured, resumable handoff -- a receipt that also serves as an idempotency key, so re-running pause returns the same receipt instead of creating a second one. |
 | `/ant-resume` | Validate and restore the safest honest recovery point: a clean handoff is **Confirmed**; unclean interruptions may be **Reconstructed** from durable evidence; **Conflicting** or **Unknown** evidence stops without changing state. |
 
 ---
@@ -684,7 +713,7 @@ These commands manage the beginning and end of a colony's life.
 
 | Command | Description |
 |---------|-------------|
-| `/ant-seal` | Seal the colony with the Crowned Anthill milestone ceremony. Promotes colony wisdom to QUEEN.md, spawns a Sage for analytics, a Chronicler for documentation audit, exports XML archives, and writes CROWNED-ANTHILL.md. Flags: `--no-visual`. |
+| `/ant-seal` | Seal the colony with the Crowned Anthill milestone ceremony. Promotes colony wisdom to QUEEN.md, spawns a Sage for analytics, a Chronicler for documentation audit, exports XML archives, and writes CROWNED-ANTHILL.md. Flags: `--no-visual`. Sealing also writes a dated entry (the goal and one line per phase) to the project's own CHANGELOG.md, creating the file if there is none. |
 | `/ant-entomb` | Archive a sealed colony into `.aether/chambers/`. Requires the colony to be sealed first. Copies all colony data, exports XML archives, records in eternal memory, and resets colony state for a fresh start. Flag: `--no-visual`. |
 | `/ant-update` | Update Aether system files from the global hub. Uses a transactional updater with checkpoint creation, safe sync, and automatic rollback on failure. Flag: `--force`. |
 
@@ -696,7 +725,7 @@ Power-user commands for deep research, philosophical exploration, resilience tes
 
 | Command | Description |
 |---------|-------------|
-| `/ant-swarm "<bug>"` | Deploy 4 parallel scouts (Archaeologist, Pattern Hunter, Error Analyst, Web Researcher) to investigate and fix stubborn bugs. Cross-compares findings, ranks solutions by confidence, applies the best fix, and auto-rolls back on failure. No arguments shows a real-time swarm display. |
+| `/ant-swarm "<bug>"` | Deploy 4 parallel investigators (Archaeologist, Pattern Hunter, Error Analyst, Web Researcher) to investigate and fix stubborn bugs. Cross-compares findings, ranks solutions by confidence, applies the best fix with an automatic checkpoint-and-rollback safety net, and writes up a plain-language case if the same bug survives three attempts. Pass `--watch` to inspect a live swarm instead of launching a new run. |
 | `/ant-oracle` | Deep research agent using an iterative RALF loop. Guided by a scoping ritual (`oracle propose` suggests output shape, sources, depth and accuracy target; `oracle brief` records the approved core question; `oracle --from-brief` refuses to run without one). Subcommands: `propose`, `brief`, `status`, `stop`, `recover`, `save`, `promote`, `selftest`. Flags: `--depth`, `--confidence-target`, `--scope`, `--template`, `--max-iterations`, `--background`, `--follow`, `--from-brief`. |
 | `/ant-dream` | The Dreamer -- a philosophical wanderer that observes the codebase and writes 5-8 dream observations to `.aether/dreams/`. Categories: musing, observation, concern, emergence, archaeology, prophecy, undercurrent. May suggest pheromones. Flag: `--no-visual`. |
 | `/ant-interpret [date]` | The Interpreter -- grounds dreams in reality by validating each dream observation against the actual codebase. Rates each dream as confirmed, partially confirmed, unconfirmed, or refuted. Can inject pheromones or add items to TO-DOS based on findings. |
@@ -704,6 +733,7 @@ Power-user commands for deep research, philosophical exploration, resilience tes
 | `/ant-archaeology <path>` | The Archaeologist -- git historian that excavates commit history for a file or directory. Analyzes authorship, churn, tech debt markers, dead code candidates, and stability. Produces a full archaeology report with tribal knowledge extraction. Flag: `--no-visual`. |
 | `/ant-organize` | Codebase hygiene report -- spawns an archivist to scan for stale files, dead code patterns, and orphaned configs. Report-only (no files modified). Output saved to `.aether/data/hygiene-report.md`. Flag: `--no-visual`. |
 | `/ant-council` | Convene a council for intent clarification. Presents multi-choice questions about project direction, quality priorities, or constraints, then translates answers into FOCUS, REDIRECT, and FEEDBACK pheromone signals. Supports `--deliberate "<proposal>"` mode for Advocate/Challenger/Sage structured debate. Flag: `--no-visual`. |
+| `/ant-improve` | Check how the colony's own past suggestions have been doing, or declare and compare one change by hand. Read-only unless you pass `--declare`/`--compare`. |
 
 ---
 
@@ -902,24 +932,17 @@ aether build 1
 <details><summary>Phase 1 build output (click to expand)</summary>
 
 ```
+Team check-in: one worker, nothing pending -- dispatching.
+  Chip-12 (Builder) -> Foundation: scaffolding, database layer, and tests
+    (grouped into one job -- these tasks share the same files)
+
 Deploying worker wave for Phase 1: Foundation...
 
-Workers spawned:
-  Chip-12 (Builder)     -> Project scaffolding
-  Chip-34 (Builder)     -> Database setup
-  Chip-56 (Probe)       -> Test scaffolding
-  Dot-09 (Watcher)      -> Quality verification
-
-Chip-12: Creating go.mod, directory structure...
-Chip-34: Setting up database connection layer...
-Chip-56: Writing initial test suite...
-Dot-09: Monitoring build quality...
-
 [Chip-12] go.mod created: module github.com/you/task-api
-[Chip-34] db/connection.go created -- uses pgxpool
-[Chip-34] db/migrations/001_create_users.up.sql created
-[Chip-56] db/connection_test.go created
-[Chip-56] models/user_test.go created
+[Chip-12] db/connection.go created -- uses pgxpool
+[Chip-12] db/migrations/001_create_users.up.sql created
+[Chip-12] db/connection_test.go created
+[Chip-12] models/user_test.go created
 
 Build complete. 4 files created, 6 tests passing.
 Phase 1 status: VERIFIED
@@ -927,7 +950,7 @@ Phase 1 status: VERIFIED
 
 </details>
 
-Behind the scenes, multiple builder ants worked in parallel. A Probe ant wrote tests. A Watcher verified everything compiled and tests passed. The REDIRECT signal about raw SQL was active -- Chip-34 used `pgxpool` with parameterized queries instead.
+This phase touches none of the five risk signals (logins, payments, a release, deleting data, a database migration), so the Queen sent one Builder and nothing else -- no team check-in pause, because there was nothing left for you to decide. Related tasks that shared the same files were grouped into one job for Chip-12 instead of one worker per task. The REDIRECT signal about raw SQL was still active -- Chip-12 used `pgxpool` with parameterized queries instead. The program's own build and test checks ran regardless.
 
 ---
 
@@ -970,21 +993,19 @@ aether build 2
 <details><summary>Phase 2 build output (click to expand)</summary>
 
 ```
+Team check-in: one worker, nothing pending -- dispatching.
+  Chip-71 (Builder) -> Authentication: JWT tokens, auth endpoints, middleware, and tests
+    (grouped into one job)
+  Note: this phase touches logins and passwords -- a security reviewer
+  (Gatekeeper) joins automatically at the next `aether continue`, not here.
+
 Deploying worker wave for Phase 2: Authentication...
 
-Workers spawned:
-  Chip-71 (Builder)     -> JWT token implementation
-  Chip-88 (Builder)     -> Auth endpoints
-  Chip-23 (Probe)       -> Auth test suite
-  Dot-15 (Watcher)      -> Security verification
-
 [Chip-71] internal/auth/jwt.go created -- RS256 signing, 15min access tokens
-[Chip-88] handlers/auth.go created -- /register, /login endpoints
-[Chip-88] middleware/auth.go created -- token validation middleware
-[Chip-23] internal/auth/jwt_test.go created -- 12 tests
-[Chip-23] handlers/auth_test.go created -- 8 tests
-[Dot-15] Password hashing verified: bcrypt with cost 12
-[Dot-15] No plaintext secrets detected
+[Chip-71] handlers/auth.go created -- /register, /login endpoints
+[Chip-71] middleware/auth.go created -- token validation middleware
+[Chip-71] internal/auth/jwt_test.go created -- 12 tests
+[Chip-71] handlers/auth_test.go created -- 8 tests
 
 Build complete. 5 files created, 20 tests passing.
 Phase 2 status: VERIFIED
@@ -992,7 +1013,7 @@ Phase 2 status: VERIFIED
 
 </details>
 
-The REDIRECT signal about bcrypt was active. The Watcher explicitly verified no plaintext secrets made it into the code. This is the colony self-enforcing your constraints without you having to review every line.
+The REDIRECT signal about bcrypt was active during the build. Because this phase names a real risk -- logins and passwords -- the next `aether continue` automatically adds a security reviewer (Gatekeeper) to check for exactly that, named by the signal it matched, not guessed at. Only the owner can decline that forced reviewer, and declining is recorded. The program's own build and test checks ran regardless of who else was sent.
 
 ---
 
@@ -1079,21 +1100,18 @@ aether build 5
 <details><summary>Phase 5 build output (click to expand)</summary>
 
 ```
+Team check-in: one worker, nothing pending -- dispatching.
+  Chip-44 (Builder) -> Integration and Polish: e2e tests, API docs, and a final pass
+    (grouped into one job)
+
 Deploying worker wave for Phase 5: Integration and Polish...
 
-Workers spawned:
-  Chip-44 (Builder)     -> End-to-end test suite
-  Chip-99 (Chronicler)  -> API documentation
-  Dot-07 (Watcher)      -> Final quality gate
-
 [Chip-44] tests/integration_test.go created -- 22 e2e tests
-[Chip-99] docs/api.yaml created -- OpenAPI 3.0 spec
-[Chip-99] docs/README.md created -- Getting started guide
-[Dot-07] All endpoints documented
-[Dot-07] Error responses consistent across handlers
-[Dot-07] No hardcoded secrets found
+[Chip-44] docs/api.yaml created -- OpenAPI 3.0 spec
+[Chip-44] docs/README.md created -- Getting started guide
 
 Build complete. 3 files created, 80 tests passing.
+Build/test checks: all endpoints documented, error responses consistent, no hardcoded secrets found.
 Phase 5 status: VERIFIED
 ```
 
@@ -1193,55 +1211,25 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ## 🗺️ Roadmap
 
-### 🎉 v1.0.41 -- Released
+### 🎉 v1.0.63-1.0.67 -- Team Check-In, Coherent Jobs, and the Live Colony
 
-- Restored universal classic ceremony parity across Codex lifecycle flows, including spawn plans, wave starts, worker completions, and closeouts.
-- Hardened Porter full-release readiness with persisted receipts, version agreement, binary smoke, Go/TypeScript/npm gates, and redacted failed-command diagnostics.
-- Strengthened final seal review so blocker-level security and quality findings stop sealing while non-blocking release lessons are preserved.
+- A build now sends one Builder by default; a second reviewer joins only for one of five named risks (credentials, payments, release sign-off, data deletion, database migration), and only at the check step (`/ant-continue`), never during the build itself.
+- Related tasks that are genuinely connected are grouped into one job for one worker instead of one worker per task, and completion is credited only from files actually present afterward -- never from a worker's own claim alone.
+- `aether watch` became one honest live screen (a live cockpit, a replay of the last run, or an idle card) in the terminal you're already in -- no second tmux window.
+- `/ant-swarm` gained four parallel bug investigators with an automatic checkpoint-and-rollback safety net; `/ant-oracle` became an iterative research loop whose answer leads with the recommendation, not the source list.
+- Session start now greets you with a short card: what the project is, how far along it is, and what to run next.
 
-### 🎉 v1.0.34 -- Released
+### 🎉 v1.0.68-1.0.79 -- Classic Visual Voice, Biological Runtime, and the Learning Governor
 
-- Plan closeout ceremony now renders the actual planned phases, task goals, selected hints, and confidence directly in the runtime visual surface.
-- `aether ceremony closeout --workflow plan` can pull phase details from either the completion packet or the active colony state, so Claude/OpenCode no longer need to supply the rich plan recap as plain prose after the banner.
-- Regression coverage now locks the richer plan closeout against the kind of thin summary that only said a plan existed.
+- Every everyday screen (plan, build, continue, seal, status) got a consistent plain-symbol line-by-line style, locked by a structural test so it cannot silently fade again.
+- A stuck helper can ask the program for backup (`aether recruit`); the program, never the assistant, decides using real limits (chain depth, run budget, duplicate work), and you see a live line for every request and refusal.
+- The program's own steering notes now gain or lose trust based on whether they actually helped, and a lesson only reaches the shared instruction file once it has genuinely helped at least once, checked against real evidence rather than a helper's own word.
+- Per-build and per-check cost tracking landed, using the AI platform's own reported usage instead of a rough character-count guess.
 
-### 🎉 v1.0.33 -- Released
+### 🎉 v1.0.80-1.0.83 -- First Real Trial Fixes
 
-- Runtime-owned `aether ceremony` surfaces restore the older stacked visual wrapper experience from manifest and completion JSON: spawn plans, wave banners, worker completion lines, and closeout summaries.
-- Claude and OpenCode lifecycle wrappers now call the ceremony renderer for build, plan, colonize, heavy continue, seal, and swarm while preserving the JSON finalizer contract.
-- Regression tests now cover the ceremony renderer plus lifecycle wrapper contracts so future command changes cannot silently drop the visual ceremony.
-
-### 🎉 v1.0.32 -- Released
-
-- Watcher agents now have their own read-cache discipline, so their fresh-evidence rule requires fresh command output without repeatedly reading unchanged files.
-- Build verification prompts now tell Watchers to read target files once, treat "File unchanged since last read" as authoritative cached context, and return `fix_required` if context is genuinely missing.
-- Regression tests now cover Builder and Watcher read-loop guardrails across Claude, OpenCode, Codex, and Aether source surfaces.
-
-### 🎉 v1.0.31 -- Released
-
-- Worker read-loop guardrails now ship across Builder agents, build playbooks, continue review waves, and Codex runtime-generated briefs.
-- Workers are instructed to treat "File unchanged since last read" as a cache hit, continue from earlier content, and avoid confidence re-read loops.
-- Build and continue orchestrators now mark repeated unchanged-read loops as `blocked` with missing context instead of waiting through another worker timeout.
-
-### 🎉 v1.0.30 -- Released
-
-- Live worker ceremony is restored for host-orchestrated build, plan, colonize, continue, seal, and swarm flows: agents should appear as visible stacked Task/subagent panels with caste-labelled descriptions instead of being described as background-only work.
-- Build now renders the forced-color runtime spawn ceremony before dispatch, then keeps the platform-native live worker stack visible until terminal worker results return.
-- Wrapper/playbook contract tests now prevent regressions where lifecycle commands lose the live stacked worker ceremony or fall back to markdown-only worker tables.
-
-### 🎉 v1.0.29 -- Released
-
-- Visual command ceremony is restored across lifecycle, signal, reference, shelf, queen, tunnels, medic, and porter surfaces while preserving runtime-owned state changes.
-- Lifecycle wrappers now keep JSON finalizers for machine contracts and add visual closeouts for user-facing completion.
-- One public Aether version now governs the Go runtime, npm bootstrap package, README badges, changelog, and operator docs: `1.0.29`
-- `npx --yes aether-colony@latest` remains a thin bootstrap, not a second runtime, and now stays explicitly documented as matching the published Go release version
-- The npm bootstrap now matches the actual GitHub release asset names and checksum filename, so `latest` no longer points at a package that asks GitHub for files that do not exist
-- The publish/update runbook now treats `aether install --package-dir "$PWD"`, downstream `aether update --force`, `--download-binary`, and npm publishing as one release system instead of disconnected steps
-- Medic now diagnoses release-integrity drift across hub publish completeness, runtime versioning, npm page behavior, and downstream refresh verification before recommending repairs
-- OpenCode, Claude, Codex, and repo-level operator docs now describe the same source-checkout publish path and the same released-user update path
-- Current release surfaces now include 27 specialized worker castes (Builder, Watcher, Scout, Tracker, Oracle, Archaeologist, Medic, Fixer, Porter, and more)
-- Current release surfaces now include 60 slash commands across the full colony lifecycle on the primary Claude/OpenCode surfaces, plus native Codex CLI workflow
-- Current release surfaces now include 86 skills (55 colony + 31 domain), shared through the same hub and release pipeline
+- Fixed a finished-and-archived project reading as damaged, a long project path blocking the clarification step, the updater refusing after Aether's own helper-package installs, and the closing status/resume cards disagreeing about an archived project.
+- **v1.0.84:** sealing a project also writes a dated entry to that project's own CHANGELOG.md, and this README was corrected against the current program.
 
 ### 📅 Near-Term
 
@@ -1252,10 +1240,11 @@ Five commands from zero to deployed. The colony writes code, verifies quality, a
 
 ### 🔮 Future
 
-- Visual colony dashboard -- real-time view of worker activity, pheromone signals, and phase progress
 - Multi-user colony collaboration -- enabling teams to work within the same colony simultaneously
 - Plugin marketplace -- a curated registry for community skills, castes, and extensions
 - IDE integration beyond Claude Code and OpenCode -- native support for additional development environments
+
+(A real-time view of worker activity already shipped as `aether watch` -- see v1.0.63-1.0.67 above.)
 
 ---
 
@@ -1302,13 +1291,14 @@ Run `make test` and `make lint` before every commit. CI will do the same.
 
 ```
 cmd/aether/          CLI entry point (main.go)
-internal/            Core logic -- commands, pheromones, state, curation, and more
-  commands/          Go implementations of slash commands
-.aether/commands/    YAML source definitions for agent commands (consumed by setup)
+cmd/                 Go implementation -- one flat package, one file per feature
+pkg/                 Shared Go packages -- agent pool, memory, storage, graph, events
+.aether/commands/    YAML source definitions for slash commands (64 files)
 .aether/             Colony system files -- templates, skills, agent definitions, docs
+.claude/, .opencode/, .codex/   Platform-specific agents and commands, generated from .aether/
 ```
 
-The Go code lives under `cmd/` and `internal/`. The colony's agent definitions, skills, templates, and command YAML files live under `.aether/`.
+The Go code lives flat under `cmd/` (there is no `internal/` package) with shared logic in `pkg/`. The colony's agent definitions, skills, templates, and command YAML files live under `.aether/`.
 
 ### 📝 Contributing Workflow
 
@@ -1322,12 +1312,12 @@ Keep pull requests focused. One feature or fix per PR makes review easier and hi
 
 ### ➕ Adding Commands
 
-Aether commands are defined as YAML files in the `commands/` directory at the repo root. Each YAML file describes the command name, description, agent caste, and prompt template. The Go implementation lives in `internal/` as a matching command file.
+Aether commands are defined as YAML files in `.aether/commands/` at the repo root. Each YAML file describes the command name, description, agent caste, and prompt template. The Go implementation lives flat in `cmd/` as a matching command file (there is no `internal/` package).
 
 To add a new command:
 
-1. Create a YAML definition in `commands/`
-2. Implement the Go handler in `internal/`
+1. Create a YAML definition in `.aether/commands/`
+2. Implement the Go handler in `cmd/`
 3. Register the command in the root command registry
 4. Add tests in a `_test.go` file alongside the implementation
 5. Run `make test` and `make lint`
@@ -1369,7 +1359,7 @@ Apache 2.0
 <div align="center">
 
 [![Apache 2.0 License](https://img.shields.io/badge/License-Apache%202.0-7B3FE4?style=flat-square)](LICENSE)
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8B?style=flat-square&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.26.5+-00ADD8B?style=flat-square&logo=go)](https://go.dev/)
 [![Latest Release](https://img.shields.io/github/v/release/calcosmic/Aether?style=flat-square&color=7B3FE4)](https://github.com/calcosmic/Aether/releases)
 
 <br>

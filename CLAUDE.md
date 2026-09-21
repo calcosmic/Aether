@@ -1,6 +1,6 @@
 # CLAUDE.md — Aether Development Guide
 
-> **Current Version:** v1.0.83
+> **Current Version:** v1.0.84
 > **Last Updated:** 2026-08-17
 
 > ## READ THIS BEFORE YOU WRITE ANYTHING TO THE OWNER
@@ -26,7 +26,7 @@
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.83 |
+| Version | v1.0.84 |
 | Slash commands | 64 (Claude) + 64 (OpenCode); Codex uses nine public ant skills + native CLI + 27 TOML agents |
 | Agent definitions | 27 |
 | Skills | 86 (55 colony + 31 domain) |
@@ -1127,10 +1127,33 @@ Metrics tracked:
 
 ## Changelog System
 
-Automated changelog collection:
+**Marking a project finished writes it into the project's changelog.** After
+`/ant-seal` has committed, the program adds one entry to `CHANGELOG.md` in the
+project folder: the date, the project's goal, and one line per phase, newest
+entry first but never above a hand-kept "Unreleased" section. If the folder has
+no changelog yet, one is created (owner's ruling, 2026-09-21). A project closed
+before every phase was finished says so, and marks the unfinished phases — it is
+never written up as complete. Running the same finish again adds nothing twice.
+The entry is a courtesy written *after* the finish: it cannot fail, delay or
+undo it, it never writes through a shortcut link or over anything that is not
+an ordinary file, and a problem is reported as one plain line.
 
-- `changelog-append` — Append entry to CHANGELOG.md
-- `changelog-collect-plan-data` — Collect plan data for changelog
+Locked by `TestFinishingAProjectWritesItsChangelogEntry` (the real
+init-to-finished path, so a writer nothing calls fails this by name),
+`TestProjectChangelogEntryShapeAndPlacement`,
+`TestProjectChangelogCreatesTheFileWhenMissing`,
+`TestProjectChangelogIsHonestAboutAForcedFinish`, and
+`TestProjectChangelogNeverWritesThroughALinkAndNeverFails`.
+
+Two older commands, `changelog-append` and `changelog-collect-plan-data`, still
+exist but nothing in the program calls them; they are on the list of features
+that were built and never switched on, and the behaviour above does not use
+them. Nothing updates a project's README automatically.
+
+*For dummies: when you mark a project finished, Aether adds a short dated note
+to that project's changelog saying what the goal was and which phases got done
+— and starts the file for you if there isn't one. If you closed the project
+early, the note says so rather than pretending it all got finished.*
 
 ---
 
@@ -1801,4 +1824,4 @@ For Codex-specific rules and agents, see `.codex/CODEX.md`
 
 ---
 
-*Updated for Aether v1.0.83 — 2026-09-21*
+*Updated for Aether v1.0.84 — 2026-09-21*
