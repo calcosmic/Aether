@@ -418,3 +418,63 @@ func TestQuickTrustsDiskOverWorkerReport(t *testing.T) {
 		t.Fatalf("expected a real disk change to never verdict no_change just because the worker did not report it")
 	}
 }
+
+// blockerReportingWorkerInvoker completes successfully but reports a
+// blocker -- the shape TestQuickBlockerNeverStopsTheProject proves never
+// escalates into a project-stopping blocker flag for a quick job.
+type blockerReportingWorkerInvoker struct{}
+
+func (i *blockerReportingWorkerInvoker) IsAvailable(ctx context.Context) bool { return true }
+func (i *blockerReportingWorkerInvoker) ValidateAgent(path string) error      { return nil }
+func (i *blockerReportingWorkerInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "could not finish safely",
+		Blockers:   []string{"needs a decision about which config file to use"},
+	}, nil
+}
+
+// TestQuickBlockerNeverStopsTheProject is release 1.0.85's second review
+// fix: a helper-reported blocker during a quick job must never raise a
+// project-stopping `blocker` flag (which halts an active project's next
+// check and flips the what-next advice to "resume"). A quick job raises
+// exactly one tracked `issue` instead, carrying the helper's own sentence.
+func TestQuickBlockerNeverStopsTheProject(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	chdirForTest190_05(t, root)
+
+	origInvoker := newQuickWorkerInvoker
+	newQuickWorkerInvoker = func() codex.WorkerInvoker { return &blockerReportingWorkerInvoker{} }
+	t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+	if _, err := runQuickJob("do something risky", 2*time.Second); err != nil {
+		t.Fatalf("runQuickJob: %v", err)
+	}
+
+	var ff colony.FlagsFile
+	_ = store.LoadJSON("pending-decisions.json", &ff)
+	unresolvedBlockers := 0
+	unresolvedQuickIssues := 0
+	for _, entry := range ff.Decisions {
+		if entry.Resolved {
+			continue
+		}
+		if entry.Type == "blocker" {
+			unresolvedBlockers++
+		}
+		if entry.Type == "issue" && strings.EqualFold(strings.TrimSpace(entry.Source), "quick") {
+			unresolvedQuickIssues++
+		}
+	}
+	if unresolvedBlockers != 0 {
+		t.Fatalf("expected zero unresolved blocker rows from a quick job's reported blocker, got %d (decisions=%+v)", unresolvedBlockers, ff.Decisions)
+	}
+	if unresolvedQuickIssues != 1 {
+		t.Fatalf("expected exactly one unresolved issue row with source quick, got %d (decisions=%+v)", unresolvedQuickIssues, ff.Decisions)
+	}
+}

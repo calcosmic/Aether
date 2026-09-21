@@ -834,15 +834,30 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	attempt.Files = filesChanged
 	attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
 
-	dispatchResult := codex.DispatchResult{WorkerName: workerName, Status: emptyFallback(workerResult.Status, "completed"), WorkerResult: &workerResult}
+	// A quick job must never stop the project: recordDispatchWorkerOutcome's
+	// shared memory feed raises a project-stopping `blocker` flag for ANY
+	// worker-reported blocker (recordWorkerBlockerFlag), which halts an
+	// active project's next check and flips the what-next advice to
+	// "resume". That escalation is right for a build worker inside a phase
+	// and wrong for a one-off quick job. Record the outcome with the
+	// blockers cleared -- handoff, lessons and the (non-blocker) failure
+	// log are unaffected -- and raise one tracked issue instead, below.
+	recordedResult := workerResult
+	recordedResult.Blockers = nil
+	dispatchResult := codex.DispatchResult{WorkerName: workerName, Status: emptyFallback(workerResult.Status, "completed"), WorkerResult: &recordedResult}
 	if recErr := recordDispatchWorkerOutcome(dispatch, dispatchResult); recErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not record quick job outcome: %v\n", recErr)
 	}
 
 	if attempt.Verdict == colony.WorkOutcomeBlocker {
 		recordQuickFailureToMidden(job, attempt.ID, fmt.Errorf("quick job's checks failed for %q: %s", job, strings.Join(checkEvidence, "; ")))
-		if flagErr := raiseQuickIssueFlag(job); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
+		if flagErr := raiseQuickIssueFlag(fmt.Sprintf("A quick job's checks failed: %s", job)); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
 			fmt.Fprintf(os.Stderr, "warning: could not raise a flag for the failed quick job: %v\n", flagErr)
+		}
+	}
+	if sentence := firstNonEmptyQuickBlocker(workerResult.Blockers); sentence != "" {
+		if flagErr := raiseQuickIssueFlag(fmt.Sprintf("A quick job's helper reported: %s (job: %s)", sentence, job)); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
+			fmt.Fprintf(os.Stderr, "warning: could not raise a flag for the quick job's reported blocker: %v\n", flagErr)
 		}
 	}
 
@@ -865,16 +880,30 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	}, nil
 }
 
-// raiseQuickIssueFlag files one tracked issue when a quick job's changes
-// fail the project's own checks, through the existing flag writer
-// (updateFlagFile) -- never a second flag-writing path. Deduplicated on
-// (source, description): re-running the same failing job does not pile up
-// a second identical flag.
-func raiseQuickIssueFlag(job string) error {
+// firstNonEmptyQuickBlocker picks the first non-blank blocker sentence a
+// quick job's helper reported, or "" when it reported none.
+func firstNonEmptyQuickBlocker(blockers []string) string {
+	for _, b := range blockers {
+		if trimmed := strings.TrimSpace(b); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+// raiseQuickIssueFlag files one tracked issue for a quick job, through the
+// existing flag writer (updateFlagFile) -- never a second flag-writing
+// path. Deduplicated on (source, description): re-running the same failing
+// job, or a helper repeating the same reported blocker, never piles up a
+// second identical flag.
+func raiseQuickIssueFlag(description string) error {
 	if store == nil {
 		return nil
 	}
-	description := fmt.Sprintf("A quick job's checks failed: %s", strings.TrimSpace(job))
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return nil
+	}
 	var ff colony.FlagsFile
 	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
 		ff = colony.FlagsFile{}
