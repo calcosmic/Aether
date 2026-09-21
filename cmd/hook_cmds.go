@@ -404,7 +404,7 @@ func logScreenRelayIntervention() {
 }
 
 // transcriptEntry, transcriptContentBlock are the minimum shape
-// owedScreenBanners reads out of a real Claude Code transcript line. Unknown
+// owedScreenFrom reads out of a real Claude Code transcript line. Unknown
 // fields are ignored by encoding/json, and every entry this function cannot
 // parse is skipped rather than treated as an error -- consistent with fail
 // open.
@@ -615,7 +615,7 @@ func isGenuineUserPrompt(content json.RawMessage) bool {
 // toolResultText reads the text of a tool_result content block, which a real
 // transcript has shown in two shapes: a plain string (the common case for a
 // Bash result), or an array of blocks carrying a "text" field. Any other
-// shape yields "", which owedScreenBanners treats as no banners rather than
+// shape yields "", which owedScreenFrom treats as no banners rather than
 // an error.
 func toolResultText(raw json.RawMessage) string {
 	var text string
