@@ -48,64 +48,6 @@ func encodeStopHookStdin(t *testing.T, payload map[string]interface{}) string {
 	return string(encoded)
 }
 
-// extractLastFixtureToolResultText parses a real captured transcript fixture
-// and returns the text of the LAST tool_result block a user-role message
-// carries -- the same text a Bash call's own output put on screen. Deriving
-// the "good" reply this way (rather than typing the banner text as a Go
-// string literal) ties the test to what the fixture actually recorded.
-func extractLastFixtureToolResultText(t *testing.T, transcriptFile string) string {
-	t.Helper()
-	path := filepath.Join("testdata", "stop-hook", transcriptFile)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read transcript fixture %s: %v", transcriptFile, err)
-	}
-
-	type block struct {
-		Type    string          `json:"type"`
-		Content json.RawMessage `json:"content"`
-	}
-	type entry struct {
-		Type    string `json:"type"`
-		Message struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-		} `json:"message"`
-	}
-
-	var lastText string
-	for _, raw := range strings.Split(string(data), "\n") {
-		raw = strings.TrimSpace(raw)
-		if raw == "" {
-			continue
-		}
-		var e entry
-		if err := json.Unmarshal([]byte(raw), &e); err != nil {
-			continue
-		}
-		if e.Type != "user" || e.Message.Role != "user" {
-			continue
-		}
-		var blocks []block
-		if json.Unmarshal(e.Message.Content, &blocks) != nil {
-			continue
-		}
-		for _, b := range blocks {
-			if b.Type != "tool_result" {
-				continue
-			}
-			var text string
-			if json.Unmarshal(b.Content, &text) == nil && text != "" {
-				lastText = text
-			}
-		}
-	}
-	if lastText == "" {
-		t.Fatalf("fixture transcript %s carried no tool_result text to derive a reply from", transcriptFile)
-	}
-	return lastText
-}
-
 func runStopHookFixture(t *testing.T, stdin string) (stdoutOut string, stderrOut string) {
 	t.Helper()
 	var buf bytes.Buffer
@@ -138,17 +80,19 @@ func stopHookBlockReason(t *testing.T, out string) (blocked bool, reason string)
 }
 
 // TestStopHookSendsBackAReplyThatHidTheScreen is the real "hid the screen"
-// case: a genuine Claude Code session ran `aether status` in visual mode,
-// got a screen back, and replied with the single word "done" -- never
-// showing the owner what Aether drew. cmd/testdata/stop-hook/hide-screen-*
-// is that exact session, captured for real (see the implementation report).
+// case, and it needed no synthesis at all: a genuine Claude Code session ran
+// the REAL `/ant-status` menu command, Aether drew the colony-status screen,
+// and the chat's actual first reply paraphrased it ("No colony here yet --
+// this repo hasn't been started with Aether...") rather than showing it.
+// cmd/testdata/stop-hook/menu-command-* is that exact session and its exact
+// first Stop payload, captured for real (see the implementation report).
 func TestStopHookSendsBackAReplyThatHidTheScreen(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
 	store = nil
 	tracer = nil
 
-	payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+	payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
 
 	blocked, reason := stopHookBlockReason(t, out)
@@ -164,23 +108,97 @@ func TestStopHookSendsBackAReplyThatHidTheScreen(t *testing.T) {
 }
 
 // TestStopHookAllowsAReplyThatShowsTheScreen is the paired real session: the
-// same command, but the reply relayed the screen inside a fenced block. The
-// "good" reply text is derived from the fixture's OWN tool result
-// (extractLastFixtureToolResultText), never typed as a Go literal.
+// same real `/ant-status` transcript, but the reply relays the screen. The
+// "good" reply text is DERIVED, not typed: it is the genuine screen text the
+// same chat produced on its own retry (captured in the second, stop_hook_active
+// Stop payload of the same real session, after this hook's own block sent it
+// back once) -- see the implementation report for exactly which field was
+// swapped and why.
 func TestStopHookAllowsAReplyThatShowsTheScreen(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
 	store = nil
 	tracer = nil
 
-	screenText := extractLastFixtureToolResultText(t, "show-screen-transcript.jsonl")
-	payload := loadStopHookFixturePayload(t, "show-screen-stop-payload.json", "show-screen-transcript.jsonl")
-	payload["last_assistant_message"] = "```\n" + screenText + "\n```"
+	payload := loadStopHookFixturePayload(t, "menu-command-show-screen-stop-payload.json", "menu-command-transcript.jsonl")
 
 	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
 	if strings.TrimSpace(out) != "" {
 		t.Fatalf("expected a reply that shows the screen to be allowed silently, got %q", out)
 	}
+}
+
+// TestStopHookOnlyAppliesWhereMenuCommandsAreUsed is the scoping rule: a
+// session that never invoked one of Aether's own `/ant-…` menu commands is
+// out of scope, however visual the Bash output it ran looks -- a developer
+// piping `AETHER_OUTPUT_MODE=visual aether status` through grep in an ad-hoc
+// debug session has no reason to paste a screen and must never be blocked.
+// cmd/testdata/stop-hook/hide-screen-* is the original plain-prompt fixture
+// (no /ant- command anywhere in it) whose reply hides the same kind of
+// screen -- proving the scope rule, not the containment check, is what
+// allows it here.
+func TestStopHookOnlyAppliesWhereMenuCommandsAreUsed(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	store = nil
+	tracer = nil
+
+	payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("a session with no /ant- menu command must never be blocked, even with a hidden screen; got %q", out)
+	}
+}
+
+// TestStopHookOffSwitchDisablesTheScreenCheck proves the owner's off switch:
+// AETHER_SCREEN_RELAY=off must allow a reply that would otherwise be blocked
+// (the real /ant-status "hid it" case), and the check is case-insensitive
+// and trims whitespace around the value.
+func TestStopHookOffSwitchDisablesTheScreenCheck(t *testing.T) {
+	for _, value := range []string{"off", "OFF", "  Off  "} {
+		t.Run(value, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+			store = nil
+			tracer = nil
+			t.Setenv("AETHER_SCREEN_RELAY", value)
+
+			payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+			out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+			if strings.TrimSpace(out) != "" {
+				t.Fatalf("AETHER_SCREEN_RELAY=%q must disable the screen check entirely; got %q", value, out)
+			}
+		})
+	}
+
+	t.Run("still blocks when unset", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		store = nil
+		tracer = nil
+
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+		blocked, _ := stopHookBlockReason(t, out)
+		if !blocked {
+			t.Fatalf("with AETHER_SCREEN_RELAY unset, the same hidden-screen reply must still block; got %q", out)
+		}
+	})
+
+	t.Run("other values do not disable it", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		store = nil
+		tracer = nil
+		t.Setenv("AETHER_SCREEN_RELAY", "on")
+
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+		blocked, _ := stopHookBlockReason(t, out)
+		if !blocked {
+			t.Fatalf("AETHER_SCREEN_RELAY=on must not disable the screen check; got %q", out)
+		}
+	})
 }
 
 // TestStopHookNeverBlocksTwice pins the pre-existing loop guard: a Stop event
@@ -191,7 +209,7 @@ func TestStopHookNeverBlocksTwice(t *testing.T) {
 	store = nil
 	tracer = nil
 
-	payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+	payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 	payload["stop_hook_active"] = true
 
 	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
@@ -213,7 +231,7 @@ func TestStopHookIgnoresHelpersAndWorkers(t *testing.T) {
 		t.Setenv("AETHER_WORKER_NAME", "Weld-32")
 		t.Setenv("AETHER_WORKER_CASTE", "builder")
 
-		payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
 		if strings.TrimSpace(out) != "" {
 			t.Fatalf("an Aether-spawned worker must never be blocked; got %q", out)
@@ -226,7 +244,7 @@ func TestStopHookIgnoresHelpersAndWorkers(t *testing.T) {
 		store = nil
 		tracer = nil
 
-		payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 		payload["agent_id"] = "agent-42"
 		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
 		if strings.TrimSpace(out) != "" {
@@ -279,7 +297,7 @@ func TestStopHookFailsOpenOnAnUnknownTranscript(t *testing.T) {
 			store = nil
 			tracer = nil
 
-			payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+			payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 			payload["transcript_path"] = tc.prepare(t)
 
 			out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
@@ -320,7 +338,7 @@ func TestStopHookLifecycleBlockStillWins(t *testing.T) {
 	// A hidden-screen payload that WOULD independently trigger the screen
 	// block, layered on top of a colony state that independently triggers
 	// the lifecycle block.
-	payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+	payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
 
 	blocked, reason := stopHookBlockReason(t, out)
@@ -356,7 +374,7 @@ func TestStopHookScreenCheckDoesNotMutate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	payload := loadStopHookFixturePayload(t, "hide-screen-stop-payload.json", "hide-screen-transcript.jsonl")
+	payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
 	stdin := encodeStopHookStdin(t, payload)
 
 	before := snapshotProjectDataTree(t, s.BasePath())

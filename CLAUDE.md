@@ -242,26 +242,38 @@ transcript of the current turn, finds the last Bash call that ran Aether in
 visual mode and drew at least one banner line (`━━ … ━━`, the same
 `isAetherBannerLine` predicate `renderBanner` itself is checked against), and
 blocks once, with a plain-English reason, if the reply never showed every one
-of those banner lines. The lifecycle check still wins when both would block --
-one project state, one answer. The check fails open on every unreadable or
-unrecognised transcript, an empty reply, or no owed screen at all, and it never
-writes anything; it is skipped entirely for a Stop event belonging to an
-Aether-spawned worker or a platform-reported sub-agent, since the hook exists
-to catch the OWNER walking past a screen, not a helper. Locked by
+of those banner lines. The check applies ONLY in a session where the owner
+has actually used one of Aether's own `/ant-…` menu commands (detected from
+the real `<command-name>/ant-…</command-name>` tag Claude Code itself records
+for a typed slash command) -- a developer piping
+`AETHER_OUTPUT_MODE=visual aether status` through grep in an ad-hoc debug
+session is never in scope, however visual its output looks. The owner can
+also switch the whole check off with `AETHER_SCREEN_RELAY=off`. The lifecycle
+check still wins when both would block -- one project state, one answer. The
+check fails open on every unreadable or unrecognised transcript, an empty
+reply, or no owed screen at all, and it never writes anything; it is skipped
+entirely for a Stop event belonging to an Aether-spawned worker or a
+platform-reported sub-agent, since the hook exists to catch the OWNER walking
+past a screen, not a helper. Locked by
 `TestStopHookSendsBackAReplyThatHidTheScreen`,
-`TestStopHookAllowsAReplyThatShowsTheScreen`, `TestStopHookNeverBlocksTwice`,
+`TestStopHookAllowsAReplyThatShowsTheScreen`,
+`TestStopHookOnlyAppliesWhereMenuCommandsAreUsed`,
+`TestStopHookOffSwitchDisablesTheScreenCheck`, `TestStopHookNeverBlocksTwice`,
 `TestStopHookIgnoresHelpersAndWorkers`,
 `TestStopHookFailsOpenOnAnUnknownTranscript`,
 `TestStopHookLifecycleBlockStillWins`,
 `TestStopHookScreenCheckDoesNotMutate`, and
 `TestBannerPredicateMatchesTheRenderer` (`cmd/stop_hook_screen_test.go`,
-fixtures captured from a real Claude Code session under
-`cmd/testdata/stop-hook/`).
+fixtures captured from real Claude Code sessions under
+`cmd/testdata/stop-hook/`, including a real `/ant-status` session).
 
 *For dummies: if Aether draws you a screen (a status board, a finished-phase
-card) and the chat's reply never actually shows it to you, the program itself
-notices and sends the reply back once, asking it to paste the screen in
-before finishing. It never asks twice in a row, it never fires for Aether's
+card) after you used one of its own `/ant-…` commands, and the chat's reply
+never actually shows it to you, the program itself notices and sends the
+reply back once, asking it to paste the screen in before finishing. It never
+fires in an ordinary developer session that never used a `/ant-…` command,
+and you can turn the whole thing off with `AETHER_SCREEN_RELAY=off`. It never
+asks twice in a row, it never fires for Aether's
 own background helpers, and if it cannot make sense of what happened it always
 lets the reply through rather than guessing wrong.*
 

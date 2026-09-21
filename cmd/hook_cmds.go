@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -326,13 +327,24 @@ func lifecycleStopBlockReason() string {
 // "renderer", no "transcript" -- just what happened and what to do about it.
 const stopHookScreenRelayReason = "Aether drew a screen in this reply and you did not show it. Show it now in a fenced text block, unchanged, from the first ━━ banner line to the end, then finish."
 
+// screenRelayDisabledByEnv is the owner's off switch: AETHER_SCREEN_RELAY=off
+// (case-insensitive, trimmed) skips the screen check entirely, leaving the
+// lifecycle check as the only thing hook-stop can still block on.
+func screenRelayDisabledByEnv() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("AETHER_SCREEN_RELAY")), "off")
+}
+
 // screenRelayBlockReason decides the second, independent question: did
 // Aether draw a screen in this turn that the reply never showed. It fails
 // open on every ambiguous or unreadable case -- no transcript path, an
-// unreadable or unrecognised transcript, no owed screen, and an empty reply
-// all return "" (allow) rather than guessing. This function and
-// owedScreenBanners never write anything; the Stop hook stays read-only.
+// unreadable or unrecognised transcript, no owed screen, an empty reply, and
+// AETHER_SCREEN_RELAY=off all return "" (allow) rather than guessing. This
+// function and owedScreenBanners never write anything; the Stop hook stays
+// read-only.
 func screenRelayBlockReason(input claudeHookInput) string {
+	if screenRelayDisabledByEnv() {
+		return ""
+	}
 	owed := owedScreenBanners(input.TranscriptPath)
 	if len(owed) == 0 {
 		return ""
@@ -396,9 +408,50 @@ type transcriptContentBlock struct {
 	} `json:"input"`
 }
 
+// antCommandNamePattern matches Claude Code's own record of a slash command
+// invocation, e.g. "<command-name>/ant-status</command-name>". Observed
+// directly in a real captured transcript (cmd/testdata/stop-hook/menu-command-*):
+// a genuine human prompt whose message.content is the plain string
+// "<command-message>ant-status</command-message>\n<command-name>/ant-status</command-name>",
+// never inside a tool_result or an isMeta companion message.
+var antCommandNamePattern = regexp.MustCompile(`<command-name>\s*/ant-[a-zA-Z0-9_-]+\s*</command-name>`)
+
+// sessionUsesAntCommands reports whether ANY genuine human prompt in the
+// transcript invoked one of Aether's own `/ant-…` menu commands. This is the
+// scoping rule the screen check needs: a developer piping
+// `AETHER_OUTPUT_MODE=visual aether status` through grep in an ad-hoc debug
+// session has no menu-command prompt anywhere in their transcript and is
+// never in scope, however the Bash output looks. Only a plain-string
+// user-role message is checked -- the shape Claude Code actually records a
+// typed slash command as -- never a tool_result or an array content block.
+func sessionUsesAntCommands(lines []string) bool {
+	for _, raw := range lines {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		var entry transcriptEntry
+		if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+			continue
+		}
+		if entry.Type != "user" || entry.Message.Role != "user" {
+			continue
+		}
+		var text string
+		if json.Unmarshal(entry.Message.Content, &text) != nil {
+			continue
+		}
+		if antCommandNamePattern.MatchString(text) {
+			return true
+		}
+	}
+	return false
+}
+
 // owedScreenBanners reads a real Claude Code transcript and returns the
 // whitespace-normalised banner lines of the screen the current turn owes the
-// owner, or nil when nothing is owed or the transcript cannot be read or
+// owner, or nil when nothing is owed, the session never used one of
+// Aether's own `/ant-…` menu commands, or the transcript cannot be read or
 // understood.
 //
 // "The current turn" is everything from the LAST genuine human prompt
@@ -425,6 +478,15 @@ func owedScreenBanners(transcriptPath string) []string {
 	}
 
 	lines := strings.Split(string(data), "\n")
+
+	// Scope: only a session where the owner has used one of Aether's own
+	// menu commands is in scope at all. A raw developer/debug session that
+	// happens to run `aether status` in visual mode -- e.g. piped through
+	// grep -- is never owed a relayed screen.
+	if !sessionUsesAntCommands(lines) {
+		return nil
+	}
+
 	entries := make([]transcriptEntry, len(lines))
 	parsed := make([]bool, len(lines))
 
