@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,24 +44,33 @@ var maturityCmd = &cobra.Command{
 }
 
 var quickCmd = &cobra.Command{
-	Use:   "quick [question]",
-	Short: "Run a lightweight Scout query without build ceremony",
+	Use:   "quick [job]",
+	Short: "Do one small job with one helper, then run the project's checks",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		question := strings.TrimSpace(strings.Join(args, " "))
-		if question == "" {
-			outputError(1, `usage: aether quick "question"`, nil)
+		task := strings.TrimSpace(strings.Join(args, " "))
+		if task == "" {
+			outputError(1, `usage: aether quick "small job"`+"\n"+`       aether quick --question "question"`, nil)
 			return nil
 		}
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		if timeout <= 0 {
 			timeout = codex.DefaultWorkerTimeout
 		}
-		result, err := runQuickScout(question, timeout)
+		questionMode, _ := cmd.Flags().GetBool("question")
+
+		var result map[string]interface{}
+		var err error
+		if questionMode {
+			result, err = runQuickScout(task, timeout)
+		} else {
+			result, err = runQuickJob(task, timeout)
+		}
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "quick", "", "")
 		outputWorkflow(result, renderQuickVisual(result))
 		return nil
 	},
@@ -120,7 +132,8 @@ var verifyCastesCmd = &cobra.Command{
 }
 
 func init() {
-	quickCmd.Flags().Duration("timeout", codex.DefaultWorkerTimeout, "Scout worker timeout")
+	quickCmd.Flags().Duration("timeout", codex.DefaultWorkerTimeout, "Worker timeout")
+	quickCmd.Flags().Bool("question", false, "Ask a read-only question instead of doing a job (dispatches a scout, changes nothing)")
 	bumpVersionCmd.Flags().Bool("dry-run", false, "Preview version updates without writing files")
 	migrateStateCmd.Flags().Bool("dry-run", false, "Preview migration without writing COLONY_STATE.json")
 	migrateStateCmd.Flags().String("rollback", "", "Restore an Aether-created pre-migration backup")
@@ -395,13 +408,29 @@ type quickAttemptDispatch struct {
 // one-question request, on the same six-verdict work-outcome vocabulary
 // (colony.WorkOutcome, D-05) the rest of the work cycle reports through.
 type quickAttemptRecord struct {
-	ID         string                 `json:"id"`
-	Question   string                 `json:"question"`
-	StartedAt  string                 `json:"started_at"`
-	Dispatches []quickAttemptDispatch `json:"dispatches"`
-	Verdict    colony.WorkOutcome     `json:"verdict,omitempty"`
-	Summary    string                 `json:"summary,omitempty"`
-	Evidence   []string               `json:"evidence,omitempty"`
+	ID string `json:"id"`
+	// Mode is "question" (a read-only scout query, runQuickScout) or "job"
+	// (a small job done by the builder, runQuickJob) -- the durable record's
+	// own distinction between the two /ant-quick shapes.
+	Mode        string                 `json:"mode,omitempty"`
+	Question    string                 `json:"question"`
+	StartedAt   string                 `json:"started_at"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	Dispatches  []quickAttemptDispatch `json:"dispatches"`
+	Verdict     colony.WorkOutcome     `json:"verdict,omitempty"`
+	Summary     string                 `json:"summary,omitempty"`
+	Evidence    []string               `json:"evidence,omitempty"`
+	Files       []string               `json:"files,omitempty"`
+	// CheckArtifacts lists files the project's own checks left behind (e.g.
+	// a compiled binary) -- reported, never deleted, and never folded into
+	// Files (a check artifact is not the helper's own change).
+	CheckArtifacts []string `json:"check_artifacts,omitempty"`
+	// WorkerName and Caste name the one helper this attempt dispatched, so
+	// the shared episode lineage (colonyEpisodeIndexEntry) can show an
+	// actor instead of "Unknown" -- the same information every other
+	// episode source already carries.
+	WorkerName string `json:"worker_name,omitempty"`
+	Caste      string `json:"caste,omitempty"`
 }
 
 // newQuickAttempt opens one attempt for a quick request. The ID is a plain,
@@ -424,50 +453,95 @@ func (a *quickAttemptRecord) recordDispatch(workerName, caste, status string) {
 	a.Dispatches = append(a.Dispatches, quickAttemptDispatch{WorkerName: workerName, Caste: caste, Status: status})
 }
 
+// The three words a quick request's own checks can come back with: they
+// passed, they failed, or nothing could actually be run (no verification
+// command resolved, or it ran out of time). "Not checked" is never folded
+// into either passed or failed -- a change nothing could verify is reported
+// honestly as unverified, never as a pass.
+const (
+	quickChecksPassed      = "passed"
+	quickChecksFailed      = "failed"
+	quickChecksNotResolved = "not_checked"
+)
+
+// quickChecksMaxDuration caps a single resolved check command under quick's
+// own budget -- a job is meant to be small, so one hung command must not
+// hold the whole request hostage.
+const quickChecksMaxDuration = 5 * time.Minute
+
 // quickWorkVerdict derives CAP-029's verdict for a quick request: no_change
 // when the request touched no files (the common, read-only case), success
-// when it changed files and the deterministic checks over the changed area
-// passed, and blocker when those checks failed. Never success or no_change
-// on a failed check -- a changed-but-unverified file is never reported as
-// though nothing needed changing.
-func quickWorkVerdict(filesChanged []string, checksPassed bool) colony.WorkOutcome {
+// when it changed files and the project's own checks over the changed area
+// passed, partial when files changed but nothing could actually be checked,
+// and blocker when those checks failed. Never success on an unresolved or
+// failed check -- a changed-but-unverified file is never reported as though
+// nothing needed changing.
+func quickWorkVerdict(filesChanged []string, checksOutcome string) colony.WorkOutcome {
 	if len(filesChanged) == 0 {
 		return colony.WorkOutcomeNoChange
 	}
-	if checksPassed {
+	switch checksOutcome {
+	case quickChecksPassed:
 		return colony.WorkOutcomeSuccess
+	case quickChecksNotResolved:
+		return colony.WorkOutcomePartial
+	default:
+		return colony.WorkOutcomeBlocker
 	}
-	return colony.WorkOutcomeBlocker
 }
 
-// runQuickDeterministicChecks runs the deterministic check command set over
-// the repository when a quick request changed files, mirroring the
-// build/vet floor the rest of the work cycle already enforces
-// (cmd/deterministic_floor.go). Zero files changed is the common,
-// read-only case and is treated as passing without invoking a process. A
+// runQuickDeterministicChecks runs this project's own resolved verification
+// commands over the repository when a quick request changed files, using the
+// same resolution (resolveCodexVerificationCommands) and scope-narrowing
+// (deriveVerificationScope) the rest of the work cycle already relies on --
+// never a second, hardcoded command set. Zero files changed is the common,
+// read-only case and is treated as passed without invoking a process. A
 // package-level seam (mirroring newQuickWorkerInvoker) so tests can
 // substitute a fake without shelling out.
-var runQuickDeterministicChecks = func(root string, files []string) (bool, []string, error) {
+var runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
 	if len(files) == 0 {
-		return true, nil, nil
+		return quickChecksPassed, nil, nil
 	}
-	steps := [][]string{{"go", "build", "./..."}, {"go", "vet", "./..."}}
+	commands := resolveCodexVerificationCommands(root)
+	claims := codexBuildClaims{FilesModified: files}
+	_, scoped := deriveVerificationScope(root, colony.Phase{}, false, claims, commands)
+
+	type quickCheckStep struct{ name, command string }
+	var steps []quickCheckStep
+	if command := strings.TrimSpace(scoped.Build); command != "" {
+		steps = append(steps, quickCheckStep{"build", command})
+	}
+	if command := strings.TrimSpace(scoped.Type); command != "" {
+		steps = append(steps, quickCheckStep{"types", command})
+	}
+	if command := strings.TrimSpace(scoped.Lint); command != "" {
+		steps = append(steps, quickCheckStep{"lint", command})
+	}
+	if command := strings.TrimSpace(scoped.Test); command != "" {
+		steps = append(steps, quickCheckStep{"tests", command})
+	}
+	if len(steps) == 0 {
+		return quickChecksNotResolved, nil, nil
+	}
+
 	evidence := make([]string, 0, len(steps))
-	for _, args := range steps {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = root
-		out, err := cmd.CombinedOutput()
-		trimmed := strings.TrimSpace(string(out))
+	for _, step := range steps {
+		output, exitCode, timedOut, err := runShellCommand(root, step.command, quickChecksMaxDuration)
+		if timedOut {
+			evidence = append(evidence, fmt.Sprintf("%s (%s): ran out of time", step.name, step.command))
+			return quickChecksNotResolved, evidence, nil
+		}
 		if err != nil {
+			trimmed := strings.TrimSpace(output)
 			if trimmed == "" {
 				trimmed = err.Error()
 			}
-			evidence = append(evidence, fmt.Sprintf("%s: FAILED: %s", strings.Join(args, " "), trimmed))
-			return false, evidence, nil
+			evidence = append(evidence, fmt.Sprintf("%s (%s): FAILED (exit %d): %s", step.name, step.command, exitCode, trimmed))
+			return quickChecksFailed, evidence, nil
 		}
-		evidence = append(evidence, fmt.Sprintf("%s: passed", strings.Join(args, " ")))
+		evidence = append(evidence, fmt.Sprintf("%s (%s): passed", step.name, step.command))
 	}
-	return true, evidence, nil
+	return quickChecksPassed, evidence, nil
 }
 
 func runQuickScout(question string, timeout time.Duration) (map[string]interface{}, error) {
@@ -490,6 +564,8 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	// request's own attempt, before dispatch -- no check-in pause is ever
 	// added for a single worker with nothing pending.
 	attempt.recordDispatch(workerName, "scout", "dispatched")
+	attempt.WorkerName = workerName
+	attempt.Caste = "scout"
 	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
 		TaskID: "quick.scout",
 		Goal:   "Answer a lightweight user question about the current repository or Aether context.",
@@ -529,17 +605,17 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
 
 	filesChanged := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
-	checksPassed := true
+	checksOutcome := quickChecksPassed
 	var checkEvidence []string
 	if len(filesChanged) > 0 {
 		var checkErr error
-		checksPassed, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
+		checksOutcome, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
 		if checkErr != nil {
-			checksPassed = false
+			checksOutcome = quickChecksFailed
 			checkEvidence = append(checkEvidence, checkErr.Error())
 		}
 	}
-	attempt.Verdict = quickWorkVerdict(filesChanged, checksPassed)
+	attempt.Verdict = quickWorkVerdict(filesChanged, checksOutcome)
 	attempt.Summary = strings.TrimSpace(workerResult.Summary)
 	attempt.Evidence = checkEvidence
 	if attempt.Verdict == colony.WorkOutcomeBlocker {
@@ -562,6 +638,448 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	}, nil
 }
 
+// quickWorkingTreeSnapshot maps every currently non-clean path (tracked and
+// dirty, or untracked) to a content hash, read from `git status
+// --porcelain=v1 -z --untracked-files=all`. Taken once before a quick job
+// dispatches and once after it returns, the two snapshots let
+// quickRealChangedFiles detect a real disk change independently of
+// whatever the worker chooses to report -- including a second edit to a
+// path that was ALREADY dirty before the job ran, because that path's hash
+// changes too. ok is false when root is not a git repository (or git could
+// not be run), in which case the caller falls back to the worker's own
+// report and says so plainly on screen.
+func quickWorkingTreeSnapshot(root string) (map[string]string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, false
+	}
+	snapshot := map[string]string{}
+	entries := strings.Split(string(out), "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if len(entry) < 4 {
+			continue
+		}
+		status := entry[:2]
+		path := strings.TrimSpace(entry[3:])
+		if path == "" {
+			continue
+		}
+		if status[0] == 'R' || status[0] == 'C' {
+			// A rename/copy entry's OLD path follows as the next NUL-
+			// separated field -- not itself a path to hash.
+			i++
+		}
+		snapshot[filepath.ToSlash(path)] = quickFileContentHash(filepath.Join(root, filepath.FromSlash(path)))
+	}
+	return snapshot, true
+}
+
+// quickFileContentHash hashes a file's current content, or reports
+// "missing" for a path that no longer exists (e.g. a worker deleted it) so
+// that a delete still registers as a change relative to any earlier hash.
+func quickFileContentHash(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "missing"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// quickRealChangedFiles derives the real changed-file set from two
+// snapshots, excluding .aether/data/ (colony bookkeeping, never a job's own
+// output). A path present in either snapshot with a different hash, a path
+// newly dirty, or a path that WAS dirty and is no longer (e.g. reverted or
+// deleted back to clean) all count -- something happened to it.
+// quickRuntimeOwnedPathPrefixes are repo-relative path prefixes the
+// program itself owns and writes as ordinary bookkeeping -- colony data,
+// lock files, the TS host's own installed copy, in-flight update
+// transactions, and worktree scratch space. A path under one of these
+// never counts as a real change, no matter what a snapshot diff sees.
+var quickRuntimeOwnedPathPrefixes = []string{
+	".aether/data/",
+	".aether/locks/",
+	".aether/ts-host/",
+	".aether/dreams/",
+	".aether/oracle/",
+	".aether/checkpoints/",
+	".aether-transactions/",
+	".claude/worktrees/",
+}
+
+// quickBootstrapManagedPaths are the exact repo-relative files Aether's own
+// first-run bootstrap and lazy host install can create -- sometimes DURING
+// dispatch itself, inside the real worker CLI's own subprocess start-up,
+// which no before/after snapshot ordering alone can see coming (moving the
+// "before" snapshot earlier does not help once the write happens inside
+// Invoke()). A path in this set is never attributed to the helper merely
+// by APPEARING (absent before dispatch, present after) -- but if it
+// already existed before dispatch and its content changes, or it
+// disappears, that is a real, helper-attributable change and IS reported;
+// once a folder is already bootstrapped, a genuine edit to one of these
+// files is never silently swallowed.
+// This set is verified directly against the real writer
+// (ensureRepoLocalScaffold, cmd/platform_sync.go -- called for real by
+// init, lay-eggs, and update) by TestQuickClassifiesEveryFileTheRealBootstrapCreates,
+// which walks a fresh temp repository after running that function for real
+// and fails by name if it ever creates a file neither this map nor
+// quickRuntimeOwnedPathPrefixes accounts for -- so a future scaffold
+// addition is caught here rather than chased one leaked path at a time
+// after a real run.
+var quickBootstrapManagedPaths = map[string]bool{
+	".claude/settings.json":   true,
+	".codex/CODEX.md":         true,
+	".opencode/OPENCODE.md":   true,
+	"AGENTS.md":               true,
+	".aether/QUEEN.md":        true,
+	".aether/WHAT-IS-THIS.md": true,
+	".aether/.gitignore":      true,
+}
+
+// quickBootstrapManagedPathPrefixes is the directory-shaped counterpart of
+// quickBootstrapManagedPaths -- a whole rules directory the bootstrap
+// installs, not one named file.
+var quickBootstrapManagedPathPrefixes = []string{
+	".claude/rules/",
+}
+
+func quickIsRuntimeOwnedPath(path string) bool {
+	for _, prefix := range quickRuntimeOwnedPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func quickIsBootstrapManagedPath(path string) bool {
+	if quickBootstrapManagedPaths[path] {
+		return true
+	}
+	for _, prefix := range quickBootstrapManagedPathPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// quickRealChangedFiles derives the real changed-file set from two
+// snapshots. A runtime-owned path (quickIsRuntimeOwnedPath) never counts.
+// A bootstrap-managed path (quickIsBootstrapManagedPath) counts only when
+// it already existed before dispatch and genuinely changed or disappeared
+// -- never merely for appearing, since Aether's own bootstrap can create
+// it. Every other path counts on appearing, changing, or disappearing.
+func quickRealChangedFiles(before, after map[string]string) []string {
+	changed := map[string]bool{}
+	consider := func(path string, appeared bool) {
+		if quickIsRuntimeOwnedPath(path) {
+			return
+		}
+		if appeared && quickIsBootstrapManagedPath(path) {
+			return
+		}
+		changed[path] = true
+	}
+	for path, hash := range after {
+		beforeHash, existedBefore := before[path]
+		if !existedBefore {
+			consider(path, true)
+			continue
+		}
+		if beforeHash != hash {
+			consider(path, false)
+		}
+	}
+	for path := range before {
+		if _, ok := after[path]; !ok {
+			consider(path, false)
+		}
+	}
+	out := make([]string, 0, len(changed))
+	for path := range changed {
+		out = append(out, path)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// runQuickJob does one small job with one helper (CAP-029, the owner's 21
+// Sep decision): dispatches a single builder, then runs the project's own
+// checks over whatever it changed. Unlike runQuickScout it is never
+// read-only by construction -- the builder is free to create or modify
+// files -- so its context capsule is the full colony-prime capsule
+// (resolveCodexWorkerContext), which already carries active pheromone
+// signals under its own heading; PheromoneSection is deliberately left
+// empty here (see resolvePheromoneSection's calling contract in
+// cmd/codex_build.go) so steering is never shipped twice.
+//
+// A failed check never undoes the change: the paths a builder touches are
+// not known up front (unlike Swarm's repair, whose paths are known before
+// it runs), so a safe automatic undo cannot be built without risking
+// deleting something the program did not create. Instead the change is
+// kept, the screen says plainly that the checks failed, and one tracked
+// issue flag is raised so the owner does not have to remember it.
+func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, error) {
+	root := skillWorkspaceRoot()
+	attempt := newQuickAttempt(job, time.Now().UTC())
+	attempt.Mode = "job"
+	invoker := newQuickWorkerInvoker()
+	if invoker == nil {
+		invoker = &codex.FakeInvoker{}
+	}
+	ctx := context.Background()
+	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(ctx) {
+		return nil, fmt.Errorf("quick job cannot start because %s", dispatchAvailabilityMessage(invoker))
+	}
+	agentPath := dispatchAgentPath(root, invoker, "aether-builder")
+	if err := invoker.ValidateAgent(agentPath); err != nil {
+		return nil, fmt.Errorf("builder agent unavailable: %w", err)
+	}
+	workerName := deterministicAntName("builder", job)
+	// CAP-029 proportionality: exactly one worker, recorded against this
+	// request's own attempt, before dispatch -- no check-in pause is ever
+	// added for a single worker with nothing pending.
+	attempt.recordDispatch(workerName, "builder", "dispatched")
+	attempt.WorkerName = workerName
+	attempt.Caste = "builder"
+	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
+		TaskID: "quick.job",
+		Goal:   "Do one small job in this repository, directly -- not a plan, not a survey, the actual change.",
+		Constraints: []string{
+			"This is one small job. If it turns out to be bigger than a small job, stop and say so plainly in your summary instead of doing a large amount of work.",
+			"Keep the effort proportionate to the job. For a change to wording, a label, a comment, a document or configuration, make the change and do not write new tests. Add or update a test only when the job changes how the code behaves, and then only the smallest test that proves it.",
+		},
+		Hints: []string{
+			fmt.Sprintf("The job: %s", job),
+		},
+		SuccessCriteria: []string{
+			"Make the actual change the job asks for.",
+			"Report exactly which files were created or modified, and why.",
+		},
+	})
+	dispatch := codex.WorkerDispatch{
+		WorkerName:     workerName,
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  agentPath,
+		Caste:          "builder",
+		TaskID:         "quick.job",
+		TaskBrief:      taskBrief,
+		ContextCapsule: resolveCodexWorkerContext(),
+		HandoffSection: renderWorkerHandoffSection("quick", 0, workerName),
+		Root:           root,
+		Timeout:        timeout,
+		SkillSection:   resolveSkillSectionForWorkflow("quick", "builder", job),
+		Workflow:       "quick",
+	}
+	// TRUST: worker-reported evidence is never taken on faith (the same rule
+	// build claims already answer to). Snapshot the working tree before
+	// dispatch so a real disk change reaches the checks and the verdict
+	// even when the worker never reports it.
+	beforeSnapshot, snapshotOK := quickWorkingTreeSnapshot(root)
+
+	workerResult, err := invoker.Invoke(ctx, codex.WorkerConfig{
+		AgentName:      dispatch.AgentName,
+		AgentTOMLPath:  dispatch.AgentTOMLPath,
+		Caste:          dispatch.Caste,
+		WorkerName:     dispatch.WorkerName,
+		TaskID:         dispatch.TaskID,
+		TaskBrief:      dispatch.TaskBrief,
+		ContextCapsule: dispatch.ContextCapsule,
+		HandoffSection: dispatch.HandoffSection,
+		Root:           dispatch.Root,
+		Timeout:        dispatch.Timeout,
+		SkillSection:   dispatch.SkillSection,
+	})
+	if err != nil {
+		attempt.Dispatches[0].Status = "failed"
+		attempt.Verdict = colony.WorkOutcomeBlocker
+		attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		// Do NOT also call recordDispatchWorkerOutcome here: an invoke
+		// error never reached a real worker, so it has no handoff to
+		// persist, and its shared memory feed would additionally log this
+		// same failure a second time under category worker_failed,
+		// falsely attributed to "aether build". recordQuickFailureToMidden
+		// is the one, correctly-attributed record for this path.
+		recordQuickFailureToMidden(job, attempt.ID, err)
+		persistQuickAttempt(attempt)
+		return nil, err
+	}
+	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
+
+	reportedFiles := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
+	filesChanged := reportedFiles
+	changesConfirmed := false
+	if snapshotOK {
+		afterSnapshot, afterOK := quickWorkingTreeSnapshot(root)
+		if afterOK {
+			realChanged := quickRealChangedFiles(beforeSnapshot, afterSnapshot)
+			filesChanged = uniqueSortedStrings(append(append([]string(nil), reportedFiles...), realChanged...))
+			changesConfirmed = true
+		}
+	}
+	checksOutcome := quickChecksPassed
+	var checkEvidence []string
+	var checkArtifacts []string
+	if len(filesChanged) > 0 {
+		// A check must never leave files behind attributed to the helper --
+		// the Go fallback build command, for one, writes a binary into the
+		// project. Snapshot around the checks call too, separately from the
+		// helper's own before/after pair above, so anything the CHECKS
+		// create is reported as a check artifact (never deleted, never
+		// counted as the helper's change).
+		checksBeforeSnapshot, checksSnapshotOK := quickWorkingTreeSnapshot(root)
+		var checkErr error
+		checksOutcome, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
+		if checkErr != nil {
+			checksOutcome = quickChecksFailed
+			checkEvidence = append(checkEvidence, checkErr.Error())
+		}
+		if checksSnapshotOK {
+			if checksAfterSnapshot, afterOK := quickWorkingTreeSnapshot(root); afterOK {
+				alreadyAttributed := map[string]bool{}
+				for _, f := range filesChanged {
+					alreadyAttributed[f] = true
+				}
+				for _, path := range quickRealChangedFiles(checksBeforeSnapshot, checksAfterSnapshot) {
+					if !alreadyAttributed[path] {
+						checkArtifacts = append(checkArtifacts, path)
+					}
+				}
+			}
+		}
+	}
+	attempt.Verdict = quickWorkVerdict(filesChanged, checksOutcome)
+	attempt.Summary = strings.TrimSpace(workerResult.Summary)
+	attempt.Evidence = checkEvidence
+	attempt.Files = filesChanged
+	attempt.CheckArtifacts = checkArtifacts
+	attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	// A quick job must never stop the project: recordDispatchWorkerOutcome's
+	// shared memory feed raises a project-stopping `blocker` flag for ANY
+	// worker-reported blocker (recordWorkerBlockerFlag), which halts an
+	// active project's next check and flips the what-next advice to
+	// "resume". That escalation is right for a build worker inside a phase
+	// and wrong for a one-off quick job. Record the outcome with the
+	// blockers cleared -- handoff, lessons and the (non-blocker) failure
+	// log are unaffected -- and raise one tracked issue instead, below.
+	recordedResult := workerResult
+	recordedResult.Blockers = nil
+	dispatchResult := codex.DispatchResult{WorkerName: workerName, Status: emptyFallback(workerResult.Status, "completed"), WorkerResult: &recordedResult}
+	if recErr := recordDispatchWorkerOutcome(dispatch, dispatchResult); recErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not record quick job outcome: %v\n", recErr)
+	}
+
+	if attempt.Verdict == colony.WorkOutcomeBlocker {
+		recordQuickFailureToMidden(job, attempt.ID, fmt.Errorf("quick job's checks failed for %q: %s", job, strings.Join(checkEvidence, "; ")))
+		if flagErr := raiseQuickIssueFlag(fmt.Sprintf("A quick job's checks failed: %s", job)); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
+			fmt.Fprintf(os.Stderr, "warning: could not raise a flag for the failed quick job: %v\n", flagErr)
+		}
+	}
+	if sentence := firstNonEmptyQuickBlocker(workerResult.Blockers); sentence != "" {
+		if flagErr := raiseQuickIssueFlag(fmt.Sprintf("A quick job's helper reported: %s (job: %s)", sentence, job)); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
+			fmt.Fprintf(os.Stderr, "warning: could not raise a flag for the quick job's reported blocker: %v\n", flagErr)
+		}
+	}
+
+	persistQuickAttempt(attempt)
+
+	return map[string]interface{}{
+		"mode":              "quick-job",
+		"job":               job,
+		"worker_name":       workerResult.WorkerName,
+		"status":            emptyFallback(workerResult.Status, "completed"),
+		"summary":           strings.TrimSpace(workerResult.Summary),
+		"raw_output":        codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
+		"duration_ms":       workerResult.Duration.Milliseconds(),
+		"files":             filesChanged,
+		"attempt_id":        attempt.ID,
+		"work_outcome":      attempt.Verdict,
+		"check_evidence":    checkEvidence,
+		"checks_status":     checksOutcome,
+		"changes_confirmed": changesConfirmed,
+		"check_artifacts":   checkArtifacts,
+	}, nil
+}
+
+// firstNonEmptyQuickBlocker picks the first non-blank blocker sentence a
+// quick job's helper reported, or "" when it reported none.
+func firstNonEmptyQuickBlocker(blockers []string) string {
+	for _, b := range blockers {
+		if trimmed := strings.TrimSpace(b); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+// raiseQuickIssueFlag files one tracked issue for a quick job, through the
+// existing flag writer (updateFlagFile) -- never a second flag-writing
+// path. Deduplicated on (source, description): re-running the same failing
+// job, or a helper repeating the same reported blocker, never piles up a
+// second identical flag.
+func raiseQuickIssueFlag(description string) error {
+	if store == nil {
+		return nil
+	}
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return nil
+	}
+	var ff colony.FlagsFile
+	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
+		ff = colony.FlagsFile{}
+	}
+	return updateFlagFile(&ff, func() error {
+		if ff.Decisions == nil {
+			ff.Decisions = []colony.FlagEntry{}
+		}
+		for _, existing := range ff.Decisions {
+			if existing.Resolved {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(existing.Source), "quick") && existing.Description == description {
+				return errFlagNoMutation
+			}
+		}
+		ff.Decisions = append(ff.Decisions, colony.FlagEntry{
+			ID:          generateFlagID(),
+			Type:        "issue",
+			Description: description,
+			Source:      "quick",
+			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+			Resolved:    false,
+		})
+		return nil
+	})
+}
+
+// persistQuickAttempt writes the one durable record a quick job's attempt
+// produces, so aether history and the shared episode lineage
+// (loadColonyEpisodeIndex, cmd/episode_index.go) can show it -- the same
+// discipline the build/check attempt store already uses, not a new event
+// transport. A failure to persist is warned, never returned: bookkeeping
+// must never fail a quick job that already ran.
+func persistQuickAttempt(attempt quickAttemptRecord) {
+	if store == nil {
+		return
+	}
+	id := strings.TrimSpace(attempt.ID)
+	if id == "" {
+		return
+	}
+	rel := filepath.ToSlash(filepath.Join("quick", "attempts", id+".json"))
+	if err := store.SaveJSON(rel, attempt); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist the quick job's record: %v\n", err)
+	}
+}
+
 func renderQuickContextCapsule(question string) string {
 	var b strings.Builder
 	b.WriteString("# Quick Scout Context\n\n")
@@ -573,36 +1091,129 @@ func renderQuickContextCapsule(question string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func renderQuickVisual(result map[string]interface{}) string {
+// quickChecksStatusWords turns the internal checks outcome into the plain
+// words the owner reads -- "not checked" for an unresolved check is never
+// confusable with "success" (Part A's rigour requirement: a changed-but-
+// unverified file is never reported as a pass).
+func quickChecksStatusWords(status string) string {
+	switch status {
+	case quickChecksPassed:
+		return "passed"
+	case quickChecksFailed:
+		return "failed"
+	case quickChecksNotResolved:
+		return "could not be checked (no check command resolved, or it ran out of time)"
+	default:
+		return ""
+	}
+}
+
+// renderQuickCappedFileList prints up to 10 paths, one per line through
+// voiceLine, then a plain "and N more" line -- never one giant joined
+// line. The full list always stays available in the JSON result and the
+// saved attempt record; only the screen is capped.
+func renderQuickCappedFileList(files []string) string {
+	const maxShown = 10
 	var b strings.Builder
-	b.WriteString(renderBanner("⚡", "Quick Scout"))
-	b.WriteString(visualDividerStr())
-	b.WriteString("Question: ")
-	b.WriteString(emptyFallback(stringValue(result["question"]), "(none)"))
-	b.WriteString("\n")
-	b.WriteString("Status: ")
-	b.WriteString(emptyFallback(stringValue(result["status"]), "completed"))
-	b.WriteString("\n")
-	if worker := strings.TrimSpace(stringValue(result["worker_name"])); worker != "" {
-		b.WriteString("Scout: ")
-		b.WriteString(worker)
+	shown := files
+	if len(shown) > maxShown {
+		shown = shown[:maxShown]
+	}
+	for _, f := range shown {
+		b.WriteString(voiceLine("files", f))
 		b.WriteString("\n")
 	}
-	if verdict, ok := result["work_outcome"].(colony.WorkOutcome); ok && verdict.Valid() {
-		if label := colony.WorkOutcomeLabels()[verdict]; label != "" {
-			b.WriteString("Verdict: ")
-			b.WriteString(label)
+	if remaining := len(files) - len(shown); remaining > 0 {
+		b.WriteString(voiceLine("files", fmt.Sprintf("and %d more", remaining)))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func renderQuickVisual(result map[string]interface{}) string {
+	isJob := stringValue(result["mode"]) == "quick-job"
+	var b strings.Builder
+	if isJob {
+		b.WriteString(renderBanner("⚡", "Quick Job"))
+	} else {
+		b.WriteString(renderBanner("⚡", "Quick Question"))
+	}
+	b.WriteString(visualDividerStr())
+
+	if isJob {
+		b.WriteString(voiceLine("task", "Job: "+emptyFallback(stringValue(result["job"]), "(none)")))
+	} else {
+		b.WriteString(voiceLine("question", "Question: "+emptyFallback(stringValue(result["question"]), "(none)")))
+	}
+	b.WriteString("\n")
+
+	if worker := strings.TrimSpace(stringValue(result["worker_name"])); worker != "" {
+		label := "Scout"
+		if isJob {
+			label = "Helper"
+		}
+		b.WriteString(voiceLine("task", label+": "+worker))
+		b.WriteString("\n")
+	}
+
+	files, hasFiles := result["files"].([]string)
+	if hasFiles && len(files) > 0 {
+		b.WriteString(voiceLine("files", fmt.Sprintf("Files changed (%d):", len(files))))
+		b.WriteString("\n")
+		b.WriteString(renderQuickCappedFileList(files))
+	}
+	if isJob && hasFiles && len(files) > 0 {
+		if confirmed, ok := result["changes_confirmed"].(bool); ok && !confirmed {
+			b.WriteString(voiceLine("warning", "This folder is not a project under version control, so which files actually changed could not be independently confirmed -- the helper's own report is all there is to go on."))
 			b.WriteString("\n")
 		}
 	}
-	if durationMS, ok := result["duration_ms"].(int64); ok && durationMS > 0 {
-		b.WriteString(fmt.Sprintf("Time: %.1fs\n", float64(durationMS)/1000))
+	if artifacts, ok := result["check_artifacts"].([]string); ok && len(artifacts) > 0 {
+		b.WriteString(voiceLine("warning", fmt.Sprintf("The checks left these files behind (%d), not the helper's own change:", len(artifacts))))
+		b.WriteString("\n")
+		b.WriteString(renderQuickCappedFileList(artifacts))
 	}
+
+	if status := stringValue(result["checks_status"]); status != "" {
+		words := quickChecksStatusWords(status)
+		kind := "done"
+		if status == quickChecksFailed {
+			kind = "failed"
+		} else if status == quickChecksNotResolved {
+			kind = "warning"
+		}
+		if words != "" {
+			b.WriteString(voiceLine(kind, "The project's checks "+words))
+			b.WriteString("\n")
+		}
+	}
+
+	if verdict, ok := result["work_outcome"].(colony.WorkOutcome); ok && verdict.Valid() {
+		if label := colony.WorkOutcomeLabels()[verdict]; label != "" {
+			kind := "done"
+			if verdict == colony.WorkOutcomeBlocker || verdict == colony.WorkOutcomeTimeout {
+				kind = "failed"
+			} else if verdict == colony.WorkOutcomePartial {
+				kind = "warning"
+			}
+			b.WriteString(voiceLine(kind, "Verdict: "+label))
+			b.WriteString("\n")
+		}
+	}
+
+	if durationMS, ok := result["duration_ms"].(int64); ok && durationMS > 0 {
+		b.WriteString(voiceLine("elapsed", fmt.Sprintf("Time: %.1fs", float64(durationMS)/1000)))
+		b.WriteString("\n")
+	}
+
 	if summary := strings.TrimSpace(stringValue(result["summary"])); summary != "" {
 		b.WriteString("\n")
 		b.WriteString(summary)
 		b.WriteString("\n")
 	}
+
+	b.WriteString("\n")
+	b.WriteString(renderLifecycleClosing(result, "quick"))
 	return b.String()
 }
 

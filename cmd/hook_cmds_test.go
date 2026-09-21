@@ -65,7 +65,7 @@ func TestHookPreToolUseBlocksProtectedPath(t *testing.T) {
 
 // TestHookPreToolUseAllowsSanctionedScratchDirs is the positive companion to
 // TestHookPreToolUseBlocksProtectedPath. It proves the exact-subpath allowlist
-// in sanctionedDataWritePrefixes lets a worker write the four sanctioned
+// in sanctionedDataWritePrefixes lets a worker write the sanctioned
 // scratch subdirectories under .aether/data/ while everything else stays
 // blocked — including behavior 6 (a protected file NOT in the allowlist) and
 // behavior 7 (a path that merely contains a sanctioned name as a substring,
@@ -79,6 +79,10 @@ func TestHookPreToolUseAllowsSanctionedScratchDirs(t *testing.T) {
 		{"phase_research_dir", filepath.Join(".aether", "data", "phase-research", "phase-3-research.md")},
 		{"survey_dir", filepath.Join(".aether", "data", "survey", "BLUEPRINT.md")},
 		{"worker_debug_dir", filepath.Join(".aether", "data", "worker-debug", "worker-1.json")},
+		// codex_workflow_cmds.go builds every territory-refresh dispatch output
+		// under .aether/data/territory-candidates/<transaction-id>/survey/, so a
+		// surveyor ordered there must not be blocked by its own runtime.
+		{"territory_candidates_dir", filepath.Join(".aether", "data", "territory-candidates", "territory-1700000000000000000-abcd1234", "survey", "PATHOGENS.md")},
 	}
 	for _, tt := range allowed {
 		t.Run(tt.name, func(t *testing.T) {

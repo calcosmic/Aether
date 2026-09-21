@@ -278,6 +278,12 @@ func runEntombTransaction(input entombTransactionInput) (entombTransactionResult
 		}
 		return entombTransactionResult{}, entombFailureWithEffect("transaction", preflight.Transaction, effect, err)
 	}
+	// The archive is already committed and digest-verified in the chamber,
+	// and the live pending-decisions.json has just been cleared like every
+	// other data file. Restore only the carried subset (open issues and
+	// notes) immediately, before anything else can read the live file --
+	// see restoreCarriedFlagsAfterEntomb's doc comment.
+	restoreCarriedFlagsAfterEntomb(preflight)
 	result, err := loadPublishedEntombResult(preflight.ChamberPath, receipt, stages, false)
 	if err != nil {
 		return entombTransactionResult{}, entombRetainedError("published verification", preflight.Transaction, err)
@@ -285,6 +291,54 @@ func runEntombTransaction(input entombTransactionInput) (entombTransactionResult
 	result.Goal = preflight.Goal
 	result.Scope = preflight.Scope
 	return result, nil
+}
+
+// restoreCarriedFlagsAfterEntomb runs immediately after entomb's transaction
+// has committed: the archive already holds a full, digest-verified copy of
+// pending-decisions.json in the chamber, and the live file has just been
+// cleared like every other data file (appendEntombDataSources, Clear: true).
+// Leaving the live file empty until the next `aether init` would mean a
+// forced-finish blocker or a leftover clarification is gone from view, but
+// so is an owner's still-open issue or note -- exactly the gap that let a
+// blocker survive live past an archived project and made
+// lifecycleProjectionDecision answer "resume" for a shell with nothing left
+// to resume (the 1.0.83 dead-end, cmd/entomb_archived_shell_test.go). So the
+// live file is restored to the carried subset right away, using the exact
+// same rule `aether init` applies (filterCarriedFlags) -- an owner's open
+// issue or note never has a window where it is invisible on `aether status`.
+//
+// The content comes from preflight.Sources, read into memory before the
+// transaction started, never a fresh disk read: by the time this runs the
+// live file has already been cleared, so re-reading it here would find
+// nothing to filter.
+//
+// A failure here is reported but never fails, retries, or undoes the
+// already-committed, already-verified archive -- the same one-way courtesy-
+// write philosophy as writeProjectChangelogEntry (cmd/project_changelog.go):
+// the archive is the durable record either way, and the live file is
+// convenience only.
+func restoreCarriedFlagsAfterEntomb(preflight entombPreflight) {
+	var raw []byte
+	found := false
+	for _, source := range preflight.Sources {
+		if source.Manifest.ArchivePath == pendingDecisionsFile {
+			raw = source.Content
+			found = true
+			break
+		}
+	}
+	if !found || len(raw) == 0 {
+		return
+	}
+	var ff colony.FlagsFile
+	if err := json.Unmarshal(raw, &ff); err != nil {
+		// Malformed content carries nothing forward -- the live file stays
+		// cleared, same as init's own fallback for the same case.
+		return
+	}
+	if err := writeCarriedFlagsFile(preflight.DataRoot, ff, filterCarriedFlags(ff.Decisions)); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not restore carried flags after entomb: %v\n", err)
+	}
 }
 
 func loadEntombTransactionState(root, dataRoot string) (string, string, colony.ColonyState, error) {
@@ -507,6 +561,19 @@ func appendEntombDataSources(preflight *entombPreflight, seenActual, seenArchive
 			kind = "seal_receipt"
 		case "seal/closure-evidence.json":
 			kind = "closure_evidence"
+		case pendingDecisionsFile:
+			// Flags and notes must carry forward across an archived project
+			// (owner ruling, plan 1.0.85 Part C3): a full copy is archived
+			// into the chamber below like every other data file, and the
+			// live file is cleared here exactly like every other data file
+			// too -- restoreCarriedFlagsAfterEntomb writes the carried
+			// subset (open issues and notes) back immediately after the
+			// transaction commits, from the content already read here, so
+			// a forced-finish blocker or a clarification row can never
+			// survive live past a committed entomb (see that function's
+			// doc comment for why a fresh disk read after commit would be
+			// the wrong source of truth).
+			kind = "pending_decisions"
 		}
 		seenActual[actual], seenArchive[archivePath] = true, true
 		preflight.Sources = append(preflight.Sources, entombPreparedSource{
@@ -527,7 +594,13 @@ func appendEntombRepositorySources(preflight *entombPreflight, seenActual, seenA
 		actual   string
 		kind     string
 	}{
-		{".aether/CONTEXT.md", "CONTEXT.md", filepath.Join(preflight.Root, ".aether", "CONTEXT.md"), "tombstone_context"},
+		// Archived as "repository-context.md", not "CONTEXT.md": the data-root
+		// walk in appendEntombDataSources already claims the archive name
+		// "CONTEXT.md" for .aether/data/CONTEXT.md (a distinct runtime data
+		// file with the same basename but different content/purpose). Both
+		// files exist on a normal active colony, so giving this one the same
+		// archive name collided in seenArchive and failed every entomb.
+		{".aether/CONTEXT.md", "repository-context.md", filepath.Join(preflight.Root, ".aether", "CONTEXT.md"), "tombstone_context"},
 	}
 	for _, item := range optionalFiles {
 		if seenActual[item.actual] {
@@ -1586,6 +1659,13 @@ func writeEntombManifest(chamberDir, chamberName string, state colony.ColonyStat
 	return os.WriteFile(filepath.Join(chamberDir, "manifest.json"), append(data, '\n'), 0644)
 }
 
+// copyEntombArtifacts has no production caller (confirmed by grep across
+// cmd/): the real entomb archive path is prepareEntombPreflight ->
+// appendEntombDataSources, which walks the whole .aether/data directory --
+// including pending-decisions.json -- rather than a fixed file list, and
+// verifies every copy against a digest manifest. This function's dataFiles
+// list is kept in sync anyway (plan 1.0.85 Part C3) so it does not silently
+// drift further from the live path if it is ever revived.
 func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 	dataFiles := []string{
 		"COLONY_STATE.json",
@@ -1593,6 +1673,7 @@ func copyEntombArtifacts(aetherRoot, dataDir, chamberDir string) error {
 		"session.json",
 		"activity.log",
 		"flags.json",
+		pendingDecisionsFile,
 		"constraints.json",
 		"spawn-tree.txt",
 		"spawn-runs.json",

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/calcosmic/Aether/pkg/colony"
 	"github.com/calcosmic/Aether/pkg/storage"
 )
 
@@ -26,26 +27,38 @@ import (
 // that already exist: it creates nothing, writes nothing, and owns no
 // identity of its own.
 
-// The three kinds an index entry may carry. A build attempt whose
-// CheckFix field is set is reported as colonyEpisodeKindCheckAttempt
-// rather than colonyEpisodeKindBuildAttempt -- the distinction the owner
-// actually cares about -- even though both live in the same durable
-// buildAttemptRecord store.
+// The kinds an index entry may carry. A build attempt whose CheckFix field
+// is set is reported as colonyEpisodeKindCheckAttempt rather than
+// colonyEpisodeKindBuildAttempt -- the distinction the owner actually cares
+// about -- even though both live in the same durable buildAttemptRecord
+// store.
+//
+// colonyEpisodeKindQuick (release 1.0.85) is a deliberate fourth kind, not
+// the second-event-transport TestOneLiveEventModelOnly guards against: a
+// quick job's attempt record (cmd/command_truth.go's quickAttemptRecord) is
+// persisted through store.SaveJSON, the exact same durable-JSON discipline
+// buildAttemptRecord already uses, not a second serialized-timestamp
+// transport reaching disk through its own write path.
 const (
 	colonyEpisodeKindSwarm          = "swarm"
 	colonyEpisodeKindOracleResearch = "oracle-research"
 	colonyEpisodeKindBuildAttempt   = "build-attempt"
 	colonyEpisodeKindCheckAttempt   = "check-attempt"
+	colonyEpisodeKindQuick          = "quick"
 )
 
-// The three record SOURCES loadColonyEpisodeIndex reads. This is
-// deliberately three, matching the three kinds above one-for-one at the
-// source level (a build attempt and a check attempt share one source, the
-// build attempts directory) -- see TestEpisodeIndexCoversThreeRecordSources.
+// The record SOURCES loadColonyEpisodeIndex reads. This was deliberately
+// three, matching the first three kinds above one-for-one at the source
+// level (a build attempt and a check attempt share one source, the build
+// attempts directory) -- see TestEpisodeIndexCoversThreeRecordSources --
+// and is now four with colonyEpisodeSourceQuick (release 1.0.85), read from
+// the durable quick-attempt records a quick job persists
+// (cmd/command_truth.go's persistQuickAttempt).
 const (
 	colonyEpisodeSourceSwarm          = "swarm"
 	colonyEpisodeSourceOracleResearch = "oracle-research"
 	colonyEpisodeSourceBuildAttempts  = "build-attempts"
+	colonyEpisodeSourceQuick          = "quick"
 )
 
 // colonyEpisodeCostRef references the spend ledger authority's own key
@@ -76,6 +89,11 @@ type colonyEpisodeEntry struct {
 	EndedAt        time.Time            `json:"ended_at"`
 	Cost           colonyEpisodeCostRef `json:"cost"`
 	Path           string               `json:"path"`
+	// Actor names who did the work, when the source records it -- e.g. a
+	// quick job's own dispatched helper. Empty when the source carries no
+	// such identity; the history row then falls back to "Unknown" exactly
+	// as before this field existed.
+	Actor string `json:"actor,omitempty"`
 }
 
 // colonyEpisodeIndex is loadColonyEpisodeIndex's whole result: the ordered
@@ -115,6 +133,12 @@ func loadColonyEpisodeIndex(root string, s *storage.Store) (colonyEpisodeIndex, 
 	}
 	idx.Entries = append(idx.Entries, attemptEntries...)
 
+	quickEntries, quickAvailable := loadQuickAttemptIndexEntries(s)
+	if !quickAvailable {
+		idx.Unavailable = append(idx.Unavailable, colonyEpisodeSourceQuick)
+	}
+	idx.Entries = append(idx.Entries, quickEntries...)
+
 	sortColonyEpisodeEntriesNewestFirst(idx.Entries)
 	return idx, nil
 }
@@ -153,6 +177,8 @@ func colonyEpisodeKindLabel(kind string) string {
 		return "Build"
 	case colonyEpisodeKindCheckAttempt:
 		return "Check"
+	case colonyEpisodeKindQuick:
+		return "Quick job"
 	default:
 		return "Episode"
 	}
@@ -470,6 +496,109 @@ func buildAttemptIndexStanding(record buildAttemptRecord) (workStanding, string)
 		return workStandingUsefulNotes, "the remaining tasks finishing and being credited"
 	default:
 		return workStandingUsefulNotes, "the attempt finishing and reaching a recorded outcome"
+	}
+}
+
+// --- Source 4: quick jobs ---------------------------------------------------
+
+// loadQuickAttemptIndexEntries reads every durable quick-attempt record
+// (.aether/data/quick/attempts/*.json), the exact file persistQuickAttempt
+// writes (cmd/command_truth.go) -- a pure read, mirroring
+// loadBuildAttemptIndexEntries' own discipline. available is false only
+// when the quick/attempts directory itself does not exist or cannot be
+// listed -- a colony that has simply never run a quick job.
+func loadQuickAttemptIndexEntries(s *storage.Store) ([]colonyEpisodeEntry, bool) {
+	if s == nil {
+		return nil, false
+	}
+	dir := filepath.Join(s.BasePath(), "quick", "attempts")
+	dirEntries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, false
+	}
+
+	names := make([]string, 0, len(dirEntries))
+	for _, entry := range dirEntries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+
+	var out []colonyEpisodeEntry
+	for _, name := range names {
+		rel := filepath.ToSlash(filepath.Join("quick", "attempts", name))
+		var record quickAttemptRecord
+		if loadErr := s.LoadJSON(rel, &record); loadErr != nil {
+			standing, reason := resolveMalformedItemStanding("the quick job record could not be read: " + loadErr.Error())
+			out = append(out, colonyEpisodeEntry{
+				Kind: colonyEpisodeKindQuick, Subject: name,
+				Standing: standing, StandingReason: reason, Path: rel,
+			})
+			continue
+		}
+		out = append(out, quickAttemptIndexEntryFrom(record, rel))
+	}
+	return out, true
+}
+
+func quickAttemptIndexEntryFrom(record quickAttemptRecord, rel string) colonyEpisodeEntry {
+	var startedAt, endedAt time.Time
+	if t, err := time.Parse(time.RFC3339Nano, record.StartedAt); err == nil {
+		startedAt = t
+	}
+	if t, err := time.Parse(time.RFC3339Nano, record.CompletedAt); err == nil {
+		endedAt = t
+	}
+
+	outcome := string(record.Verdict)
+	known := record.Verdict.Valid()
+	standing, reason := quickAttemptIndexStanding(record.Verdict)
+
+	return colonyEpisodeEntry{
+		Kind:           colonyEpisodeKindQuick,
+		Subject:        emptyFallback(strings.TrimSpace(record.Question), "a quick job"),
+		Outcome:        outcome,
+		OutcomeKnown:   known,
+		Standing:       standing,
+		StandingReason: reason,
+		StartedAt:      startedAt,
+		EndedAt:        endedAt,
+		Path:           rel,
+		Actor:          quickAttemptActor(record),
+	}
+}
+
+// quickAttemptActor names the one helper a quick attempt dispatched (e.g.
+// "Forge-4 (builder)"), the same identity recordDispatch already carried --
+// so a history row shows who did the work instead of "Unknown".
+func quickAttemptActor(record quickAttemptRecord) string {
+	name := strings.TrimSpace(record.WorkerName)
+	if name == "" {
+		return ""
+	}
+	if caste := strings.TrimSpace(record.Caste); caste != "" {
+		return fmt.Sprintf("%s (%s)", name, caste)
+	}
+	return name
+}
+
+// quickAttemptIndexStanding resolves a quick attempt's standing through the
+// shared vocabulary: success or no-change is verified, a blocker/timeout/
+// interrupted run has useful notes toward a passing check, and a partial
+// verdict (files changed but nothing could be checked) is useful notes
+// toward the checks actually running -- never presented as verified when
+// the change itself was never confirmed.
+func quickAttemptIndexStanding(v colony.WorkOutcome) (workStanding, string) {
+	switch v {
+	case colony.WorkOutcomeSuccess, colony.WorkOutcomeNoChange:
+		return workStandingVerified, ""
+	case colony.WorkOutcomeBlocker, colony.WorkOutcomeTimeout, colony.WorkOutcomeInterrupted:
+		return workStandingUsefulNotes, "the change passing the project's own checks instead of failing them"
+	case colony.WorkOutcomePartial:
+		return workStandingUsefulNotes, "the project's checks actually running so the change can be confirmed"
+	default:
+		return resolveMalformedItemStanding("the quick job has no recorded outcome")
 	}
 }
 

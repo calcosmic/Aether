@@ -5776,8 +5776,9 @@
   },
   {
     "name": "quick",
-    "short_description": "Run a lightweight Scout query without build ceremony",
+    "short_description": "Do one small job with one helper, then run the project's checks",
     "flags": [
+      "question",
       "timeout"
     ],
     "parent_command": "",

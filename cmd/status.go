@@ -172,6 +172,9 @@ func renderArchivedProjectStatusVisual(archiveID string, answer nextAction) stri
 		archiveID = "unnamed archive"
 	}
 	b.WriteString(fmt.Sprintf("Your last project here is finished and archived (%s). Nothing is active.\n", archiveID))
+	if section := renderOpenFlagsSection(store); section != "" {
+		b.WriteString(section)
+	}
 	b.WriteString(renderNextActionCard(answer))
 	return b.String()
 }
@@ -1094,6 +1097,9 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		fmt.Fprintf(&b, "%s\n", voiceLine("flag", fmt.Sprintf("Flags: %d blockers | %d issues | %d notes", blockers, issues, notes)))
 		fmt.Fprintf(&b, "%s\n", voiceLine("blocked", fmt.Sprintf("Existing blocker work: %d active (%d escalated)", blockers, escalatedBlockers)))
 	}
+	if section := renderOpenFlagsSection(s); section != "" {
+		b.WriteString(section)
+	}
 	if report := renderAutopilotReportFromResult(result); report != "" {
 		b.WriteString("\n")
 		b.WriteString(report)
@@ -1738,20 +1744,8 @@ func countStatusNonBlockerFlags(s *storage.Store) (issues, notes int) {
 	if !ok {
 		return 0, 0
 	}
-	for _, f := range flags.Decisions {
-		if f.Resolved {
-			continue
-		}
-		switch f.Type {
-		case "blocker":
-			continue
-		case "issue":
-			issues++
-		default:
-			notes++
-		}
-	}
-	return issues, notes
+	c := classifyOpenFlags(flags.Decisions)
+	return len(c.Issues), len(c.Notes)
 }
 
 func loadFlagsFile(s *storage.Store) (colony.FlagsFile, bool) {

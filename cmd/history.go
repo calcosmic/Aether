@@ -128,7 +128,7 @@ func init() {
 	rootCmd.AddCommand(historyCmd)
 	historyCmd.Flags().IntVar(&historyLimit, "limit", 20, "Maximum number of history rows to show")
 	historyCmd.Flags().StringVar(&historyFilter, "filter", "", "Filter history by event, actor, result, or evidence source")
-	historyCmd.Flags().StringVar(&historyKind, "kind", "", "Narrow the listing to one row kind (e.g. swarm, oracle-research, build-attempt, check-attempt, or an unverified-work kind)")
+	historyCmd.Flags().StringVar(&historyKind, "kind", "", "Narrow the listing to one row kind (e.g. swarm, oracle-research, build-attempt, check-attempt, quick, or an unverified-work kind)")
 	historyCmd.Flags().BoolVar(&historyJSON, "json", false, "Output as JSON, including raw evidence detail")
 }
 
@@ -520,7 +520,7 @@ func lifecycleHistoryRowFromEpisode(entry colonyEpisodeEntry) LifecycleHistoryRo
 	return LifecycleHistoryRow{
 		Timestamp:      timestamp,
 		Event:          colonyEpisodeKindLabel(entry.Kind) + ": " + entry.Subject,
-		Actor:          "Unknown",
+		Actor:          emptyFallback(strings.TrimSpace(entry.Actor), "Unknown"),
 		Result:         "Outcome: " + outcome,
 		Category:       lifecycleHistoryCategoryEpisode,
 		EvidenceKind:   "episode",

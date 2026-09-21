@@ -346,15 +346,11 @@ func inspectReconcileFlags(dataDir string, report *reconcileReport) reconcileFla
 			continue
 		}
 		summary.Unresolved++
-		switch strings.ToLower(flag.Type) {
-		case "blocker":
-			summary.Blockers++
-		case "issue":
-			summary.Issues++
-		default:
-			summary.Notes++
-		}
 	}
+	c := classifyOpenFlags(flags.Decisions)
+	summary.Blockers = len(c.Blockers)
+	summary.Issues = len(c.Issues)
+	summary.Notes = len(c.Notes)
 	if summary.Unresolved > 0 {
 		addReconcileFinding(report, "warning", "flags", "pending-decisions.json", fmt.Sprintf("%d unresolved flag(s) found (%d blocker(s), %d issue(s))", summary.Unresolved, summary.Blockers, summary.Issues), "Review flags before dogfood; resolve placeholders through normal flag commands.")
 	}

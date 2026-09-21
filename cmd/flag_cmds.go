@@ -192,6 +192,7 @@ var flagResolveCmd = &cobra.Command{
 			}
 		}
 
+		var resolvedAt string
 		err := updateFlagFile(&ff, func() error {
 			found := false
 			for i := range ff.Decisions {
@@ -203,6 +204,7 @@ var flagResolveCmd = &cobra.Command{
 					ff.Decisions[i].Resolved = true
 					ff.Decisions[i].ResolvedAt = time.Now().UTC().Format(time.RFC3339)
 					ff.Decisions[i].Resolution = message
+					resolvedAt = ff.Decisions[i].ResolvedAt
 					found = true
 					break
 				}
@@ -228,7 +230,7 @@ var flagResolveCmd = &cobra.Command{
 			"resolved":  true,
 			"id":        id,
 			"message":   message,
-			"timestamp": ff.Decisions[0].ResolvedAt,
+			"timestamp": resolvedAt,
 		}
 		outputWorkflow(result, renderFlagActionVisual("flags", "Flag Resolved", result))
 		return nil

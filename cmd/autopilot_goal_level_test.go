@@ -607,10 +607,10 @@ func TestQuickRunsOnTheSharedAttemptModel(t *testing.T) {
 		origChecks := runQuickDeterministicChecks
 		checkCalls := 0
 		var checkedFiles []string
-		runQuickDeterministicChecks = func(root string, files []string) (bool, []string, error) {
+		runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
 			checkCalls++
 			checkedFiles = files
-			return true, []string{"go build ./...: passed", "go vet ./...: passed"}, nil
+			return quickChecksPassed, []string{"go build ./...: passed", "go vet ./...: passed"}, nil
 		}
 		t.Cleanup(func() { runQuickDeterministicChecks = origChecks })
 

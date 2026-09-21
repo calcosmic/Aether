@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -139,6 +140,12 @@ func TestNewSubcommandFlags(t *testing.T) {
 			if err := os.MkdirAll(dataDir, 0755); err != nil {
 				t.Fatal(err)
 			}
+			// The command re-opens its store from the folder it is pointed
+			// at, not from the store global set below. Without this line the
+			// flag-create case wrote a flag titled "test" into the REAL
+			// checkout's data on every full-suite run (37 rows by 2026-09-21).
+			t.Setenv("AETHER_ROOT", tmpDir)
+			realFlags := realCheckoutFlagFileBytes(t)
 			s, storeErr := storage.NewStore(dataDir)
 			if storeErr != nil {
 				t.Fatal(storeErr)
@@ -151,6 +158,21 @@ func TestNewSubcommandFlags(t *testing.T) {
 			if err != nil {
 				t.Errorf("command %v returned error: %v", tt.args, err)
 			}
+			if after := realCheckoutFlagFileBytes(t); !bytes.Equal(realFlags, after) {
+				t.Fatalf("command %v changed the real checkout's flag file; the test is not isolated", tt.args)
+			}
 		})
 	}
+}
+
+// realCheckoutFlagFileBytes reads the flag file of the checkout the test
+// binary is running from (the package folder is cmd/, so one level up), or
+// nil when there is none. Used to prove a test left real data untouched.
+func realCheckoutFlagFileBytes(t *testing.T) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", ".aether", "data", "pending-decisions.json"))
+	if err != nil {
+		return nil
+	}
+	return data
 }

@@ -98,19 +98,10 @@ func renderFlagsTable(entries []colony.FlagEntry) string {
 	if len(entries) == 0 {
 		return "🚩 Flags: none\n"
 	}
-	blockers, issues, notes := 0, 0, 0
+	c := classifyOpenFlags(entries)
+	blockers, issues, notes := len(c.Blockers), len(c.Issues), len(c.Notes)
 	var b strings.Builder
 	for _, entry := range entries {
-		if !entry.Resolved {
-			switch strings.ToLower(strings.TrimSpace(entry.Type)) {
-			case "blocker":
-				blockers++
-			case "note":
-				notes++
-			default:
-				issues++
-			}
-		}
 		icon := "🚩"
 		state := "open"
 		if entry.Resolved {

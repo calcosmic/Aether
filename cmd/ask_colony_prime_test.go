@@ -174,7 +174,7 @@ func TestAskWrapperAnswersWithoutSpawning(t *testing.T) {
 			"aether colony-prime --question",
 			"Do NOT spawn workers",
 			"Do NOT invent beyond the briefing",
-			"/ant-quick",
+			"aether quick --question",
 		} {
 			if !strings.Contains(text, anchor) {
 				t.Fatalf("%s lost the ask contract anchor %q", path, anchor)
