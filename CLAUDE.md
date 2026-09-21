@@ -1669,16 +1669,22 @@ beneath it. `aether plan`, `aether discuss`, `aether spec`, `aether status`,
 closes every command now open each content line with a small symbol naming
 what kind of line it is (a goal, a phase, a warning, a finished task...), the
 same symbol system the live colony view (`aether watch`) already used.
-Nothing here is a one-time paint job: every one of the eight ordinary screens
-is registered into one shared list (the "voice corpus"), and a named check
-fails if a future screen is ever added without carrying the look, or if an
-existing screen's look quietly fades back to plain text.
+The release that shows the owner every screen it draws (1.0.88) widened this
+to the first two screens a brand-new project ever sees and the cards drawn
+while helpers are sent out: `aether init` (starting a project), `aether
+colonize` (surveying the existing code), and the four `aether ceremony`
+cards (spawn-plan, wave-start, worker-complete, closeout) — eleven screen
+families in total. Nothing here is a one-time paint job: every one of the
+eleven ordinary screens is registered into one shared list (the "voice
+corpus"), and a named check fails if a future screen is ever added without
+carrying the look, or if an existing screen's look quietly fades back to
+plain text.
 
 **The corpus knows which screens are supposed to be voiced, and notices if
-one goes missing.** Eight screen families are named once; a fresh screen
-family — say a ninth ordinary lifecycle screen added later — that is never
-registered is caught by name, not discovered later by an owner. Locked by
-`TestEveryOrdinaryScreenIsMeasuredForVoice`.
+one goes missing.** Eleven screen families are named once; a fresh screen
+family — say a twelfth ordinary lifecycle screen added later — that is
+never registered is caught by name, not discovered later by an owner.
+Locked by `TestEveryOrdinaryScreenIsMeasuredForVoice`.
 
 **Every registered screen is measured, not eyeballed.** A number derived from
 the actual Classic-era screens (a "reference figure" computed from real
@@ -1712,13 +1718,14 @@ that class of mistake is now closed at its one true source (the writer, not
 the reader), and a structural check refuses any future code from bypassing
 that source. Locked by `TestLifecycleEventSentenceTypeCannotBeBypassed`.
 
-*For dummies: every screen you actually look at day to day — planning,
-asking a question, checking status, building, finishing a phase, sealing a
-project — now carries the Classic look back: a little symbol at the start of
-each line telling you what kind of information it is, worded in plain
-English, never a raw code where a sentence belongs. And it can't quietly fade
-away again — six separate checks fail the moment any of that stops being
-true.*
+*For dummies: every screen you actually look at day to day — starting a
+project, surveying the existing code, planning, asking a question, checking
+status, building (including the cards it shows while sending out helpers),
+finishing a phase, sealing a project — now carries the Classic look back: a
+little symbol at the start of each line telling you what kind of information
+it is, worded in plain English, never a raw code where a sentence belongs.
+And it can't quietly fade away again — six separate checks fail the moment
+any of that stops being true.*
 
 ---
 
