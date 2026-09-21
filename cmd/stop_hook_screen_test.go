@@ -464,3 +464,162 @@ func TestBannerPredicateMatchesTheCardHeaderToo(t *testing.T) {
 		}
 	}
 }
+
+// writeDirectScreenRouteSettings writes a project's .claude/settings.json
+// registering (or not registering) Phase 206's direct route, for
+// directScreenRouteRegistered to read.
+func writeDirectScreenRouteSettings(t *testing.T, projectRoot string, registerDirectRoute bool) {
+	t.Helper()
+	claudeDir := filepath.Join(projectRoot, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatalf("mkdir .claude: %v", err)
+	}
+
+	hooks := map[string]interface{}{}
+	if registerDirectRoute {
+		hooks["PostToolUse"] = []map[string]interface{}{
+			{
+				"matcher": "Bash",
+				"hooks": []map[string]interface{}{
+					{"type": "command", "command": "aether hook-post-tool-use", "timeout": 10},
+				},
+			},
+		}
+	} else {
+		// A settings file that registers something else, never the direct
+		// route -- proves directScreenRouteRegistered reads for the specific
+		// command, not merely "a PostToolUse entry exists at all".
+		hooks["PostToolUse"] = []map[string]interface{}{
+			{
+				"matcher": "Bash",
+				"hooks": []map[string]interface{}{
+					{"type": "command", "command": "some-other-tool", "timeout": 10},
+				},
+			},
+		}
+	}
+	encoded, err := json.MarshalIndent(map[string]interface{}{"hooks": hooks}, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal settings: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), encoded, 0o644); err != nil {
+		t.Fatalf("write settings.json: %v", err)
+	}
+}
+
+// buildOverLengthMenuCommandTranscript derives an over-cap variant of the
+// real menu-command transcript fixture: the same real tool_use Bash command,
+// but a tool_result whose screen is stuffed past directScreenMessageCapBytes.
+// Returns the path to the scratch copy.
+func buildOverLengthMenuCommandTranscript(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", "stop-hook", "menu-command-transcript.jsonl"))
+	if err != nil {
+		t.Fatalf("read real menu-command transcript: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("expected the real transcript to carry 4 lines, got %d", len(lines))
+	}
+
+	var toolResultEntry map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[3]), &toolResultEntry); err != nil {
+		t.Fatalf("unmarshal tool_result line: %v", err)
+	}
+
+	var overLength strings.Builder
+	base := "━━ 📊 C O L O N Y   S T A T U S ━━\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nNo colony initialized in this repo.\n"
+	for overLength.Len() <= directScreenMessageCapBytes*2 {
+		overLength.WriteString(base)
+	}
+	newScreen := overLength.String()
+
+	if message, ok := toolResultEntry["message"].(map[string]interface{}); ok {
+		if content, ok := message["content"].([]interface{}); ok && len(content) > 0 {
+			if block, ok := content[0].(map[string]interface{}); ok {
+				block["content"] = newScreen
+			}
+		}
+	}
+	if toolUseResult, ok := toolResultEntry["toolUseResult"].(map[string]interface{}); ok {
+		toolUseResult["stdout"] = newScreen
+	}
+
+	encoded, err := json.Marshal(toolResultEntry)
+	if err != nil {
+		t.Fatalf("marshal over-length tool_result line: %v", err)
+	}
+	lines[3] = string(encoded)
+
+	path := filepath.Join(t.TempDir(), "over-length-transcript.jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write over-length transcript: %v", err)
+	}
+	return path
+}
+
+// TestBackstopStaysQuietWhenTheScreenAlreadyArrived is Phase 206's exemption:
+// once the direct route has already handed the owner the WHOLE screen, the
+// finish check must not send the reply back a second time for hiding it.
+// Two subtests point the payload's cwd at a temp directory whose settings do,
+// and then do not, register the direct route, and assert the block appears
+// only in the second case -- per the plan's own wording.
+func TestBackstopStaysQuietWhenTheScreenAlreadyArrived(t *testing.T) {
+	t.Run("direct route registered: stays quiet", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		store = nil
+		tracer = nil
+
+		tmpDir := t.TempDir()
+		writeDirectScreenRouteSettings(t, tmpDir, true)
+
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+		payload["cwd"] = tmpDir
+		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+		if strings.TrimSpace(out) != "" {
+			t.Fatalf("expected no block once the whole screen already arrived via the registered direct route; got %q", out)
+		}
+	})
+
+	t.Run("direct route not registered: still blocks", func(t *testing.T) {
+		saveGlobalsCmd(t)
+		resetRootCmd(t)
+		store = nil
+		tracer = nil
+
+		tmpDir := t.TempDir()
+		writeDirectScreenRouteSettings(t, tmpDir, false)
+
+		payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+		payload["cwd"] = tmpDir
+		out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+		blocked, _ := stopHookBlockReason(t, out)
+		if !blocked {
+			t.Fatalf("expected a block when the direct route is not registered in this project's settings; got %q", out)
+		}
+	})
+}
+
+// TestBackstopStillFiresWhenOnlyPartOfTheScreenArrived is the partial case:
+// even with the direct route registered, a screen too long to arrive whole
+// still owes the owner the rest, so the finish check must still block.
+func TestBackstopStillFiresWhenOnlyPartOfTheScreenArrived(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	store = nil
+	tracer = nil
+
+	tmpDir := t.TempDir()
+	writeDirectScreenRouteSettings(t, tmpDir, true)
+
+	payload := loadStopHookFixturePayload(t, "menu-command-hide-screen-stop-payload.json", "menu-command-transcript.jsonl")
+	payload["cwd"] = tmpDir
+	payload["transcript_path"] = buildOverLengthMenuCommandTranscript(t)
+
+	out, _ := runStopHookFixture(t, encodeStopHookStdin(t, payload))
+	blocked, _ := stopHookBlockReason(t, out)
+	if !blocked {
+		t.Fatalf("expected a block when the direct route is registered but the screen would only arrive in part; got %q", out)
+	}
+}
