@@ -708,7 +708,8 @@ func renderCodexCommandSkillShimBody(command string, def commandGuideDefinition)
 		b.WriteString("2. Follow the runtime guide directly.\n")
 	}
 	b.WriteString("3. Preserve runtime ownership of state: wrappers and skills may interview, synthesize, spawn workers, and summarize, but must not hand-edit `.aether/data`.\n")
-	b.WriteString("4. Honor raw/exact/no-orchestration requests by using the raw bypass below.\n\n")
+	b.WriteString("4. Honor raw/exact/no-orchestration requests by using the raw bypass below.\n")
+	b.WriteString("5. When the runtime prints a screen, show it to the user unchanged in a fenced text block, from the first banner line (the line drawn with `━━`) to the end. After it, add at most two short sentences of your own, and never restate or replace the screen.\n\n")
 	b.WriteString("Worker skill content is included automatically in runtime worker briefs. There is no separate skill-loader command; do not preload full skill mirrors. Follow command-guide over stale local notes.\n\n")
 
 	if def.Intent != "" {
