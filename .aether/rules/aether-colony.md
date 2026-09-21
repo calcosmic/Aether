@@ -76,7 +76,7 @@ creating a second recovery effect.
 |---------|---------|
 | `/ant-run` | Autopilot — build, verify, advance automatically |
 | `/ant-improve` | Check how the colony's own suggestions have been doing, or try one by hand |
-| `/ant-quick` | Quick one-shot task |
+| `/ant-quick "<small job>"` | Do one small job with one helper, then run the project's own checks |
 | `/ant-swarm "<bug>"` | Parallel bug investigation |
 | `/ant-oracle` | Deep research (RALF loop) |
 | `/ant-dream` | Philosophical observation |

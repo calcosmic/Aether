@@ -1,8 +1,9 @@
 name: ant-quick
-description: "⚡ Quick scout query — fast answers without build ceremony"
+description: "⚡ Do one small job — one helper, the project's checks, no ceremony"
 source_of_truth: "Use the Go `aether` CLI as the source of truth."
 runtime:
   command: "AETHER_OUTPUT_MODE=visual aether quick $ARGUMENTS"
 guardrails:
+  - "Usage: /ant-quick \"<small job>\" -- does the job with one helper, then runs the project's own checks. Questions (not jobs) go to /ant-ask, or /ant-quick --question \"<question>\" directly."
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
   - "If docs and runtime disagree, runtime wins."

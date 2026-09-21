@@ -1096,7 +1096,7 @@ Failures are logged automatically, on every path that can produce one:
   chat-driven build path (`TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane`)
 - The program's own build/type/formatting/test check fails, on either check
   lane (`TestFailedCheckWritesOneFailureRecordOnBothLanes`)
-- A one-off question (`/ant-quick`) fails to get an answer
+- A quick job or question (`/ant-quick`, `/ant-quick --question`) fails
   (`TestQuickFailureReachesTheFailureLog`)
 - A bug-investigation helper fails or times out, on either lane
   (`TestSwarmWorkerFailureReachesTheFailureLogOnBothLanes`)
@@ -1105,6 +1105,51 @@ Failures are logged automatically, on every path that can produce one:
 
 **Data Maintenance:**
 - `/ant-data-clean` — Remove test artifacts from colony data files (pheromones, constraints, midden)
+
+---
+
+## Quick Jobs (release 1.0.85)
+
+`/ant-quick "<small job>"` DOES the job -- one helper (the code-writing
+builder), dispatched through the same in-process route the command already
+used, then the project's own resolved checks (build, type, lint, and a
+narrowed test run when one can be honestly derived -- `resolveCodexVerificationCommands`
++ `deriveVerificationScope`, never a hardcoded `go build`/`go vet` pair) run
+over whatever it changed. It works even when no project is set up in the
+folder. `/ant-quick --question "<question>"` keeps the old read-only route
+(a scout, changes nothing) byte-for-byte; `/ant-ask` is the one command for
+any question, code included.
+
+A failed check is never auto-undone: the files a helper touches are not
+known up front, so a safe automatic undo cannot be built without risking
+deleting something the program did not create. The change stays, the screen
+says plainly that the checks failed or could not be run, and exactly one
+tracked issue is raised (deduplicated, so re-running the same failing job
+never piles up a second identical one). A quick job's own attempt is
+persisted durably and shows up in `aether history` and the shared episode
+lineage (`loadColonyEpisodeIndex`), the same discipline a build or check
+attempt already uses -- a fourth record source, not a second event
+transport.
+
+Locked by `TestQuickSendsOneBuilderWithMemory` (one builder, QUEEN.md
+preferences and an active REDIRECT note reach its brief, works with no
+project and after a project is archived), `TestQuickQuestionModeStaysReadOnlyScout`
+(the read-only route is unchanged), `TestQuickVerdictFollowsTheProjectsOwnChecks`
+(the verdict table: passed is success, failed is a blocker with one tracked
+issue and one failure-log entry and the files kept, unresolved is reported
+as changed-but-not-checked and never as success),
+`TestQuickUsesResolvedChecksNotGoOnly` (the project's own declared
+verification commands are what runs), and `TestQuickLeavesARecordHistoryCanShow`
+(the durable record reaches history).
+
+*For dummies: `/ant-quick "fix the typo in the readme"` just does it -- one
+helper makes the change, then the program runs its own checks on what
+changed. If those checks fail, nothing is undone (the program can't safely
+guess what to delete), but you get a plain-English "the checks failed"
+message, the failed job is tracked as a to-do so it isn't forgotten, and
+`aether history` remembers it happened. Asking a question instead of giving
+a job? Use `/ant-ask "<question>"` for anything, including questions about
+the code itself.*
 
 ---
 

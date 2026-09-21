@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -41,24 +41,33 @@ var maturityCmd = &cobra.Command{
 }
 
 var quickCmd = &cobra.Command{
-	Use:   "quick [question]",
-	Short: "Run a lightweight Scout query without build ceremony",
+	Use:   "quick [job]",
+	Short: "Do one small job with one helper, then run the project's checks",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		question := strings.TrimSpace(strings.Join(args, " "))
-		if question == "" {
-			outputError(1, `usage: aether quick "question"`, nil)
+		task := strings.TrimSpace(strings.Join(args, " "))
+		if task == "" {
+			outputError(1, `usage: aether quick "small job"`+"\n"+`       aether quick --question "question"`, nil)
 			return nil
 		}
 		timeout, _ := cmd.Flags().GetDuration("timeout")
 		if timeout <= 0 {
 			timeout = codex.DefaultWorkerTimeout
 		}
-		result, err := runQuickScout(question, timeout)
+		questionMode, _ := cmd.Flags().GetBool("question")
+
+		var result map[string]interface{}
+		var err error
+		if questionMode {
+			result, err = runQuickScout(task, timeout)
+		} else {
+			result, err = runQuickJob(task, timeout)
+		}
 		if err != nil {
 			outputError(1, err.Error(), nil)
 			return nil
 		}
+		closeLifecycleCommand(result, "quick", "", "")
 		outputWorkflow(result, renderQuickVisual(result))
 		return nil
 	},
@@ -120,7 +129,8 @@ var verifyCastesCmd = &cobra.Command{
 }
 
 func init() {
-	quickCmd.Flags().Duration("timeout", codex.DefaultWorkerTimeout, "Scout worker timeout")
+	quickCmd.Flags().Duration("timeout", codex.DefaultWorkerTimeout, "Worker timeout")
+	quickCmd.Flags().Bool("question", false, "Ask a read-only question instead of doing a job (dispatches a scout, changes nothing)")
 	bumpVersionCmd.Flags().Bool("dry-run", false, "Preview version updates without writing files")
 	migrateStateCmd.Flags().Bool("dry-run", false, "Preview migration without writing COLONY_STATE.json")
 	migrateStateCmd.Flags().String("rollback", "", "Restore an Aether-created pre-migration backup")
@@ -395,13 +405,19 @@ type quickAttemptDispatch struct {
 // one-question request, on the same six-verdict work-outcome vocabulary
 // (colony.WorkOutcome, D-05) the rest of the work cycle reports through.
 type quickAttemptRecord struct {
-	ID         string                 `json:"id"`
-	Question   string                 `json:"question"`
-	StartedAt  string                 `json:"started_at"`
-	Dispatches []quickAttemptDispatch `json:"dispatches"`
-	Verdict    colony.WorkOutcome     `json:"verdict,omitempty"`
-	Summary    string                 `json:"summary,omitempty"`
-	Evidence   []string               `json:"evidence,omitempty"`
+	ID string `json:"id"`
+	// Mode is "question" (a read-only scout query, runQuickScout) or "job"
+	// (a small job done by the builder, runQuickJob) -- the durable record's
+	// own distinction between the two /ant-quick shapes.
+	Mode        string                 `json:"mode,omitempty"`
+	Question    string                 `json:"question"`
+	StartedAt   string                 `json:"started_at"`
+	CompletedAt string                 `json:"completed_at,omitempty"`
+	Dispatches  []quickAttemptDispatch `json:"dispatches"`
+	Verdict     colony.WorkOutcome     `json:"verdict,omitempty"`
+	Summary     string                 `json:"summary,omitempty"`
+	Evidence    []string               `json:"evidence,omitempty"`
+	Files       []string               `json:"files,omitempty"`
 }
 
 // newQuickAttempt opens one attempt for a quick request. The ID is a plain,
@@ -424,50 +440,95 @@ func (a *quickAttemptRecord) recordDispatch(workerName, caste, status string) {
 	a.Dispatches = append(a.Dispatches, quickAttemptDispatch{WorkerName: workerName, Caste: caste, Status: status})
 }
 
+// The three words a quick request's own checks can come back with: they
+// passed, they failed, or nothing could actually be run (no verification
+// command resolved, or it ran out of time). "Not checked" is never folded
+// into either passed or failed -- a change nothing could verify is reported
+// honestly as unverified, never as a pass.
+const (
+	quickChecksPassed      = "passed"
+	quickChecksFailed      = "failed"
+	quickChecksNotResolved = "not_checked"
+)
+
+// quickChecksMaxDuration caps a single resolved check command under quick's
+// own budget -- a job is meant to be small, so one hung command must not
+// hold the whole request hostage.
+const quickChecksMaxDuration = 5 * time.Minute
+
 // quickWorkVerdict derives CAP-029's verdict for a quick request: no_change
 // when the request touched no files (the common, read-only case), success
-// when it changed files and the deterministic checks over the changed area
-// passed, and blocker when those checks failed. Never success or no_change
-// on a failed check -- a changed-but-unverified file is never reported as
-// though nothing needed changing.
-func quickWorkVerdict(filesChanged []string, checksPassed bool) colony.WorkOutcome {
+// when it changed files and the project's own checks over the changed area
+// passed, partial when files changed but nothing could actually be checked,
+// and blocker when those checks failed. Never success on an unresolved or
+// failed check -- a changed-but-unverified file is never reported as though
+// nothing needed changing.
+func quickWorkVerdict(filesChanged []string, checksOutcome string) colony.WorkOutcome {
 	if len(filesChanged) == 0 {
 		return colony.WorkOutcomeNoChange
 	}
-	if checksPassed {
+	switch checksOutcome {
+	case quickChecksPassed:
 		return colony.WorkOutcomeSuccess
+	case quickChecksNotResolved:
+		return colony.WorkOutcomePartial
+	default:
+		return colony.WorkOutcomeBlocker
 	}
-	return colony.WorkOutcomeBlocker
 }
 
-// runQuickDeterministicChecks runs the deterministic check command set over
-// the repository when a quick request changed files, mirroring the
-// build/vet floor the rest of the work cycle already enforces
-// (cmd/deterministic_floor.go). Zero files changed is the common,
-// read-only case and is treated as passing without invoking a process. A
+// runQuickDeterministicChecks runs this project's own resolved verification
+// commands over the repository when a quick request changed files, using the
+// same resolution (resolveCodexVerificationCommands) and scope-narrowing
+// (deriveVerificationScope) the rest of the work cycle already relies on --
+// never a second, hardcoded command set. Zero files changed is the common,
+// read-only case and is treated as passed without invoking a process. A
 // package-level seam (mirroring newQuickWorkerInvoker) so tests can
 // substitute a fake without shelling out.
-var runQuickDeterministicChecks = func(root string, files []string) (bool, []string, error) {
+var runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
 	if len(files) == 0 {
-		return true, nil, nil
+		return quickChecksPassed, nil, nil
 	}
-	steps := [][]string{{"go", "build", "./..."}, {"go", "vet", "./..."}}
+	commands := resolveCodexVerificationCommands(root)
+	claims := codexBuildClaims{FilesModified: files}
+	_, scoped := deriveVerificationScope(root, colony.Phase{}, false, claims, commands)
+
+	type quickCheckStep struct{ name, command string }
+	var steps []quickCheckStep
+	if command := strings.TrimSpace(scoped.Build); command != "" {
+		steps = append(steps, quickCheckStep{"build", command})
+	}
+	if command := strings.TrimSpace(scoped.Type); command != "" {
+		steps = append(steps, quickCheckStep{"types", command})
+	}
+	if command := strings.TrimSpace(scoped.Lint); command != "" {
+		steps = append(steps, quickCheckStep{"lint", command})
+	}
+	if command := strings.TrimSpace(scoped.Test); command != "" {
+		steps = append(steps, quickCheckStep{"tests", command})
+	}
+	if len(steps) == 0 {
+		return quickChecksNotResolved, nil, nil
+	}
+
 	evidence := make([]string, 0, len(steps))
-	for _, args := range steps {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = root
-		out, err := cmd.CombinedOutput()
-		trimmed := strings.TrimSpace(string(out))
+	for _, step := range steps {
+		output, exitCode, timedOut, err := runShellCommand(root, step.command, quickChecksMaxDuration)
+		if timedOut {
+			evidence = append(evidence, fmt.Sprintf("%s (%s): ran out of time", step.name, step.command))
+			return quickChecksNotResolved, evidence, nil
+		}
 		if err != nil {
+			trimmed := strings.TrimSpace(output)
 			if trimmed == "" {
 				trimmed = err.Error()
 			}
-			evidence = append(evidence, fmt.Sprintf("%s: FAILED: %s", strings.Join(args, " "), trimmed))
-			return false, evidence, nil
+			evidence = append(evidence, fmt.Sprintf("%s (%s): FAILED (exit %d): %s", step.name, step.command, exitCode, trimmed))
+			return quickChecksFailed, evidence, nil
 		}
-		evidence = append(evidence, fmt.Sprintf("%s: passed", strings.Join(args, " ")))
+		evidence = append(evidence, fmt.Sprintf("%s (%s): passed", step.name, step.command))
 	}
-	return true, evidence, nil
+	return quickChecksPassed, evidence, nil
 }
 
 func runQuickScout(question string, timeout time.Duration) (map[string]interface{}, error) {
@@ -529,17 +590,17 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
 
 	filesChanged := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
-	checksPassed := true
+	checksOutcome := quickChecksPassed
 	var checkEvidence []string
 	if len(filesChanged) > 0 {
 		var checkErr error
-		checksPassed, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
+		checksOutcome, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
 		if checkErr != nil {
-			checksPassed = false
+			checksOutcome = quickChecksFailed
 			checkEvidence = append(checkEvidence, checkErr.Error())
 		}
 	}
-	attempt.Verdict = quickWorkVerdict(filesChanged, checksPassed)
+	attempt.Verdict = quickWorkVerdict(filesChanged, checksOutcome)
 	attempt.Summary = strings.TrimSpace(workerResult.Summary)
 	attempt.Evidence = checkEvidence
 	if attempt.Verdict == colony.WorkOutcomeBlocker {
@@ -562,6 +623,202 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	}, nil
 }
 
+// runQuickJob does one small job with one helper (CAP-029, the owner's 21
+// Sep decision): dispatches a single builder, then runs the project's own
+// checks over whatever it changed. Unlike runQuickScout it is never
+// read-only by construction -- the builder is free to create or modify
+// files -- so its context capsule is the full colony-prime capsule
+// (resolveCodexWorkerContext), which already carries active pheromone
+// signals under its own heading; PheromoneSection is deliberately left
+// empty here (see resolvePheromoneSection's calling contract in
+// cmd/codex_build.go) so steering is never shipped twice.
+//
+// A failed check never undoes the change: the paths a builder touches are
+// not known up front (unlike Swarm's repair, whose paths are known before
+// it runs), so a safe automatic undo cannot be built without risking
+// deleting something the program did not create. Instead the change is
+// kept, the screen says plainly that the checks failed, and one tracked
+// issue flag is raised so the owner does not have to remember it.
+func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, error) {
+	root := skillWorkspaceRoot()
+	attempt := newQuickAttempt(job, time.Now().UTC())
+	attempt.Mode = "job"
+	invoker := newQuickWorkerInvoker()
+	if invoker == nil {
+		invoker = &codex.FakeInvoker{}
+	}
+	ctx := context.Background()
+	if _, ok := invoker.(*codex.FakeInvoker); !ok && !invoker.IsAvailable(ctx) {
+		return nil, fmt.Errorf("quick job cannot start because %s", dispatchAvailabilityMessage(invoker))
+	}
+	agentPath := dispatchAgentPath(root, invoker, "aether-builder")
+	if err := invoker.ValidateAgent(agentPath); err != nil {
+		return nil, fmt.Errorf("builder agent unavailable: %w", err)
+	}
+	workerName := deterministicAntName("builder", job)
+	// CAP-029 proportionality: exactly one worker, recorded against this
+	// request's own attempt, before dispatch -- no check-in pause is ever
+	// added for a single worker with nothing pending.
+	attempt.recordDispatch(workerName, "builder", "dispatched")
+	taskBrief := codex.RenderTaskBrief(codex.TaskBriefData{
+		TaskID: "quick.job",
+		Goal:   "Do one small job in this repository, directly -- not a plan, not a survey, the actual change.",
+		Constraints: []string{
+			"This is one small job. If it turns out to be bigger than a small job, stop and say so plainly in your summary instead of doing a large amount of work.",
+		},
+		Hints: []string{
+			fmt.Sprintf("The job: %s", job),
+		},
+		SuccessCriteria: []string{
+			"Make the actual change the job asks for.",
+			"Report exactly which files were created or modified, and why.",
+		},
+	})
+	dispatch := codex.WorkerDispatch{
+		WorkerName:     workerName,
+		AgentName:      "aether-builder",
+		AgentTOMLPath:  agentPath,
+		Caste:          "builder",
+		TaskID:         "quick.job",
+		TaskBrief:      taskBrief,
+		ContextCapsule: resolveCodexWorkerContext(),
+		HandoffSection: renderWorkerHandoffSection("quick", 0, workerName),
+		Root:           root,
+		Timeout:        timeout,
+		SkillSection:   resolveSkillSectionForWorkflow("quick", "builder", job),
+		Workflow:       "quick",
+	}
+	workerResult, err := invoker.Invoke(ctx, codex.WorkerConfig{
+		AgentName:      dispatch.AgentName,
+		AgentTOMLPath:  dispatch.AgentTOMLPath,
+		Caste:          dispatch.Caste,
+		WorkerName:     dispatch.WorkerName,
+		TaskID:         dispatch.TaskID,
+		TaskBrief:      dispatch.TaskBrief,
+		ContextCapsule: dispatch.ContextCapsule,
+		HandoffSection: dispatch.HandoffSection,
+		Root:           dispatch.Root,
+		Timeout:        dispatch.Timeout,
+		SkillSection:   dispatch.SkillSection,
+	})
+	if err != nil {
+		attempt.Dispatches[0].Status = "failed"
+		attempt.Verdict = colony.WorkOutcomeBlocker
+		attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		if recErr := recordDispatchWorkerOutcome(dispatch, codex.DispatchResult{WorkerName: workerName, Status: "failed", Error: err}); recErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not record quick job outcome: %v\n", recErr)
+		}
+		recordQuickFailureToMidden(job, attempt.ID, err)
+		persistQuickAttempt(attempt)
+		return nil, err
+	}
+	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
+
+	filesChanged := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
+	checksOutcome := quickChecksPassed
+	var checkEvidence []string
+	if len(filesChanged) > 0 {
+		var checkErr error
+		checksOutcome, checkEvidence, checkErr = runQuickDeterministicChecks(root, filesChanged)
+		if checkErr != nil {
+			checksOutcome = quickChecksFailed
+			checkEvidence = append(checkEvidence, checkErr.Error())
+		}
+	}
+	attempt.Verdict = quickWorkVerdict(filesChanged, checksOutcome)
+	attempt.Summary = strings.TrimSpace(workerResult.Summary)
+	attempt.Evidence = checkEvidence
+	attempt.Files = filesChanged
+	attempt.CompletedAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	dispatchResult := codex.DispatchResult{WorkerName: workerName, Status: emptyFallback(workerResult.Status, "completed"), WorkerResult: &workerResult}
+	if recErr := recordDispatchWorkerOutcome(dispatch, dispatchResult); recErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not record quick job outcome: %v\n", recErr)
+	}
+
+	if attempt.Verdict == colony.WorkOutcomeBlocker {
+		recordQuickFailureToMidden(job, attempt.ID, fmt.Errorf("quick job's checks failed for %q: %s", job, strings.Join(checkEvidence, "; ")))
+		if flagErr := raiseQuickIssueFlag(job); flagErr != nil && !errors.Is(flagErr, errFlagNoMutation) {
+			fmt.Fprintf(os.Stderr, "warning: could not raise a flag for the failed quick job: %v\n", flagErr)
+		}
+	}
+
+	persistQuickAttempt(attempt)
+
+	return map[string]interface{}{
+		"mode":           "quick-job",
+		"job":            job,
+		"worker_name":    workerResult.WorkerName,
+		"status":         emptyFallback(workerResult.Status, "completed"),
+		"summary":        strings.TrimSpace(workerResult.Summary),
+		"raw_output":     codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
+		"duration_ms":    workerResult.Duration.Milliseconds(),
+		"files":          filesChanged,
+		"attempt_id":     attempt.ID,
+		"work_outcome":   attempt.Verdict,
+		"check_evidence": checkEvidence,
+		"checks_status":  checksOutcome,
+	}, nil
+}
+
+// raiseQuickIssueFlag files one tracked issue when a quick job's changes
+// fail the project's own checks, through the existing flag writer
+// (updateFlagFile) -- never a second flag-writing path. Deduplicated on
+// (source, description): re-running the same failing job does not pile up
+// a second identical flag.
+func raiseQuickIssueFlag(job string) error {
+	if store == nil {
+		return nil
+	}
+	description := fmt.Sprintf("A quick job's checks failed: %s", strings.TrimSpace(job))
+	var ff colony.FlagsFile
+	if err := store.LoadJSON("pending-decisions.json", &ff); err != nil {
+		ff = colony.FlagsFile{}
+	}
+	return updateFlagFile(&ff, func() error {
+		if ff.Decisions == nil {
+			ff.Decisions = []colony.FlagEntry{}
+		}
+		for _, existing := range ff.Decisions {
+			if existing.Resolved {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(existing.Source), "quick") && existing.Description == description {
+				return errFlagNoMutation
+			}
+		}
+		ff.Decisions = append(ff.Decisions, colony.FlagEntry{
+			ID:          generateFlagID(),
+			Type:        "issue",
+			Description: description,
+			Source:      "quick",
+			CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+			Resolved:    false,
+		})
+		return nil
+	})
+}
+
+// persistQuickAttempt writes the one durable record a quick job's attempt
+// produces, so aether history and the shared episode lineage
+// (loadColonyEpisodeIndex, cmd/episode_index.go) can show it -- the same
+// discipline the build/check attempt store already uses, not a new event
+// transport. A failure to persist is warned, never returned: bookkeeping
+// must never fail a quick job that already ran.
+func persistQuickAttempt(attempt quickAttemptRecord) {
+	if store == nil {
+		return
+	}
+	id := strings.TrimSpace(attempt.ID)
+	if id == "" {
+		return
+	}
+	rel := filepath.ToSlash(filepath.Join("quick", "attempts", id+".json"))
+	if err := store.SaveJSON(rel, attempt); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not persist the quick job's record: %v\n", err)
+	}
+}
+
 func renderQuickContextCapsule(question string) string {
 	var b strings.Builder
 	b.WriteString("# Quick Scout Context\n\n")
@@ -573,36 +830,94 @@ func renderQuickContextCapsule(question string) string {
 	return strings.TrimSpace(b.String())
 }
 
+// quickChecksStatusWords turns the internal checks outcome into the plain
+// words the owner reads -- "not checked" for an unresolved check is never
+// confusable with "success" (Part A's rigour requirement: a changed-but-
+// unverified file is never reported as a pass).
+func quickChecksStatusWords(status string) string {
+	switch status {
+	case quickChecksPassed:
+		return "passed"
+	case quickChecksFailed:
+		return "failed"
+	case quickChecksNotResolved:
+		return "could not be checked (no check command resolved, or it ran out of time)"
+	default:
+		return ""
+	}
+}
+
 func renderQuickVisual(result map[string]interface{}) string {
+	isJob := stringValue(result["mode"]) == "quick-job"
 	var b strings.Builder
-	b.WriteString(renderBanner("⚡", "Quick Scout"))
+	if isJob {
+		b.WriteString(renderBanner("⚡", "Quick Job"))
+	} else {
+		b.WriteString(renderBanner("⚡", "Quick Question"))
+	}
 	b.WriteString(visualDividerStr())
-	b.WriteString("Question: ")
-	b.WriteString(emptyFallback(stringValue(result["question"]), "(none)"))
+
+	if isJob {
+		b.WriteString(voiceLine("task", "Job: "+emptyFallback(stringValue(result["job"]), "(none)")))
+	} else {
+		b.WriteString(voiceLine("question", "Question: "+emptyFallback(stringValue(result["question"]), "(none)")))
+	}
 	b.WriteString("\n")
-	b.WriteString("Status: ")
-	b.WriteString(emptyFallback(stringValue(result["status"]), "completed"))
-	b.WriteString("\n")
+
 	if worker := strings.TrimSpace(stringValue(result["worker_name"])); worker != "" {
-		b.WriteString("Scout: ")
-		b.WriteString(worker)
+		label := "Scout"
+		if isJob {
+			label = "Helper"
+		}
+		b.WriteString(voiceLine("task", label+": "+worker))
 		b.WriteString("\n")
 	}
-	if verdict, ok := result["work_outcome"].(colony.WorkOutcome); ok && verdict.Valid() {
-		if label := colony.WorkOutcomeLabels()[verdict]; label != "" {
-			b.WriteString("Verdict: ")
-			b.WriteString(label)
+
+	if files, ok := result["files"].([]string); ok && len(files) > 0 {
+		b.WriteString(voiceLine("files", fmt.Sprintf("Files changed: %s", strings.Join(files, ", "))))
+		b.WriteString("\n")
+	}
+
+	if status := stringValue(result["checks_status"]); status != "" {
+		words := quickChecksStatusWords(status)
+		kind := "done"
+		if status == quickChecksFailed {
+			kind = "failed"
+		} else if status == quickChecksNotResolved {
+			kind = "warning"
+		}
+		if words != "" {
+			b.WriteString(voiceLine(kind, "The project's checks "+words))
 			b.WriteString("\n")
 		}
 	}
-	if durationMS, ok := result["duration_ms"].(int64); ok && durationMS > 0 {
-		b.WriteString(fmt.Sprintf("Time: %.1fs\n", float64(durationMS)/1000))
+
+	if verdict, ok := result["work_outcome"].(colony.WorkOutcome); ok && verdict.Valid() {
+		if label := colony.WorkOutcomeLabels()[verdict]; label != "" {
+			kind := "done"
+			if verdict == colony.WorkOutcomeBlocker || verdict == colony.WorkOutcomeTimeout {
+				kind = "failed"
+			} else if verdict == colony.WorkOutcomePartial {
+				kind = "warning"
+			}
+			b.WriteString(voiceLine(kind, "Verdict: "+label))
+			b.WriteString("\n")
+		}
 	}
+
+	if durationMS, ok := result["duration_ms"].(int64); ok && durationMS > 0 {
+		b.WriteString(voiceLine("elapsed", fmt.Sprintf("Time: %.1fs", float64(durationMS)/1000)))
+		b.WriteString("\n")
+	}
+
 	if summary := strings.TrimSpace(stringValue(result["summary"])); summary != "" {
 		b.WriteString("\n")
 		b.WriteString(summary)
 		b.WriteString("\n")
 	}
+
+	b.WriteString("\n")
+	b.WriteString(renderLifecycleClosing(result, "quick"))
 	return b.String()
 }
 
