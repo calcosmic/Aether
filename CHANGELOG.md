@@ -5,6 +5,39 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.86] - 2026-09-21
+
+### Added
+
+- **`/ant-quick "<small job>"` now does the job.** One code-writing helper
+  makes the change with your saved preferences and "never do this" notes in
+  hand, then the project's own checks run. It works with no project set up.
+  The program looks at the folder itself to see what changed instead of taking
+  the helper's word. If the checks fail the change is kept, the screen says so
+  plainly, and an issue flag is raised so it is tracked. A helper that gets
+  stuck raises an ordinary issue, never something that halts a project. Small
+  wording and settings jobs do not get new tests written for them. Each quick
+  job appears in the history screen with the helper's name.
+- **`/ant-ask` answers any question.** Questions about the project are
+  answered from its memory; questions about the code send one read-only
+  helper to look (`aether quick --question`).
+- **The status screen lists open flags by title** under "Things to deal
+  with": blocking work, issues, and notes for later, five of each and then a
+  count. The archived-project screen and the greeting card do the same.
+
+### Changed
+
+- **Open issues and notes for later survive into the next project.** When a
+  project is archived the full set of flags goes into the archive and only
+  your still-open issues and notes stay live; starting the next project keeps
+  them. Blockers and old clarifying questions are never carried over.
+- **Flags are counted one way everywhere.** Three screens used three different
+  rules for what is an issue and what is a note.
+
+### Fixed
+
+- Closing a flag reported the wrong flag's closing time.
+
 ## [1.0.85] - 2026-09-21
 
 ### Fixed
