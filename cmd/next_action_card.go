@@ -280,6 +280,13 @@ func nextActionFlagLines(flags []nextActionFlag) []string {
 		}
 		lines = append(lines, description)
 	}
+	// Cap at five, then fold the rest into "and N more" -- the same cap the
+	// status screen's open-flags section uses (maxOpenFlagsShownPerGroup),
+	// so the greeting card's "Waiting on you" list never grows unbounded.
+	if len(lines) > maxOpenFlagsShownPerGroup {
+		extra := len(lines) - maxOpenFlagsShownPerGroup
+		lines = append(lines[:maxOpenFlagsShownPerGroup], fmt.Sprintf("and %d more", extra))
+	}
 	return lines
 }
 
