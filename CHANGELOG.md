@@ -5,6 +5,39 @@ All notable changes to the Aether Colony project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.83] - 2026-09-21
+
+All four fixes came from the owner's first morning of real use.
+
+### Fixed
+
+- **A finished-and-archived project no longer reads as damaged.** Filing a
+  finished project in the archive left pieces of its old plan and spec in the
+  saved record, so the update screen said "recover", resume printed a wall of
+  "malformed" lines, and status said "no project". Archiving now clears them
+  (the archive keeps the full verified copy), projects archived by 1.0.79 to
+  1.0.82 are read correctly without being rewritten, and status, resume and
+  update all say the same thing: your last project is finished and archived,
+  start the next one.
+- **Planning no longer refuses a project whose main page sits in a deep or
+  long-named folder.** The internal name for such a page was built from its
+  whole path against a 40-character limit, so any path deeper than about 22
+  characters stopped the discussion step. Long paths now get a short stable
+  name; short paths keep the names they already had.
+- **Update is no longer locked out after Aether installs its own helper
+  packages.** The program installs packages into the shared copy on your
+  machine when it needs them, and those packages contain shortcut links the
+  updater refused to pass. It now steps over package folders, which were never
+  copied anyway, and still refuses a link anywhere else.
+- **The closing advice on the status and resume screens comes from the one
+  shared decision** every other screen uses, and that shared card no longer
+  claims a saved goal or an unwritten handover note for an archived project.
+
+### Changed
+
+- The changelog now has an entry for every release from 1.0.64 to 1.0.82;
+  eighteen were missing.
+
 ## [1.0.82] - 2026-09-20
 
 ### Added
@@ -27,6 +60,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema, dependency-gated waves, honest timeout figures, accurate rollback
   message, superseded blocked closeouts, and host-pinned worker platform.
 
+## [1.0.80] and [1.0.81] - 2026-09-18
+
+These were local hotfix builds made from a side branch and never formally
+tagged on the main line before 1.0.82 absorbed them.
+
+### Fixed
+
+- **A helper now always runs on the platform it was actually given, with no
+  quiet fallback.** Earlier, if the requested AI platform (Claude Code, Codex,
+  OpenCode) could not be reached for a worker, the run could silently swap in
+  a different one instead of stopping and saying so.
+- **Two bookkeeping bugs that could leave a project's phase tracking wrong
+  after a partial rebuild are fixed.** A finished check's verification result
+  is now saved before a reviewer is sent out, and proof of work already done
+  on earlier, unaffected tasks survives when only part of a phase is rebuilt.
+  The most recent outcome recorded for a phase is now always the one that
+  wins.
+- **Five accuracy fixes reported from a real project in the field:** a
+  reviewer's finished review is now accepted in the shape the program
+  actually produces; work that depends on another task now waits for that
+  task to be genuinely proven first rather than assuming it is done; a
+  helper that times out without reporting back is now described honestly
+  ("no result was reported") instead of showing a false zero; an automatic
+  rollback message now names the actual files it kept; and a properly
+  finished phase no longer hands the next phase a leftover "this was
+  blocked" note that no longer applies.
+
 ## [1.0.79] - 2026-09-16
 
 ### Changed
@@ -44,6 +104,285 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missing handoff notes, and resuming refreshes those notes. Finish and archive
   messages reach the chat while machine-readable results remain valid. Completion
   checks reject claims that name tests which never ran.
+
+## [1.0.78] - 2026-09-13
+
+### Added
+
+- **A helper that gets stuck can now ask the program for backup, and the
+  program decides whether to grant it.** Every AI helper the colony (an
+  Aether project) sends out is now told it can request another helper join
+  it, but the request only succeeds if the program's own limits allow it —
+  how many "ask for help" hops deep the chain has gone, how many helpers the
+  run has already used, and whether the same job is already being worked.
+  When you check a finished run, you now see a full family tree of who asked
+  for backup, what it cost, and any request that was turned down.
+- **The program's own steering notes now earn or lose trust based on whether
+  they actually helped.** A short reminder the colony leaves for itself
+  ("focus here", "never do this") gets strengthened the more it genuinely
+  helps and weakened — or set aside — the more it doesn't, based on what
+  really happened afterward, not just on whether a helper saw the note. A
+  note you pinned yourself is never moved by this automatic tuning.
+
+### Fixed
+
+- **You can now retire a plan proposal that is sitting idle waiting for a
+  decision**, instead of it being stuck with no way to withdraw it.
+- **A screen that had quietly lost its plain-language status indicators is
+  fixed** — the project status screen shows its per-line symbols again.
+
+## [1.0.77] - 2026-09-13
+
+### Fixed
+
+- **A record of exactly which files a helper touched is now carried through
+  correctly on every build path**, including the one used by the Claude Code
+  menu commands, so finished work is never mistakenly treated as unproven.
+
+## [1.0.76] - 2026-09-13
+
+### Added
+
+- **Backup-helper requests are now recorded durably before any decision is
+  made about them**, and every detail of a request can be inspected with the
+  `aether recruit` command.
+- **Suggestions the program raises about itself, and files it wants to pull
+  in from another project, now go through one shared approval line** instead
+  of separate, inconsistent paths.
+
+### Fixed
+
+- **A security scan that used to stop at the first exposed secret in a file
+  now reports every one it finds in that file**, not just the first.
+- **A file a helper reported changing in its own notes is no longer silently
+  dropped** if it did not also show up in a separate internal record — the
+  program now trusts a helper's own claimed changes.
+- **Writes to the approval queue (the shared list of pending suggestions and
+  imports) are now all-or-nothing**, so a crash mid-write can no longer leave
+  it in a half-written state.
+
+## [1.0.75] - 2026-09-12
+
+### Added
+
+- **The first piece of the "ask for backup" system landed**: a helper's
+  request for another helper to join it is now traced end to end and
+  governed by one real gate in the program, rather than being an idea with
+  no enforcement.
+- **A steering note pulled in from another project is now quarantined and
+  labelled with where it came from**, rather than being treated the same as
+  a note this project generated itself.
+
+### Fixed
+
+- **Work already proven correct in an earlier attempt at a task is now
+  properly credited**, instead of potentially being asked for again.
+
+## [1.0.74] - 2026-09-12
+
+### Fixed
+
+- **If a project was left "paused" in a way that blocked you from resuming
+  it, the program now tells you exactly how to get unstuck**, instead of
+  leaving you at a dead end.
+
+## [1.0.73] - 2026-09-12
+
+### Added
+
+- **Most of the remaining everyday screens got their plain-symbol treatment**
+  (see 1.0.72 below for what this means): the project-status screen, the
+  clarifying-questions screen, the specification screen, the finishing
+  ("seal") screen, the phase-check screen, and the build screen all now show
+  a small symbol at the start of each line explaining what kind of
+  information it is, in plain English.
+- **A safety rule about who is allowed to review higher-risk work (money,
+  passwords, deleting data, etc.) is now checked at the right moment** — when
+  the phase is actually being checked, not earlier when it is only being
+  planned — closing a case where two internal rules disagreed about when
+  that review happens.
+
+### Fixed
+
+- **A stray internal signal could pause a whole project from inside a
+  helper's own task; that is fixed** so a helper working on its assignment
+  can no longer accidentally halt the run it is part of.
+- **A rare bug where machine-readable output leaked a plain-text symbol into
+  JSON data is fixed.**
+
+## [1.0.72] - 2026-09-12
+
+### Added
+
+- **The first screens got a return of the readable, symbol-per-line look**
+  this project used earlier in its life: each line on the "what to do next"
+  card now opens with a small icon showing what kind of information it is
+  (a warning, a finished task, a suggestion, and so on), in plain English,
+  building toward every everyday screen matching by 1.0.73.
+
+### Fixed
+
+- **You can now tell the program which of two waiting plans to review by
+  name**, instead of it being ambiguous which one you meant.
+- **The program no longer drafts a plan proposal that its own acceptance
+  check is guaranteed to refuse** — that mismatch is caught earlier instead
+  of producing wasted work.
+- **Advice offered after a failed automatic bug repair now goes through the
+  same shared decision path as everything else**, instead of a separate,
+  inconsistent one.
+
+## [1.0.71] - 2026-09-12
+
+### Fixed
+
+- **Planning helpers are now told to return what the program actually
+  accepts.** A research or plan-writing helper that followed its own
+  instructions had its result rejected, because the instructions described an
+  older result shape and asked it to write files it was not allowed to write.
+
+## [1.0.70] - 2026-09-12
+
+### Fixed
+
+- **An interrupted plan that had reached its second research round can be
+  picked back up.** Rerunning planning used to start a brand-new run and
+  abandon the finished first round; it now continues the run that was
+  genuinely waiting.
+
+## [1.0.69] - 2026-09-12
+
+### Fixed
+
+- **A planning run that stopped partway can be found again even when its
+  bookmark file is missing.** The program now falls back to the run's own
+  saved records, and refuses to guess when more than one run could match.
+
+## [1.0.68] - 2026-09-12
+
+### Fixed
+
+- **A project marked finished by an older version no longer dead-ends when
+  you try to archive it.** The refusal now names the way out: mark it finished
+  again under the current version, then archive.
+
+## [1.0.67] - 2026-09-12
+
+This was the largest release in this run — 1,082 commits, covering several
+phases of work.
+
+### Added
+
+- **A live, truthful view of what the colony is doing right now
+  (`aether watch`).** It shows exactly one of three honest screens: a live
+  dashboard while something is running, a replay of the most recent run once
+  it finishes, or an honest "nothing has run yet" card — never an invented
+  status.
+- **Chasing down a bug now sends four different kinds of investigation at
+  once** (`/ant-swarm`): one traces the bug through the project's history,
+  one searches the current code for the same pattern elsewhere, one traces
+  the actual error, and one researches outside sources. You get one card
+  showing where they agree and disagree and which fix ranks highest. The
+  winning fix is then applied automatically with a safety net — a save
+  point beforehand, a check that it worked, and an automatic undo if it
+  didn't — and if the same bug survives three attempts, the program writes
+  up a plain-language case for you instead of trying again blindly.
+- **Deep research now works in rounds and leads with the answer**
+  (`/ant-oracle`): it asks one round of clarifying questions, then researches
+  on its own, and its final answer leads with the actionable recommendation
+  and an honest confidence level — sources are listed further down, not
+  first.
+- **Every "wrap up and close out" command now ends with the same clear
+  summary card** — pausing, resuming, sealing (marking a project finished),
+  and checking status all render the same, consistent closing message
+  instead of each writing its own.
+- **Opening a session now greets you with what the colony remembers about
+  you** — your saved preferences, its strongest learned habits, and a note
+  on what the last helper left for the next one.
+- **A helper's own lesson learned on the job now flows automatically into a
+  reusable project habit**, and once a lesson is strong enough it is shared
+  with your other projects at the end of every check, not only when a
+  project is formally closed.
+- **Setup, resuming, and status tracking were rebuilt so project state can't
+  be left half-written** if a command is interrupted partway through, and
+  the guided setup command became the standard front door for starting a
+  new project.
+- **Overnight/unattended runs (`/ant-run`) got firmer guardrails** —
+  clearer rules for when to pause versus continue automatically, and
+  more reliable resuming of research and planning that was interrupted
+  partway through.
+
+## [1.0.66] - 2026-08-29
+
+### Added
+
+- **Build and check screens now stream a live line the moment each
+  verification step starts and finishes**, naming exactly which check ran
+  and what it found, instead of only showing a result once everything is
+  done.
+- **Finishing a project ("sealing" it) now requires an explicit yes from
+  you before it's marked complete**, closing a gap where a seal could be
+  recorded without a clear owner confirmation.
+- **The `aether pause` command is now the standard name** for stopping work
+  at a safe point (the older `pause-colony` name still works as an alias),
+  and running `aether update` now restores that alias automatically if it
+  ever goes missing.
+
+### Fixed
+
+- Corrected the wording of a finished check's plain-English result summary
+  so it no longer showed raw internal terms.
+- Fixed a case where the pause screen offered the same next-step command
+  twice.
+
+## [1.0.65] - 2026-08-28
+
+### Added
+
+- **Every build and check now ends with one honest line stating what it
+  cost.** The team card also shows which AI model each helper used and why —
+  routine, low-risk helpers are now automatically pinned to a cheaper model
+  with the reason written down.
+- **Cost tracking now uses the actual usage the AI platform reports**,
+  replacing an old rough guess based on counting characters in the
+  conversation.
+- **A new read-only view lets you see spending broken down by helper**, not
+  just as one combined total.
+
+### Fixed
+
+- Several accuracy bugs in the new cost-tracking system were caught and
+  fixed in this same release: a retried task was overwriting a phase's
+  recorded cost instead of adding to it, one measurement could get credited
+  to two helpers at once, and a helper session the program couldn't read
+  was being reported as costing nothing instead of being marked "unknown."
+
+## [1.0.64] - 2026-08-27
+
+### Added
+
+- **A second AI reviewer is now only sent for one of five specific,
+  named risky situations** — passwords/logins, payments, releasing a
+  version, deleting data, or changing the database's structure — and only
+  you, never the automatic Queen or autopilot, can decide to skip that
+  reviewer. A simple one-task bug fix now gets just the one helper writing
+  the code, instead of a full review team every time.
+- **Several related tasks can now be handled by one helper as a single,
+  coherent job** when they are genuinely connected (for example, several
+  tasks that all touch the same file), rather than always being split one
+  helper per task. The program checks first that grouping them this way
+  cannot make anything run in the wrong order.
+- **If a helper only finishes part of a grouped job, exactly the finished
+  tasks are credited and only the unfinished ones are retried** — nothing
+  already proven working gets redone, and a helper's own claim of what it
+  finished is checked against the real files in the project before any
+  credit is given.
+
+### Fixed
+
+- Closed a set of gaps in the new team-review and grouped-job systems found
+  during their own follow-up review, including cases where a forced
+  reviewer's decision could be lost on a retry and where a trimmed team's
+  stated reasons could be dropped.
 
 ## [1.0.63] - 2026-08-21
 

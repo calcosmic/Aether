@@ -1,6 +1,6 @@
 # AGENTS.md -- Aether Development Guide (Codex CLI)
 
-> **Current Version:** v1.0.82
+> **Current Version:** v1.0.83
 > **Last Updated:** 2026-07-27
 > **Platform:** Codex CLI (OpenAI)
 
@@ -20,7 +20,7 @@ OpenCode, and Codex CLI.
 
 | What | Count/Status |
 |------|--------------|
-| Version | v1.0.82 |
+| Version | v1.0.83 |
 | Agent definitions | 27 castes; OpenCode also ships 1 restricted infrastructure router |
 | Skills | 86 (55 colony + 31 domain) |
 | Go binary | `aether` CLI (Go binary in cmd/) |
@@ -991,4 +991,4 @@ data files clean, and test coverage comprehensive as features evolve.
 
 ---
 
-*Updated for Aether v1.0.82 — 2026-09-20*
+*Updated for Aether v1.0.83 — 2026-09-21*
