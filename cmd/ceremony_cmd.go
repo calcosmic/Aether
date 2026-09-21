@@ -387,14 +387,14 @@ func renderCeremonySpawnPlan(workflow string, manifest map[string]interface{}, d
 		if idx > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(ceremonyPlanLabel(plan))
+		b.WriteString(voiceLine("phase", ceremonyPlanLabel(plan)))
 		b.WriteString("\n")
 		for _, dispatch := range dispatchesForPlan(dispatches, plan) {
 			writeCeremonyDispatchLine(&b, dispatch, "  ")
 		}
 	}
 	b.WriteString("\n")
-	b.WriteString("Total: ")
+	b.WriteString(voiceLine("status", "Total: "))
 	b.WriteString(ceremonyCasteCountSummary(dispatches))
 	b.WriteString(fmt.Sprintf(" = %d spawns\n", len(dispatches)))
 	return b.String()
@@ -422,16 +422,20 @@ func renderCeremonyQueenSpawnBudget(manifest map[string]interface{}) string {
 		reason = "Queen relevance budget"
 	}
 
-	fmt.Fprintf(&b, "Queen Budget: %d workers across %d castes", workerCount, selectedCastes)
+	// "Queen"/"worker"/"caste" are this repository's own words for
+	// coordinator/helper/kind-of-helper; each is explained inline, in this
+	// same sentence, the first time this screen says it
+	// (repoInventedWords, cmd/next_action_card_test.go).
+	fmt.Fprintf(&b, "Queen Budget: the coordinator selected %d worker(s) (helpers), %d caste(s) (kind of helper)", workerCount, selectedCastes)
 	if maxSelectedCastes > 0 {
-		fmt.Fprintf(&b, " (caste budget %d, %s)", maxSelectedCastes, reason)
+		fmt.Fprintf(&b, " (helper-kind budget %d, %s)", maxSelectedCastes, reason)
 	} else {
 		fmt.Fprintf(&b, " (%s)", reason)
 	}
 	b.WriteString("\n")
 
 	if required := stringSliceValue(budget["required_castes"]); len(required) > 0 {
-		b.WriteString("Required: ")
+		b.WriteString(voiceLine("requirement", "Required: "))
 		b.WriteString(strings.Join(required, ", "))
 		b.WriteString("\n")
 	}
@@ -469,16 +473,20 @@ func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, 
 		label string
 		value string
 	}{
-		{"workflow", normalizedCeremonyWorkflow(workflow)},
-		{"mode", stringValue(manifest["dispatch_mode"])},
-		{"owner", stringValue(manifest["execution_owner"])},
-		{"platform", stringValue(manifest["host_platform"])},
-		{"parallel", stringValue(manifest["parallel_mode"])},
-		{"review", emptyFallback(stringValue(manifest["review_depth"]), stringValue(manifest["verification_depth"]))},
-		{"depth", stringValue(manifest["colony_depth"])},
+		{"Workflow", normalizedCeremonyWorkflow(workflow)},
+		{"Mode", stringValue(manifest["dispatch_mode"])},
+		{"Owner", stringValue(manifest["execution_owner"])},
+		{"Platform", stringValue(manifest["host_platform"])},
+		{"Parallel", stringValue(manifest["parallel_mode"])},
+		{"Review", emptyFallback(stringValue(manifest["review_depth"]), stringValue(manifest["verification_depth"]))},
+		{"Depth", stringValue(manifest["colony_depth"])},
 	} {
 		if strings.TrimSpace(item.value) != "" {
-			parts = append(parts, fmt.Sprintf("%s=%s", item.label, item.value))
+			// Plain-English "Label: value" rather than a "label=value"
+			// bookkeeping pair -- the owner reads this line, and a bare
+			// "workflow=build" token is the exact internal-state shape
+			// TestVoicedScreensCarryNoRawStateToken refuses.
+			parts = append(parts, fmt.Sprintf("%s: %s", item.label, item.value))
 		}
 	}
 	if len(parts) == 0 && len(dispatches) == 0 {
@@ -486,7 +494,10 @@ func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, 
 	}
 
 	var b strings.Builder
-	b.WriteString("👑🐜 Queen Orchestration")
+	// "Queen" is explained inline, in the same sentence, the first time this
+	// screen says it -- the plain-English rule every voiced screen must
+	// satisfy (repoInventedWords, cmd/next_action_card_test.go).
+	b.WriteString("👑🐜 Queen Orchestration (the coordinator that decides which helpers to send)")
 	if len(parts) > 0 {
 		b.WriteString(": ")
 		b.WriteString(strings.Join(parts, " | "))
@@ -497,7 +508,7 @@ func renderCeremonyQueenFrame(workflow string, manifest map[string]interface{}, 
 		reason := strings.TrimSpace(stringValue(recommendation["reason"]))
 		reviewDepth := strings.TrimSpace(stringValue(recommendation["review_depth"]))
 		if reason != "" || reviewDepth != "" {
-			b.WriteString("   Recommendation: ")
+			b.WriteString("   " + voiceLine("decision", "Recommendation: "))
 			if reviewDepth != "" {
 				b.WriteString(reviewDepth)
 				if reason != "" {
@@ -608,7 +619,14 @@ func renderCeremonyWorkerComplete(workflow string, dispatch ceremonyDispatch) st
 	if status == "" {
 		status = "completed"
 	}
-	fmt.Fprintf(&b, "%s %s %s", dispatchStatusIcon(status), casteIdentity(dispatch.Caste), emptyFallback(dispatch.Name, "worker"))
+	// Lead with the caste identity (its own emoji, e.g. "🔨🐜") rather than
+	// the bare status glyph (dispatchStatusIcon returns a plain "✓"/"✗"/"…"
+	// character, outside the closed voice-glyph set voiceDensity checks
+	// against) so this line reads as glyph-led like every other voiced
+	// screen, and carry the status word alongside the icon, in plain words
+	// (status is an internal enum like "completed_no_change"), so the icon
+	// is never the only signal of what happened.
+	fmt.Fprintf(&b, "%s %s %s (%s)", casteIdentity(dispatch.Caste), emptyFallback(dispatch.Name, "worker"), dispatchStatusIcon(status), strings.ReplaceAll(status, "_", " "))
 	if dispatch.TaskID != "" {
 		b.WriteString("  Task ")
 		b.WriteString(dispatch.TaskID)
@@ -719,7 +737,9 @@ func renderCeremonyCloseoutVisualBody(result map[string]interface{}) string {
 		var state colony.ColonyState
 		if store != nil && store.LoadJSON("COLONY_STATE.json", &state) == nil && phaseID > 0 {
 			b.WriteString("\n")
-			b.WriteString(renderStageMarker("Colony State"))
+			// "Colony State (project)" explains "colony" inline for this
+			// screen's own call site (repoInventedWords cue: "project").
+			b.WriteString(renderStageMarker("Colony State (project)"))
 			b.WriteString(renderPhaseEndFooter(state, phaseID))
 		}
 		b.WriteString("\n")
@@ -910,14 +930,17 @@ func writeCeremonyWorkerSummary(b *strings.Builder, result map[string]interface{
 		total = len(workers)
 	}
 	if total > 0 {
-		fmt.Fprintf(b, "\nWorkers: %d completed  %d blocked  %d failed  (%d total)\n", completed, blocked, failed, total)
+		// "worker" is explained inline, in this same sentence, the first
+		// time this screen says it (repoInventedWords,
+		// cmd/next_action_card_test.go).
+		fmt.Fprintf(b, "\nWorkers: %d completed  %d blocked  %d failed  (%d total helpers)\n", completed, blocked, failed, total)
 	}
 	toolCount := 0
 	for _, worker := range workers {
 		toolCount += intValue(worker["tool_count"])
 	}
 	if toolCount > 0 {
-		fmt.Fprintf(b, "Tools: %d calls across workers\n", toolCount)
+		fmt.Fprintf(b, "Tools: %d calls across the helpers above\n", toolCount)
 	}
 	artifacts := stringSliceValue(result["completion_artifacts"])
 	if len(artifacts) > 0 {
@@ -933,7 +956,11 @@ func writeCeremonyWorkerSummary(b *strings.Builder, result map[string]interface{
 	}
 	if len(workers) > 0 {
 		b.WriteString("\n")
-		b.WriteString(renderStageMarker("Worker Results"))
+		// "Worker Results (helpers)" (rather than bare "Worker Results")
+		// explains "worker" inline for this screen's own call site, without
+		// touching the many other call sites elsewhere that render this
+		// exact stage-marker text and are pinned to it by other tests.
+		b.WriteString(renderStageMarker("Worker Results (helpers)"))
 		for _, worker := range workers {
 			b.WriteString(renderCeremonyWorkerComplete(normalizedCeremonyWorkflow(stringValue(result["workflow"])), ceremonyDispatchFromMap(worker)))
 		}
@@ -1271,15 +1298,18 @@ func writeCeremonyPhaseLine(b *strings.Builder, manifest map[string]interface{})
 		return
 	}
 	if phase > 0 {
-		fmt.Fprintf(b, "Phase %d", phase)
+		var line strings.Builder
+		fmt.Fprintf(&line, "Phase %d", phase)
 		if phaseName != "" {
-			b.WriteString(": ")
-			b.WriteString(phaseName)
+			line.WriteString(": ")
+			line.WriteString(phaseName)
 		}
+		b.WriteString(voiceLine("phase", line.String()))
 		b.WriteString("\n\n")
 		return
 	}
-	fmt.Fprintf(b, "%s\n\n", phaseName)
+	b.WriteString(voiceLine("phase", phaseName))
+	b.WriteString("\n\n")
 }
 
 func writeCeremonyDispatchLine(b *strings.Builder, dispatch ceremonyDispatch, prefix string) {
