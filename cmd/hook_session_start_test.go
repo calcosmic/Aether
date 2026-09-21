@@ -319,6 +319,13 @@ type claudeHookSettingsFile struct {
 			Timeout int    `json:"timeout"`
 		} `json:"hooks"`
 	} `json:"hooks"`
+	// StatusLine is Phase 206 plan 02's top-level settings key, sibling to
+	// "hooks" rather than nested inside it -- Claude Code's status-line
+	// feature is not a hook event.
+	StatusLine struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	} `json:"statusLine"`
 }
 
 func readShippedHookSettings(t *testing.T) claudeHookSettingsFile {

@@ -966,31 +966,46 @@ func hookSettingsCommandArgs(path string) [][]string {
 				Command string `json:"command"`
 			} `json:"hooks"`
 		} `json:"hooks"`
+		// StatusLine is Phase 206 plan 02's top-level settings key, sibling
+		// to "hooks" rather than nested inside it -- the platform executes
+		// its command exactly the same way it executes a hook's command, so
+		// it is credited as a caller the same way.
+		StatusLine struct {
+			Command string `json:"command"`
+		} `json:"statusLine"`
 	}
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return nil
+	}
+
+	creditCommandString := func(invocations [][]string, command string) [][]string {
+		fields := tokenizeShellLike(command)
+		for j, field := range fields {
+			if !isBinaryToken(field, nil) {
+				continue
+			}
+			if j+1 >= len(fields) {
+				continue
+			}
+			name := normalizeShellToken(fields[j+1])
+			if !subcommandNameShapeRe.MatchString(name) {
+				continue
+			}
+			invocations = append(invocations, append([]string{name}, fields[j+2:]...))
+		}
+		return invocations
 	}
 
 	var invocations [][]string
 	for _, entries := range settings.Hooks {
 		for _, entry := range entries {
 			for _, inner := range entry.Hooks {
-				fields := tokenizeShellLike(inner.Command)
-				for j, field := range fields {
-					if !isBinaryToken(field, nil) {
-						continue
-					}
-					if j+1 >= len(fields) {
-						continue
-					}
-					name := normalizeShellToken(fields[j+1])
-					if !subcommandNameShapeRe.MatchString(name) {
-						continue
-					}
-					invocations = append(invocations, append([]string{name}, fields[j+2:]...))
-				}
+				invocations = creditCommandString(invocations, inner.Command)
 			}
 		}
+	}
+	if cmd := strings.TrimSpace(settings.StatusLine.Command); cmd != "" {
+		invocations = creditCommandString(invocations, cmd)
 	}
 	return invocations
 }

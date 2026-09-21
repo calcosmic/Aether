@@ -1099,6 +1099,7 @@ func init() {
 	rootCmd.AddCommand(hookStopCmd)
 	rootCmd.AddCommand(hookPreCompactCmd)
 	rootCmd.AddCommand(hookSessionStartCmd)
+	rootCmd.AddCommand(statusLineCmd)
 }
 
 // isAetherSpawnedWorker reports whether the current process is running inside a

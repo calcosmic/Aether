@@ -99,5 +99,10 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "aether status-line",
+    "padding": 0
   }
 }
