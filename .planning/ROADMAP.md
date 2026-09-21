@@ -50,6 +50,7 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   straight to the owner (`systemMessage`, verified 2026-09-21), with the owner judging how it looks
   on his own screen, and a permanent status line (phase, task, next command). Proof: real chats in
   a scratch project show the screens unchanged.
+
 - [ ] **Phase 207 — A Messy Practice Project Is the Release Gate.** A practice project built by a
   committed script with the traps real projects have (a shortcut to a folder, a shortcut loop, two
   names differing only by letter case, a nested project, long folder names, an out-of-date code
@@ -59,6 +60,7 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   the chat ran, never on wording; three trials; failures sorted into flaky and real; money and turn
   caps; hooks and menu commands must be loaded. Proof: the journey catches each of 2026-09-21's six
   blockers when its fix is removed.
+
 - [ ] **Phase 208 — Never a Dead End.** Every place the program refuses is listed and sorted: a
   refusal that does not protect against losing work becomes a warning that carries on. Every
   refusal that stays names the one command that gets past it, as a required field a test enforces,
@@ -69,11 +71,13 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   a failure whose text the safety filter rejects is logged as "could not be safely recorded", which
   tells the owner nothing; a refusal log and a one-command report bundle, with "report it, do not
   patch Aether" written into every refusal so chats in other projects stop editing Aether's source.
+
 - [ ] **Phase 209 — A Light Default Path.** One entry command; the program picks small or big from
   the size of the change, says why, and moves a job back up to planning if "small" turns out wrong.
   One planning pass by default. Discuss, specification approval and deeper planning rounds become
   things the owner asks for. About six menu commands visible, the rest behind an advanced setting.
   Owner decides the details before building (this changes how Aether behaves for him).
+
 - [ ] **Phase 210 — Two-Week Freeze.** The owner uses Aether in his real projects. Only bugs he
   hits are fixed. Ends with the done-means check and the stopping rule.
 
@@ -855,7 +859,6 @@ Plans:
 
 - [x] 204.2-16-PLAN.md — Account exact final normal/race regressions and refresh canonical verification after archiving its original bytes; depends on 15.
 
-
 **Second gap-closure pass — Plans17–20 reported; dependent qualification blocked on actual host evidence**
 
 **Wave 14 — completed**
@@ -1057,7 +1060,16 @@ Plans:
 4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
 5. Proven in real chats in a scratch project, not only in tests.
 
-**Plans:** 0 plans
+**Plans:** 2 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 206-01-PLAN.md — The direct route: a hook hands a drawn screen straight to the owner, and the finish check stops demanding a screen that already arrived whole (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 206-02-PLAN.md — The permanent status line, the real-chat proof in a scratch project, and the owner's recorded verdict (wave 2)
 
 ### Phase 207: A Messy Practice Project Is the Release Gate
 

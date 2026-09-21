@@ -2,14 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
+current_phase: 206
+current_phase_name: screens-reach-the-owner
 status: active
-stopped_at: Phase 206 in progress 2026-09-21 -- release 1.0.88 assembled and in its full test run; direct screen route and status line still to build. See decisions/2026-09-21-v1.29-use-it-every-day.md.
-last_updated: "2026-09-21T00:00:00+00:00"
-last_activity: 2026-09-21 -- v1.29 Use It Every Day approved by the owner; Phase 206 started
+stopped_at: Phase 206 planned 2026-09-21 -- 2 plans in 2 waves (direct screen route, then status line + real-chat proof + owner look); release 1.0.88 published; next is /gsd-execute-phase 206
+last_updated: "2026-09-21T21:00:39.917Z"
+last_activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
+last_activity_desc: Phase 206 planned; next is execute
+state_head: 3b5c2ed9543e448bb82c28d445be8dd544a44fe8
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
   percent: 0
 ---
@@ -30,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 204.2 (codex-native-worker-lifecycle) — PARKED at Plan 25 (2026-09-20 decision)
-Next phase: Publish 1.0.82 (direct-dispatch Codex route as default, native bridge opt-in), then the slim Claude trial
-Status: Paused — Phase 204.2-204.5 parked, not cancelled
-Plan: 25 of 26 — parked mid-plan; see decisions/2026-09-20-park-codex-native-lifecycle.md for what is kept
-Last activity: 2026-09-20 -- Phase 204.2 parked; next is publish 1.0.82 + slim Claude trial
+Phase: 206 (screens-reach-the-owner) — READY TO EXECUTE
+Next phase: 207 (messy practice project as the release gate)
+Status: Ready to execute
+Plan: 0 of 2
+Last activity: 2026-09-21 -- Phase 206 planned (2 plans, checker passed)
 
 ## Performance Metrics
 
