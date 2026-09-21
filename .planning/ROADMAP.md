@@ -1041,6 +1041,92 @@ Plans:
 
 - [ ] 205-18-PLAN.md — Owner acceptance and the restoration seal (wave 10)
 
+### Phase 206: Screens Reach the Owner
+
+**Goal:** The owner sees the program's own screens in the chat, every time, unchanged.
+
+**Depends on:** nothing; release 1.0.88 carries the first four requirements.
+
+**Requirements:** UED-01..06
+
+**Success criteria:**
+
+1. Every menu command that draws a screen tells the chat to show it unchanged, and a test fails if any command loses that instruction.
+2. In a chat where a menu command was used, a reply that hides the screen is sent back once, never twice, and the check changes nothing on disk.
+3. A screen printed for a chat carries no colour escape codes; start-up, code survey and helper cards are in the guarded look.
+4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
+5. Proven in real chats in a scratch project, not only in tests.
+
+**Plans:** 0 plans
+
+### Phase 207: A Messy Practice Project Is the Release Gate
+
+**Goal:** Dead ends are found by an automated journey through a deliberately messy project before the owner finds them.
+
+**Depends on:** Phase 206
+
+**Requirements:** UED-07..09
+
+**Success criteria:**
+
+1. A committed script builds the practice project with every trap named in the milestone section.
+2. The whole journey runs through a real chat with hooks and menu commands loaded; it asserts on files produced and commands run, never on wording; three trials; failures sorted into flaky and real; money and turn caps.
+3. With each of the six 2026-09-21 fixes reverted in turn, the journey fails at that step.
+4. The journey is the gate for every release from here on.
+
+**Plans:** 0 plans
+
+### Phase 208: Never a Dead End
+
+**Goal:** The program warns and carries on unless work could be lost, and every refusal that remains says how to get past it.
+
+**Depends on:** Phase 207 (the journey finds the refusals and proves the fixes)
+
+**Requirements:** UED-10..15
+
+**Success criteria:**
+
+1. Every refusal is listed and sorted; one that does not protect against losing work is a warning that carries on.
+2. Every refusal that stays names the one command that gets past it, enforced by a test, and the journey runs each printed command.
+3. A failed check adds tasks and carries on; status is worked out from what is on disk and the less-finished record is believed.
+4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
+5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
+
+**Plans:** 0 plans
+
+### Phase 209: A Light Default Path
+
+**Goal:** Ordinary work takes goal, one planning pass, build, check; everything heavier is something the owner asks for.
+
+**Depends on:** Phase 208; the owner's decisions on the details before planning
+
+**Requirements:** UED-16..18
+
+**Success criteria:**
+
+1. One entry command; the program picks small or big from the size of the change, says why, and moves a job back up to planning when small was wrong.
+2. One planning pass by default; discuss, specification approval and deeper rounds are opt-in.
+3. About six menu commands visible by default, the rest behind an advanced setting.
+4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
+
+**Plans:** 0 plans
+
+### Phase 210: Two-Week Freeze
+
+**Goal:** The owner uses Aether for real work and only what he hits is fixed.
+
+**Depends on:** Phases 206-209
+
+**Requirements:** UED-19, UED-20
+
+**Success criteria:**
+
+1. The owner completes one real piece of work from start to finish in each of his real projects without pasting a bug into the Aether chat.
+2. Every blocker hit during the fortnight is counted and reported.
+3. The stopping rule in the decision record is applied honestly.
+
+**Plans:** 0 plans
+
 ## Milestone Traceability
 
 | Phase | Requirement count | Primary restored experience |
