@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -339,5 +341,80 @@ func TestQuickLeavesARecordHistoryCanShow(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected one quick-job entry in the episode index, got %+v", idx.Entries)
+	}
+}
+
+// silentFileWritingWorkerInvoker writes a real file into the repo but
+// reports zero files -- the untrusted-evidence shape TestQuickTrustsDiskOverWorkerReport
+// proves the runtime never takes on faith.
+type silentFileWritingWorkerInvoker struct {
+	root string
+	rel  string
+}
+
+func (i *silentFileWritingWorkerInvoker) IsAvailable(ctx context.Context) bool { return true }
+func (i *silentFileWritingWorkerInvoker) ValidateAgent(path string) error      { return nil }
+func (i *silentFileWritingWorkerInvoker) Invoke(ctx context.Context, config codex.WorkerConfig) (codex.WorkerResult, error) {
+	if err := os.WriteFile(filepath.Join(i.root, i.rel), []byte("package fixture\n"), 0644); err != nil {
+		return codex.WorkerResult{}, err
+	}
+	return codex.WorkerResult{
+		WorkerName: config.WorkerName,
+		Caste:      config.Caste,
+		TaskID:     config.TaskID,
+		Status:     "completed",
+		Summary:    "did the job",
+		// Deliberately empty -- the worker reports NO files, even though it
+		// really wrote one. Worker-reported evidence is untrusted.
+	}, nil
+}
+
+// TestQuickTrustsDiskOverWorkerReport is release 1.0.85's TRUST fix: a
+// helper that changes a file but reports none must still have that file
+// checked and must never verdict no_change. The runtime's own trust
+// boundary (CLAUDE.md: worker-reported evidence is untrusted) applies to
+// quick jobs exactly as it does to build claims.
+func TestQuickTrustsDiskOverWorkerReport(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	chdirForTest190_05(t, root)
+	gitInitForTest(t, root)
+
+	origInvoker := newQuickWorkerInvoker
+	newQuickWorkerInvoker = func() codex.WorkerInvoker {
+		return &silentFileWritingWorkerInvoker{root: root, rel: "sneaky.go"}
+	}
+	t.Cleanup(func() { newQuickWorkerInvoker = origInvoker })
+
+	origChecks := runQuickDeterministicChecks
+	checkCalls := 0
+	var checkedFiles []string
+	runQuickDeterministicChecks = func(root string, files []string) (string, []string, error) {
+		checkCalls++
+		checkedFiles = append([]string(nil), files...)
+		return quickChecksPassed, []string{"passed"}, nil
+	}
+	t.Cleanup(func() { runQuickDeterministicChecks = origChecks })
+
+	result, err := runQuickJob("silently create a file", 2*time.Second)
+	if err != nil {
+		t.Fatalf("runQuickJob: %v", err)
+	}
+	if checkCalls != 1 {
+		t.Fatalf("expected the checks seam to be called exactly once for the real disk change the worker never reported, got %d calls", checkCalls)
+	}
+	found := false
+	for _, f := range checkedFiles {
+		if strings.Contains(f, "sneaky.go") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected sneaky.go (written to disk but never reported) to reach the checks seam, got %v", checkedFiles)
+	}
+	verdict, _ := result["work_outcome"].(colony.WorkOutcome)
+	if verdict == colony.WorkOutcomeNoChange {
+		t.Fatalf("expected a real disk change to never verdict no_change just because the worker did not report it")
 	}
 }

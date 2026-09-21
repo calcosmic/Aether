@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -623,6 +626,90 @@ func runQuickScout(question string, timeout time.Duration) (map[string]interface
 	}, nil
 }
 
+// quickWorkingTreeSnapshot maps every currently non-clean path (tracked and
+// dirty, or untracked) to a content hash, read from `git status
+// --porcelain=v1 -z --untracked-files=all`. Taken once before a quick job
+// dispatches and once after it returns, the two snapshots let
+// quickRealChangedFiles detect a real disk change independently of
+// whatever the worker chooses to report -- including a second edit to a
+// path that was ALREADY dirty before the job ran, because that path's hash
+// changes too. ok is false when root is not a git repository (or git could
+// not be run), in which case the caller falls back to the worker's own
+// report and says so plainly on screen.
+func quickWorkingTreeSnapshot(root string) (map[string]string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	cmd.Dir = root
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, false
+	}
+	snapshot := map[string]string{}
+	entries := strings.Split(string(out), "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if len(entry) < 4 {
+			continue
+		}
+		status := entry[:2]
+		path := strings.TrimSpace(entry[3:])
+		if path == "" {
+			continue
+		}
+		if status[0] == 'R' || status[0] == 'C' {
+			// A rename/copy entry's OLD path follows as the next NUL-
+			// separated field -- not itself a path to hash.
+			i++
+		}
+		snapshot[filepath.ToSlash(path)] = quickFileContentHash(filepath.Join(root, filepath.FromSlash(path)))
+	}
+	return snapshot, true
+}
+
+// quickFileContentHash hashes a file's current content, or reports
+// "missing" for a path that no longer exists (e.g. a worker deleted it) so
+// that a delete still registers as a change relative to any earlier hash.
+func quickFileContentHash(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "missing"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// quickRealChangedFiles derives the real changed-file set from two
+// snapshots, excluding .aether/data/ (colony bookkeeping, never a job's own
+// output). A path present in either snapshot with a different hash, a path
+// newly dirty, or a path that WAS dirty and is no longer (e.g. reverted or
+// deleted back to clean) all count -- something happened to it.
+func quickRealChangedFiles(before, after map[string]string) []string {
+	changed := map[string]bool{}
+	consider := func(path string) {
+		if strings.HasPrefix(path, ".aether/data/") {
+			return
+		}
+		changed[path] = true
+	}
+	for path, hash := range after {
+		if beforeHash, ok := before[path]; !ok || beforeHash != hash {
+			consider(path)
+		}
+	}
+	for path := range before {
+		if _, ok := after[path]; !ok {
+			consider(path)
+		}
+	}
+	out := make([]string, 0, len(changed))
+	for path := range changed {
+		out = append(out, path)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // runQuickJob does one small job with one helper (CAP-029, the owner's 21
 // Sep decision): dispatches a single builder, then runs the project's own
 // checks over whatever it changed. Unlike runQuickScout it is never
@@ -688,6 +775,12 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 		SkillSection:   resolveSkillSectionForWorkflow("quick", "builder", job),
 		Workflow:       "quick",
 	}
+	// TRUST: worker-reported evidence is never taken on faith (the same rule
+	// build claims already answer to). Snapshot the working tree before
+	// dispatch so a real disk change reaches the checks and the verdict
+	// even when the worker never reports it.
+	beforeSnapshot, snapshotOK := quickWorkingTreeSnapshot(root)
+
 	workerResult, err := invoker.Invoke(ctx, codex.WorkerConfig{
 		AgentName:      dispatch.AgentName,
 		AgentTOMLPath:  dispatch.AgentTOMLPath,
@@ -714,7 +807,17 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	}
 	attempt.Dispatches[0].Status = emptyFallback(workerResult.Status, "completed")
 
-	filesChanged := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
+	reportedFiles := append(append([]string(nil), workerResult.FilesCreated...), workerResult.FilesModified...)
+	filesChanged := reportedFiles
+	changesConfirmed := false
+	if snapshotOK {
+		afterSnapshot, afterOK := quickWorkingTreeSnapshot(root)
+		if afterOK {
+			realChanged := quickRealChangedFiles(beforeSnapshot, afterSnapshot)
+			filesChanged = uniqueSortedStrings(append(append([]string(nil), reportedFiles...), realChanged...))
+			changesConfirmed = true
+		}
+	}
 	checksOutcome := quickChecksPassed
 	var checkEvidence []string
 	if len(filesChanged) > 0 {
@@ -746,18 +849,19 @@ func runQuickJob(job string, timeout time.Duration) (map[string]interface{}, err
 	persistQuickAttempt(attempt)
 
 	return map[string]interface{}{
-		"mode":           "quick-job",
-		"job":            job,
-		"worker_name":    workerResult.WorkerName,
-		"status":         emptyFallback(workerResult.Status, "completed"),
-		"summary":        strings.TrimSpace(workerResult.Summary),
-		"raw_output":     codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
-		"duration_ms":    workerResult.Duration.Milliseconds(),
-		"files":          filesChanged,
-		"attempt_id":     attempt.ID,
-		"work_outcome":   attempt.Verdict,
-		"check_evidence": checkEvidence,
-		"checks_status":  checksOutcome,
+		"mode":              "quick-job",
+		"job":               job,
+		"worker_name":       workerResult.WorkerName,
+		"status":            emptyFallback(workerResult.Status, "completed"),
+		"summary":           strings.TrimSpace(workerResult.Summary),
+		"raw_output":        codex.SanitizeWorkerDiagnosticOutput(workerResult.RawOutput),
+		"duration_ms":       workerResult.Duration.Milliseconds(),
+		"files":             filesChanged,
+		"attempt_id":        attempt.ID,
+		"work_outcome":      attempt.Verdict,
+		"check_evidence":    checkEvidence,
+		"checks_status":     checksOutcome,
+		"changes_confirmed": changesConfirmed,
 	}, nil
 }
 
@@ -873,9 +977,16 @@ func renderQuickVisual(result map[string]interface{}) string {
 		b.WriteString("\n")
 	}
 
-	if files, ok := result["files"].([]string); ok && len(files) > 0 {
+	files, hasFiles := result["files"].([]string)
+	if hasFiles && len(files) > 0 {
 		b.WriteString(voiceLine("files", fmt.Sprintf("Files changed: %s", strings.Join(files, ", "))))
 		b.WriteString("\n")
+	}
+	if isJob && hasFiles && len(files) > 0 {
+		if confirmed, ok := result["changes_confirmed"].(bool); ok && !confirmed {
+			b.WriteString(voiceLine("warning", "This folder is not a project under version control, so which files actually changed could not be independently confirmed -- the helper's own report is all there is to go on."))
+			b.WriteString("\n")
+		}
 	}
 
 	if status := stringValue(result["checks_status"]); status != "" {
