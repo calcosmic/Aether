@@ -136,10 +136,11 @@ eval-gate-release:
 # journey: the full messy-practice-project lifecycle, driven through a real
 # claude -p chat with hooks and menu commands loaded. Requires a local,
 # interactively-authenticated claude CLI; never runs in CI. Sets no
-# environment variable that could turn this into a skip. Budget 5400s,
-# provisional (gates.json).
+# environment variable that could turn this into a skip. Budget 1100s,
+# measured from 207-06-PLAN.md's real three-trial run (gates.json) --
+# -timeout is set with headroom above that measured figure.
 eval-gate-journey:
-	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=5400s ./...,-tags=journey -list=TestJourney ./...)
+	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=1500s ./...,-tags=journey -list=TestJourney ./...)
 
 # prove-journey-fix-reverts (207-05-PLAN.md, UED-09, owner ruling D-01): the
 # journey gate above proves the product works; this proves the gate is
