@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 38
+open_count: 39
 waived_count: 0
 fixed_count: 14
-total_count: 52
-last_updated: 2026-09-22T11:27:19.326Z
+total_count: 53
+last_updated: 2026-09-22T12:21:50.698Z
 ---
 
 # Broken Windows Ledger
@@ -67,6 +67,7 @@ last_updated: 2026-09-22T11:27:19.326Z
 | 50 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): task.Verified is set from the phase-wide verification.ChecksPassed flag (the code comment near continueTasksSupportAdvancement says so), not per task. One failing criterion therefore marks every task implemented_unverified, and the implementation_evidence gate fails with text identical to the causal blocker, so gate-results shows two failures for one cause and sends the owner and the Fixer after a phantom second defect. Close by evaluating Verified per task against the criteria bound to that task and having the gate name the causal criterion. | open |  | 2026-09-22T11:27:19.099Z |  |
 | 51 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server && python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh, bash...) and 'cd' is not among them. Close by recognising a 'cd <dir> &&' prefix (strip it and classify the remainder, run via sh -c with that cwd), and by rejecting an unrecognised line loudly by name instead of reporting it absent. Note: a valid line in AGENTS.md masks an invalid one in CLAUDE.md and vice versa, which is why the reporter first blamed '&&'. | open |  | 2026-09-22T11:27:19.215Z |  |
 | 52 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, dead end): there is no scoped, audited way to correct one criterion's evidence binding on an in-progress phase; .aether/data is protected from hand edits by design and no plan --revise-criterion exists. The only exit is 'aether skip-phase N --force', which records a completed-and-verified phase as abandoned, a materially false statement. Close (Phase 208 'never a dead end') with a scoped revision command for a single criterion's evidence binding, or '--accept-criterion <id> --reason <text>' on continue that records an owner attestation as first-class evidence. | open |  | 2026-09-22T11:27:19.326Z |  |
+| 53 | 208 | unmet-truth | cmd/codex_colonize_finalize.go |  | JOURNEY FINDING 2026-09-22 (Phase 207 live trial, practice project, step 2 of 14 'survey'): after /ant-colonize the territory snapshot's source_revision stays at the stale seeded revision, so the out-of-date-code-map trap is never cleared. Cause, read from the chat's own on-disk transcript: the chat ran 'aether host colonize --force-resurvey', dispatched four real surveyors that wrote the seven survey documents, then assembled the completion packet by hand in python and dropped the manifest's generated_at field; 'aether colonize-finalize' refused with 'colonize_manifest generated_at is required for freshness validation' (validateCodexColonizeManifestFreshness) and the snapshot was never published. The refusal names no way forward and the chat then told the owner the survey 'completed clean' -- a false reassurance on top of a dead end. Two fixes belong here: (1) finalize should recover generated_at from the manifest it itself wrote (or the wrapper's packet spec must show the field explicitly in its example, which today only says 'the exact result.colonize_manifest object'); (2) every finalize refusal must name the one command that gets past it (Phase 208 UED-10) so a chat cannot narrate around it. Caught by TestJourney/survey's on-disk fact check, exactly as UED-08 intends; the check was deliberately not weakened. | open |  | 2026-09-22T12:21:50.698Z |  |
 
 ````json
 [
@@ -692,6 +693,18 @@ last_updated: 2026-09-22T11:27:19.326Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-22T11:27:19.326Z",
+    "resolved_at": null
+  },
+  {
+    "id": 53,
+    "kind": "unmet-truth",
+    "phase": "208",
+    "file": "cmd/codex_colonize_finalize.go",
+    "line": null,
+    "description": "JOURNEY FINDING 2026-09-22 (Phase 207 live trial, practice project, step 2 of 14 'survey'): after /ant-colonize the territory snapshot's source_revision stays at the stale seeded revision, so the out-of-date-code-map trap is never cleared. Cause, read from the chat's own on-disk transcript: the chat ran 'aether host colonize --force-resurvey', dispatched four real surveyors that wrote the seven survey documents, then assembled the completion packet by hand in python and dropped the manifest's generated_at field; 'aether colonize-finalize' refused with 'colonize_manifest generated_at is required for freshness validation' (validateCodexColonizeManifestFreshness) and the snapshot was never published. The refusal names no way forward and the chat then told the owner the survey 'completed clean' -- a false reassurance on top of a dead end. Two fixes belong here: (1) finalize should recover generated_at from the manifest it itself wrote (or the wrapper's packet spec must show the field explicitly in its example, which today only says 'the exact result.colonize_manifest object'); (2) every finalize refusal must name the one command that gets past it (Phase 208 UED-10) so a chat cannot narrate around it. Caught by TestJourney/survey's on-disk fact check, exactly as UED-08 intends; the check was deliberately not weakened.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T12:21:50.698Z",
     "resolved_at": null
   }
 ]
