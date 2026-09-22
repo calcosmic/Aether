@@ -1060,7 +1060,7 @@ Plans:
 4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
 5. Proven in real chats in a scratch project, not only in tests.
 
-**Plans:** 2/2 plans complete
+**Plans:** 2/2 plans executed
 
 Plans:
 **Wave 1**
