@@ -1092,7 +1092,7 @@ Plans:
 
 4. The journey is the gate for every release from here on.
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -1110,7 +1110,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 207-05-PLAN.md — Revert each of the five landed fixes in a throwaway copy and prove the journey fails at that step (UED-09)
+- [x] 207-05-PLAN.md — Revert each of the five landed fixes in a throwaway copy and prove the journey fails at that step (UED-09)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
