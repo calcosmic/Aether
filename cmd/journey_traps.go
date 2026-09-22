@@ -48,21 +48,31 @@ func journeyTrapsRepoRoot() (string, error) {
 	return root, nil
 }
 
-// journeyTrapAssertion is the machine-readable descriptor naming the file a
-// trap lives at and what must be true of it.
+// journeyTrapAssertion is the machine-readable descriptor naming the path(s)
+// a trap lives at, a Kind identifying which generic checker in
+// cmd/messy_practice_project_test.go applies, and the fact that must hold.
+// Kind is deliberately its own vocabulary, separate from the trap's own id:
+// the id names WHAT the trap is, Kind names HOW to check it, so the test file
+// never needs to switch on (and therefore never needs to re-type) any of the
+// nine declared trap ids.
 type journeyTrapAssertion struct {
-	File string `json:"file"`
-	Must string `json:"must"`
+	Kind       string `json:"kind"`
+	Path       string `json:"path,omitempty"`
+	SecondPath string `json:"second_path,omitempty"`
+	Must       string `json:"must"`
 }
 
 // journeyTrap is one declared, constructible trap in the messy practice
-// project.
+// project. JourneySteps is always a list, even for a trap that exercises
+// only one journey step, so a trap serving two steps (nested-project serves
+// both pause and survey) needs no separate schema shape.
 type journeyTrap struct {
-	ID          string               `json:"id"`
-	Description string               `json:"description"`
-	JourneyStep string               `json:"journey_step"`
-	Blocker     string               `json:"blocker"`
-	Assertion   journeyTrapAssertion `json:"assertion"`
+	ID           string               `json:"id"`
+	Description  string               `json:"description"`
+	JourneySteps []string             `json:"journey_steps"`
+	Blocker      string               `json:"blocker"`
+	Note         string               `json:"note"`
+	Assertion    journeyTrapAssertion `json:"assertion"`
 }
 
 // journeyTrapFile is the on-disk container at journeyTrapsPath.
@@ -100,4 +110,20 @@ func journeyTrapIDs() ([]string, error) {
 		ids = append(ids, t.ID)
 	}
 	return ids, nil
+}
+
+// journeyTrapByID returns the declared trap with the given id, and whether
+// it was found. The builder script and the Go test both resolve traps this
+// way, off the one committed manifest, rather than re-declaring the id list.
+func journeyTrapByID(id string) (journeyTrap, bool) {
+	file, err := loadJourneyTraps()
+	if err != nil {
+		return journeyTrap{}, false
+	}
+	for _, t := range file.Traps {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return journeyTrap{}, false
 }

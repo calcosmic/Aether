@@ -2,13 +2,112 @@
   "schema_version": "journey-traps/v1",
   "traps": [
     {
-      "id": "leftover-junk-data",
-      "description": "junk left behind in the colony's own failure log -- at least one entry the colony has not yet acknowledged",
-      "journey_step": "status",
-      "blocker": "a status card advising a menu command that does not exist",
+      "id": "shortcut-to-a-folder",
+      "description": "an unsaved shortcut (a symbolic link, the filesystem kind, not a menu command) pointing at a real folder inside the project -- left uncommitted",
+      "journey_steps": ["pause"],
+      "blocker": "a pause fingerprint that followed folder shortcuts",
+      "note": "",
       "assertion": {
-        "file": ".aether/data/midden.json",
-        "must": "at least one entry with acknowledged false"
+        "kind": "symlink_to_directory",
+        "path": "shortcut-to-src",
+        "must": "a symbolic link whose target resolves to a real directory inside the project, left uncommitted"
+      }
+    },
+    {
+      "id": "shortcut-loop",
+      "description": "two shortcuts (symbolic links) that point at each other, forming a loop",
+      "journey_steps": ["survey"],
+      "blocker": "",
+      "note": "no historical blocker names this trap specifically -- it is a robustness net against a hang or an unhandled crash when a directory walk meets a symlink cycle",
+      "assertion": {
+        "kind": "symlink_loop",
+        "path": "loop-a",
+        "second_path": "loop-b",
+        "must": "loop-a and loop-b are symbolic links that point at each other"
+      }
+    },
+    {
+      "id": "case-only-archive-collision",
+      "description": "two real files in different directories whose archive-relative names collide only by letter case",
+      "journey_steps": ["archive"],
+      "blocker": "two archive names differing only by letter case",
+      "note": "built as two files in different directories, never as same-directory siblings -- a case-insensitive volume (the macOS default) silently aliases same-directory siblings differing only by case, so the trap would not exist; this different-directory shape is what the real bug actually was",
+      "assertion": {
+        "kind": "case_only_collision",
+        "path": ".aether/HANDOFF.md",
+        "second_path": ".aether/data/handoff.md",
+        "must": "both paths exist as distinct regular files whose archive-relative names are identical once lowercased"
+      }
+    },
+    {
+      "id": "nested-project",
+      "description": "a subdirectory that is its own git repository, with its own committed file, left uncommitted in the outer project",
+      "journey_steps": ["pause", "survey"],
+      "blocker": "a pause fingerprint that followed folder shortcuts",
+      "note": "the same fix covers this trap per that commit's own message; its behaviour at survey time is genuinely unexplored -- no existing code detects a nested repository",
+      "assertion": {
+        "kind": "nested_git_repo",
+        "path": "nested-project",
+        "must": "path/.git is a real directory, path has its own commit, and the outer repository's git status --porcelain reports path as untracked"
+      }
+    },
+    {
+      "id": "long-folder-names",
+      "description": "a real source file reachable only through a directory chain long enough to exceed the forty-character canonical lineage cap (a limit on how long a specification item's identity can be)",
+      "journey_steps": ["discuss"],
+      "blocker": "",
+      "note": "a genuine 2026-09-21 fix (commit 1c3a1299, specPublicPathLineage) but not one of the six blockers the decision record names -- a bonus regression check",
+      "assertion": {
+        "kind": "long_lineage",
+        "path": "src/deeply/nested/directory/chain/intentionally/long/enough/to/exceed/the/forty/character/canonical/lineage/cap/file.go",
+        "must": "specPublicPathLineage(path) falls back to a short digest ID because the normalized lineage exceeds 40 canonical characters"
+      }
+    },
+    {
+      "id": "out-of-date-code-map",
+      "description": "a territory snapshot (the colony's saved map of the codebase) recorded far enough behind the project's own commits to classify as stale",
+      "journey_steps": ["survey"],
+      "blocker": "a folder missing from a write allowlist",
+      "note": "the stale map is what forces the territory refresh that hits the missing write-allowlist entry",
+      "assertion": {
+        "kind": "stale_survey",
+        "must": "classifySurveyFreshness(repo, now) reports Freshness Stale with source_revision_changed and source_revision_expired among its reason codes"
+      }
+    },
+    {
+      "id": "specification-corrected-mid-planning",
+      "description": "a planning run parked mid-flight against an approved specification (the owner-approved contract for the work) that the owner then corrects, superseding it",
+      "journey_steps": ["plan-second"],
+      "blocker": "a planning run pinned to a superseded specification",
+      "note": "built via the runtime's own specification writers (createSpecificationDraft/approveSpecification/reviseSpecification), never a hand-typed stage-state.json -- that file's own format is self-authenticating (it carries a real approval receipt hash), so a fabricated shape would either be rejected outright or silently fail to trip the real refusal this trap exists to prove",
+      "assertion": {
+        "kind": "superseded_plan",
+        "path": "journey-trap-run",
+        "must": "planningRunIsSuperseded is true for the parked run's own stage-state.json against the specification's current approved revision, and the run is genuinely awaiting a worker"
+      }
+    },
+    {
+      "id": "leftover-junk-data",
+      "description": "junk left behind in the colony's own failure log and its steering-signal log -- entries the colony has not yet acknowledged or cleaned up",
+      "journey_steps": ["status"],
+      "blocker": "a status card advising a menu command that does not exist",
+      "note": "",
+      "assertion": {
+        "kind": "midden_unacknowledged",
+        "path": ".aether/data/midden.json",
+        "second_path": ".aether/data/pheromones.json",
+        "must": "midden.json has at least one entry with acknowledged false, and pheromones.json has at least one signal marked active whose expiry date has already passed"
+      }
+    },
+    {
+      "id": "unsaved-changes",
+      "description": "uncommitted edits to a tracked file and at least one untracked file, left in place at the end of the build",
+      "journey_steps": ["pause"],
+      "blocker": "a pause fingerprint that followed folder shortcuts",
+      "note": "",
+      "assertion": {
+        "kind": "dirty_worktree",
+        "must": "git status --porcelain is non-empty and includes both a modified tracked path and an untracked path"
       }
     }
   ]
