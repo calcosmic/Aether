@@ -88,8 +88,8 @@
       "build_tags": ["journey"],
       "run_pattern": "TestJourney",
       "requires": "claude_cli_credentials",
-      "budget_seconds": 5400,
-      "purpose": "The full messy-practice-project lifecycle, driven through a real claude -p chat with hooks and menu commands loaded, asserting on the transcript and on-disk state -- never on wording. Requires a local, interactively-authenticated claude CLI; never runs in CI (no credential is configured there). Budget is provisional -- 5400s covers three trials of a fourteen-step chat with margin, sized from no real cost data yet (207-RESEARCH.md Assumption A2); 207-06-PLAN.md's real run tightens this once it records observed wall clock. The gate for every release from here on -- see .aether/docs/publish-update-runbook.md's Preflight checklist."
+      "budget_seconds": 1100,
+      "purpose": "The full messy-practice-project lifecycle, driven through a real claude -p chat with hooks and menu commands loaded, asserting on the transcript and on-disk state -- never on wording. Requires a local, interactively-authenticated claude CLI; never runs in CI (no credential is configured there). Budget is measured, not provisional: 1100s comes from 207-06-PLAN.md's real three-trial run (.planning/phases/207-messy-practice-project-gate/207-JOURNEY-RUN.md) -- the slowest trial's own wall clock (344.95s) times three, plus that run's own measured per-trial build/setup headroom (61.93s), rounded up. That run's three trials each stopped at the 'survey' step (a real, recorded dead end -- WINDOWS.md entry 53, Phase 208's job to close), so this budget covers what was actually measured; a future run that completes the full fourteen-step chain will need this figure re-measured from that run. The gate for every release from here on -- see .aether/docs/publish-update-runbook.md's Preflight checklist."
     }
   ]
 }
