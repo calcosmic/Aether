@@ -1083,10 +1083,23 @@ Plans:
 
 1. A committed script builds the practice project with every trap named in the milestone section.
 2. The whole journey runs through a real chat with hooks and menu commands loaded; it asserts on files produced and commands run, never on wording; three trials; failures sorted into flaky and real; money and turn caps.
-3. With each of the six 2026-09-21 fixes reverted in turn, the journey fails at that step.
+3. With each of the 2026-09-21 fixes reverted in turn, the journey fails at that step.
+   **Amended by owner ruling D-01 (2026-09-22, `207-CONTEXT.md`):** only five of the six
+   blockers have a landed fix. The journey proves those five by reverting each in turn. The
+   check for the sixth — the status card advising `aether midden-review`, a command with no
+   menu wrapper — is built too and stays honestly red until Phase 208 lands the fix: a
+   standing, named, expected-red case, never a silent pass and never a claim of six.
 4. The journey is the gate for every release from here on.
 
-**Plans:** 0 plans
+**Plans:** 6 plans
+
+Plans:
+- [ ] 207-01-PLAN.md — One lifecycle step end to end: builder script, real chat, transcript assertions, journey report, `journey` gate registered (tracer)
+- [ ] 207-02-PLAN.md — Every trap the roadmap names, built by the script and proven by one named check each (UED-07)
+- [ ] 207-03-PLAN.md — The sixth blocker's check, built now, honestly red, recorded with what closes it (D-01)
+- [ ] 207-04-PLAN.md — All fourteen lifecycle steps in one chat, three trials, flaky versus real, the finished gate verdict (UED-08)
+- [ ] 207-05-PLAN.md — Revert each of the five landed fixes in a throwaway copy and prove the journey fails at that step (UED-09)
+- [ ] 207-06-PLAN.md — The real three-trial run, measured; the journey becomes the step before every release; owner sign-off
 
 ### Phase 208: Never a Dead End
 
