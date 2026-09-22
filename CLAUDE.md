@@ -40,6 +40,27 @@
 - **Secondary platform:** Codex CLI. Codex has best-effort support for the direct `aether` workflow.
 - **Expectation:** keep Claude/OpenCode command and agent UX aligned first. Keep Codex safe, usable, and accurate about its native CLI capabilities.
 
+## What Else Is Installed Here (not part of Aether)
+
+- **GSD** (`/gsd-*` commands and skills) is a separate development tool used to
+  build Aether. It is not an Aether feature, is not shipped by Aether, and
+  nothing in `cmd/` should reference it. `.planning/` is GSD's directory.
+- **Superpowers** and the other Claude Code plugins are general tooling. Where a
+  plugin's workflow conflicts with this file or the owner's own instructions,
+  this file wins.
+
+## Where Unfinished Work Is Recorded
+
+Use what already exists — never create a new tracker:
+
+| For | Use |
+|-----|-----|
+| Current milestone and phase position | `.planning/STATE.md` |
+| Known defects and openly-recorded gaps | `.planning/WINDOWS.md` |
+| Phase plans, reports and verdicts | `.planning/phases/<phase>/` |
+| Handover between sessions | `.planning/HANDOFF.json` |
+| Blockers, issues and "later" notes the owner sees | `/ant-flag`, `/ant-flags` |
+
 ## Codex Public Entrypoints
 
 Pick an ant skill in Codex to start the matching workflow. The skill reads Aether's
@@ -1580,6 +1601,9 @@ make eval-gate-journey
 # turn (more expensive; not needed before every publish)
 make prove-journey-fix-reverts
 ```
+
+`make build`, `make test` and `make lint` wrap the commands above.
+`make test` is `go test -race -count=1 -timeout 90m ./...`.
 
 ---
 
