@@ -313,9 +313,16 @@ func journeyDriveStep(t *testing.T, result *journeyStepResult, repo, repoRoot, b
 	status, retried := journeyRunStep(t, repo, binDir, settingsPath, prompt, sessionID, budgetFlagSupported, caps, streamOutPath)
 	result.Retried = retried
 	if status != 0 {
+		// WR-02 (207-REVIEW.md): classify from stdout+stderr together --
+		// the same combined text journeyRunClaudeWithRetry's own retry
+		// decision was classified from -- never from stdout alone. A
+		// diagnostic message (rate limit / overloaded / timed out) that
+		// appears only on the final attempt's stderr must classify the
+		// same way here as it did for the retry decision.
 		streamed, _ := os.ReadFile(streamOutPath)
+		streamedErr, _ := os.ReadFile(journeyStreamStderrPath(streamOutPath))
 		result.Status = "fail"
-		result.FailureKind = string(classifyJourneyFailure(string(streamed)))
+		result.FailureKind = string(classifyJourneyFailure(string(streamed) + "\n" + string(streamedErr)))
 		result.Detail = fmt.Sprintf("claude -p invocation failed (exit %d, retried=%v)", status, retried)
 		t.Fatalf("step %q: %s", result.Name, result.Detail)
 	}
@@ -955,7 +962,7 @@ func journeyCaptureSessionID(t *testing.T, repo, binDir, settingsPath string, bu
 		args = append(args, "--max-budget-usd", "2.00")
 	}
 
-	out, status, retried := journeyRunClaudeWithRetry(t, repo, binDir, args, 120*time.Second)
+	out, _, status, retried := journeyRunClaudeWithRetry(t, repo, binDir, args, 120*time.Second)
 	if status != 0 {
 		t.Fatalf("session-establishing claude -p call failed (exit %d, retried=%v)", status, retried)
 	}
@@ -970,6 +977,14 @@ func journeyCaptureSessionID(t *testing.T, repo, binDir, settingsPath string, bu
 		t.Fatalf("session-establishing call returned an empty session_id")
 	}
 	return envelope.SessionID
+}
+
+// journeyStreamStderrPath derives the sibling stderr-capture path for a
+// given streamOutPath (the stdout stream-json capture) -- one shared naming
+// rule so journeyRunStep's writer and journeyDriveStep's reader can never
+// drift apart (WR-02, 207-REVIEW.md).
+func journeyStreamStderrPath(streamOutPath string) string {
+	return streamOutPath + ".stderr"
 }
 
 // journeyRunStep drives one lifecycle step's prompt through a real chat,
@@ -999,9 +1014,20 @@ func journeyRunStep(t *testing.T, repo, binDir, settingsPath, prompt, sessionID 
 		args = append(args, "--max-budget-usd", fmt.Sprintf("%.2f", caps.MaxBudgetUSD))
 	}
 
-	out, status, retried := journeyRunClaudeWithRetry(t, repo, binDir, args, time.Duration(caps.WallClockSecs)*time.Second)
+	out, errOut, status, retried := journeyRunClaudeWithRetry(t, repo, binDir, args, time.Duration(caps.WallClockSecs)*time.Second)
 	if err := os.WriteFile(streamOutPath, out, 0o644); err != nil {
 		t.Fatalf("write captured stream stdout to %s: %v", streamOutPath, err)
+	}
+	// WR-02 (207-REVIEW.md): persist this same attempt's stderr as a sibling
+	// file (never merged into streamOutPath itself -- that file is also the
+	// stream-json artifact debugging tooling parses). journeyDriveStep reads
+	// both files back and classifies any PERSISTED failure from their
+	// concatenation -- the same combined text journeyRunClaudeWithRetry's own
+	// retry decision above was classified from -- so a transient failure
+	// whose diagnostic text lands only on the final attempt's stderr can
+	// never be independently reclassified as "real" once persisted.
+	if err := os.WriteFile(journeyStreamStderrPath(streamOutPath), errOut, 0o644); err != nil {
+		t.Fatalf("write captured stream stderr to %s: %v", journeyStreamStderrPath(streamOutPath), err)
 	}
 	return status, retried
 }
@@ -1010,10 +1036,15 @@ func journeyRunStep(t *testing.T, repo, binDir, settingsPath, prompt, sessionID 
 // first on PATH, retrying exactly once if the combined stdout+stderr
 // classifies as a transient failure -- the same one-retry-on-transient
 // policy scripts/proof-screens-reach-the-owner.sh already implements,
-// generalized per 207-RESEARCH.md Q6. Returns stdout only (the transcript /
-// --output-format json payload), never merged with stderr, so a transient
-// failure's stderr noise can never corrupt a JSON parse.
-func journeyRunClaudeWithRetry(t *testing.T, dir, binDir string, args []string, timeout time.Duration) ([]byte, int, bool) {
+// generalized per 207-RESEARCH.md Q6. Returns stdout and stderr as SEPARATE
+// values (the transcript / --output-format json payload lives in stdout
+// alone, and must never be merged with stderr, so a transient failure's
+// stderr noise can never corrupt a JSON parse) -- WR-02 (207-REVIEW.md):
+// the caller is responsible for persisting both and classifying any
+// PERSISTED failure from their concatenation, the exact same text this
+// function's own retry decision below is classified from, so the retry
+// decision and any later persisted classification can never diverge.
+func journeyRunClaudeWithRetry(t *testing.T, dir, binDir string, args []string, timeout time.Duration) ([]byte, []byte, int, bool) {
 	t.Helper()
 
 	run := func() ([]byte, []byte, int) {
@@ -1050,5 +1081,5 @@ func journeyRunClaudeWithRetry(t *testing.T, dir, binDir string, args []string, 
 	if status != 0 {
 		t.Logf("claude invocation failed (exit %d): stdout=%s stderr=%s", status, string(out), string(errOut))
 	}
-	return out, status, retried
+	return out, errOut, status, retried
 }
