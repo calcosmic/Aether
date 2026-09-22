@@ -11,14 +11,58 @@ import (
 // optional legacy substring match, used only by the pattern-matching path
 // friendlyErrorForPattern folds in on top of this same table (Task 2) --
 // most rows never need one.
+//
+// The classification rule (208-06-PLAN.md Task 1), written down here once
+// and never re-derived per row: ProtectsWork is true when carrying on
+// (instead of refusing) would (a) overwrite or delete something the owner
+// made and cannot get back, (b) record a completion, verification or
+// advancement that is not true, or (c) spend money or contact something
+// outside the program. Everything else is false. A row whose ProtectsWork
+// is true must always carry Disposition "stop" -- TestEveryRowCarriesAClassificationReason
+// fails any row that pairs ProtectsWork=true with Disposition="warn".
 type refusalRow struct {
-	ID           string
-	Pattern      string
-	What         string
-	Why          string
-	NextCommand  string
+	ID          string
+	Pattern     string
+	What        string
+	Why         string
+	NextCommand string
+	// ProtectsWork is the verdict the doc comment above argues: would
+	// carrying on past this refusal risk losing the owner's work, record a
+	// false completion, or spend money / reach outside the program.
 	ProtectsWork bool
-	ExtraSteps   []string
+	// Disposition is "stop" (the site returns the refusal as an error and
+	// nothing after it runs) or "warn" (warnAndCarryOn, cmd/refusal.go,
+	// renders the same block headed as something Aether noticed rather than
+	// something that stopped, and the code after it keeps running). Every
+	// row not yet converted by 208-06 Task 2 stays "stop", matching what the
+	// site's real code still does.
+	Disposition string
+	// Reason is one line saying which of ProtectsWork's three grounds --
+	// (a), (b) or (c) from the doc comment above -- applies, or plainly
+	// that none does.
+	Reason     string
+	ExtraSteps []string
+}
+
+// refusalDeclaredFiles is the declared scope for the two ratchets in
+// cmd/refusal_enumerate_test.go: the ten lifecycle files behind the
+// fourteen steps an owner actually walks (cmd/journey.go's own
+// journeyStepMenuCommandMap names the steps; these are the files those
+// steps' commands run through). The rest of the program is out of scope for
+// this phase -- cmd/testdata/refusals/untyped-floor.json is the honest,
+// shrink-only record of what inside this declared scope is not yet a typed
+// refuse(...) call.
+var refusalDeclaredFiles = []string{
+	"codex_colonize_finalize.go",
+	"codex_plan_finalize.go",
+	"codex_build_finalize.go",
+	"codex_continue_finalize.go",
+	"codex_continue.go",
+	"criterion_evidence.go",
+	"entomb_cmd.go",
+	"init_cmd.go",
+	"session_flow_cmds.go",
+	"codex_workflow_cmds.go",
 }
 
 // refusalRegistry is the ONE refusal table in the program. It is checked in,
@@ -36,6 +80,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether stamps this field itself in a standard timestamp format; a different value usually means it was edited by hand.",
 		NextCommand:  "aether colonize --plan-only --force-resurvey",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing only blocks publishing a survey result; nothing the owner made is deleted or overwritten, and re-surveying records nothing false.",
 	},
 	{
 		ID:           "colonize-finalize-missing-timestamp",
@@ -43,6 +89,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether checks that a survey result came from a recent `aether colonize --plan-only` run before publishing it, and cannot do that without a generation time.",
 		NextCommand:  "aether colonize --plan-only --force-resurvey",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing only blocks publishing a survey result; Aether already tries recovering the timestamp from its own receipt first (codex_colonize_finalize.go), so this only fires when it genuinely cannot tell freshness, and nothing is deleted or falsely recorded either way.",
 	},
 	{
 		ID:           "colonize-finalize-timestamp-in-future",
@@ -50,6 +98,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether stamps this field itself at the moment the survey plan is written; a future time usually means it was edited by hand or copied from a different run.",
 		NextCommand:  "aether colonize --plan-only --force-resurvey",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing only blocks publishing a survey result whose own freshness claim cannot be trusted; nothing the owner made is deleted or overwritten.",
 	},
 	{
 		ID:           "corrupted-colony-data",
@@ -58,6 +108,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether's data file is corrupted or was modified outside of Aether.",
 		NextCommand:  "aether patrol",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing here happens before any write to the data file; nothing already on disk is changed or deleted, and nothing is recorded as verified using a read that could not be trusted.",
 		ExtraSteps:   []string{"Check `.aether/data/COLONY_STATE.json` for syntax errors."},
 	},
 	{
@@ -66,6 +118,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether checks evidence one file at a time; it cannot check a whole folder, so a folder bound this way could never be satisfied by any build.",
 		NextCommand:  "aether plan --refresh",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing here happens before any worker is dispatched; nothing has been built or changed yet, and letting the phase proceed would only let it advance toward a criterion no build could ever satisfy.",
 		ExtraSteps: []string{
 			"Bind the specific files inside the folder instead of the folder itself.",
 			"Or bind a verification check (for example a test or lint run) instead of an artifact path.",
@@ -77,6 +131,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "The bound artifact exists on disk as a folder, and Aether checks evidence file by file, never a whole folder.",
 		NextCommand:  "aether decision-answer",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "This path routes the phase to owner-confirmation rather than silently recording it advanced (evaluatePhaseCriterionEvidence); it is a scoped stop that still requires an explicit owner answer, not a default that would record a completion that is not true.",
 		ExtraSteps: []string{
 			"Run `aether continue` on this phase to see the exact question and the exact command for this criterion.",
 			"Answer it in your own words once you have confirmed the criterion is genuinely true.",
@@ -89,6 +145,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether could not set up its data storage. This usually means the data directory is inaccessible.",
 		NextCommand:  "aether patrol",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Aether cannot set up its own storage here; refusing happens before any data is written, so nothing on disk is changed, deleted or falsely recorded.",
 		ExtraSteps:   []string{"Check that `.aether/data/` exists and is writable."},
 	},
 	{
@@ -98,6 +156,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether could not read the colony data file. This may be corrupted or was modified outside of Aether.",
 		NextCommand:  "aether patrol",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing here happens before any write to the data file; nothing already on disk is changed or deleted, and nothing is recorded as verified using a read that could not be trusted.",
 		ExtraSteps:   []string{"Check `.aether/data/COLONY_STATE.json` for syntax errors."},
 	},
 	{
@@ -107,6 +167,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "The charter passed to Aether is not valid JSON. The colony state file was not changed.",
 		NextCommand:  `aether init "your goal"`,
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "The colony state file is left unchanged when this fires (the Why line says so); refusing an unparsable charter loses nothing the owner made.",
 		ExtraSteps:   []string{"If an assistant generated the command, ask it to compact the charter or escape quotes/newlines correctly."},
 	},
 	{
@@ -116,6 +178,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "This command needs more information to run. Check the required flags and try again.",
 		NextCommand:  "aether <command> --help",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "A command missing a required flag has not done anything yet; refusing before running loses nothing.",
 	},
 	{
 		ID:           "no-colony-initialized",
@@ -124,6 +188,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether needs a colony to work with. A colony is a workspace for building toward a specific goal.",
 		NextCommand:  `aether init "your goal"`,
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "There is no project to lose here -- this fires precisely when no colony exists yet.",
 		ExtraSteps:   []string{"Run `aether lay-eggs` first if this repo is brand new."},
 	},
 	{
@@ -133,6 +199,8 @@ var refusalRegistry = []refusalRow{
 		Why:          "Aether does not have permission to access a file or directory.",
 		NextCommand:  "aether patrol",
 		ProtectsWork: false,
+		Disposition:  "stop",
+		Reason:       "Refusing here happens before Aether touches the inaccessible file or directory; nothing is deleted, overwritten or falsely recorded.",
 		ExtraSteps:   []string{"Check file permissions. On macOS/Linux: `ls -la <path>` to inspect."},
 	},
 	{
@@ -140,7 +208,9 @@ var refusalRegistry = []refusalRow{
 		What:         "A verification command line Aether found could not be understood.",
 		Why:          "Aether recognises only a fixed set of build/type/lint/test command shapes; a line whose kind is labelled (for example \"- tests: ...\") but whose command doesn't match one of them is never silently dropped or reported as absent.",
 		NextCommand:  "aether patrol",
-		ProtectsWork: false,
+		ProtectsWork: true,
+		Disposition:  "stop",
+		Reason:       "Continuing past an unreadable verification line would record a phase as checked when one of its own declared checks was never actually run -- ground (b), a false verification.",
 	},
 }
 

@@ -1,0 +1,4 @@
+{
+  "untyped": 411,
+  "reason": "These are error returns in the ten declared lifecycle files (cmd/refusal_register.go's refusalDeclaredFiles) that are not yet a typed refuse(...) call carrying a next command. Measured 2026-09-22 (208-06-PLAN.md Task 1) by running enumerateRefusalSites over the tree as shipped: 411 rule-applying, non-wrapping error returns, none of them yet registered. This number may only go down as later plans convert sites to refuse(...) calls; it must never be raised to make a failing check pass."
+}
