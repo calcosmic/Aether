@@ -279,7 +279,7 @@ func parsePositivePhaseArg(value string) (int, error) {
 func loadExternalBuildCompletion(path string) (codexExternalBuildCompletion, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return codexExternalBuildCompletion{}, fmt.Errorf("flag --completion-file is required")
+		return codexExternalBuildCompletion{}, refuse("missing-required-flag", "--completion-file is required.")
 	}
 	if err := validateFinalizerCompletionFilePath(path); err != nil {
 		return codexExternalBuildCompletion{}, err
@@ -442,7 +442,7 @@ func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexE
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion file must include dispatch_manifest")
 	}
 	if !manifest.PlanOnly {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("dispatch_manifest must come from `aether build --plan-only`")
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, refuse("build-dispatch-manifest-wrong-source")
 	}
 	if manifest.Phase != phaseNum {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("completion phase %d does not match requested phase %d", manifest.Phase, phaseNum)
@@ -463,7 +463,7 @@ func runCodexBuildFinalizeWithHooks(root string, phaseNum int, completion codexE
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if len(state.Plan.Phases) == 0 {
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
+		return nil, colony.ColonyState{}, colony.Phase{}, nil, refuse("no-project-plan")
 	}
 	// Consult saved lane evidence before classifying the submitted binding.
 	// Dropping all tracking fields must not bypass native journal admission.

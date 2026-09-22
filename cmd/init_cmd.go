@@ -696,7 +696,7 @@ func validateCharterFieldLength(ch colony.Charter) error {
 	}
 	for _, f := range fields {
 		if len(f.value) > maxLen {
-			return fmt.Errorf("charter field %q exceeds %d characters (%d)", f.name, maxLen, len(f.value))
+			return refuse("charter-field-too-long", fmt.Sprintf("Field %q is %d characters, over the %d-character limit.", f.name, len(f.value), maxLen))
 		}
 	}
 	return nil

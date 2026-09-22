@@ -628,7 +628,8 @@ func resolveWorkerTimeoutFlag(cmd *cobra.Command) (time.Duration, error) {
 		return 0, fmt.Errorf("invalid --worker-timeout: %w", err)
 	}
 	if timeout <= 0 {
-		return 0, fmt.Errorf("--worker-timeout must be greater than 0")
+		warnAndCarryOn(refuse("invalid-timeout-value", fmt.Sprintf("--worker-timeout was %s; Aether is using its own built-in worker timeout instead.", timeout)))
+		return 0, nil
 	}
 	return timeout, nil
 }
@@ -640,7 +641,8 @@ func resolveContinueVerificationTimeoutFlag(cmd *cobra.Command) (time.Duration, 
 			return 0, false, fmt.Errorf("invalid --verification-timeout: %w", err)
 		}
 		if timeout <= 0 {
-			return 0, false, fmt.Errorf("--verification-timeout must be greater than 0")
+			warnAndCarryOn(refuse("invalid-timeout-value", fmt.Sprintf("--verification-timeout was %s; Aether is using its own built-in verification timeout instead.", timeout)))
+			return continueVerificationTimeout, false, nil
 		}
 		return timeout, true, nil
 	}
@@ -650,7 +652,8 @@ func resolveContinueVerificationTimeoutFlag(cmd *cobra.Command) (time.Duration, 
 			return 0, false, fmt.Errorf("invalid AETHER_CONTINUE_VERIFICATION_TIMEOUT: %w", err)
 		}
 		if timeout <= 0 {
-			return 0, false, fmt.Errorf("AETHER_CONTINUE_VERIFICATION_TIMEOUT must be greater than 0")
+			warnAndCarryOn(refuse("invalid-timeout-value", fmt.Sprintf("AETHER_CONTINUE_VERIFICATION_TIMEOUT was %s; Aether is using its own built-in verification timeout instead.", timeout)))
+			return continueVerificationTimeout, false, nil
 		}
 		return timeout, true, nil
 	}

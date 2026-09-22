@@ -67,6 +67,60 @@ func refuse(id string, detail ...string) refusal {
 	return r
 }
 
+// warnAndCarryOn is the "warn" half of the refusal contract (208-06-PLAN.md
+// Task 2): a refusal whose row classifies ProtectsWork=false and
+// Disposition="warn" no longer stops the command -- the call site renders
+// this block, headed as something Aether noticed rather than something
+// that stopped, and then carries on using the recovery its NextCommand
+// describes where Aether can perform it itself (the same pattern jj uses
+// for stale snapshot state and git uses for a colliding checkout,
+// .planning/research/2026-09-21-reliability-and-delivery.md section 2).
+// It renders through renderWarning -- the same block shape renderRefusal
+// produces, just headed differently -- writes it through the same
+// shouldRenderVisualOutput/writeVisualOutput boundary every other
+// human-facing screen uses, records it in the refusal log exactly like a
+// stopped refusal, and returns nothing: there is no error to propagate,
+// because the work after it is expected to run.
+func warnAndCarryOn(r refusal) {
+	appendRefusalToLog(r)
+	if shouldRenderVisualOutput(stdout) {
+		writeVisualOutput(stdout, renderWarning(r))
+		return
+	}
+	visualFprintln(stdout, "Noticed:", strings.TrimSpace(r.What), "— continuing. Next:", strings.TrimSpace(r.NextCommand))
+}
+
+// renderWarning renders the same block renderRefusal renders -- what
+// Aether noticed, why, and the one command that follows up on it -- headed
+// as something noticed rather than something that stopped, and without the
+// closing "do not edit Aether's own program files" line (there is nothing
+// to work around; the command already carried on).
+func renderWarning(r refusal) string {
+	var b strings.Builder
+	b.WriteString(renderBanner("👀", "Noticed"))
+	b.WriteString(visualDividerStr())
+	b.WriteString(strings.TrimSpace(r.What))
+	b.WriteString("\n")
+	if why := strings.TrimSpace(r.Why); why != "" {
+		b.WriteString("Why: ")
+		b.WriteString(why)
+		b.WriteString("\n")
+	}
+	b.WriteString("Aether is carrying on. Next: `")
+	b.WriteString(strings.TrimSpace(r.NextCommand))
+	b.WriteString("`\n")
+	for _, step := range r.ExtraSteps {
+		step = strings.TrimSpace(step)
+		if step == "" {
+			continue
+		}
+		b.WriteString("  - ")
+		b.WriteString(step)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 // renderRefusal produces the owner-facing refusal block, drawn through the
 // same banner/divider helpers renderVisualError already uses so a refusal
 // screen looks like every other Aether screen, not a special case. The block

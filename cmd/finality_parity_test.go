@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -931,8 +932,15 @@ func TestFinalityParity_LoadExternalContinueCompletion_RejectsEmptyPath(t *testi
 	if err == nil {
 		t.Fatal("expected error for empty path")
 	}
-	if !strings.Contains(err.Error(), "flag --completion-file is required") {
-		t.Errorf("expected 'flag --completion-file is required' error, got: %v", err)
+	// 208-06: this is now the typed "missing-required-flag" refusal
+	// (cmd/refusal_register.go) -- its own What/NextCommand text, not the
+	// old bare "flag --completion-file is required" string.
+	if !strings.Contains(err.Error(), "This command needs more information to run") {
+		t.Errorf("expected the missing-required-flag refusal text, got: %v", err)
+	}
+	var r refusal
+	if !errors.As(err, &r) || r.ID != "missing-required-flag" {
+		t.Errorf("expected a typed missing-required-flag refusal, got: %v", err)
 	}
 }
 

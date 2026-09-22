@@ -127,7 +127,7 @@ func validateNewPlanEvidenceContract(phases []colony.Phase) error {
 			criteriaCount += len(nonEmptyCriteria(task.SuccessCriteria))
 		}
 		if criteriaCount == 0 {
-			return fmt.Errorf("phase %d (%s) has no success criteria; every new phase needs explicit acceptance criteria and evidence bindings", phase.ID, strings.TrimSpace(phase.Name))
+			return refuse("plan-missing-success-criteria", fmt.Sprintf("Phase %d (%s) has no success criteria.", phase.ID, strings.TrimSpace(phase.Name)))
 		}
 		if phaseCriterionEvidencePolicy(phase) != criterionEvidencePolicyBoundV1 {
 			return fmt.Errorf("phase %d (%s) has unbound success criteria; every criterion in a newly accepted plan must declare evidence_requirements", phase.ID, strings.TrimSpace(phase.Name))

@@ -385,11 +385,11 @@ func pauseColonyInMutationSession(now time.Time, mutation *planningMutationSessi
 		return pauseResumeLifecycleOutcome{}, err
 	}
 	if facts.State.Source.Provenance != LifecycleFactConfirmed {
-		return pauseResumeLifecycleOutcome{}, fmt.Errorf("colony state is %s: %s", facts.State.Source.Provenance, facts.State.Source.Diagnostic)
+		return pauseResumeLifecycleOutcome{}, refuse("resume-colony-state-unconfirmed", fmt.Sprintf("Aether's own project state came back %s: %s.", facts.State.Source.Provenance, facts.State.Source.Diagnostic))
 	}
 	state := normalizeLegacyColonyState(facts.State.Value)
 	if !resumeStateIsRunnable(state) {
-		return pauseResumeLifecycleOutcome{}, fmt.Errorf("COLONY_STATE.json is not a runnable recovery source")
+		return pauseResumeLifecycleOutcome{}, refuse("resume-colony-state-not-runnable")
 	}
 	session := pauseResumeSessionFromFacts(facts, state, now)
 
@@ -679,7 +679,7 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 		}
 	}
 	if reference == nil {
-		return pauseResumeLifecycleOutcome{}, fmt.Errorf("resume handoff reference is missing")
+		return pauseResumeLifecycleOutcome{}, refuse("resume-handoff-reference-missing")
 	}
 
 	staleSession := pauseResumeSessionIsStale(session, now, handoff.Repository.Head)
@@ -859,7 +859,7 @@ func loadValidatedPauseHandoffReferenceFromState() (colony.PauseHandoff, error) 
 		return colony.PauseHandoff{}, err
 	}
 	if state.PauseHandoff == nil {
-		return colony.PauseHandoff{}, fmt.Errorf("state does not reference a pause handoff")
+		return colony.PauseHandoff{}, refuse("pause-handoff-missing-from-state")
 	}
 	return loadValidatedPauseHandoff(*state.PauseHandoff)
 }

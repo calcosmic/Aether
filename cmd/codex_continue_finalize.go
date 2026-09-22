@@ -84,7 +84,7 @@ var continueFinalizeCmd = &cobra.Command{
 func loadExternalContinueCompletion(path string) (codexExternalContinueCompletion, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return codexExternalContinueCompletion{}, fmt.Errorf("flag --completion-file is required")
+		return codexExternalContinueCompletion{}, refuse("missing-required-flag", "--completion-file is required.")
 	}
 	if err := validateFinalizerCompletionFilePath(path); err != nil {
 		return codexExternalContinueCompletion{}, err
@@ -721,13 +721,13 @@ func validateExternalContinueState(plan *codexContinuePlanManifest) (colony.Colo
 		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
 	if len(state.Plan.Phases) == 0 {
-		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("No project plan. Run `aether plan` first.")
+		return state, colony.Phase{}, codexContinueManifest{}, refuse("no-project-plan")
 	}
 	if state.State != colony.StateEXECUTING && state.State != colony.StateBUILT {
-		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
+		return state, colony.Phase{}, codexContinueManifest{}, refuse("no-active-phase-to-continue")
 	}
 	if state.CurrentPhase < 1 || state.CurrentPhase > len(state.Plan.Phases) {
-		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
+		return state, colony.Phase{}, codexContinueManifest{}, refuse("no-active-phase-to-continue")
 	}
 	if plan.Phase != state.CurrentPhase {
 		return state, colony.Phase{}, codexContinueManifest{}, fmt.Errorf("continue_manifest phase %d does not match active phase %d", plan.Phase, state.CurrentPhase)

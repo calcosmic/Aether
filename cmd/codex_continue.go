@@ -693,13 +693,13 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	}
 
 	if len(state.Plan.Phases) == 0 {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No project plan. Run `aether plan` first.")
+		return nil, state, colony.Phase{}, nil, nil, false, refuse("no-project-plan")
 	}
 	if state.State != colony.StateEXECUTING && state.State != colony.StateBUILT {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
+		return nil, state, colony.Phase{}, nil, nil, false, refuse("no-active-phase-to-continue")
 	}
 	if state.CurrentPhase < 1 || state.CurrentPhase > len(state.Plan.Phases) {
-		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("No active phase to continue. Run `aether build <phase>` first.")
+		return nil, state, colony.Phase{}, nil, nil, false, refuse("no-active-phase-to-continue")
 	}
 
 	currentIdx := state.CurrentPhase - 1

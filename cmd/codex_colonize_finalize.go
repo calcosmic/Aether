@@ -271,7 +271,7 @@ func colonizeLifecycleCloseoutDetails(result map[string]interface{}) LifecycleCl
 func loadExternalColonizeCompletion(path string) (codexExternalColonizeCompletion, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return codexExternalColonizeCompletion{}, fmt.Errorf("flag --completion-file is required")
+		return codexExternalColonizeCompletion{}, refuse("missing-required-flag", "--completion-file is required.")
 	}
 	if err := validateFinalizerCompletionFilePath(path); err != nil {
 		return codexExternalColonizeCompletion{}, err
@@ -368,7 +368,7 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	if surveyDocsExist(surveyDir) && !manifest.ForceResurvey && !manifest.ExistingSurvey && surveyDocsExistedInManifest(*manifest) {
-		return nil, fmt.Errorf("existing territory survey found; rerun `aether colonize --plan-only --force-resurvey` before finalizing a replacement")
+		return nil, refuse("colonize-existing-survey-found")
 	}
 	if err := os.MkdirAll(surveyDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create survey directory: %w", err)

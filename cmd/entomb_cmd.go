@@ -1088,10 +1088,10 @@ func verifyPublishedEntombManifest(chamberPath string, manifest colony.ArchiveMa
 		return err
 	}
 	if lifecycleDigest(entombManifestDigestBytes(manifest)) != manifest.ManifestDigest {
-		return fmt.Errorf("manifest digest does not match published bytes")
+		return refuse("entomb-manifest-digest-mismatch")
 	}
 	if manifest.Transaction.ID != receipt.Transaction.ID || manifest.Receipt == nil || manifest.Receipt.ID != receipt.ReceiptID {
-		return fmt.Errorf("manifest transaction/receipt does not match the durable transaction receipt")
+		return refuse("entomb-manifest-receipt-mismatch")
 	}
 	var outcome colony.SealOutcome
 	for _, entry := range manifest.Entries {

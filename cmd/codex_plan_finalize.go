@@ -372,7 +372,7 @@ func planLifecycleCloseoutDetails(result map[string]interface{}) LifecycleCloseo
 func loadExternalPlanCompletion(path string) (codexExternalPlanCompletion, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return codexExternalPlanCompletion{}, fmt.Errorf("flag --completion-file is required")
+		return codexExternalPlanCompletion{}, refuse("missing-required-flag", "--completion-file is required.")
 	}
 	if err := validateFinalizerCompletionFilePath(path); err != nil {
 		return codexExternalPlanCompletion{}, err
@@ -610,7 +610,7 @@ func runCodexPlanFinalizeInSession(session *planningMutationSession, completion 
 	scoutReport := provenance.ScoutReport
 	phasePlan := provenance.PhasePlan
 	if len(phasePlan.Phases) == 0 {
-		return nil, fmt.Errorf("phase_plan contains no phases")
+		return nil, refuse("plan-empty-phase-list")
 	}
 	normalizedPhasePlan, dependencyRepairs, err := normalizeWorkerPlanArtifactDependencies(*phasePlan)
 	if err != nil {
