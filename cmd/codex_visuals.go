@@ -2125,7 +2125,7 @@ func renderSteeringSignals() string {
 	const shown = 5
 	for i, sig := range active {
 		if i >= shown {
-			b.WriteString(fmt.Sprintf("  … and %d more — `aether pheromone-display` for the full view\n", len(active)-shown))
+			b.WriteString(fmt.Sprintf("  … and %d more — `aether pheromones` for the full view\n", len(active)-shown))
 			break
 		}
 		emoji := signalTypeGlyph(sig.Type)

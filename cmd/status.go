@@ -1928,7 +1928,7 @@ func renderPheromoneSummary(b *strings.Builder, s *storage.Store) {
 		emoji := signalTypeGlyph(row.Type)
 		fmt.Fprintf(b, "   %s [%d%%] %q — %s\n", emoji, int(math.Round(row.Strength*100)), signal, row.Life)
 	}
-	b.WriteString("   Strength fades over time; run `aether pheromone-display` for the full view.\n")
+	b.WriteString("   Strength fades over time; run `aether pheromones` for the full view.\n")
 }
 
 func renderStrongestInstincts(b *strings.Builder, instincts []colony.Instinct) {

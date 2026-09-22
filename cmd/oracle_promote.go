@@ -133,7 +133,7 @@ func runOraclePromote(root string, minConfidence int, dryRun bool, provenance st
 		"learnings":            learnings,
 		"instincts":            instincts,
 		"outcomes":             outcomes,
-		"next":                 "aether pheromone-display",
+		"next":                 "aether pheromones",
 	}, nil
 }
 
