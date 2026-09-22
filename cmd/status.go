@@ -230,7 +230,7 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 				}
 			}
 			if unackCount > 0 {
-				warnings = append(warnings, fmt.Sprintf("%d unacknowledged failure(s). Run `aether midden-review` to inspect.", unackCount))
+				warnings = append(warnings, fmt.Sprintf("%d unacknowledged failure(s) sit in the log of things that went wrong -- run `aether midden-review` to look at them.", unackCount))
 			}
 		}
 
@@ -722,7 +722,7 @@ func middenGuidedAction(s *storage.Store) (guidedAction, bool) {
 	if count == 0 {
 		return guidedAction{}, false
 	}
-	summary := fmt.Sprintf("%d unacknowledged failure(s)", count)
+	summary := fmt.Sprintf("%d unacknowledged failure(s) in the log of things that went wrong", count)
 	if strings.TrimSpace(top.Message) != "" {
 		summary += ". Top: " + compactActionText(top.Message, 90)
 	}

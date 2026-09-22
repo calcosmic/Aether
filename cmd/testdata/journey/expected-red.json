@@ -1,12 +1,4 @@
 {
   "schema_version": "journey-expected-red/v1",
-  "cases": [
-    {
-      "id": "status-card-advises-a-menu-command-that-does-not-exist",
-      "blocker": "a status card advising a menu command that does not exist",
-      "detail": "The project's own status screen tells the owner to run `aether midden-review` when failures are waiting, and there is no menu command for it on any platform, so following the advice on the menu leads nowhere.",
-      "closed_by": "Phase 208 (UED-13)",
-      "proof": "statusGuidanceCommandsWithoutMenuWrapper"
-    }
-  ]
+  "cases": []
 }

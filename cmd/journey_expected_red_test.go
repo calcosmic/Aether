@@ -8,7 +8,6 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -50,18 +49,19 @@ func seedUnacknowledgedMiddenFailure(t *testing.T, s interface{ SaveJSON(string,
 	}
 }
 
-// TestSixthBlockerCheckIsStillRed proves the sixth 2026-09-21 blocker is
-// genuinely red against the real repository today: the status card's own
-// guidance code advises `aether midden-review`, and this checkout has no
-// menu wrapper for it.
+// TestSixthBlockerGapIsClosed proves the sixth 2026-09-21 blocker is closed
+// for real against the live repository: the status card's own guidance
+// code advises `aether midden-review`, and this checkout now carries a
+// menu wrapper for it (cmd/testdata/journey/expected-red.json's one case is
+// gone). This replaces TestSixthBlockerCheckIsStillRed, which asserted the
+// opposite before Phase 208 (UED-13) landed the wrapper.
 //
-// If this test starts failing because the result comes back empty, that
-// means Phase 208 landed its fix and the gap has closed. The correct
-// response is to delete the single case from
-// cmd/testdata/journey/expected-red.json and turn this into an ordinary
-// green assertion -- never to loosen, skip, or delete this test to make it
-// pass.
-func TestSixthBlockerCheckIsStillRed(t *testing.T) {
+// If this test starts failing, either the wrapper files were removed or
+// the real gap has reopened -- do not restore the deleted case or loosen
+// this assertion to make it pass; fix the wrapper instead. Renaming
+// .claude/commands/ant/midden-review.md away must make this test fail
+// again.
+func TestSixthBlockerGapIsClosed(t *testing.T) {
 	t.Setenv("AETHER_HUB_DIR", t.TempDir())
 	s, tmpDir := newTestStore(t)
 	defer os.RemoveAll(tmpDir)
@@ -73,25 +73,19 @@ func TestSixthBlockerCheckIsStillRed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("statusGuidanceCommandsWithoutMenuWrapper: %v", err)
 	}
-	if len(missing) == 0 {
-		t.Fatal("the sixth blocker's gap has closed (statusGuidanceCommandsWithoutMenuWrapper reported no gap) -- " +
-			"this means Phase 208 landed its fix. Remove the single case from " +
-			"cmd/testdata/journey/expected-red.json and turn this test into an ordinary green " +
-			"assertion; do not loosen or skip it.")
-	}
-	if len(missing) != 1 || missing[0] != "midden-review" {
-		t.Fatalf("missing wrapper verbs = %v, want exactly [midden-review]", missing)
+	if len(missing) != 0 {
+		t.Fatalf("missing wrapper verbs = %v, want none -- the sixth 2026-09-21 blocker "+
+			"(status card advising `aether midden-review` with no menu wrapper) should be "+
+			"closed by Phase 208's wrapper files; if this fails, the wrapper is missing, "+
+			"not this test's assertion", missing)
 	}
 
 	file, err := loadJourneyExpectedRed()
 	if err != nil {
 		t.Fatalf("load expected-red register: %v", err)
 	}
-	if len(file.Cases) != 1 {
-		t.Fatalf("expected exactly one registered case, got %d", len(file.Cases))
-	}
-	if !strings.Contains(file.Cases[0].Detail, "midden-review") {
-		t.Fatalf("registered case detail = %q, want it to name midden-review", file.Cases[0].Detail)
+	if len(file.Cases) != 0 {
+		t.Fatalf("expected the expected-red register to be empty now the gap has closed, got %d case(s)", len(file.Cases))
 	}
 }
 
@@ -165,22 +159,11 @@ func TestExpectedRedRegisterOnlyShrinks(t *testing.T) {
 	}
 }
 
-// TestPhaseProvesFiveFixesNotSix asserts the register holds exactly one
-// case and that its closed_by names Phase 208, so nothing in this phase can
-// be read as proving six blockers rather than five.
-func TestPhaseProvesFiveFixesNotSix(t *testing.T) {
-	file, err := loadJourneyExpectedRed()
-	if err != nil {
-		t.Fatalf("load expected-red register: %v", err)
-	}
-	if len(file.Cases) != 1 {
-		t.Fatalf("expected exactly one standing expected-red case (five blockers proven, one "+
-			"still open), got %d", len(file.Cases))
-	}
-	if !strings.Contains(file.Cases[0].ClosedBy, "Phase 208") {
-		t.Fatalf("case %q closed_by = %q, want it to name Phase 208", file.Cases[0].ID, file.Cases[0].ClosedBy)
-	}
-}
+// TestExpectedRedRegisterIsEmptyAndTheFiveRevertsStand (cmd/journey_fix_reverts_test.go)
+// replaces this test: it asserts the fix-revert table still holds exactly
+// five entries and the expected-red register now holds zero cases, since
+// Phase 208 closed the sixth blocker with a real fix rather than by
+// editing this register.
 
 // TestStatusGuidanceGapCheckHandlesAnEmptyStore: with a store carrying no
 // failures, no flags and no research, the check returns no gaps and no

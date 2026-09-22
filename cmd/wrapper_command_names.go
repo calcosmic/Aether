@@ -43,6 +43,7 @@ var wrapperCommandNames = map[string]bool{
 	"maintenance":     true,
 	"medic":           true,
 	"memory-details":  true,
+	"midden-review":   true,
 	"migrate-state":   true,
 	"oracle":          true,
 	"organize":        true,

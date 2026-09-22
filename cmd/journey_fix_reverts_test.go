@@ -284,10 +284,16 @@ func TestFixRevertResultsFollowTheDeclaredOrder(t *testing.T) {
 	}
 }
 
-// TestPhaseCountsFiveRevertsAndOneStandingRedCase asserts exactly five
-// entries in the fix-revert table and exactly one case in the expected-red
-// register, so nothing in this phase can be read as proving six blockers.
-func TestPhaseCountsFiveRevertsAndOneStandingRedCase(t *testing.T) {
+// TestExpectedRedRegisterIsEmptyAndTheFiveRevertsStand asserts exactly five
+// entries still stand in the fix-revert table and the expected-red
+// register now holds zero cases, replacing
+// TestPhaseProvesFiveFixesNotSix (cmd/journey_expected_red_test.go) and
+// TestPhaseCountsFiveRevertsAndOneStandingRedCase. Phase 208 closed the
+// sixth 2026-09-21 blocker with a real fix -- the menu wrapper for
+// `aether midden-review` -- rather than by editing this register, so
+// nothing in this phase can be read as proving six blockers by loosening
+// the check; it is proven by the register being honestly empty.
+func TestExpectedRedRegisterIsEmptyAndTheFiveRevertsStand(t *testing.T) {
 	reverts, err := loadJourneyFixReverts()
 	if err != nil {
 		t.Fatalf("load fix-revert table: %v", err)
@@ -297,11 +303,12 @@ func TestPhaseCountsFiveRevertsAndOneStandingRedCase(t *testing.T) {
 		t.Fatalf("load expected-red register: %v", err)
 	}
 
-	if len(reverts.Reverts) != 5 || len(expectedRed.Cases) != 1 {
-		t.Fatalf("got %d fix-revert entries and %d expected-red case(s); want exactly 5 and 1 -- "+
+	if len(reverts.Reverts) != 5 || len(expectedRed.Cases) != 0 {
+		t.Fatalf("got %d fix-revert entries and %d expected-red case(s); want exactly 5 and 0 -- "+
 			"per the owner's ruling (D-01, .planning/phases/207-messy-practice-project-gate/207-CONTEXT.md): "+
 			"\"the journey proves it catches the five fixed blockers ... the check for the sixth is "+
-			"built too and stays honestly red ... never a claim of six\"",
+			"built too and stays honestly red ... never a claim of six\" -- Phase 208 closed the "+
+			"sixth with a real fix, so the register is now empty, not still standing",
 			len(reverts.Reverts), len(expectedRed.Cases))
 	}
 }
