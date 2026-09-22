@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 37
+open_count: 38
 waived_count: 0
 fixed_count: 16
-total_count: 53
-last_updated: 2026-09-22T16:47:36.867Z
+total_count: 54
+last_updated: 2026-09-22T19:17:21.862Z
 ---
 
 # Broken Windows Ledger
@@ -68,6 +68,7 @@ last_updated: 2026-09-22T16:47:36.867Z
 | 51 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server && python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh, bash...) and 'cd' is not among them. Close by recognising a 'cd <dir> &&' prefix (strip it and classify the remainder, run via sh -c with that cwd), and by rejecting an unrecognised line loudly by name instead of reporting it absent. Note: a valid line in AGENTS.md masks an invalid one in CLAUDE.md and vice versa, which is why the reporter first blamed '&&'. | fixed |  | 2026-09-22T11:27:19.215Z | 2026-09-22T16:47:36.867Z |
 | 52 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, dead end): there is no scoped, audited way to correct one criterion's evidence binding on an in-progress phase; .aether/data is protected from hand edits by design and no plan --revise-criterion exists. The only exit is 'aether skip-phase N --force', which records a completed-and-verified phase as abandoned, a materially false statement. Close (Phase 208 'never a dead end') with a scoped revision command for a single criterion's evidence binding, or '--accept-criterion <id> --reason <text>' on continue that records an owner attestation as first-class evidence. | open |  | 2026-09-22T11:27:19.326Z |  |
 | 53 | 208 | unmet-truth | cmd/codex_colonize_finalize.go |  | JOURNEY FINDING 2026-09-22 (Phase 207 live trial, practice project, step 2 of 14 'survey'): after /ant-colonize the territory snapshot's source_revision stays at the stale seeded revision, so the out-of-date-code-map trap is never cleared. Cause, read from the chat's own on-disk transcript: the chat ran 'aether host colonize --force-resurvey', dispatched four real surveyors that wrote the seven survey documents, then assembled the completion packet by hand in python and dropped the manifest's generated_at field; 'aether colonize-finalize' refused with 'colonize_manifest generated_at is required for freshness validation' (validateCodexColonizeManifestFreshness) and the snapshot was never published. The refusal names no way forward and the chat then told the owner the survey 'completed clean' -- a false reassurance on top of a dead end. Two fixes belong here: (1) finalize should recover generated_at from the manifest it itself wrote (or the wrapper's packet spec must show the field explicitly in its example, which today only says 'the exact result.colonize_manifest object'); (2) every finalize refusal must name the one command that gets past it (Phase 208 UED-10) so a chat cannot narrate around it. Caught by TestJourney/survey's on-disk fact check, exactly as UED-08 intends; the check was deliberately not weakened. | open |  | 2026-09-22T12:21:50.698Z |  |
+| 54 | 208 | deviation | cmd/entomb_archived_shell_test.go |  | TestResumeOnAnArchivedProjectSaysThereIsNothingToResume fails on a pre-existing, unrelated planning-migration bug (revisions[0].plan_hash does not match its phase snapshot) that blocks seal from reaching COMPLETED; confirmed via a disposable worktree pinned to 2fda84b7 (before this plan's changes) that it fails identically there | open |  | 2026-09-22T19:17:21.862Z |  |
 
 ````json
 [
@@ -705,6 +706,18 @@ last_updated: 2026-09-22T16:47:36.867Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-22T12:21:50.698Z",
+    "resolved_at": null
+  },
+  {
+    "id": 54,
+    "kind": "deviation",
+    "phase": "208",
+    "file": "cmd/entomb_archived_shell_test.go",
+    "line": null,
+    "description": "TestResumeOnAnArchivedProjectSaysThereIsNothingToResume fails on a pre-existing, unrelated planning-migration bug (revisions[0].plan_hash does not match its phase snapshot) that blocks seal from reaching COMPLETED; confirmed via a disposable worktree pinned to 2fda84b7 (before this plan's changes) that it fails identically there",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T19:17:21.862Z",
     "resolved_at": null
   }
 ]

@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
+current_phase: 208
+current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-04-PLAN.md
-last_updated: "2026-09-22T18:29:43.791Z"
+stopped_at: Completed 208-06-PLAN.md
+last_updated: "2026-09-22T19:20:35.728Z"
 last_activity: 2026-09-22
+state_head: 86c424051f45abe53d44ee6adbd50b30ca29d29b
 progress:
-  total_phases: 18
-  completed_phases: 10
-  total_plans: 231
-  completed_plans: 219
-  percent: 56
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 16
+  completed_plans: 14
+  percent: 40
 ---
 
 # Project State
@@ -33,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 208 (never a dead end)
 Status: Ready to execute
-Plan: 6 of 8
+Plan: 7 of 8
 Last activity: 2026-09-22
 
 ## Performance Metrics
@@ -216,6 +219,7 @@ Last activity: 2026-09-22
 | Phase 208 P03 | 24min | 3 tasks | 17 files |
 | Phase 208 P05 | 35 min | 2 tasks | 6 files |
 | Phase 208 P04 | 95min | 2 tasks | 7 files |
+| Phase 208 P06 | ~105min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -685,6 +689,7 @@ Last activity: 2026-09-22
 - [Phase 208]: Directory-bound criterion evidence is refused by name at build time, and an already-stuck phase routes to the existing owner-confirmation exit instead of failing forever (WINDOWS.md rows 49 and 52 closed).
 - [Phase 208]: Recovery tasks never set colony.Task.SemanticID -- that field belongs to the specification/candidate planning-authority system and a non-empty value breaks any legacy_unbound plan outright. — Discovered by this plan's own idempotency test (TestFailedCheckAddsTheSameTasksOnlyOnce), not assumed. Identity now lives in a deterministic Goal prefix instead.
 - [Phase 208]: resolvePhaseProgressFromDisk is wired only into renderDashboard (the function aether status actually renders through), not into buildStatusResult's JSON map. — Matches the plan's explicit scope; the JSON envelope is unchanged by this plan.
+- [Phase 208]: Measured the real untyped-refusal floor (411) instead of guessing it, converted 25 sites to the typed refusal contract (one as warn-and-carry-on), and wrote a behavioural test that fails if the table and the program disagree -- which caught and fixed two live bugs (an unconverted duplicate dead end in codex_colonize.go, and a refusal whose next command never reached the printed screen).
 
 ### Pending Todos
 
@@ -807,8 +812,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T18:29:43.777Z
-Stopped at: Completed 208-04-PLAN.md
+Last session: 2026-09-22T19:20:35.545Z
+Stopped at: Completed 208-06-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

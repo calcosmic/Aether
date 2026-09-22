@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 5/8 plans executed
+**Plans:** 6/8 plans executed
 
 Plans:
 **Wave 1**
@@ -1151,7 +1151,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 208-06-PLAN.md — The sorted refusal table: classify, convert the ones that do not guard work into warnings that carry on, and count the rest on a floor that may only shrink (UED-11)
+- [x] 208-06-PLAN.md — The sorted refusal table: classify, convert the ones that do not guard work into warnings that carry on, and count the rest on a floor that may only shrink (UED-11)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
