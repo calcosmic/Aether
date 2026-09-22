@@ -394,6 +394,10 @@ func journeyAssertStepFact(t *testing.T, result *journeyStepResult, repo, repoRo
 		state := journeyReadColonyState(t, repo)
 		if state.Goal == nil || strings.TrimSpace(*state.Goal) == "" {
 			fail("COLONY_STATE.json parses but carries no goal")
+			return
+		}
+		if strings.TrimSpace(*state.Goal) != journeyFirstGoal {
+			fail(fmt.Sprintf("COLONY_STATE.json goal is %q after start, want %q -- state does not match what the practice project was actually built with", *state.Goal, journeyFirstGoal))
 		}
 
 	case journeyStepSurvey:
@@ -682,61 +686,68 @@ func journeyTrapIDsForStep(traps journeyTrapFile, step journeyStep) []string {
 // journeyStepMaxTurns, journeyStepWallClockSecs and journeyStepMaxBudgetUSD
 // size each step's own caps to what that step's wrapper actually needs
 // (207-04-PLAN.md Task 1): the simple relay steps (status, pause, resume,
-// start, start-again) need few turns and a short wall clock; build and
-// check -- the only two steps that dispatch real workers -- need
-// substantially more of both. These are a documented, instrumented STARTING
-// point (207-RESEARCH.md Assumption A2), never a fixed, unquestioned
-// number: this plan's own live run records the observed wall clock and cost
-// in its SUMMARY so a later pass can tighten or widen them from a real
-// measurement rather than a guess.
+// start, start-again) need few turns and a short wall clock; survey,
+// discuss, specification, plan-first, plan-second, build and check --
+// every step whose own wrapper dispatches real subagent workers -- need
+// substantially more of both. These are a documented, instrumented number,
+// never a fixed, unquestioned one: the first-draft caps for survey
+// (max-budget-usd 1.00) were measured live (2026-09-22) against this exact
+// repository's own /ant-colonize wrapper and found genuinely too tight --
+// it dispatches four real surveyor subagents (surveyor-provisions,
+// surveyor-nest, surveyor-disciplines, surveyor-pathogens) and reached
+// $2.09 actual cost before the too-tight cap cut it off mid-run
+// (terminal_reason: budget_exhausted). The figures below are that
+// measurement times a safety margin, not a guess; a later pass should keep
+// tightening or widening them from further real measurements, never
+// silently.
 var journeyStepMaxTurns = map[journeyStep]int{
 	journeyStepStart:         4,
-	journeyStepSurvey:        8,
-	journeyStepDiscuss:       6,
-	journeyStepSpecification: 8,
-	journeyStepPlanFirst:     10,
-	journeyStepPlanSecond:    10,
-	journeyStepBuild:         15,
-	journeyStepCheck:         15,
+	journeyStepSurvey:        20,
+	journeyStepDiscuss:       12,
+	journeyStepSpecification: 15,
+	journeyStepPlanFirst:     25,
+	journeyStepPlanSecond:    25,
+	journeyStepBuild:         40,
+	journeyStepCheck:         40,
 	journeyStepStatus:        4,
 	journeyStepPause:         4,
 	journeyStepResume:        4,
-	journeyStepFinish:        8,
-	journeyStepArchive:       8,
+	journeyStepFinish:        12,
+	journeyStepArchive:       12,
 	journeyStepStartAgain:    4,
 }
 
 var journeyStepWallClockSecs = map[journeyStep]int{
 	journeyStepStart:         120,
-	journeyStepSurvey:        300,
-	journeyStepDiscuss:       240,
-	journeyStepSpecification: 300,
-	journeyStepPlanFirst:     420,
-	journeyStepPlanSecond:    420,
-	journeyStepBuild:         900,
-	journeyStepCheck:         900,
+	journeyStepSurvey:        600,
+	journeyStepDiscuss:       400,
+	journeyStepSpecification: 400,
+	journeyStepPlanFirst:     700,
+	journeyStepPlanSecond:    700,
+	journeyStepBuild:         1200,
+	journeyStepCheck:         1200,
 	journeyStepStatus:        120,
 	journeyStepPause:         120,
 	journeyStepResume:        120,
-	journeyStepFinish:        300,
-	journeyStepArchive:       300,
+	journeyStepFinish:        400,
+	journeyStepArchive:       400,
 	journeyStepStartAgain:    120,
 }
 
 var journeyStepMaxBudgetUSD = map[journeyStep]float64{
 	journeyStepStart:         0.50,
-	journeyStepSurvey:        1.00,
-	journeyStepDiscuss:       0.75,
-	journeyStepSpecification: 1.00,
-	journeyStepPlanFirst:     1.50,
-	journeyStepPlanSecond:    1.50,
-	journeyStepBuild:         3.00,
-	journeyStepCheck:         3.00,
+	journeyStepSurvey:        4.00, // measured live at $2.09 (four real surveyor subagents); this is that measurement with a safety margin, not a guess
+	journeyStepDiscuss:       2.00,
+	journeyStepSpecification: 2.00,
+	journeyStepPlanFirst:     4.00,
+	journeyStepPlanSecond:    4.00,
+	journeyStepBuild:         6.00,
+	journeyStepCheck:         6.00,
 	journeyStepStatus:        0.50,
 	journeyStepPause:         0.50,
 	journeyStepResume:        0.50,
-	journeyStepFinish:        1.00,
-	journeyStepArchive:       1.00,
+	journeyStepFinish:        2.00,
+	journeyStepArchive:       2.00,
 	journeyStepStartAgain:    0.50,
 }
 
