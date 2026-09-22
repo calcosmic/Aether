@@ -1092,12 +1092,12 @@ Plans:
 
 4. The journey is the gate for every release from here on.
 
-**Plans:** 6 plans
+**Plans:** 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 207-01-PLAN.md — One lifecycle step end to end: builder script, real chat, transcript assertions, journey report, `journey` gate registered (tracer)
+- [x] 207-01-PLAN.md — One lifecycle step end to end: builder script, real chat, transcript assertions, journey report, `journey` gate registered (tracer)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

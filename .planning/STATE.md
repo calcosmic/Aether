@@ -5,16 +5,16 @@ milestone_name: Use It Every Day
 current_phase: 207
 current_phase_name: A Messy Practice Project Is the Release Gate
 status: executing
-stopped_at: Phase 207 planned (6 plans, 5 waves), ready to execute
-last_updated: "2026-09-22T09:18:19.990Z"
+stopped_at: Completed 207-01-PLAN.md
+last_updated: "2026-09-22T10:47:48.636Z"
 last_activity: 2026-09-22
-last_activity_desc: Phase 207 planned, 6 plans in 5 waves, checker passed
-state_head: 0b8df2cb2935bfd50d03098967edfad1c1a00491
+last_activity_desc: Phase 207 execution started
+state_head: 8ed66d06932bf86c99cbd2b412d0045f90186f1d
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 2
+  completed_plans: 3
   percent: 20
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 207 (A Messy Practice Project Is the Release Gate) — READY TO EXECUTE
+Phase: 207 (A Messy Practice Project Is the Release Gate) — EXECUTING
 Next phase: 207 (messy practice project as the release gate)
 Status: Ready to execute
-Plan: Not started
-Last activity: 2026-09-22 — Phase 207 planned: 6 plans in 5 waves, checker passed
+Plan: 2 of 6
+Last activity: 2026-09-22 — Phase 207 execution started
 
 ## Performance Metrics
 
@@ -209,6 +209,7 @@ Last activity: 2026-09-22 — Phase 207 planned: 6 plans in 5 waves, checker pas
 | Phase 202 P17 | 40min | 3 tasks | 6 files |
 | Phase 206 P01 | 40min | 3 tasks | 8 files |
 | Phase 206 P02 | ~65min active | 3 tasks | 10 files |
+| Phase 207 P01 | 65min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -658,6 +659,7 @@ Last activity: 2026-09-22 — Phase 207 planned: 6 plans in 5 waves, checker pas
 - [Phase 206]: Status line command always translates through translateHintCommandsForPlatform rather than trusting projection.NextAction.DisplayCommand directly, since gateLifecycleProjection resets DisplayCommand to the untranslated runtime form — Literal plan wording would have shown 'aether continue' instead of '/ant-continue' on Claude; behavior spec and acceptance criteria required platform-correct spelling
 - [Phase 206]: Reachability ratchet's hookSettingsCommandArgs extended to recognize the statusLine top-level settings key as a genuine caller, not just hooks — Without this the new aether status-line command would be a permanent false orphan in TestNoRegisteredSubcommandIsUnreferenced
 - [Phase 206]: Owner reviewed the direct screen route and the status line on his own screen 2026-09-22 and answered keep-on, verbatim, with no accompanying sentence — Recorded in 206-OWNER-VERDICT.md; the direct route stays on by default, the Stop-hook backstop remains as the safety net underneath
+- [Phase 207]: The tracer's <command-name> assertion must read Claude Code's own on-disk session transcript (~/.claude/projects/<encoded-cwd>/<session-id>.jsonl), never the --output-format stream-json stdout, which never echoes the outgoing user turn
 
 ### Pending Todos
 
@@ -779,8 +781,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T08:16:05.639Z
-Stopped at: Phase 206 complete, ready to plan Phase 207
+Last session: 2026-09-22T10:47:48.567Z
+Stopped at: Completed 207-01-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
