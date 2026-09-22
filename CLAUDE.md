@@ -346,6 +346,37 @@ background helpers, and if you've switched screen relaying off yourself.*
 
 The owner looked at this on his own screen on 2026-09-22 and kept the direct route on by default (`.planning/phases/206-screens-reach-the-owner/206-OWNER-VERDICT.md`).
 
+### A permanent status line (v1.29, Phase 206)
+
+The bottom of the Claude Code window now carries one line that says where the
+project is and what to run next, redrawn by Claude Code itself on every turn.
+A new hidden command, `aether status-line`, prints it, and the shipped
+settings register it under the platform's `statusLine` key
+(`TestStatusLineIsRegistered`). The line is not a second opinion: its command
+comes from the one shared what-next decision every closing card already uses
+(`resolveNextAction`, `cmd/next_action.go`), and a structural check refuses
+any second spelling of that decision inside the status-line code
+(`TestStatusLineComesFromTheSharedDecision`). The command spelling always goes
+through the same platform translator every other screen uses, so the line
+shows `/ant-resume`, never the bare runtime form. A folder with no project
+set up prints nothing at all (`TestStatusLineIsSilentWithoutAProject`); the
+command reads and never writes, and prints the same line twice in a row
+(`TestStatusLineChangesNothingAndRepeatsItself`); it is safe when Claude Code
+redraws it while another command is running
+(`TestStatusLineIsSafeUnderConcurrentReads`); and it never prints a raw
+internal state token or an untranslated repo word
+(`TestStatusLineSpeaksPlainEnglish`). Installing Aether into a project that
+already has its own status line leaves that line alone
+(`TestStatusLineInstallOnlyWhenTheProjectHasNone`). A task goal too long for
+the line is cut at a whole word with an ellipsis; only a single word longer
+than the whole allowance is ever cut inside the word.
+
+*For dummies: there is now a short line permanently at the bottom of the
+window telling you which phase and task you are on and the one command to
+type next. It is the same answer the program gives everywhere else, so it can
+never disagree with the "what next" card, and if you have not set a project
+up in this folder the line simply stays blank.*
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users

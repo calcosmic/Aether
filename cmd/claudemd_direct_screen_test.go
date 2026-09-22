@@ -23,6 +23,7 @@ import (
 // guard, authored for a different owner's edit.
 var claudeMDDirectScreenSections = []string{
 	"### The screen reaches the owner directly (v1.29, Phase 206)",
+	"### A permanent status line (v1.29, Phase 206)",
 }
 
 // TestEveryDirectScreenClaimInCLAUDEMDNamesALiveTest is the removal-proof
