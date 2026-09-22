@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
 status: executing
-stopped_at: Completed 208-05-PLAN.md
-last_updated: "2026-09-22T17:40:06.557Z"
+stopped_at: Completed 208-04-PLAN.md
+last_updated: "2026-09-22T18:29:43.791Z"
 last_activity: 2026-09-22
 progress:
   total_phases: 18
   completed_phases: 10
   total_plans: 231
-  completed_plans: 218
+  completed_plans: 219
   percent: 56
 ---
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 208 (never a dead end)
 Status: Ready to execute
-Plan: 5 of 8
+Plan: 6 of 8
 Last activity: 2026-09-22
 
 ## Performance Metrics
@@ -215,6 +215,7 @@ Last activity: 2026-09-22
 | Phase 208 P02 | 45min | 2 tasks | 6 files |
 | Phase 208 P03 | 24min | 3 tasks | 17 files |
 | Phase 208 P05 | 35 min | 2 tasks | 6 files |
+| Phase 208 P04 | 95min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -682,6 +683,8 @@ Last activity: 2026-09-22
 - [Phase 208]: Widened the guidance check from slash commands to every program command a screen can advise; its first real run found and fixed a genuine gap (aether pheromone-display had no wrapper -- renamed advice to its already-wrapped alias aether pheromones).
 - [Phase 208]: colony.NeutralizeForRecord keeps a rejected failure's own words instead of a canned could-not-be-safely-recorded sentence, across all four midden-recording fallback sites.
 - [Phase 208]: Directory-bound criterion evidence is refused by name at build time, and an already-stuck phase routes to the existing owner-confirmation exit instead of failing forever (WINDOWS.md rows 49 and 52 closed).
+- [Phase 208]: Recovery tasks never set colony.Task.SemanticID -- that field belongs to the specification/candidate planning-authority system and a non-empty value breaks any legacy_unbound plan outright. — Discovered by this plan's own idempotency test (TestFailedCheckAddsTheSameTasksOnlyOnce), not assumed. Identity now lives in a deterministic Goal prefix instead.
+- [Phase 208]: resolvePhaseProgressFromDisk is wired only into renderDashboard (the function aether status actually renders through), not into buildStatusResult's JSON map. — Matches the plan's explicit scope; the JSON envelope is unchanged by this plan.
 
 ### Pending Todos
 
@@ -804,8 +807,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T17:40:06.542Z
-Stopped at: Completed 208-05-PLAN.md
+Last session: 2026-09-22T18:29:43.777Z
+Stopped at: Completed 208-04-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
