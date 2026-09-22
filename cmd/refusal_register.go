@@ -162,10 +162,18 @@ var refusalRegistry = []refusalRow{
 		},
 	},
 	{
-		ID:           "criterion-binding-unsatisfiable",
-		What:         "One criterion in this phase is bound to evidence no build could ever satisfy.",
-		Why:          "The bound artifact exists on disk as a folder, and Aether checks evidence file by file, never a whole folder.",
-		NextCommand:  "aether decision-answer",
+		ID:   "criterion-binding-unsatisfiable",
+		What: "One criterion in this phase is bound to evidence no build could ever satisfy.",
+		Why:  "The bound artifact exists on disk as a folder, and Aether checks evidence file by file, never a whole folder.",
+		// aether decision-answer has no /ant-... menu wrapper of its own: it
+		// is only ever run with the exact, pre-filled --question/--phase
+		// arguments ownerConfirmationCommand (cmd/criterion_owner_confirmation.go)
+		// composes at the moment the criterion is evaluated -- no static
+		// menu template could carry those. `aether continue` is the real
+		// owner-typable route: it is what runs that evaluation and surfaces
+		// the exact decision-answer invocation, matching the ExtraSteps
+		// below (TestScreenGuidanceNamesCommandsTheOwnerCanRun).
+		NextCommand:  "aether continue",
 		ProtectsWork: false,
 		Disposition:  "stop",
 		Reason:       "This path routes the phase to owner-confirmation rather than silently recording it advanced (evaluatePhaseCriterionEvidence); it is a scoped stop that still requires an explicit owner answer, not a default that would record a completion that is not true.",
