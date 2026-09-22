@@ -1,0 +1,15 @@
+{
+  "schema_version": "journey-traps/v1",
+  "traps": [
+    {
+      "id": "leftover-junk-data",
+      "description": "junk left behind in the colony's own failure log -- at least one entry the colony has not yet acknowledged",
+      "journey_step": "status",
+      "blocker": "a status card advising a menu command that does not exist",
+      "assertion": {
+        "file": ".aether/data/midden.json",
+        "must": "at least one entry with acknowledged false"
+      }
+    }
+  ]
+}
