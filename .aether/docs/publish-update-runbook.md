@@ -20,6 +20,34 @@ actually updated afterwards (`aether version --check` matches AND the binary
 mtime moved). A past bug sent go-run builds to a temp directory while reporting
 success.
 
+## Preflight: The Messy Practice Project Journey Before Publish
+
+Before every publish, in addition to the clean-tree check above:
+
+- Run the messy practice project journey and confirm it passed:
+
+```bash
+make eval-gate-journey
+```
+
+This drives the full fourteen-step everyday lifecycle -- starting a project, surveying the
+code, planning, building, checking, pausing, resuming, finishing, filing it away, and starting
+again -- through a real `claude -p` chat, three times over, against a freshly built practice
+project deliberately full of the kinds of mess real projects have. It checks which files
+appeared and which commands genuinely ran, never what the chat said about itself. The measured
+run recorded in `.planning/phases/207-messy-practice-project-gate/207-JOURNEY-RUN.md` took
+~17.7 minutes and ~$9.00 for three trials -- know what you are committing to before you run it.
+
+It needs a signed-in `claude` CLI on the machine (`claude --version` must succeed), which is
+why it can never run in the automated CI checks -- it is a procedural step here, in this
+runbook, not a refusal built into the `aether` binary. A failing journey is a reason not to
+publish, not a step to skip.
+
+`make prove-journey-fix-reverts` is a separate, more expensive proof (five throwaway `git
+worktree` copies, five more real chats, ~13 minutes and ~$6.42 measured) that the journey
+gate is worth running at all -- it is not needed before every publish; run it when you want to
+re-confirm the gate still catches the blockers it was built to catch.
+
 ## Rule of Thumb
 
 - `aether publish` is the source-checkout publish command. It builds the local channel binary, refreshes the shared hub, and verifies binary/hub version agreement.

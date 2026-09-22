@@ -377,6 +377,89 @@ type next. It is the same answer the program gives everywhere else, so it can
 never disagree with the "what next" card, and if you have not set a project
 up in this folder the line simply stays blank.*
 
+### A messy practice project is the release gate (v1.29, Phase 207)
+
+Before this phase, this program's own 5,000+ automated tests caught none of the six real bugs
+that stopped the owner's work dead on 2026-09-21 (`.planning/decisions/2026-09-21-v1.29-use-it-every-day.md`).
+Phase 207 built a second kind of check that those tests cannot be: a practice project (a
+throwaway Aether project built purely to be walked through, never a real one) deliberately
+built with the exact kinds of everyday mess a real project has — a shortcut (symlink) to a
+folder, a shortcut that loops back on itself, two saved names differing only by capital
+letters, a project folder tucked inside another project folder, very long folder names, an
+out-of-date map of the code (a "territory snapshot" — Aether's own cached picture of what
+files exist), a project description corrected partway through planning, leftover junk files,
+and unsaved work — built from nothing by a committed script
+(`scripts/build-messy-practice-project.sh`), then walked all the way through by a real chat: a
+real `claude -p` invocation with the same hooks and `/ant-...` menu commands an owner actually
+types, driving all fourteen everyday steps in order — starting a project, surveying the code,
+discussing it, writing its description, planning twice, building, checking, pausing, picking
+back up, finishing, filing it away, and starting again. It checks which files actually appeared
+on disk and which commands genuinely ran (`cmd/journey_live_test.go`'s `TestJourney`), never
+what the chat said about itself.
+
+**`make eval-gate-journey`** runs this for real, three times over (never fewer — `const
+journeyMinimumTrials = 3`, `cmd/journey.go`), and is now the gate the publish runbook's
+preflight list names before every release (`.aether/docs/publish-update-runbook.md`). A trial
+that stops partway is never read as a clean pass — `journeyGateVerdict` (`cmd/journey.go`)
+refuses a report unless every trial declares and executes the same fourteen steps, proven by
+`TestJourneyGateVerdictRefusals`, `TestJourneyGateVerdictAcceptsAGenuineRun`,
+`TestJourneyGateRefusesAPartialRun`, `TestJourneyIncompleteTrialIsNeverPassed`, and
+`TestJourneyTrialsDoNotShareState`.
+
+**A real three-trial run happened this phase, and it found a real dead end.** Recorded in
+`.planning/phases/207-messy-practice-project-gate/207-JOURNEY-RUN.md`: all three trials
+genuinely dispatched four real surveyor subagents during the "survey" step and completed it —
+then each one's own on-disk check found the out-of-date-map trap's snapshot had not been
+refreshed to the project's current state. This is a real, repeatable gap (the same result, all
+three times), not noise — filed as `WINDOWS.md` entry 53, and it is Phase 208's job to close,
+not this one's. The check was not weakened and Aether's own code was not touched to get past
+it — that refusal to paper over a real finding is this phase's whole point.
+
+**Whether the journey is worth running was proven separately, by breaking it on purpose.**
+`scripts/prove-journey-catches-the-2026-09-21-fixes.sh` (`make prove-journey-fix-reverts`)
+reverts each of the five 2026-09-21 fixes that do have a landed repair, one at a time, inside a
+disposable extra copy of the repository (a `git worktree`, removed immediately after, never
+the owner's own checkout — `TestFixRevertHarnessNeverTouchesTheOwnersCheckout`), and drives
+only the one journey step that fix protects. All five were run for real this phase and all
+five were caught: the missing write-allowlist entry failed at "survey", the archive
+name-collision failed at "archive", the fingerprint no helper can compute and the
+superseded-specification both failed at the second planning pass ("plan-second"), and the
+pause fingerprint that followed a folder shortcut failed at "pause" — full figures in
+`207-JOURNEY-RUN.md`. The table itself cannot rot silently or claim a sixth entry
+(`TestFixRevertTableNamesFiveLandedFixes`, `TestFixRevertMutationsStillApply`,
+`TestFixRevertEntriesAreDistinct`, `TestFixRevertTableIsNeverEmpty`,
+`TestFixRevertResultsFollowTheDeclaredOrder`).
+
+**Five proven, not six — the owner's own ruling, quoted exactly.** The sixth 2026-09-21
+problem (a status screen advising `aether midden-review`, a command with no `/ant-...` menu
+wrapper) has no fix yet. The owner's ruling (D-01, `.planning/phases/207-messy-practice-project-gate/207-CONTEXT.md`):
+*"the journey proves it catches the five fixed blockers (revert each fix in turn, journey
+fails at that step). The check for the sixth is built too and stays honestly red until Phase
+208 lands the fix. UED-09 is satisfied for the five; the sixth check is a standing, named,
+expected-red case — never a silent pass and never a claim of six."* That standing check has
+its own three guards: `TestSixthBlockerCheckIsStillRed` (it stays red until a real fix lands),
+`TestNoUnregisteredStatusGuidanceGap` (a new gap of the same shape can't slip past unnamed),
+and `TestExpectedRedRegisterOnlyShrinks` (an expected-red entry can only be removed by actually
+fixing it, never by editing the register); `TestPhaseProvesFiveFixesNotSix` guards the count
+itself.
+
+**The measured cost, not a guess.** The three-trial run took ~17.7 minutes and ~$9.00; the
+five-revert proof took ~13 minutes and ~$6.42 (both figures read from the real Claude Code
+session transcripts, in `207-JOURNEY-RUN.md`). The journey gate's own declared time budget
+(`cmd/testdata/eval-gates/gates.json`) is set from that measured run, not a guess — the
+provisional number Plan 01 seeded is gone.
+
+*For dummies: before anything is released now, a robot walks a deliberately messy practice
+project all the way through the everyday routine — start, survey, plan, build, check, pause,
+resume, finish, file away, start again — three times over, in a real chat, and checks the
+actual files and commands rather than trusting what the chat says happened. This phase's own
+first real run found one thing it genuinely could not get past (an out-of-date map of the code
+never gets refreshed) — that is written down honestly as a known dead end for the next phase to
+fix, not hidden. Separately, all five of the bugs from the bad day 2026-09-21 that do have a
+fix were deliberately broken again, one at a time, in a disposable copy — and every single time,
+this new check caught it. The sixth bug still has no fix; its check is built and stays failing
+on purpose until the next phase fixes it. Five proven, not six.*
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users
@@ -546,8 +629,8 @@ list of work.
 
 *For dummies: instead of sending six helpers to do six related things — each one
 starting cold and re-reading the same files — the system now sends one helper to
-do all six as a single piece of work, after checking that bundling them cannot
-make anything run out of order. And when a helper says "I finished the first
+do the whole group as a single piece of work, after checking that bundling them
+cannot make anything run out of order. And when a helper says "I finished the first
 four", the system does not take its word for it: it goes and looks at the actual
 files in your project, and only what it can genuinely see finished gets ticked
 off. The rest stays on the list and is retried, and nothing the helper did is
@@ -1487,6 +1570,15 @@ aether version
 
 # Run all Go tests (or: make test)
 go test ./... -race -count=1 -timeout 90m
+
+# The messy practice project journey (release gate; see "A messy practice
+# project is the release gate" above) -- needs a signed-in claude CLI,
+# real money, ~18 minutes; never runs in CI
+make eval-gate-journey
+
+# Proves the journey gate is worth running by breaking each landed fix in
+# turn (more expensive; not needed before every publish)
+make prove-journey-fix-reverts
 ```
 
 ---
