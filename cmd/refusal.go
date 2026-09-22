@@ -135,11 +135,19 @@ func renderRefusal(r refusal) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("⛔", "Refused"))
 	b.WriteString(visualDividerStr())
-	b.WriteString(strings.TrimSpace(r.What))
+	// The What, Why, and closing lines each carry a leading glyph from the
+	// one shared table (voiceGlyphMap, cmd/codex_visuals.go;
+	// TestVoiceGlyphsHaveOneTable forbids a second table) so this screen
+	// meets the corpus-wide voice density gate
+	// (TestEveryVoicedScreenMeetsTheReferenceDensity). The "Next: `...`"
+	// line is deliberately left with NO leading glyph or other prefix:
+	// journeyPrintedRefusalNextLineRe (cmd/journey.go) matches it anchored
+	// at the start of the line, and 208-07's printed-refusal extractor
+	// depends on that exact shape to find and re-run the command.
+	b.WriteString(voiceLine("blocked", strings.TrimSpace(r.What)))
 	b.WriteString("\n")
 	if why := strings.TrimSpace(r.Why); why != "" {
-		b.WriteString("Why: ")
-		b.WriteString(why)
+		b.WriteString(voiceLine("evidence", "Why: "+why))
 		b.WriteString("\n")
 	}
 	b.WriteString("Next: `")
@@ -154,6 +162,8 @@ func renderRefusal(r refusal) string {
 		b.WriteString(step)
 		b.WriteString("\n")
 	}
-	b.WriteString("\nThis is a limit in Aether itself, not a mistake you made. Run `aether report` and send the file it writes to whoever maintains Aether -- please do not edit Aether's own program files to work around this.\n")
+	b.WriteString("\n")
+	b.WriteString(voiceLine("warning", "This is a limit in Aether itself, not a mistake you made. Run `aether report` and send the file it writes to whoever maintains Aether -- please do not edit Aether's own program files to work around this."))
+	b.WriteString("\n")
 	return b.String()
 }
