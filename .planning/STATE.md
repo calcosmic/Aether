@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
+current_phase: 208
+current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-01-PLAN.md
-last_updated: "2026-09-22T16:18:05.347Z"
+stopped_at: Completed 208-02-PLAN.md
+last_updated: "2026-09-22T16:49:48.918Z"
 last_activity: 2026-09-22
+state_head: b2e9cf7679249c5d3307c92f21f55f2c19a0d96c
 progress:
-  total_phases: 18
-  completed_phases: 10
-  total_plans: 231
-  completed_plans: 215
-  percent: 56
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 16
+  completed_plans: 10
+  percent: 40
 ---
 
 # Project State
@@ -33,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 208 (never a dead end)
 Status: Ready to execute
-Plan: 2 of 8
+Plan: 3 of 8
 Last activity: 2026-09-22
 
 ## Performance Metrics
@@ -212,6 +215,7 @@ Last activity: 2026-09-22
 | Phase 207 P05 | 55min | 3 tasks | 5 files |
 | Phase 207 P06 | 57min | 3 tasks | 4 files |
 | Phase 208 P01 | 26min | 3 tasks | 22 files |
+| Phase 208 P02 | 45min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -673,6 +677,8 @@ Last activity: 2026-09-22
 - [Phase 207]: [Phase 207 P06] Both real gate runs (three-trial journey, five-fix revert proof) ran live 2026-09-22; all three trials stopped at the same real 'survey' dead end (WINDOWS.md entry 53, Phase 208's job); all five landed fixes caught. journey gate budget_seconds set to 1100 from the measured run. Owner chose to keep the three-trial shape (Option A) as-is.
 - [Phase 208]: refusalRegistry is checked in by hand in ascending id order (not sorted at runtime) so the sort test proves the real committed order — A runtime sort would make the ordering test pass regardless of what is committed
 - [Phase 208]: friendlyErrorForPattern resolves matching ties by longest-pattern-wins rather than table position — alphabetical id order and legacy most-specific-first substring precedence are two different orderings for the same table; only pattern-length satisfies both
+- [Phase 208]: Task Verified now comes from that task's own bound criteria (taskVerifiedFromCriteria), decoupled from the phase-wide checksPassed flag; deterministic_floor.go's own criteria fold is deliberately left unchanged and still gates phase advancement.
+- [Phase 208]: runVerificationStepInDir wraps the existing runVerificationStep rather than changing its signature, so the pre-existing call sites and tests outside this plan's files_modified stay untouched.
 
 ### Pending Todos
 
@@ -795,8 +801,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T16:18:05.334Z
-Stopped at: Completed 208-01-PLAN.md
+Last session: 2026-09-22T16:49:48.767Z
+Stopped at: Completed 208-02-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

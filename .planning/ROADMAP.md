@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 1/8 plans executed
+**Plans:** 2/8 plans executed
 
 Plans:
 **Wave 1**
@@ -1141,7 +1141,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 208-02-PLAN.md — The check's two field-reported bugs: a per-task verdict from that task's own criteria, and a `cd dir &&` verification command that actually runs (UED-10, UED-12; WINDOWS 50, 51)
+- [x] 208-02-PLAN.md — The check's two field-reported bugs: a per-task verdict from that task's own criteria, and a `cd dir &&` verification command that actually runs (UED-10, UED-12; WINDOWS 50, 51)
 - [ ] 208-03-PLAN.md — The failure log reachable and readable: `/ant-midden-review`, the sixth 2026-09-21 blocker closed, guidance widened to program commands, rejected failures recorded in readable words (UED-13, UED-14)
 
 **Wave 3** *(blocked on Wave 2 completion)*
