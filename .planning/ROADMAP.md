@@ -1092,7 +1092,7 @@ Plans:
 
 4. The journey is the gate for every release from here on.
 
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -1106,7 +1106,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 207-04-PLAN.md — All fourteen lifecycle steps in one chat, three trials, flaky versus real, the finished gate verdict (UED-08)
+- [x] 207-04-PLAN.md — All fourteen lifecycle steps in one chat, three trials, flaky versus real, the finished gate verdict (UED-08)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

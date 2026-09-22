@@ -5,16 +5,16 @@ milestone_name: Use It Every Day
 current_phase: 207
 current_phase_name: A Messy Practice Project Is the Release Gate
 status: executing
-stopped_at: Completed 207-03-PLAN.md
-last_updated: "2026-09-22T11:39:06.729Z"
+stopped_at: Completed 207-04-PLAN.md
+last_updated: "2026-09-22T12:19:18.023Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 207 plan 03 (sixth-blocker check) complete
-state_head: 1210b39449fe257dc293aad41412c8a5496ce250
+state_head: b125557ea85155d89af239f014bd3c53d3778115
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 20
 ---
 
@@ -37,7 +37,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 207 (A Messy Practice Project Is the Release Gate) — EXECUTING
 Next phase: 207 (messy practice project as the release gate)
 Status: Ready to execute
-Plan: 4 of 6
+Plan: 5 of 6
 Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 
 ## Performance Metrics
@@ -212,6 +212,7 @@ Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 | Phase 207 P01 | 65min | 3 tasks | 9 files |
 | Phase 207 P02 | 130min | 2 tasks | 5 files |
 | Phase 207 P03 | 45 min | 2 tasks | 3 files |
+| Phase 207 P04 | 38min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -667,6 +668,8 @@ Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 - [Phase 207]: UED-07 not marked complete this plan -- requirements.ready-ids reports it blocked, shared with 207-01/207-06
 - [Phase 207]: 207-03: derive status-card advised commands from live guidance code (loadGuidedActions + computeWarnings), never a typed list
 - [Phase 207]: 207-03: expected-red register mirrors evalGateSentinelFloor in reverse -- a ceiling that may only shrink as Phase 208 lands fixes
+- [Phase 207]: The start step legitimately needs no Bash call when a colony already exists; the wrapper correctly declines rather than running a guaranteed-to-fail command — Verified live 2026-09-22; every other step still requires a Bash call
+- [Phase 207]: Per-step chat caps for the journey harness were raised from a real measured cost (survey: four real surveyor subagents, $2.09), never a guess — 207-RESEARCH.md Assumption A2 instructed instrumenting and adjusting rather than fixing numbers blind
 
 ### Pending Todos
 
@@ -728,6 +731,7 @@ Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 - ℹ️ [Phase 204 carry-forward] The automatic hypothesis-to-validated promoter is wired but cannot fire in production (WINDOWS.md entry 44, reopened); check-lane token usage and cost stay recorded as absent (entry 48); 30 of 51 confirmed incidents still have no guard test (entry 42); swarm worker names can collide about one run in fifty and the manifest refuses instead of de-duplicating (entry 47).
 - ℹ️ [Phase 204 side finding] The fixture bank's sanitiser silently drops any confirmed incident whose text contains backticks or XML-looking tags; eight pre-existing incidents have never been in the bank for that reason and WINDOWS.md descriptions that must seed a fixture need plain names.
 - Historical Plan204.2-24 acquisition remains blocked under its original contract. Owner-approved prospective amendment now completes admission-only Plan 24; actual full context/answer/ACK source remains unresolved even after owned history DB/WAL inspection. See 204.2-PROOF-AMENDMENT.md and 204.2-25-CHECKPOINT.md.
+- Open question: whether the out-of-date-code-map trap's territory refresh fires at /ant-colonize, at /ant-plan, or neither by default -- a live whole-chain run reached survey's own on-disk fact check and found source_revision had not moved after /ant-colonize alone; not yet resolved by continuing to /ant-plan in a live run
 
 ## Deferred Items
 
@@ -788,8 +792,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T11:38:49.413Z
-Stopped at: Completed 207-03-PLAN.md
+Last session: 2026-09-22T12:19:17.950Z
+Stopped at: Completed 207-04-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
