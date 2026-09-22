@@ -63,7 +63,9 @@ func statusLineTaskLabel(tasks []colony.Task) string {
 
 // shortenStatusLineGoal collapses whitespace and, when the result is longer
 // than statusLineMaxTaskRunes, cuts back to the last whole word that fits and
-// appends a single-character ellipsis -- never mid-word.
+// appends a single-character ellipsis. Only when the very first word is itself
+// longer than the limit (one long identifier or path as a goal) is that word
+// cut, so the line can never grow past the limit.
 func shortenStatusLineGoal(goal string) string {
 	collapsed := strings.Join(strings.Fields(goal), " ")
 	runes := []rune(collapsed)

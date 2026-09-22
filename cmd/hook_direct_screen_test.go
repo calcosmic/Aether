@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -633,5 +634,40 @@ func TestDirectRouteInstallsWithoutDisturbingOtherHooks(t *testing.T) {
 	}
 	if string(mergedTwice) != string(merged) {
 		t.Errorf("merging twice is not idempotent.\nfirst:\n%s\nsecond:\n%s", merged, mergedTwice)
+	}
+}
+
+// TestDirectRouteRegistrationRequiresABashMatcher locks the review finding
+// WR-01 (206-REVIEW.md): a settings file that names the direct-route command
+// under a PostToolUse entry whose matcher never fires for Bash has NOT
+// installed the route, because the Bash call that drew the screen would never
+// run it. The backstop must therefore keep blocking in that project.
+func TestDirectRouteRegistrationRequiresABashMatcher(t *testing.T) {
+	cases := []struct {
+		matcher string
+		want    bool
+	}{
+		{"Bash", true},
+		{"", true},
+		{"*", true},
+		{"Write|Bash", true},
+		{"Write", false},
+		{"Read|Edit", false},
+	}
+	for _, tc := range cases {
+		t.Run("matcher="+tc.matcher, func(t *testing.T) {
+			dir := t.TempDir()
+			claudeDir := filepath.Join(dir, ".claude")
+			if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			body := fmt.Sprintf(`{"hooks":{"PostToolUse":[{"matcher":%q,"hooks":[{"type":"command","command":"aether hook-post-tool-use","timeout":10}]}]}}`, tc.matcher)
+			if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := directScreenRouteRegistered(dir); got != tc.want {
+				t.Fatalf("matcher %q: directScreenRouteRegistered = %v, want %v", tc.matcher, got, tc.want)
+			}
+		})
 	}
 }

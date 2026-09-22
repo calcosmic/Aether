@@ -122,10 +122,30 @@ func directScreenMessageWithinCap(screen string) (message string, complete bool,
 // which commands are registered under which hook events.
 type directScreenHookSettingsFile struct {
 	Hooks map[string][]struct {
-		Hooks []struct {
+		Matcher string `json:"matcher"`
+		Hooks   []struct {
 			Command string `json:"command"`
 		} `json:"hooks"`
 	} `json:"hooks"`
+}
+
+// directScreenMatcherCoversBash reports whether a PostToolUse entry's matcher
+// would fire for the Bash tool -- the only tool that can draw an Aether
+// screen. Claude Code treats an empty matcher and "*" as every tool, and a
+// "|"-separated list as alternatives. An entry registered against some other
+// tool names the right command but never runs for the call that drew the
+// screen, so it must not count as the route being installed.
+func directScreenMatcherCoversBash(matcher string) bool {
+	matcher = strings.TrimSpace(matcher)
+	if matcher == "" || matcher == "*" {
+		return true
+	}
+	for _, alt := range strings.Split(matcher, "|") {
+		if strings.TrimSpace(alt) == "Bash" {
+			return true
+		}
+	}
+	return false
 }
 
 // directScreenRouteRegistered reports whether a project's own shipped
@@ -160,6 +180,9 @@ func directScreenSettingsFileRegistersRoute(path string) bool {
 		return false
 	}
 	for _, entry := range parsed.Hooks["PostToolUse"] {
+		if !directScreenMatcherCoversBash(entry.Matcher) {
+			continue
+		}
 		for _, h := range entry.Hooks {
 			if strings.HasPrefix(strings.TrimSpace(h.Command), "aether hook-post-tool-use") {
 				return true
