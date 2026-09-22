@@ -51,6 +51,68 @@ var refusalRegistry = []refusalRow{
 		NextCommand:  "aether colonize --plan-only --force-resurvey",
 		ProtectsWork: false,
 	},
+	{
+		ID:           "corrupted-colony-data",
+		Pattern:      "json:",
+		What:         "Aether's own project data file looks corrupted or was edited outside of Aether.",
+		Why:          "Aether's data file is corrupted or was modified outside of Aether.",
+		NextCommand:  "aether patrol",
+		ProtectsWork: false,
+		ExtraSteps:   []string{"Check `.aether/data/COLONY_STATE.json` for syntax errors."},
+	},
+	{
+		ID:           "failed-to-initialize-store",
+		Pattern:      "failed to initialize store",
+		What:         "Aether could not set up its own data storage.",
+		Why:          "Aether could not set up its data storage. This usually means the data directory is inaccessible.",
+		NextCommand:  "aether patrol",
+		ProtectsWork: false,
+		ExtraSteps:   []string{"Check that `.aether/data/` exists and is writable."},
+	},
+	{
+		ID:           "failed-to-load-colony-state",
+		Pattern:      "failed to load colony state",
+		What:         "Aether could not read its own project data file.",
+		Why:          "Aether could not read the colony data file. This may be corrupted or was modified outside of Aether.",
+		NextCommand:  "aether patrol",
+		ProtectsWork: false,
+		ExtraSteps:   []string{"Check `.aether/data/COLONY_STATE.json` for syntax errors."},
+	},
+	{
+		ID:           "invalid-charter-json",
+		Pattern:      "invalid charter JSON",
+		What:         "The charter text handed to `aether init` was not valid JSON.",
+		Why:          "The charter passed to Aether is not valid JSON. The colony state file was not changed.",
+		NextCommand:  `aether init "your goal"`,
+		ProtectsWork: false,
+		ExtraSteps:   []string{"If an assistant generated the command, ask it to compact the charter or escape quotes/newlines correctly."},
+	},
+	{
+		ID:           "missing-required-flag",
+		Pattern:      "flag --",
+		What:         "This command needs more information to run.",
+		Why:          "This command needs more information to run. Check the required flags and try again.",
+		NextCommand:  "aether <command> --help",
+		ProtectsWork: false,
+	},
+	{
+		ID:           "no-colony-initialized",
+		Pattern:      "no colony initialized",
+		What:         "Aether has no project set up in this folder yet.",
+		Why:          "Aether needs a colony to work with. A colony is a workspace for building toward a specific goal.",
+		NextCommand:  `aether init "your goal"`,
+		ProtectsWork: false,
+		ExtraSteps:   []string{"Run `aether lay-eggs` first if this repo is brand new."},
+	},
+	{
+		ID:           "permission-denied",
+		Pattern:      "permission denied",
+		What:         "Aether does not have permission to access a file or directory it needs.",
+		Why:          "Aether does not have permission to access a file or directory.",
+		NextCommand:  "aether patrol",
+		ProtectsWork: false,
+		ExtraSteps:   []string{"Check file permissions. On macOS/Linux: `ls -la <path>` to inspect."},
+	},
 }
 
 // refusalForID looks up a registered row by id. Two calls with the same id
@@ -62,6 +124,31 @@ func refusalForID(id string) (refusalRow, bool) {
 		}
 	}
 	return refusalRow{}, false
+}
+
+// refusalRowForPattern is friendlyErrorForPattern's real lookup, kept here
+// beside the table it reads. Rows are checked in ascending id order (the
+// registry's own order, D-required by TestRefusalRegisterIsSortedAndUnique)
+// -- but specificity, not table position, decides a tie: when more than one
+// row's Pattern matches, the LONGEST pattern wins, so a general row like
+// "json:" (corrupted-colony-data) can never shadow a more specific row like
+// "invalid charter JSON" (invalid-charter-json) just because it happens to
+// sort earlier alphabetically. Matching is case-insensitive.
+func refusalRowForPattern(message string) (refusalRow, bool) {
+	lower := strings.ToLower(message)
+	best, found := refusalRow{}, false
+	for _, row := range refusalRegistry {
+		if row.Pattern == "" {
+			continue
+		}
+		if !strings.Contains(lower, strings.ToLower(row.Pattern)) {
+			continue
+		}
+		if !found || len(row.Pattern) > len(best.Pattern) {
+			best, found = row, true
+		}
+	}
+	return best, found
 }
 
 // refusalRegistryProblems is the one check both TestEveryRefusalRowNamesANextCommand

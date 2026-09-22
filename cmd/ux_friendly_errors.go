@@ -4,90 +4,52 @@ import (
 	"strings"
 )
 
-// friendlyError maps an error pattern to a human-readable explanation and next steps.
+// friendlyError is the rendering shape renderVisualError's fallback path
+// still expects: a plain-language explanation plus an ordered list of next
+// steps. It is kept as a thin, unexported view over a refusalRegistry row
+// (cmd/refusal_register.go) -- the ONE refusal table in the program -- not a
+// second, parallel table. errorPatternMap used to live here, hand-rolled;
+// TestFriendlyErrorsReadTheOneRefusalTable fails naming this file if a
+// second one is ever planted anywhere in cmd/*.go.
 type friendlyError struct {
 	Pattern     string
 	Explanation string
 	NextSteps   []string
 }
 
-// errorPatternMap lists known error patterns ordered from most specific to least.
-// Each entry maps a substring match to a plain-language explanation and actionable
-// next steps for the user.
-var errorPatternMap = []friendlyError{
-	{
-		Pattern:     "invalid charter JSON",
-		Explanation: "The charter passed to Aether is not valid JSON. The colony state file was not changed.",
-		NextSteps: []string{
-			"Retry with valid JSON, or run `aether init \"your goal\"` without `--charter-json`.",
-			"If an assistant generated the command, ask it to compact the charter or escape quotes/newlines correctly.",
-		},
-	},
-	{
-		Pattern:     "no colony initialized",
-		Explanation: "Aether needs a colony to work with. A colony is a workspace for building toward a specific goal.",
-		NextSteps: []string{
-			"Run `aether init \"your goal\"` to start a colony.",
-			"Run `aether lay-eggs` first if this repo is brand new.",
-		},
-	},
-	{
-		Pattern:     "failed to load colony state",
-		Explanation: "Aether could not read the colony data file. This may be corrupted or was modified outside of Aether.",
-		NextSteps: []string{
-			"Run `aether patrol` for diagnostics.",
-			"Check `.aether/data/COLONY_STATE.json` for syntax errors.",
-		},
-	},
-	{
-		Pattern:     "flag --",
-		Explanation: "This command needs more information to run. Check the required flags and try again.",
-		NextSteps: []string{
-			"Run `aether <command> --help` to see available flags.",
-		},
-	},
-	{
-		Pattern:     "failed to initialize store",
-		Explanation: "Aether could not set up its data storage. This usually means the data directory is inaccessible.",
-		NextSteps: []string{
-			"Run `aether patrol` for diagnostics.",
-			"Check that `.aether/data/` exists and is writable.",
-		},
-	},
-	{
-		Pattern:     "permission denied",
-		Explanation: "Aether does not have permission to access a file or directory.",
-		NextSteps: []string{
-			"Check file permissions. On macOS/Linux: `ls -la <path>` to inspect.",
-		},
-	},
-	{
-		Pattern:     "json:",
-		Explanation: "Aether's data file is corrupted or was modified outside of Aether.",
-		NextSteps: []string{
-			"Run `aether patrol` for diagnostics.",
-			"Check `.aether/data/COLONY_STATE.json` for syntax errors.",
-		},
-	},
+// friendlyErrorForPattern looks up the refusalRegistry row whose Pattern is
+// a case-insensitive substring of message -- ties broken by the longest
+// (most specific) pattern, via refusalRowForPattern -- and adapts it into
+// the friendlyError shape. Matching is case-insensitive.
+func friendlyErrorForPattern(message string) (friendlyError, bool) {
+	row, ok := refusalRowForPattern(message)
+	if !ok {
+		return friendlyError{}, false
+	}
+	return friendlyError{
+		Pattern:     row.Pattern,
+		Explanation: row.Why,
+		NextSteps:   refusalRowNextSteps(row),
+	}, true
 }
 
-// friendlyErrorForPattern looks up a friendly error entry matching the given
-// error message. Matching is case-insensitive using substring containment.
-func friendlyErrorForPattern(message string) (friendlyError, bool) {
-	lowerMessage := strings.ToLower(message)
-	for _, entry := range errorPatternMap {
-		if strings.Contains(lowerMessage, strings.ToLower(entry.Pattern)) {
-			return entry, true
-		}
+// refusalRowNextSteps reconstructs the ordered next-steps list a row's
+// NextCommand plus ExtraSteps represents, in the shape renderFriendlyError
+// already renders: the command first, any extra steps after it.
+func refusalRowNextSteps(row refusalRow) []string {
+	steps := make([]string, 0, 1+len(row.ExtraSteps))
+	if command := strings.TrimSpace(row.NextCommand); command != "" {
+		steps = append(steps, "Run `"+command+"`.")
 	}
-	return friendlyError{}, false
+	steps = append(steps, row.ExtraSteps...)
+	return steps
 }
 
 // renderFriendlyError produces a visual error display with a plain-language
 // explanation and actionable next steps.
 func renderFriendlyError(entry friendlyError, rawMessage string) string {
 	var b strings.Builder
-	b.WriteString(renderBanner("\u274C", "Error"))
+	b.WriteString(renderBanner("❌", "Error"))
 	b.WriteString(visualDividerStr())
 	b.WriteString(entry.Explanation)
 	b.WriteString("\n\n")

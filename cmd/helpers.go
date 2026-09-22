@@ -75,6 +75,7 @@ func outputErrorMessage(message string) {
 // reads identically whichever lane prints it.
 func outputRefusal(r refusal) {
 	markRenderedCommandError(1)
+	appendRefusalToLog(r)
 	if shouldRenderVisualOutput(stderr) {
 		writeVisualOutput(stderr, renderRefusal(r))
 		return

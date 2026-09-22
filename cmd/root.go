@@ -668,6 +668,7 @@ func renderedErrorExit(code int) error {
 // lanes unable to print a different next command for the same refusal.
 func renderRefusalToExitWriter(r refusal) {
 	visualFprint(stderr, renderRefusal(r))
+	appendRefusalToLog(r)
 }
 
 // ExitWithError prints the error to stderr and exits with code 1.
