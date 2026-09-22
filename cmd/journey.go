@@ -161,6 +161,12 @@ type journeyContentBlock struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
 	Text string `json:"text"`
+	// Content carries a tool_result block's own payload (cmd/hook_cmds.go's
+	// transcriptContentBlock models the identical shape) -- a real
+	// transcript has shown this as either a plain string or an array of
+	// blocks carrying their own "text" field, never the top-level "text"
+	// field above. Read it with toolResultText.
+	Content json.RawMessage `json:"content"`
 }
 
 // journeyScanTranscriptLines calls fn once per non-empty JSONL line at
@@ -257,6 +263,102 @@ func journeyMenuCommandNames(transcriptPath string) ([]string, error) {
 		return nil, err
 	}
 	return names, nil
+}
+
+// --- Printed refusals ---
+//
+// 208-07-PLAN.md (UED-10): a refusal a real chat met has its way out proven
+// only when the command it printed actually runs. journeyPrintedRefusals
+// finds every refusal a step's own transcript actually printed;
+// printedCommandToRuntimeCommand turns what it printed into a command the
+// live harness can execute.
+
+// journeyPrintedRefusal is one refusal found in a step's own transcript: the
+// exact next command from its "Next:" line, and the raw matched text for a
+// failure message that needs to show the reader what was actually printed.
+type journeyPrintedRefusal struct {
+	NextCommand string
+	Raw         string
+}
+
+// journeyPrintedRefusalNextLineRe matches the exact "Next: `<command>`" line
+// renderRefusal (cmd/refusal.go) writes for every refusal block, on its own
+// line with no other prefix. This is the stable marker: an ordinary sentence
+// that happens to carry a backticked command is never mistaken for a
+// refusal, because it is never preceded by this exact "Next:" label.
+var journeyPrintedRefusalNextLineRe = regexp.MustCompile("(?m)^Next: `([^`\n]+)`")
+
+// journeyPrintedRefusals reads the transcript at transcriptPath and returns
+// every printed refusal found, in the order they appear. It looks only at
+// the two places a real renderRefusal block can appear in a transcript: an
+// assistant's own text block (the chat relaying what it saw), and a
+// user-role tool_result block (a Bash call's own captured stdout/stderr) --
+// the same two shapes journeyMenuCommandNames and owedScreenFrom already
+// read. A transcript line that does not decode, or an empty transcript,
+// yields no refusals and no error.
+func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, error) {
+	var found []journeyPrintedRefusal
+	err := journeyScanTranscriptLines(transcriptPath, func(entry journeyTranscriptEntry) {
+		if len(entry.Message.Content) == 0 {
+			return
+		}
+		var blocks []journeyContentBlock
+		if err := json.Unmarshal(entry.Message.Content, &blocks); err != nil {
+			return // content is a bare string on this line, not a block array
+		}
+		for _, b := range blocks {
+			var text string
+			switch {
+			case b.Type == "text" && entry.Message.Role == "assistant":
+				text = b.Text
+			case b.Type == "tool_result" && entry.Message.Role == "user":
+				text = toolResultText(b.Content)
+			default:
+				continue
+			}
+			for _, m := range journeyPrintedRefusalNextLineRe.FindAllStringSubmatch(text, -1) {
+				found = append(found, journeyPrintedRefusal{
+					NextCommand: strings.TrimSpace(m[1]),
+					Raw:         strings.TrimSpace(m[0]),
+				})
+			}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return found, nil
+}
+
+// printedCommandToRuntimeCommand reverses platformCommandName's forward
+// mapping (cmd/codex_visuals.go): a printed command already starting with
+// `aether ` is returned unchanged; a printed `/ant-<verb> ...` has its verb
+// looked up directly in wrapperCommandNames -- the same table
+// platformCommandName reads when it produces the menu form, so this reverse
+// mapping can never drift from the forward one -- and is rewritten to
+// `aether <verb> ...` with every argument after the verb preserved byte for
+// byte. A verb in neither form (not `aether `-prefixed, and either not
+// `/ant-`-prefixed or naming a verb wrapperCommandNames does not carry)
+// returns not-ok rather than a guess.
+func printedCommandToRuntimeCommand(printed string) (string, bool) {
+	printed = strings.TrimSpace(printed)
+	if printed == "aether" || strings.HasPrefix(printed, "aether ") {
+		return printed, true
+	}
+	if !strings.HasPrefix(printed, "/ant-") {
+		return "", false
+	}
+	rest := strings.TrimPrefix(printed, "/ant-")
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return "", false
+	}
+	verb := fields[0]
+	if !wrapperCommandNames[verb] {
+		return "", false
+	}
+	remainder := strings.TrimPrefix(rest, verb)
+	return "aether " + verb + remainder, true
 }
 
 // --- Failure classification ---
