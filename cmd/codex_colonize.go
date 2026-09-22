@@ -374,6 +374,19 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	// per-dispatch loop.
 	contextCapsule := resolveCodexWorkerContext()
 	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))), contextCapsule)
+	// Write a small receipt of this manifest's own generated_at, so
+	// `aether colonize-finalize` can recover a completion packet's missing
+	// generated_at from Aether's own record instead of refusing outright
+	// (WINDOWS.md row 53). Reuses manifest.GeneratedAt -- already stamped
+	// above from the one time.Now().UTC().Format(time.RFC3339) call this
+	// function makes -- rather than a second, possibly different, call.
+	if err := store.SaveJSON(colonizeManifestReceiptPath, colonizeManifestReceipt{
+		TransactionID: manifest.TransactionID,
+		Root:          facts.Root,
+		GeneratedAt:   manifest.GeneratedAt,
+	}); err != nil {
+		logActivity("colonize", fmt.Sprintf("failed to write manifest receipt: %v", err))
+	}
 	dispatchMaps := surveyorDispatchMaps(manifest.Dispatches)
 	result := map[string]interface{}{
 		"status":                status,

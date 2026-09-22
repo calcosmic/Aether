@@ -68,6 +68,37 @@ func outputErrorMessage(message string) {
 	outputError(1, message, nil)
 }
 
+// outputRefusal is the drawn-screen lane's entry point for a typed refusal
+// (cmd/refusal.go), mirroring outputError's error-code/visual-mode split but
+// rendering through renderRefusal instead of the generic error format --
+// the same renderer ExitWithError's plain-text lane calls, so a refusal
+// reads identically whichever lane prints it.
+func outputRefusal(r refusal) {
+	markRenderedCommandError(1)
+	if shouldRenderVisualOutput(stderr) {
+		writeVisualOutput(stderr, renderRefusal(r))
+		return
+	}
+	envelope := struct {
+		OK          bool   `json:"ok"`
+		Error       string `json:"error"`
+		Code        int    `json:"code"`
+		NextCommand string `json:"next_command"`
+	}{
+		OK:          false,
+		Error:       r.What,
+		Code:        1,
+		NextCommand: r.NextCommand,
+	}
+	payload, err := json.Marshal(envelope)
+	if err != nil {
+		msgJSON, _ := json.Marshal(r.What)
+		fmt.Fprintf(stderr, "{\"ok\":false,\"error\":%s,\"code\":1}\n", string(msgJSON))
+		return
+	}
+	fmt.Fprintf(stderr, "%s\n", string(payload))
+}
+
 // mustGetString retrieves a required string flag, calling outputError and
 // exiting if the flag is missing or empty.
 func mustGetString(cmd *cobra.Command, flag string) string {

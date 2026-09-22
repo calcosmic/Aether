@@ -660,8 +660,26 @@ func renderedErrorExit(code int) error {
 	return renderedCommandError{code: code}
 }
 
+// renderRefusalToExitWriter is ExitWithError's refusal branch, factored out
+// of the os.Exit call so it can be exercised directly by
+// TestRefusalCarriesItsNextCommandOnBothLanes without ending the test
+// process. It renders through the exact same renderRefusal the drawn-screen
+// lane's outputRefusal (cmd/helpers.go) calls, which is what makes the two
+// lanes unable to print a different next command for the same refusal.
+func renderRefusalToExitWriter(r refusal) {
+	visualFprint(stderr, renderRefusal(r))
+}
+
 // ExitWithError prints the error to stderr and exits with code 1.
 func ExitWithError(err error) {
+	// Checked before renderedCommandError: a refusal always carries the one
+	// command that gets past it, and this plain-text lane must render that
+	// full block -- not just the bare Error() string.
+	var r refusal
+	if errors.As(err, &r) {
+		renderRefusalToExitWriter(r)
+		os.Exit(1)
+	}
 	var renderedErr renderedCommandError
 	if errors.As(err, &renderedErr) {
 		os.Exit(renderedErr.code)

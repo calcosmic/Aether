@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -215,6 +216,11 @@ var colonizeFinalizeCmd = &cobra.Command{
 		}
 		result, err := runCodexColonizeFinalize(skillWorkspaceRoot(), completion)
 		if err != nil {
+			var r refusal
+			if errors.As(err, &r) {
+				outputRefusal(r)
+				return renderedErrorExit(1)
+			}
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
@@ -337,6 +343,14 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 		return nil, fmt.Errorf("colonize_manifest root does not match current workspace (manifest=%s current=%s)", manifest.Root, root)
 	}
 	now := time.Now().UTC()
+	generatedAtRecovered := false
+	if strings.TrimSpace(manifest.GeneratedAt) == "" {
+		if recovered, ok := recoverColonizeManifestGeneratedAt(*manifest); ok {
+			manifest.GeneratedAt = recovered
+			generatedAtRecovered = true
+			logActivity("colonize-finalize", "recovered generated_at from Aether's own record of the last `aether colonize --plan-only` run; carrying on")
+		}
+	}
 	if err := validateCodexColonizeManifestFreshness(*manifest, now); err != nil {
 		return nil, err
 	}
@@ -427,6 +441,9 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 	if !stateRecorded {
 		result["state_note"] = surveyWithoutColonyNote
 		result["next"] = "aether init"
+	}
+	if generatedAtRecovered {
+		result["generated_at_recovered"] = true
 	}
 	if codegraphStats != nil {
 		result["codebase_graph"] = map[string]interface{}{
@@ -695,20 +712,61 @@ func collectTerritoryPublicationArtifacts(root, sourceDir string) (map[string][]
 func validateCodexColonizeManifestFreshness(manifest codexColonizeManifest, now time.Time) error {
 	raw := strings.TrimSpace(manifest.GeneratedAt)
 	if raw == "" {
-		return fmt.Errorf("colonize_manifest generated_at is required for freshness validation")
+		return refuse("colonize-finalize-missing-timestamp")
 	}
 	generatedAt, err := time.Parse(time.RFC3339, raw)
 	if err != nil {
-		return fmt.Errorf("colonize_manifest generated_at is invalid: %w", err)
+		return refuse("colonize-finalize-invalid-timestamp", fmt.Sprintf("generated_at was %q: %v.", raw, err))
 	}
 	generatedAt = generatedAt.UTC()
 	if generatedAt.After(now.Add(colonizeFinalizeManifestFutureSkew)) {
-		return fmt.Errorf("colonize_manifest generated_at %s is too far in the future", raw)
+		return refuse("colonize-finalize-timestamp-in-future", fmt.Sprintf("generated_at was %s, which is after now (%s) plus the %s allowance.", raw, now.Format(time.RFC3339), colonizeFinalizeManifestFutureSkew))
 	}
 	if now.Sub(generatedAt) > colonizeFinalizeManifestMaxAge {
 		return fmt.Errorf("stale colonize_manifest generated_at %s exceeds max age %s; rerun `aether colonize --plan-only`", raw, colonizeFinalizeManifestMaxAge)
 	}
 	return nil
+}
+
+// colonizeManifestReceiptPath names the small receipt `aether colonize
+// --plan-only` writes of its own manifest's generated_at, so
+// `aether colonize-finalize` can recover a completion packet's missing
+// generated_at from Aether's own record instead of refusing outright
+// (WINDOWS.md row 53). Not the manifest itself -- just enough to answer
+// "did this workspace's own last plan-only run generate this timestamp".
+const colonizeManifestReceiptPath = "colonize-manifest-receipt.json"
+
+type colonizeManifestReceipt struct {
+	TransactionID string `json:"transaction_id"`
+	Root          string `json:"root"`
+	GeneratedAt   string `json:"generated_at"`
+}
+
+// recoverColonizeManifestGeneratedAt reads the receipt `aether colonize
+// --plan-only` wrote of its own manifest and, when its transaction_id and
+// root match the submitted manifest, returns the generated_at it recorded.
+// Returns ("", false) whenever there is nothing to recover from -- no store,
+// no receipt on disk, or a receipt for a different workspace/run -- so the
+// caller falls through to the ordinary missing-timestamp refusal.
+func recoverColonizeManifestGeneratedAt(manifest codexColonizeManifest) (string, bool) {
+	if store == nil {
+		return "", false
+	}
+	var receipt colonizeManifestReceipt
+	if err := store.LoadJSON(colonizeManifestReceiptPath, &receipt); err != nil {
+		return "", false
+	}
+	if receipt.TransactionID != manifest.TransactionID {
+		return "", false
+	}
+	if strings.TrimSpace(manifest.Root) != "" && !sameCleanPath(receipt.Root, manifest.Root) {
+		return "", false
+	}
+	generatedAt := strings.TrimSpace(receipt.GeneratedAt)
+	if generatedAt == "" {
+		return "", false
+	}
+	return generatedAt, true
 }
 
 func validateCodexColonizeManifestWorkspace(manifest codexColonizeManifest, facts codexWorkspaceFacts) error {
