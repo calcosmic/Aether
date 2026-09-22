@@ -610,20 +610,27 @@ func loadEvalGateHoldouts() (evalGateHoldoutFile, error) {
 
 // --- Seed bank guard index (LEARN-05, Task 3) ---
 
-// seedBankUnguardedFloor is the recorded maximum number of fixture-bank
-// entries that may lack a guard test. This floor may only DECREASE --
-// TestEveryFixtureNamesItsGuardOrIsCountedUnguarded fails when the real
-// unguarded count exceeds it, and TestSeedBankUnguardedFloorIsTheRealCount
-// (via assertSeedBankUnguardedFloorIsExact) fails when the real unguarded
-// count is BELOW it -- so the two checks together are a two-sided ratchet:
-// this constant must equal the real count exactly, never merely bound it
-// from one side. Give a fixture a guard, or raise this comment and this
+// seedBankUnguardedFloor is the recorded number of fixture-bank entries
+// that lack a guard test. TestEveryFixtureNamesItsGuardOrIsCountedUnguarded
+// fails when the real unguarded count exceeds it, and
+// TestSeedBankUnguardedFloorIsTheRealCount (via
+// assertSeedBankUnguardedFloorIsExact) fails when the real unguarded count
+// is BELOW it -- so the two checks together are a two-sided ratchet: this
+// constant must equal the real count exactly, never merely bound it from
+// one side. Give a fixture a guard, or raise this comment and this
 // constant together in the same reviewed change with a written reason
 // (never widen it silently). Recorded 2026-09-14 (204-14-PLAN.md Task 1,
 // closing verification gap SC3c): 47 fixtures total, 17 guarded, 30
-// unguarded -- this constant is that 30, the floor the unguarded count is
-// recorded at.
-const seedBankUnguardedFloor = 30
+// unguarded.
+//
+// Raised 2026-09-22 (post-208 gate repair, TestSeededBankIsReproducible):
+// regenerating the bank from its confirmed-incident sources (-update-bank)
+// picked up two new WINDOWS.md "fixed" rows recorded by the 208 plans
+// (fixture-52cfda052c88, fixture-eacbe4e21ca7 -- both field-report entries
+// on cmd/codex_continue.go dated 2026-09-22), which arrive unguarded per
+// TestSeededBankUpdate's own contract. 53 fixtures total, 21 guarded, 32
+// unguarded -- this constant is that 32.
+const seedBankUnguardedFloor = 32
 
 // seedBankGuardIndexEntry is one visible row in the guard index.
 type seedBankGuardIndexEntry struct {

@@ -410,6 +410,30 @@
       "content_digest": "4c5c7d22b094b947db6ecbc9f1ca434fee5db3e611ca5412bc1635130515921c"
     },
     {
+      "id": "fixture-52cfda052c88",
+      "title": "[broad-invariant] unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, h",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server \u0026\u0026 python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh,",
+        "reference": "51"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server \u0026\u0026 python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh,",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "51"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "medium",
+      "content_digest": "52cfda052c8891c5b9aef2ed9d3d23fed901bddaab21fc596bf20373681e50a2"
+    },
+    {
       "id": "fixture-539987569003",
       "title": "[broad-invariant] deviation: cmd/episode_ledger_test.go. FIXED by 204-13: runSwarmDestroy (cmd/swarm_cmd.go) and o",
       "failing_baseline": {
@@ -1232,6 +1256,30 @@
       "privacy": "repo_local",
       "severity": "low",
       "content_digest": "e3c1824e0d6c7b2b9d17d4812d5bdd1a18dd56848c0635c125555aec575e88c4"
+    },
+    {
+      "id": "fixture-eacbe4e21ca7",
+      "title": "[broad-invariant] unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): task.Verified is set from the phase-wide verification.ChecksPassed flag (the code comment near continueTasksSupportAdvancement says so), not per task. One failing criterion therefore marks every task implemented_unverified, and the implementation_evidence gate fails with text identical to the causal blocker, so gate-results shows two failures for one cause and sends the owner and the Fixer after a pha",
+        "reference": "50"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): task.Verified is set from the phase-wide verification.ChecksPassed flag (the code comment near continueTasksSupportAdvancement says so), not per task. One failing criterion therefore marks every task implemented_unverified, and the implementation_evidence gate fails with text identical to the causal blocker, so gate-results shows two failures for one cause and sends the owner and the Fixer after a pha",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "50"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "eacbe4e21ca7123bb27872d30e1421d1c3a1b5b514d2db937b124636befbc160"
     },
     {
       "id": "fixture-ec011ad6e69c",
