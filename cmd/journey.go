@@ -300,35 +300,113 @@ type journeyCaps struct {
 
 // journeyStepResult is the outcome of one lifecycle step within one trial.
 type journeyStepResult struct {
-	Name          string `json:"name"`
-	MenuCommand   string `json:"menu_command"`
-	Status        string `json:"status"` // "pass" | "fail"
-	BashToolCalls int    `json:"bash_tool_calls"`
-	FailureKind   string `json:"failure_kind,omitempty"`
-	Detail        string `json:"detail,omitempty"`
-	Retried       bool   `json:"retried"`
+	Name          string   `json:"name"`
+	MenuCommand   string   `json:"menu_command"`
+	Status        string   `json:"status"` // "pass" | "fail" | "not-reached"
+	BashToolCalls int      `json:"bash_tool_calls"`
+	FailureKind   string   `json:"failure_kind,omitempty"`
+	Detail        string   `json:"detail,omitempty"`
+	Retried       bool     `json:"retried"`
+	TrapIDs       []string `json:"trap_ids,omitempty"`
+}
+
+// --- Trial outcome vocabulary ---
+//
+// Same completeness convention as evalGateName and journeyStep: const block,
+// names slice, names() helper, declared-membership predicate.
+
+// journeyTrialOutcome is the declared, closed vocabulary a trial's overall
+// result classifies into.
+type journeyTrialOutcome string
+
+const (
+	// journeyTrialPassed: every step in the trial passed.
+	journeyTrialPassed journeyTrialOutcome = "passed"
+	// journeyTrialFlakyFailure: the trial failed, but every failure
+	// classified transient (worth retrying, not a product defect on its
+	// own).
+	journeyTrialFlakyFailure journeyTrialOutcome = "flaky-failure"
+	// journeyTrialRealFailure: at least one failure in the trial classified
+	// real.
+	journeyTrialRealFailure journeyTrialOutcome = "real-failure"
+	// journeyTrialIncomplete: the trial was cut short before every declared
+	// step ran -- never counted as passed, regardless of what ran before
+	// the cutoff looked clean.
+	journeyTrialIncomplete journeyTrialOutcome = "incomplete"
+)
+
+var journeyTrialOutcomeVocabulary = []journeyTrialOutcome{
+	journeyTrialPassed,
+	journeyTrialFlakyFailure,
+	journeyTrialRealFailure,
+	journeyTrialIncomplete,
+}
+
+// journeyTrialOutcomeNames returns the declared trial-outcome names.
+func journeyTrialOutcomeNames() []string {
+	names := make([]string, 0, len(journeyTrialOutcomeVocabulary))
+	for _, o := range journeyTrialOutcomeVocabulary {
+		names = append(names, string(o))
+	}
+	return names
+}
+
+// journeyTrialOutcomeDeclared reports whether o is in the declared
+// vocabulary.
+func journeyTrialOutcomeDeclared(o journeyTrialOutcome) bool {
+	for _, v := range journeyTrialOutcomeVocabulary {
+		if v == o {
+			return true
+		}
+	}
+	return false
 }
 
 // journeyTrial is one full attempt at the declared journey.
 type journeyTrial struct {
-	SessionID string              `json:"session_id"`
-	Caps      journeyCaps         `json:"caps"`
-	Steps     []journeyStepResult `json:"steps"`
-	Outcome   string              `json:"outcome"` // "pass" | "fail"
+	Index         int                 `json:"index"`
+	SessionID     string              `json:"session_id"`
+	StartedAt     string              `json:"started_at,omitempty"`
+	EndedAt       string              `json:"ended_at,omitempty"`
+	Caps          journeyCaps         `json:"caps"`
+	Steps         []journeyStepResult `json:"steps"`
+	StepsDeclared int                 `json:"steps_declared"`
+	StepsExecuted int                 `json:"steps_executed"`
+	// IncompleteAtStep names the step the trial stopped at when Outcome is
+	// journeyTrialIncomplete -- a trial that stopped part way must show
+	// where, never omit it silently.
+	IncompleteAtStep string `json:"incomplete_at_step,omitempty"`
+	Outcome          string `json:"outcome"` // one of journeyTrialOutcomeVocabulary
+}
+
+// journeyExpectedRedResult is the status step's genuine, real-run result for
+// one case in the committed expected-red register (cmd/journey_expected_red.go),
+// plus the unregistered-gap case: a failing check the register never named.
+type journeyExpectedRedResult struct {
+	ID       string `json:"id,omitempty"`
+	ClosedBy string `json:"closed_by,omitempty"`
+	// Result is one of "still-red" (the registered case is honestly red
+	// today, as recorded), "now-green" (the register is stale -- the case
+	// must be removed, never relied on to keep passing), or
+	// "unregistered-gap" (a real failing check this run found that has no
+	// matching case in the register at all).
+	Result string `json:"result"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // journeyReport is the versioned, on-disk record of one journey run --
 // written by writeJourneyReport, read back and judged by
 // journeyGateVerdict.
 type journeyReport struct {
-	SchemaVersion string         `json:"schema_version"`
-	Scope         string         `json:"scope"` // "whole-chain" | "one-step"
-	Mode          string         `json:"mode"`  // "live"
-	StepsDeclared int            `json:"steps_declared"`
-	StepsExecuted int            `json:"steps_executed"`
-	Trials        []journeyTrial `json:"trials"`
-	Verdict       string         `json:"verdict"` // "pass" | "fail" | "pending"
-	VerdictReason string         `json:"verdict_reason,omitempty"`
+	SchemaVersion string                     `json:"schema_version"`
+	Scope         string                     `json:"scope"` // "whole-chain" | "one-step"
+	Mode          string                     `json:"mode"`  // "live"
+	StepsDeclared int                        `json:"steps_declared"`
+	StepsExecuted int                        `json:"steps_executed"`
+	Trials        []journeyTrial             `json:"trials"`
+	ExpectedRed   []journeyExpectedRedResult `json:"expected_red,omitempty"`
+	Verdict       string                     `json:"verdict"` // "pass" | "fail" | "pending"
+	VerdictReason string                     `json:"verdict_reason,omitempty"`
 }
 
 // writeJourneyReport writes r as JSON to path, creating parent directories
@@ -362,12 +440,28 @@ func readJourneyReport(path string) (journeyReport, error) {
 	return r, nil
 }
 
+// journeyMinimumTrials is the fewest trials a whole-chain live report may
+// carry and still be judged -- "three trials" is a milestone-level
+// constraint (207-CONTEXT.md, must_haves), not a tunable.
+const journeyMinimumTrials = 3
+
 // journeyGateVerdict is the ONE place that decides whether a journey
-// report passes the release gate. Plan 01 implements the checks the
-// tracer slice can honestly make: scope must be whole-chain, mode must be
-// live, and the declared step count must equal the executed count. Plan 04
-// adds the trial-count and flaky/real rules to this SAME function -- there
-// must never be a second verdict function anywhere in this package.
+// report passes the release gate. Plan 01 implemented the checks the
+// tracer slice could honestly make (scope, mode, and a report-level
+// declared/executed step count). Plan 04 extends this SAME function with
+// the trial-count and flaky/real rules -- there must never be a second
+// verdict function anywhere in this package.
+//
+// Refusals are enforced in this fixed order, each naming what was wrong:
+//  1. scope must be "whole-chain"
+//  2. mode must be "live"
+//  3. at least journeyMinimumTrials trials
+//  4. every trial's declared step count equals its executed step count
+//  5. no trial may be a real failure, and not every trial may have failed
+//     (three flaky failures in a row is itself a real failure)
+//  6. every expected-red register case must be reported "still-red"
+//  7. any check this run found failing with no matching register case
+//     fails outright (an unregistered, silently-discovered gap)
 func journeyGateVerdict(r journeyReport) error {
 	if r.Scope != "whole-chain" {
 		return fmt.Errorf("journey report scope is %q, want %q -- a partial run can never satisfy the release gate", r.Scope, "whole-chain")
@@ -375,8 +469,207 @@ func journeyGateVerdict(r journeyReport) error {
 	if r.Mode != "live" {
 		return fmt.Errorf("journey report mode is %q, want %q", r.Mode, "live")
 	}
-	if r.StepsDeclared != r.StepsExecuted {
-		return fmt.Errorf("journey report declares %d steps but only executed %d -- a truncated run must not read as clean", r.StepsDeclared, r.StepsExecuted)
+	if len(r.Trials) < journeyMinimumTrials {
+		return fmt.Errorf("journey report carries %d trial(s), want at least %d -- a reduced trial count can never satisfy the release gate", len(r.Trials), journeyMinimumTrials)
 	}
+
+	for i, trial := range r.Trials {
+		if trial.StepsDeclared != trial.StepsExecuted {
+			return fmt.Errorf("trial %d declares %d steps but only executed %d (stopped at %q) -- a trial that stopped part way must not read as clean", i, trial.StepsDeclared, trial.StepsExecuted, trial.IncompleteAtStep)
+		}
+	}
+
+	allFailed := true
+	for i, trial := range r.Trials {
+		outcome := journeyTrialOutcome(trial.Outcome)
+		if !journeyTrialOutcomeDeclared(outcome) {
+			return fmt.Errorf("trial %d carries undeclared outcome %q, want one of %v", i, trial.Outcome, journeyTrialOutcomeNames())
+		}
+		if outcome == journeyTrialRealFailure {
+			failingStep := journeyFirstFailingStepName(trial)
+			return fmt.Errorf("trial %d is a real failure at step %q -- a real failure in any trial refuses the whole run", i, failingStep)
+		}
+		if outcome != journeyTrialFlakyFailure {
+			allFailed = false
+		}
+	}
+	if allFailed {
+		return fmt.Errorf("all %d trials failed (flaky-failure or worse) -- three consecutive flaky failures is itself a real failure, not noise", len(r.Trials))
+	}
+
+	for _, c := range r.ExpectedRed {
+		if c.Result == "now-green" {
+			return fmt.Errorf("expected-red register is stale: case %q now reports now-green -- remove it from cmd/testdata/journey/expected-red.json, never loosen this gate to keep passing it", c.ID)
+		}
+	}
+	for _, c := range r.ExpectedRed {
+		if c.Result == "unregistered-gap" {
+			return fmt.Errorf("a check this run found failing has no matching case in the expected-red register: %s -- either fix it or add a named, closed-by case to cmd/testdata/journey/expected-red.json", c.Detail)
+		}
+	}
+
 	return nil
+}
+
+// journeyFirstFailingStepName returns the name of the first step in trial
+// whose status is not "pass" (a real failure, since flaky and passed
+// outcomes never reach this call with a failing step at all) -- used only
+// to name the offending step in journeyGateVerdict's refusal message.
+func journeyFirstFailingStepName(trial journeyTrial) string {
+	for _, step := range trial.Steps {
+		if step.Status != "pass" && step.Status != "not-reached" {
+			return step.Name
+		}
+	}
+	return "unknown"
+}
+
+// journeyDeriveTrialOutcome classifies a completed or cut-short trial from
+// its own step results -- the one place this decision is made, so the live
+// harness and the offline tests derive it identically.
+//
+//   - Every step "pass" (and executed == declared) -> passed.
+//   - executed < declared (a step failed and stopped the trial, or the
+//     trial was otherwise cut short) -> incomplete, naming the step it
+//     stopped at.
+//   - Every step ran (executed == declared) but at least one failed:
+//     every failing step's failure_kind is "transient" -> flaky-failure;
+//     otherwise -> real-failure.
+func journeyDeriveTrialOutcome(steps []journeyStepResult, declared, executed int) (outcome journeyTrialOutcome, incompleteAtStep string) {
+	if executed < declared {
+		for _, s := range steps {
+			if s.Status != "pass" {
+				return journeyTrialIncomplete, s.Name
+			}
+		}
+		return journeyTrialIncomplete, ""
+	}
+
+	sawFailure := false
+	allTransient := true
+	for _, s := range steps {
+		if s.Status != "pass" {
+			sawFailure = true
+			if s.FailureKind != string(journeyFailureTransient) {
+				allTransient = false
+			}
+		}
+	}
+	if !sawFailure {
+		return journeyTrialPassed, ""
+	}
+	if allTransient {
+		return journeyTrialFlakyFailure, ""
+	}
+	return journeyTrialRealFailure, ""
+}
+
+// journeyExpectedRedCaseForVerb returns the registered case (if any) whose
+// own detail prose names verb as an `aether <verb>` command, and whether one
+// was found. Reads the register's own detail field via a simple substring
+// check rather than duplicating statusAdvisedCommandRe's regex extraction
+// (cmd/journey_expected_red.go) -- both derive the same fact, one by regex
+// extraction (going forward, prose to verb), the other by substring
+// containment (going backward, verb to prose); a case's detail always
+// carries its own advised command as a backtick-quoted `aether <verb>` span
+// by construction (207-03-PLAN.md Task 1), so containment is sufficient and
+// avoids a second regex.
+func journeyExpectedRedCaseForVerb(cases []journeyExpectedRedCase, verb string) (journeyExpectedRedCase, bool) {
+	needle := "`aether " + verb
+	for _, c := range cases {
+		if strings.Contains(c.Detail, needle) {
+			return c, true
+		}
+	}
+	return journeyExpectedRedCase{}, false
+}
+
+// journeyEvaluateExpectedRed turns the real, live result of the status
+// step's own guidance check (missingWrapperVerbs, straight from
+// statusGuidanceCommandsWithoutMenuWrapper against the real practice
+// project) into the report's expected_red section: every registered case
+// still reflected in missingWrapperVerbs is "still-red"; a registered case
+// NOT reflected is "now-green" (the register has gone stale); a missing
+// verb with no registered case at all is a new "unregistered-gap".
+func journeyEvaluateExpectedRed(registered []journeyExpectedRedCase, missingWrapperVerbs []string) []journeyExpectedRedResult {
+	var results []journeyExpectedRedResult
+
+	stillRed := make(map[string]bool, len(registered))
+	for _, verb := range missingWrapperVerbs {
+		if c, ok := journeyExpectedRedCaseForVerb(registered, verb); ok {
+			stillRed[c.ID] = true
+		} else {
+			results = append(results, journeyExpectedRedResult{
+				Result: "unregistered-gap",
+				Detail: fmt.Sprintf("the status card advises `aether %s`, which has no menu wrapper, and no case in the register names it", verb),
+			})
+		}
+	}
+	for _, c := range registered {
+		result := "now-green"
+		if stillRed[c.ID] {
+			result = "still-red"
+		}
+		results = append(results, journeyExpectedRedResult{
+			ID: c.ID, ClosedBy: c.ClosedBy, Result: result, Detail: c.Detail,
+		})
+	}
+	return results
+}
+
+// journeyReportSummary renders the short, plain-English, end-of-run summary
+// Task 2's own action requires: how many trials passed, which steps failed
+// and whether each failure was noise or real, the caps in force, the
+// observed wall clock and cost, and one line per expected-red case. Every
+// repo-invented word here ("colony", "chamber", ...) would need explaining
+// in the same sentence it appears in -- this summary deliberately uses none,
+// since it only ever names journey steps, menu commands, and plain counts.
+func journeyReportSummary(r journeyReport) string {
+	var b strings.Builder
+	passed := 0
+	for _, t := range r.Trials {
+		if t.Outcome == string(journeyTrialPassed) {
+			passed++
+		}
+	}
+	fmt.Fprintf(&b, "%d of %d trial(s) passed cleanly.\n", passed, len(r.Trials))
+
+	for _, t := range r.Trials {
+		if t.Outcome == string(journeyTrialPassed) {
+			continue
+		}
+		for _, s := range t.Steps {
+			if s.Status == "pass" || s.Status == "not-reached" {
+				continue
+			}
+			noise := "a real problem"
+			if s.FailureKind == string(journeyFailureTransient) {
+				noise = "noise (a transient failure, not a product defect)"
+			}
+			fmt.Fprintf(&b, "trial %d: step %q failed -- %s\n", t.Index, s.Name, noise)
+		}
+		if t.IncompleteAtStep != "" {
+			fmt.Fprintf(&b, "trial %d: stopped early at step %q\n", t.Index, t.IncompleteAtStep)
+		}
+	}
+
+	for i, t := range r.Trials {
+		if i == 0 || t.Caps != r.Trials[0].Caps {
+			fmt.Fprintf(&b, "trial %d caps: max-turns=%d wall-clock=%ds max-budget-usd=%.2f (capped=%v)\n",
+				t.Index, t.Caps.MaxTurns, t.Caps.WallClockSecs, t.Caps.MaxBudgetUSD, t.Caps.BudgetCapped)
+		}
+	}
+
+	for _, c := range r.ExpectedRed {
+		switch c.Result {
+		case "still-red":
+			fmt.Fprintf(&b, "expected-red case %q is still red, as recorded -- closed by %s.\n", c.ID, c.ClosedBy)
+		case "now-green":
+			fmt.Fprintf(&b, "expected-red case %q now passes -- the register entry is stale and must be removed.\n", c.ID)
+		case "unregistered-gap":
+			fmt.Fprintf(&b, "a new, unregistered gap was found: %s\n", c.Detail)
+		}
+	}
+
+	return b.String()
 }
