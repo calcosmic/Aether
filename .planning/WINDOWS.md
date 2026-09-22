@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 34
+open_count: 38
 waived_count: 0
 fixed_count: 14
-total_count: 48
-last_updated: 2026-09-15T06:51:56.003Z
+total_count: 52
+last_updated: 2026-09-22T11:27:19.326Z
 ---
 
 # Broken Windows Ledger
@@ -63,6 +63,10 @@ last_updated: 2026-09-15T06:51:56.003Z
 | 46 | 202.1 | unmet-truth | pkg/codex/platform_dispatch.go |  | workerProcessEnv (pkg/codex/process_tracker.go) had NO caller, so AETHER_WORKER_NAME never reached a spawned worker. aether hook-stop therefore could not tell an Aether build worker from a person: it blocked worker Weld-32 mid-build and advised aether pause, the worker ran it, and a live CosmicDashboard Autopilot colony was paused mid-phase. Wired the env at the spawn site and exempted Aether-spawned workers from hook-stop. Proven by a REAL spawned subprocess reading back its own environment (TestSpawnedWorkerCarriesItsIdentityInTheEnvironment) rather than by testing the builder in isolation -- an isolated builder test passed for the entire time the wiring was missing. Migrated 2026-09-14 by plan 204-11 from a stray, out-of-band duplicate row (originally id 14, colliding with the real phase-203 entry 14) that had drifted below the JSON ledger block; original recorded/resolved timestamps were 2026-09-12T21:30:00.000Z. | fixed |  | 2026-09-14T15:42:11.225Z | 2026-09-14T15:42:13.430Z |
 | 47 | 204 | unmet-truth | cmd/swarm_cmd.go |  | PRE-EXISTING latent collision in swarm worker naming, found at the Phase 204 gap-closure wave-3 gate (2026-09-15) and NOT introduced by it: no gap-closure plan touches swarm naming. deterministicAntName (cmd/codex_visuals.go) derives a worker name as prefix[hash mod len(prefixes)] plus a number from hash mod 99, seeded by the colony root path, caste and target; buildSwarmManifest (cmd/swarm_cmd.go, the duplicate dispatch name check near line 1256) then refuses the whole manifest when two dispatches land on the same name instead of de-duplicating. With five or six workers drawn from roughly six prefixes times 99 numbers, any two collide about one run in fifty to a hundred, and because the root path is part of the seed, a given colony can be stuck colliding on a given target every time. Observed as TestSwarmFinalizeRecordsExternalTaskResults/timeout failing with duplicate dispatch name Guard-95 once in a full-suite run at 05b0d453; the same test passed in the previous gate at 2eae06e3 and passed three of three re-runs in isolation. Close by making the manifest builder append a disambiguating suffix on collision (or fold the caste index into the seed) with a test that forces two workers onto one name and asserts both are dispatched under distinct names. | open |  | 2026-09-15T01:08:31.907Z |  |
 | 48 | 204 | unmet-truth | cmd/codex_continue.go |  | DEFERRED by owner decision at the Phase 204 gap-closure verification (2026-09-15): a check episode's token usage and reported cost stay recorded as absent on both check lanes -- the native lane (runCodexContinue, cmd/codex_continue.go) and the delegate lane (runCodexContinueFinalize, cmd/codex_continue_finalize.go). The watcher and reviewer workers' own usage figures are computed inside runCodexContinueVerification after the episode-close defer is already registered and are never persisted anywhere the close can re-read, so 204-15 left the two fields nil rather than write a zero or an estimate (204-15-SUMMARY.md deviation 2; 204-VERIFICATION.md SC3a partial). The build and swarm lanes do record usage. Close by restructuring runCodexContinue to pre-declare a usage accumulator the close defer can read, the same shape the build lane uses, with a test on each check lane that fails when the accumulator is not threaded through. | open |  | 2026-09-15T06:51:56.003Z |  |
+| 49 | 208 | unmet-truth | cmd/criterion_evidence.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, blocking): aether plan can bind a DIRECTORY (e.g. server/app) into a phase criterion's evidence_requirements.artifacts for a negative criterion ('no file under X was modified'), but the evidence engine is file-only: evaluatePhaseCriterionEvidence matches the literal path against claim sets (never matches, correctly), and the only escape hatch --read-only-artifact rejects non-regular files in snapshotBuildArtifact (IsRegular gate ~line 348). No directory expansion exists anywhere, so a genuinely complete phase can never advance. Close with a first-class 'unchanged' evidence kind (claim set + working-tree diff), or a tree hash for directory artifacts satisfied-by-absence, and at minimum refuse a directory path at plan time, loudly. | open |  | 2026-09-22T11:27:18.986Z |  |
+| 50 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): task.Verified is set from the phase-wide verification.ChecksPassed flag (the code comment near continueTasksSupportAdvancement says so), not per task. One failing criterion therefore marks every task implemented_unverified, and the implementation_evidence gate fails with text identical to the causal blocker, so gate-results shows two failures for one cause and sends the owner and the Fixer after a phantom second defect. Close by evaluating Verified per task against the criteria bound to that task and having the gate name the causal criterion. | open |  | 2026-09-22T11:27:19.099Z |  |
+| 51 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server && python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh, bash...) and 'cd' is not among them. Close by recognising a 'cd <dir> &&' prefix (strip it and classify the remainder, run via sh -c with that cwd), and by rejecting an unrecognised line loudly by name instead of reporting it absent. Note: a valid line in AGENTS.md masks an invalid one in CLAUDE.md and vice versa, which is why the reporter first blamed '&&'. | open |  | 2026-09-22T11:27:19.215Z |  |
+| 52 | 208 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, dead end): there is no scoped, audited way to correct one criterion's evidence binding on an in-progress phase; .aether/data is protected from hand edits by design and no plan --revise-criterion exists. The only exit is 'aether skip-phase N --force', which records a completed-and-verified phase as abandoned, a materially false statement. Close (Phase 208 'never a dead end') with a scoped revision command for a single criterion's evidence binding, or '--accept-criterion <id> --reason <text>' on continue that records an owner attestation as first-class evidence. | open |  | 2026-09-22T11:27:19.326Z |  |
 
 ````json
 [
@@ -640,6 +644,54 @@ last_updated: 2026-09-15T06:51:56.003Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-15T06:51:56.003Z",
+    "resolved_at": null
+  },
+  {
+    "id": 49,
+    "kind": "unmet-truth",
+    "phase": "208",
+    "file": "cmd/criterion_evidence.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, blocking): aether plan can bind a DIRECTORY (e.g. server/app) into a phase criterion's evidence_requirements.artifacts for a negative criterion ('no file under X was modified'), but the evidence engine is file-only: evaluatePhaseCriterionEvidence matches the literal path against claim sets (never matches, correctly), and the only escape hatch --read-only-artifact rejects non-regular files in snapshotBuildArtifact (IsRegular gate ~line 348). No directory expansion exists anywhere, so a genuinely complete phase can never advance. Close with a first-class 'unchanged' evidence kind (claim set + working-tree diff), or a tree hash for directory artifacts satisfied-by-absence, and at minimum refuse a directory path at plan time, loudly.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T11:27:18.986Z",
+    "resolved_at": null
+  },
+  {
+    "id": 50,
+    "kind": "unmet-truth",
+    "phase": "208",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-22 (external project, runtime 1.0.88): task.Verified is set from the phase-wide verification.ChecksPassed flag (the code comment near continueTasksSupportAdvancement says so), not per task. One failing criterion therefore marks every task implemented_unverified, and the implementation_evidence gate fails with text identical to the causal blocker, so gate-results shows two failures for one cause and sends the owner and the Fixer after a phantom second defect. Close by evaluating Verified per task against the criteria bound to that task and having the gate name the causal criterion.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T11:27:19.099Z",
+    "resolved_at": null
+  },
+  {
+    "id": 51,
+    "kind": "unmet-truth",
+    "phase": "208",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, high friction): a '## Verification Commands' line whose first word is 'cd' (e.g. '- tests: cd server && python3 -m pytest') is silently dropped and the owner is told no command was configured. Root cause is NOT exec.LookPath as the reporter guessed: looksLikeVerificationCommand / detectVerificationCommandKind (~line 3534) recognise only a fixed list of first words (go test, pytest, npm test, make, sh, bash...) and 'cd' is not among them. Close by recognising a 'cd <dir> &&' prefix (strip it and classify the remainder, run via sh -c with that cwd), and by rejecting an unrecognised line loudly by name instead of reporting it absent. Note: a valid line in AGENTS.md masks an invalid one in CLAUDE.md and vice versa, which is why the reporter first blamed '&&'.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T11:27:19.215Z",
+    "resolved_at": null
+  },
+  {
+    "id": 52,
+    "kind": "unmet-truth",
+    "phase": "208",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-22 (external project, runtime 1.0.88, dead end): there is no scoped, audited way to correct one criterion's evidence binding on an in-progress phase; .aether/data is protected from hand edits by design and no plan --revise-criterion exists. The only exit is 'aether skip-phase N --force', which records a completed-and-verified phase as abandoned, a materially false statement. Close (Phase 208 'never a dead end') with a scoped revision command for a single criterion's evidence binding, or '--accept-criterion <id> --reason <text>' on continue that records an owner attestation as first-class evidence.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-22T11:27:19.326Z",
     "resolved_at": null
   }
 ]
