@@ -4,17 +4,17 @@ milestone: v1.29
 milestone_name: Use It Every Day
 current_phase: 206
 current_phase_name: Screens Reach the Owner
-status: executing
-stopped_at: Completed 206-01-PLAN.md
-last_updated: "2026-09-21T21:35:13.582Z"
-last_activity: 2026-09-21
-last_activity_desc: Phase 206 execution started
-state_head: b70f1175f28e44271075112932cd713458c19f13
+status: verifying
+stopped_at: Completed 206-02-PLAN.md
+last_updated: "2026-09-22T08:16:05.651Z"
+last_activity: 2026-09-22
+last_activity_desc: Phase 206 complete (2/2 plans), ready for phase verification
+state_head: 1ca7ca1e47fca8f852edc4395015fe6744c00fed
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 206 (Screens Reach the Owner) — EXECUTING
+Phase: 206 (Screens Reach the Owner) — plans complete, awaiting phase verification
 Next phase: 207 (messy practice project as the release gate)
-Status: Ready to execute
-Plan: 2 of 2
-Last activity: 2026-09-21 — Phase 206 execution started
+Status: Phase complete — ready for verification
+Plan: 2 of 2 (both complete)
+Last activity: 2026-09-22 — Completed 206-02-PLAN.md
 
 ## Performance Metrics
 
@@ -208,6 +208,7 @@ Last activity: 2026-09-21 — Phase 206 execution started
 | Phase 202 P16 | 55min | 3 tasks | 10 files |
 | Phase 202 P17 | 40min | 3 tasks | 6 files |
 | Phase 206 P01 | 40min | 3 tasks | 8 files |
+| Phase 206 P02 | ~65min active | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -654,6 +655,9 @@ Last activity: 2026-09-21 — Phase 206 execution started
 - [Phase 204.1-204.5]: Owner moved canonical Codex ant skills and behavioral parity into v1.28 before remaining Phase 205 acceptance (2026-09-16); prior later-milestone deferral is superseded. — Five inserted phases own ANT-01..16; preserve completed 205 evidence and original inventory, and qualify the changed candidate before any owner walkthrough.
 - [Phase 206]: Committed fixture represents a genuine top-level owner chat turn (agent_id/agent_type removed); direct route and backstop share one decision function, AST-enforced
 - [Phase 206]: screenRelayBlockReason stays quiet only when directScreenDelivery reports complete delivery AND directScreenRouteRegistered reads true from the project's own settings
+- [Phase 206]: Status line command always translates through translateHintCommandsForPlatform rather than trusting projection.NextAction.DisplayCommand directly, since gateLifecycleProjection resets DisplayCommand to the untranslated runtime form — Literal plan wording would have shown 'aether continue' instead of '/ant-continue' on Claude; behavior spec and acceptance criteria required platform-correct spelling
+- [Phase 206]: Reachability ratchet's hookSettingsCommandArgs extended to recognize the statusLine top-level settings key as a genuine caller, not just hooks — Without this the new aether status-line command would be a permanent false orphan in TestNoRegisteredSubcommandIsUnreferenced
+- [Phase 206]: Owner reviewed the direct screen route and the status line on his own screen 2026-09-22 and answered keep-on, verbatim, with no accompanying sentence — Recorded in 206-OWNER-VERDICT.md; the direct route stays on by default, the Stop-hook backstop remains as the safety net underneath
 
 ### Pending Todos
 
@@ -775,8 +779,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-21T21:35:13.561Z
-Stopped at: Completed 206-01-PLAN.md
+Last session: 2026-09-22T08:16:05.639Z
+Stopped at: Completed 206-02-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

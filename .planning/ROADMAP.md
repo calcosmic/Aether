@@ -43,7 +43,7 @@ projects without pasting a bug into the Aether chat. **Stopping rule:** more tha
 a week after Phase 210 ends investment in the full framework (see the decision record).
 Each phase is small; its proof is a real run in a real chat; one review round.
 
-- [ ] **Phase 206 — Screens Reach the Owner.** Ship 1.0.88 (every menu command tells the chat to
+- [x] **Phase 206 — Screens Reach the Owner** (completed 2026-09-22). Ship 1.0.88 (every menu command tells the chat to
   show the program's screen unchanged; a finish checkpoint sends a chat back once if it hid the
   screen; no colour codes into a chat; start-up, survey and helper cards join the guarded look).
   Then the direct route: a hook that hands the program's screen to Claude Code as a message shown
@@ -1060,7 +1060,7 @@ Plans:
 4. The program hands its screen to Claude Code to show directly, the owner has looked at it on his own screen and said yes or no, and a permanent status line shows phase, task and next command.
 5. Proven in real chats in a scratch project, not only in tests.
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 **Wave 1**
@@ -1069,7 +1069,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 206-02-PLAN.md — The permanent status line, the real-chat proof in a scratch project, and the owner's recorded verdict (wave 2)
+- [x] 206-02-PLAN.md — The permanent status line, the real-chat proof in a scratch project, and the owner's recorded verdict (wave 2)
 
 ### Phase 207: A Messy Practice Project Is the Release Gate
 
