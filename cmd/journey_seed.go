@@ -1,5 +1,18 @@
+//go:build journey
+
 package cmd
 
+// CR-01 (207-REVIEW.md): this file is excluded from every release binary via
+// the `journey` build tag above -- `go build ./cmd/aether` (the shipped
+// build) no longer compiles either hidden command in at all. It is compiled
+// in only when a caller explicitly opts in with `-tags=journey`, exactly the
+// tag scripts/build-messy-practice-project.sh's own `go build` now passes
+// (and the practice-project test fixtures that build their own aether binary
+// for the same purpose). Belt and braces: requireJourneyPracticeProjectMarker
+// below is a second, independent runtime guard, so even a `-tags=journey`
+// build refuses to mutate a real project that was never built by
+// scripts/build-messy-practice-project.sh.
+//
 // 207-02-PLAN.md Task 1 (UED-07): two hidden, undocumented commands used only
 // by scripts/build-messy-practice-project.sh to construct two traps whose
 // on-disk shape is authenticity-checked by the runtime itself
@@ -55,6 +68,30 @@ func init() {
 	rootCmd.AddCommand(journeySeedSupersededPlanCmd)
 }
 
+// journeyPracticeProjectMarkerFilename is the exact marker filename
+// scripts/build-messy-practice-project.sh writes (as `$MARKER`, via
+// `$DEST/.journey-practice-project.json`) after every declared trap has
+// landed, and the same filename it checks for before adopting an existing,
+// non-empty destination directory. Both hidden seed commands below refuse to
+// run against any directory that does not already carry this exact marker --
+// CR-01 (207-REVIEW.md): a script, a misremembered command, or a curious
+// `aether --help`-reading user pointed at a real project must never be able
+// to corrupt that project's specification or survey state.
+const journeyPracticeProjectMarkerFilename = ".journey-practice-project.json"
+
+// requireJourneyPracticeProjectMarker refuses to proceed unless
+// canonicalRoot already carries journeyPracticeProjectMarkerFilename. Called
+// by both journeySeedStaleSurvey and journeySeedSupersededPlan immediately
+// after resolving their target root, before either function writes or
+// mutates anything.
+func requireJourneyPracticeProjectMarker(canonicalRoot string) error {
+	markerPath := filepath.Join(canonicalRoot, journeyPracticeProjectMarkerFilename)
+	if _, err := os.Stat(markerPath); err != nil {
+		return fmt.Errorf("refusing to seed a journey trap into %s: no %s marker -- this command only operates on a practice project scripts/build-messy-practice-project.sh created", canonicalRoot, journeyPracticeProjectMarkerFilename)
+	}
+	return nil
+}
+
 // journeySeedStaleSurvey writes a genuinely valid, digest-correct territory
 // snapshot (every required survey artifact plus a self-consistent
 // territory-snapshot.json, using computeTerritorySnapshotID and
@@ -67,6 +104,9 @@ func journeySeedStaleSurvey(root string) error {
 	canonicalRoot, err := canonicalTerritoryRoot(root)
 	if err != nil {
 		return fmt.Errorf("resolve repository root: %w", err)
+	}
+	if err := requireJourneyPracticeProjectMarker(canonicalRoot); err != nil {
+		return err
 	}
 	sourceRevision, err := currentTerritoryRevision(canonicalRoot)
 	if err != nil {
@@ -142,6 +182,9 @@ func journeySeedSupersededPlan(root string) error {
 	repositoryRoot, err := canonicalSpecificationRoot(root)
 	if err != nil {
 		return fmt.Errorf("resolve specification repository root: %w", err)
+	}
+	if err := requireJourneyPracticeProjectMarker(repositoryRoot); err != nil {
+		return err
 	}
 	now := time.Now().UTC()
 

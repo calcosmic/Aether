@@ -104,7 +104,10 @@ func journeyTestSharedProject(t *testing.T) (bin, dest string) {
 			return
 		}
 		builtBin := filepath.Join(tmp, "aether-under-test")
-		buildCmd := exec.Command("go", "build", "-o", builtBin, "./cmd/aether")
+		// -tags=journey: the hidden journey-seed-* trap constructors the
+		// builder script below calls are excluded from the default build
+		// (CR-01, 207-REVIEW.md) and only compile in under this tag.
+		buildCmd := exec.Command("go", "build", "-tags=journey", "-o", builtBin, "./cmd/aether")
 		buildCmd.Dir = root
 		if out, err := buildCmd.CombinedOutput(); err != nil {
 			journeyTestSharedErr = fmt.Errorf("go build ./cmd/aether: %w\n%s", err, out)

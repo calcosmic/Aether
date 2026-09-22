@@ -290,7 +290,11 @@ else
   BIN="$DEST/.journey-bin/aether"
   if [ ! -x "$BIN" ]; then
     mkdir -p "$DEST/.journey-bin"
-    (cd "$ROOT" && go build -o "$BIN" ./cmd/aether) || fail "go build failed"
+    # -tags=journey: cmd/journey_seed.go (the hidden journey-seed-* trap
+    # constructors this script calls below) is excluded from the default,
+    # released build (CR-01, 207-REVIEW.md) and only compiles in under this
+    # tag.
+    (cd "$ROOT" && go build -tags=journey -o "$BIN" ./cmd/aether) || fail "go build failed"
   fi
 fi
 
@@ -341,6 +345,17 @@ EOF
 
   step "aether update --force in the practice project (the install path under test)"
   (cd "$REPO" && "$BIN" update --force >/dev/null) || fail "aether update --force failed in the practice project"
+
+  # Mark $REPO itself (not just $DEST) as a genuine practice project. The
+  # hidden journey-seed-* commands operate directly on $REPO (their own
+  # <repo-root> argument), and their own runtime guard
+  # (requireJourneyPracticeProjectMarker, cmd/journey_seed.go) refuses to run
+  # against any directory lacking this exact marker file -- CR-01
+  # (207-REVIEW.md). Written here, before the trap-application step below
+  # calls either hidden command, and only when $REPO is genuinely being
+  # constructed fresh by this script.
+  jq -n --arg schema "$MARKER_SCHEMA_VERSION" \
+    '{schema_version: $schema, trap_ids: []}' > "$REPO/.journey-practice-project.json"
 else
   step "practice project already exists at $REPO -- re-applying and re-verifying traps only"
 fi
