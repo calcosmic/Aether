@@ -1215,8 +1215,13 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"midden-collect":              true,
 	"midden-cross-pr-analysis":    true,
 	"midden-recent-failures":      true,
-	"midden-write":                true,
-	"migrate-state":               true,
+	// midden-review reads unacknowledged midden entries and prints them
+	// grouped by category. It is a read-only inspection command — no
+	// verification result, gate outcome, or state mutation depends on it.
+	// Enrichment, not a gate.
+	"midden-review": true,
+	"midden-write":  true,
+	"migrate-state": true,
 	"oracle":                      true,
 	"parallel-mode":               true,
 	"patrol-check":                true,
@@ -1249,6 +1254,11 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"reference-index":             true,
 	"reference-list":              true,
 	"reference-match":             true,
+	// report writes a sendable diagnostic bundle to disk for the operator to
+	// attach elsewhere. It is a read-only inspection/export command — no
+	// verification result, gate outcome, or state mutation depends on it.
+	// Enrichment, not a gate.
+	"report": true,
 	// research lists saved research documents so the operator can point a
 	// colony at one. It reads a directory and prints it: no verification
 	// result, gate outcome, or state mutation depends on it, and a colony
