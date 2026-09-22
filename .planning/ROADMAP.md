@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -1155,7 +1155,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 208-07-PLAN.md — The journey runs each printed next command for real in the practice project (UED-10)
+- [x] 208-07-PLAN.md — The journey runs each printed next command for real in the practice project (UED-10)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
