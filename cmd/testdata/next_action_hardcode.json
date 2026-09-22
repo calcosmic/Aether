@@ -395,11 +395,6 @@
     "literal": "aether oracle status"
   },
   {
-    "file": "cmd/oracle_promote.go",
-    "function": "runOraclePromote",
-    "literal": "aether pheromone-display"
-  },
-  {
     "file": "cmd/oracle_research_doc.go",
     "function": "runOracleSave",
     "literal": "aether init --research %s \"\u003cgoal\u003e\""
