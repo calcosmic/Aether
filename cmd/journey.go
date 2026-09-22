@@ -361,6 +361,55 @@ func printedCommandToRuntimeCommand(printed string) (string, bool) {
 	return "aether " + verb + remainder, true
 }
 
+// journeyPrintedRefusalEmptyNextCommandRe matches a "Next: `...`" line whose
+// own backticked span may be empty -- unlike journeyPrintedRefusalNextLineRe
+// above, which requires at least one character so the extractor never
+// reports a refusal with no next command at all. This looser form exists
+// only to recognise journeyNextCommandFailureReason's fourth condition: a
+// printed next command's OWN subprocess output being itself a refusal block
+// with nothing to run next.
+var journeyPrintedRefusalEmptyNextCommandRe = regexp.MustCompile("(?m)^Next: `([^`\n]*)`")
+
+// journeyNextCommandTimeoutFraction sizes a printed next command's own
+// subprocess timeout as a fraction of the step's own wall-clock cap
+// (journeyCaps.WallClockSecs) -- well inside it, per 208-07-PLAN.md Task 2,
+// never a new fixed constant of its own.
+const journeyNextCommandTimeoutFraction = 4
+
+// journeyNextCommandFailureReason classifies the outcome of running one
+// printed next command as a real subprocess, and is the one place all four
+// named failure conditions (208-07-PLAN.md Task 2) are decided -- proven
+// directly, with captured subprocess output, by a unit-level test in
+// cmd/journey_test.go, never only through a live chat run. Returns "" when
+// the outcome is not a failure: a non-zero exit that matches none of the
+// four conditions may legitimately mean a recovery command found more work
+// still outstanding.
+//
+// The four conditions, in the order checked: (1) the printed command could
+// not be mapped to a runtime command at all; (2) the subprocess timed out;
+// (3) the subprocess reported an unknown command or an unknown flag; (4) the
+// subprocess's own output is itself a refusal block whose next command is
+// empty.
+func journeyNextCommandFailureReason(mapped, timedOut bool, output string) string {
+	if !mapped {
+		return "could not be mapped to a runtime command"
+	}
+	if timedOut {
+		return "timed out"
+	}
+	lower := strings.ToLower(output)
+	if strings.Contains(lower, "unknown command") {
+		return "reported an unknown command"
+	}
+	if strings.Contains(lower, "unknown flag") || strings.Contains(lower, "unknown shorthand flag") {
+		return "reported an unknown flag"
+	}
+	if m := journeyPrintedRefusalEmptyNextCommandRe.FindStringSubmatch(output); m != nil && strings.TrimSpace(m[1]) == "" {
+		return "its own output is itself a refusal with nothing to run next"
+	}
+	return ""
+}
+
 // --- Failure classification ---
 
 // journeyFailureKind is the declared, closed vocabulary a journey failure
@@ -410,6 +459,14 @@ type journeyStepResult struct {
 	Detail        string   `json:"detail,omitempty"`
 	Retried       bool     `json:"retried"`
 	TrapIDs       []string `json:"trap_ids,omitempty"`
+	// RefusalsPrinted is how many printed refusals (journeyPrintedRefusals)
+	// this step's own transcript carried -- 208-07-PLAN.md (UED-10). Zero is
+	// a legitimate, honestly-reported value: a clean step meets none.
+	RefusalsPrinted int `json:"refusals_printed"`
+	// NextCommandsRun is how many of those printed refusals' own next
+	// commands were actually run for real, as a subprocess, in the same
+	// practice project (journeyRunPrintedNextCommands, cmd/journey_live_test.go).
+	NextCommandsRun int `json:"next_commands_run"`
 }
 
 // --- Trial outcome vocabulary ---
@@ -735,6 +792,18 @@ func journeyReportSummary(r journeyReport) string {
 		}
 	}
 	fmt.Fprintf(&b, "%d of %d trial(s) passed cleanly.\n", passed, len(r.Trials))
+
+	// 208-07-PLAN.md (UED-10): name the printed-refusal / next-command
+	// totals for every trial, even when both are zero -- a run that met no
+	// refusals must say exactly that, never read as a silent pass.
+	for _, t := range r.Trials {
+		printed, ran := 0, 0
+		for _, s := range t.Steps {
+			printed += s.RefusalsPrinted
+			ran += s.NextCommandsRun
+		}
+		fmt.Fprintf(&b, "trial %d: %d printed refusal(s) found, %d next command(s) run.\n", t.Index, printed, ran)
+	}
 
 	for _, t := range r.Trials {
 		if t.Outcome == string(journeyTrialPassed) {

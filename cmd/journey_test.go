@@ -599,3 +599,105 @@ func TestJourneyStepVocabularyIsClosed(t *testing.T) {
 		}
 	}
 }
+
+// TestJourneyReportNamesHowManyNextCommandsRan builds a report with two
+// steps -- one having printed a refusal whose next command ran, one having
+// printed none -- and asserts journeyReportSummary names both totals in
+// plain words, so a run that met no refusals reads as exactly that rather
+// than a silent pass.
+func TestJourneyReportNamesHowManyNextCommandsRan(t *testing.T) {
+	r := journeyReport{
+		Scope: "whole-chain",
+		Mode:  "live",
+		Trials: []journeyTrial{
+			{
+				Index: 0,
+				Caps:  journeyCaps{MaxTurns: 6, WallClockSecs: 300},
+				Steps: []journeyStepResult{
+					{Name: "colonize-finalize", Status: "pass", RefusalsPrinted: 1, NextCommandsRun: 1},
+					{Name: "status", Status: "pass", RefusalsPrinted: 0, NextCommandsRun: 0},
+				},
+				Outcome: string(journeyTrialPassed),
+			},
+		},
+	}
+
+	summary := journeyReportSummary(r)
+	if !strings.Contains(summary, "1 printed refusal(s) found, 1 next command(s) run") {
+		t.Fatalf("journeyReportSummary did not name the printed-refusal/next-command totals in plain words:\n%s", summary)
+	}
+}
+
+// TestJourneyReportSummaryNamesZeroRefusalsHonestly proves a trial that met
+// no refusals at all is still named explicitly -- "0 printed refusal(s)" --
+// rather than the line being omitted, which would read as a silent pass.
+func TestJourneyReportSummaryNamesZeroRefusalsHonestly(t *testing.T) {
+	r := journeyPassingReportFixture()
+	summary := journeyReportSummary(r)
+	if !strings.Contains(summary, "0 printed refusal(s) found, 0 next command(s) run") {
+		t.Fatalf("journeyReportSummary did not honestly name a zero-refusal trial:\n%s", summary)
+	}
+}
+
+// TestJourneyNextCommandFailureReason proves each of the four named failure
+// conditions (208-07-PLAN.md Task 2) individually, driven with captured
+// subprocess output rather than a live chat run, and proves a non-zero exit
+// that matches none of the four is not a failure at all -- a recovery
+// command may legitimately report more work outstanding.
+func TestJourneyNextCommandFailureReason(t *testing.T) {
+	cases := []struct {
+		name       string
+		mapped     bool
+		timedOut   bool
+		output     string
+		wantReason bool
+	}{
+		{
+			name:       "not mapped to a runtime command",
+			mapped:     false,
+			wantReason: true,
+		},
+		{
+			name:       "subprocess timed out",
+			mapped:     true,
+			timedOut:   true,
+			wantReason: true,
+		},
+		{
+			name:       "subprocess reported an unknown command",
+			mapped:     true,
+			output:     `Error: unknown command "frobnicate" for "aether"`,
+			wantReason: true,
+		},
+		{
+			name:       "subprocess reported an unknown flag",
+			mapped:     true,
+			output:     "Error: unknown flag: --frobnicate\nUsage:\n  aether colonize [flags]\n",
+			wantReason: true,
+		},
+		{
+			name:       "subprocess's own output is a refusal with nothing to run next",
+			mapped:     true,
+			output:     renderRefusal(refusal{ID: "captured-fixture", What: "Something went wrong.", NextCommand: ""}),
+			wantReason: true,
+		},
+		{
+			name:       "a genuine recovery command reporting more work outstanding is not a failure",
+			mapped:     true,
+			output:     "Colony status: 2 of 5 phases complete. Nothing to resurvey yet.\n",
+			wantReason: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := journeyNextCommandFailureReason(tc.mapped, tc.timedOut, tc.output)
+			if tc.wantReason && got == "" {
+				t.Fatalf("journeyNextCommandFailureReason(%v, %v, %q) = \"\", want a non-empty reason", tc.mapped, tc.timedOut, tc.output)
+			}
+			if !tc.wantReason && got != "" {
+				t.Fatalf("journeyNextCommandFailureReason(%v, %v, %q) = %q, want \"\" (not a failure)", tc.mapped, tc.timedOut, tc.output, got)
+			}
+		})
+	}
+}

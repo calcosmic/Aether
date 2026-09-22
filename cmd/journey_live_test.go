@@ -385,7 +385,88 @@ func journeyDriveStep(t *testing.T, result *journeyStepResult, repo, repoRoot, b
 		// to Fatalf still leaves result correctly classified.
 		return
 	}
+
+	// 208-07-PLAN.md (UED-10): a refusal a real chat met has its way out
+	// executed for real, in this same step, only after the step's own
+	// on-disk fact has already passed -- never before.
+	refusals, err := journeyPrintedRefusals(transcriptPath)
+	if err != nil {
+		result.Status = "fail"
+		result.FailureKind = string(journeyFailureReal)
+		result.Detail = fmt.Sprintf("parse printed refusals from transcript: %v", err)
+		t.Fatalf("step %q: %s", result.Name, result.Detail)
+	}
+	journeyRunPrintedNextCommands(t, result, repo, binDir, refusals, caps)
+	if result.Status == "fail" {
+		return
+	}
+
 	result.Status = "pass"
+}
+
+// journeyRunPrintedNextCommands runs every one of refusals' own printed next
+// commands for real, as a subprocess in repo with binDir first on PATH and
+// AETHER_OUTPUT_MODE=visual set, recording RefusalsPrinted and
+// NextCommandsRun on result. The step fails -- classified as a real failure,
+// never noise -- the instant journeyNextCommandFailureReason names a reason
+// for any one printed command; the failure detail names that command
+// verbatim and which of the four conditions happened.
+func journeyRunPrintedNextCommands(t *testing.T, result *journeyStepResult, repo, binDir string, refusals []journeyPrintedRefusal, caps journeyCaps) {
+	t.Helper()
+	result.RefusalsPrinted = len(refusals)
+	if len(refusals) == 0 {
+		return
+	}
+
+	timeout := time.Duration(caps.WallClockSecs) * time.Second / journeyNextCommandTimeoutFraction
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	for _, r := range refusals {
+		runtimeCommand, mapped := printedCommandToRuntimeCommand(r.NextCommand)
+		if !mapped {
+			result.Status = "fail"
+			result.FailureKind = string(journeyFailureReal)
+			result.Detail = fmt.Sprintf("printed next command %q: %s", r.NextCommand, journeyNextCommandFailureReason(false, false, ""))
+			t.Fatalf("step %q: %s", result.Name, result.Detail)
+		}
+
+		fields := strings.Fields(runtimeCommand)
+		if len(fields) == 0 || fields[0] != "aether" {
+			result.Status = "fail"
+			result.FailureKind = string(journeyFailureReal)
+			result.Detail = fmt.Sprintf("printed next command %q mapped to %q, which is not an aether invocation", r.NextCommand, runtimeCommand)
+			t.Fatalf("step %q: %s", result.Name, result.Detail)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		cmd := exec.CommandContext(ctx, "aether", fields[1:]...)
+		cmd.Dir = repo
+		cmd.Env = append(os.Environ(),
+			"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+			"AETHER_OUTPUT_MODE=visual",
+		)
+		var buf bytes.Buffer
+		cmd.Stdout = &buf
+		cmd.Stderr = &buf
+		runErr := cmd.Run()
+		timedOut := ctx.Err() == context.DeadlineExceeded
+		cancel()
+		result.NextCommandsRun++
+
+		if reason := journeyNextCommandFailureReason(true, timedOut, buf.String()); reason != "" {
+			result.Status = "fail"
+			result.FailureKind = string(journeyFailureReal)
+			result.Detail = fmt.Sprintf("printed next command %q: %s", r.NextCommand, reason)
+			t.Fatalf("step %q: %s", result.Name, result.Detail)
+		}
+		// A non-zero exit that matched none of the four named conditions is
+		// not a failure -- a recovery command may legitimately report more
+		// work still outstanding. runErr is intentionally not otherwise
+		// inspected.
+		_ = runErr
+	}
 }
 
 // journeyAssertStepFact checks the one on-disk fact 207-04-PLAN.md names
