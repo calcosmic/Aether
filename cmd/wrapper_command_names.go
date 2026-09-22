@@ -60,6 +60,7 @@ var wrapperCommandNames = map[string]bool{
 	"reference-index": true,
 	"reference-list":  true,
 	"reference-match": true,
+	"report":          true,
 	"resume":          true,
 	"run":             true,
 	"seal":            true,

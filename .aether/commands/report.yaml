@@ -1,0 +1,15 @@
+name: ant-report
+description: "📄 Write a bundle describing what Aether refused, what went wrong, and where this project is -- send it to whoever maintains Aether"
+source_of_truth: "Use the Go `aether` CLI as the source of truth."
+runtime:
+  command: "AETHER_OUTPUT_MODE=visual aether report $ARGUMENTS"
+flags:
+  - name: output
+    description: "Directory to write the report bundle into (default: .aether/reports/)"
+    type: string
+guardrails:
+  - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
+  - "If docs and runtime disagree, runtime wins."
+  - "This writes one markdown file on disk. Tell the owner the file's path from the command's own output -- do not read the file's contents yourself, retype them, or summarize what is in it."
+  - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
+  - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

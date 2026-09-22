@@ -6089,6 +6089,16 @@
     "stability_score": 91
   },
   {
+    "name": "report",
+    "short_description": "Write a bundle describing what Aether refused, what went wrong, and where this project is -- send it to whoever maintains Aether",
+    "flags": [
+      "output"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
+  },
+  {
     "name": "research",
     "short_description": "Browse research documents saved from completed Oracle runs",
     "flags": [],

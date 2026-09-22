@@ -669,6 +669,7 @@ func commandGuideLiteralCommands() []string {
 		"reference-index",
 		"reference-list",
 		"reference-match",
+		"report",
 		"resume",
 		"run",
 		"shelf",
