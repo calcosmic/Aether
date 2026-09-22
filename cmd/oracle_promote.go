@@ -125,7 +125,21 @@ func runOraclePromote(root string, minConfidence int, dryRun bool, provenance st
 		}
 	}
 
-	return map[string]interface{}{
+	// The advice below routes through the one shared next-action decision
+	// (resolveNextAction/applyNextActionToResult, cmd/next_action.go) rather
+	// than a hand-typed literal -- TestNextActionNeverHardcoded forbids a
+	// second, drift-prone source for command advice. State load failure (no
+	// colony, or this ran outside a project) still produces a usable
+	// override; only the surrounding narrative fields change, never the
+	// command itself.
+	state, _ := loadActiveColonyStateReadOnly()
+	answer := nextActionForCandidateOverride(
+		state,
+		"oracle-promote",
+		candidatePheromones,
+		"See the standing instructions you have given the helpers -- what to focus on and what to avoid.",
+	)
+	result := map[string]interface{}{
 		"promoted":             !dryRun,
 		"dry_run":              dryRun,
 		"min_confidence":       minConfidence,
@@ -133,8 +147,10 @@ func runOraclePromote(root string, minConfidence int, dryRun bool, provenance st
 		"learnings":            learnings,
 		"instincts":            instincts,
 		"outcomes":             outcomes,
-		"next":                 "aether pheromones",
-	}, nil
+		"next":                 nextActionPrimarySuggestion(answer),
+	}
+	applyNextActionToResult(result, answer)
+	return result, nil
 }
 
 func truncateForReport(text string) string {
