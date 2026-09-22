@@ -654,6 +654,7 @@ func commandGuideLiteralCommands() []string {
 		"maintenance",
 		"medic",
 		"memory-details",
+		"midden-review",
 		"migrate-state",
 		"organize",
 		"patrol",
