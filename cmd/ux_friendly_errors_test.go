@@ -3,6 +3,10 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -226,5 +230,123 @@ func TestOutputErrorVisualUsesBanner(t *testing.T) {
 	// there. Per-platform naming is covered by TestRenderVisualErrorGenericHint.
 	if !strings.Contains(output, "aether patrol") {
 		t.Errorf("expected visual output to contain generic hint, got: %s", output)
+	}
+}
+
+// hintedErrorTableSite is one top-level var literal in cmd/*.go (excluding
+// _test.go files) that has the shape of a hand-rolled hinted-error/refusal
+// table: a slice of struct literals where two or more elements' field keys
+// come from hintedErrorTableFieldNames. refusalRegistry itself is the one
+// allowed exception.
+type hintedErrorTableSite struct {
+	File         string
+	AssignedName string
+}
+
+// hintedErrorTableFieldNames names the field keys that mark a struct
+// literal as a hinted-error/refusal row -- present on both the retired
+// friendlyError shape (Pattern/Explanation/NextSteps) and the current
+// refusalRow shape (Pattern/Why/NextCommand). Two or more of these on one
+// struct literal, inside a top-level slice var other than refusalRegistry,
+// is a second hinted-error table.
+var hintedErrorTableFieldNames = map[string]bool{
+	"Pattern":     true,
+	"Explanation": true,
+	"NextSteps":   true,
+	"NextCommand": true,
+	"Why":         true,
+}
+
+// scanHintedErrorTableSites walks every non-test *.go file directly inside
+// dir (not recursively -- this mirrors the existing cmd/*.go-only scope
+// TestVoiceGlyphsHaveOneTable uses for the symbol-table singleton it
+// enforces) looking for a second hinted-error table literal.
+func scanHintedErrorTableSites(dir string) ([]hintedErrorTableSite, error) {
+	entries, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	var sites []hintedErrorTableSite
+	fset := token.NewFileSet()
+	for _, path := range entries {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || len(vs.Names) != 1 || len(vs.Values) != 1 {
+					continue
+				}
+				name := vs.Names[0].Name
+				if name == "refusalRegistry" {
+					continue
+				}
+				outer, ok := vs.Values[0].(*ast.CompositeLit)
+				if !ok {
+					continue
+				}
+				if _, ok := outer.Type.(*ast.ArrayType); !ok {
+					continue
+				}
+				if hintedErrorRowShape(outer) {
+					sites = append(sites, hintedErrorTableSite{File: filepath.Base(path), AssignedName: name})
+				}
+			}
+		}
+	}
+	return sites, nil
+}
+
+func hintedErrorRowShape(outer *ast.CompositeLit) bool {
+	for _, elt := range outer.Elts {
+		inner, ok := elt.(*ast.CompositeLit)
+		if !ok {
+			continue
+		}
+		matches := 0
+		for _, field := range inner.Elts {
+			kv, ok := field.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := kv.Key.(*ast.Ident)
+			if !ok {
+				continue
+			}
+			if hintedErrorTableFieldNames[key.Name] {
+				matches++
+			}
+		}
+		if matches >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+// TestFriendlyErrorsReadTheOneRefusalTable is the "exactly one table"
+// discipline TestVoiceGlyphsHaveOneTable already enforces for the symbol
+// table, applied here: it fails naming any file that plants a second
+// hinted-error table literal beside refusalRegistry.
+func TestFriendlyErrorsReadTheOneRefusalTable(t *testing.T) {
+	sites, err := scanHintedErrorTableSites(".")
+	if err != nil {
+		t.Fatalf("scan cmd/ for hinted-error table literals: %v", err)
+	}
+	if len(sites) > 0 {
+		var names []string
+		for _, s := range sites {
+			names = append(names, s.File+": "+s.AssignedName)
+		}
+		t.Errorf("found %d second hinted-error table(s) beside refusalRegistry:\n  %s", len(sites), strings.Join(names, "\n  "))
 	}
 }
