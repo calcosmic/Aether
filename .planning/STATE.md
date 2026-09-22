@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 208
-current_phase_name: Never a Dead End
-status: ready_to_execute
-stopped_at: Phase 208 planned (8 plans, 6 waves), ready to execute
-last_updated: "2026-09-22T15:16:04.467Z"
+status: executing
+stopped_at: Completed 208-01-PLAN.md
+last_updated: "2026-09-22T16:18:05.347Z"
 last_activity: 2026-09-22
-last_activity_desc: Phase 208 planned — 8 plans in 6 waves, checker passed
-state_head: f4e0293b74c8231e089a964f9741e3a6072b410e
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 16
-  completed_plans: 8
-  percent: 40
+  total_phases: 18
+  completed_phases: 10
+  total_plans: 231
+  completed_plans: 215
+  percent: 56
 ---
 
 # Project State
@@ -25,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 207 — A Messy Practice Project Is the Release Gate
+**Current focus:** Phase 208 — Never a Dead End
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -34,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 208 (Never a Dead End) — READY TO EXECUTE
+Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 208 (never a dead end)
 Status: Ready to execute
-Plan: 0/8 executed
-Last activity: 2026-09-22 — Phase 208 planned (8 plans, 6 waves), checker passed
+Plan: 2 of 8
+Last activity: 2026-09-22
 
 ## Performance Metrics
 
@@ -215,6 +211,7 @@ Last activity: 2026-09-22 — Phase 208 planned (8 plans, 6 waves), checker pass
 | Phase 207 P04 | 38min | 3 tasks | 3 files |
 | Phase 207 P05 | 55min | 3 tasks | 5 files |
 | Phase 207 P06 | 57min | 3 tasks | 4 files |
+| Phase 208 P01 | 26min | 3 tasks | 22 files |
 
 ## Accumulated Context
 
@@ -674,6 +671,8 @@ Last activity: 2026-09-22 — Phase 208 planned (8 plans, 6 waves), checker pass
 - [Phase 207]: Per-step chat caps for the journey harness were raised from a real measured cost (survey: four real surveyor subagents, $2.09), never a guess — 207-RESEARCH.md Assumption A2 instructed instrumenting and adjusting rather than fixing numbers blind
 - [Phase 207]: Redesigned every fix-revert mutation to a single physical line after the plan's own verify pipeline (jq @tsv + grep -cF) proved unable to verify multi-line finds -- jq escapes embedded newlines to literal backslash-n, and grep -F treats a real multi-line pattern as an OR of its lines, not a block match. — Each single-line swap was independently re-derived from current source and proven (compile+vet, live for pause-follows-shortcuts) to reproduce the real bug, not merely to differ from the fix.
 - [Phase 207]: [Phase 207 P06] Both real gate runs (three-trial journey, five-fix revert proof) ran live 2026-09-22; all three trials stopped at the same real 'survey' dead end (WINDOWS.md entry 53, Phase 208's job); all five landed fixes caught. journey gate budget_seconds set to 1100 from the measured run. Owner chose to keep the three-trial shape (Option A) as-is.
+- [Phase 208]: refusalRegistry is checked in by hand in ascending id order (not sorted at runtime) so the sort test proves the real committed order — A runtime sort would make the ordering test pass regardless of what is committed
+- [Phase 208]: friendlyErrorForPattern resolves matching ties by longest-pattern-wins rather than table position — alphabetical id order and legacy most-specific-first substring precedence are two different orderings for the same table; only pattern-length satisfies both
 
 ### Pending Todos
 
@@ -796,8 +795,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T13:42:13.026Z
-Stopped at: Phase 207 complete, ready to plan Phase 208
+Last session: 2026-09-22T16:18:05.334Z
+Stopped at: Completed 208-01-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

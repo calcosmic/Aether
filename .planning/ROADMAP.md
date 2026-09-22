@@ -1132,12 +1132,12 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 8 plans
+**Plans:** 1/8 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 208-01-PLAN.md — One refusal end to end: typed refusal with a required next command, both exit lanes, the refusal log, and `aether report` (tracer; UED-10, UED-15)
+- [x] 208-01-PLAN.md — One refusal end to end: typed refusal with a required next command, both exit lanes, the refusal log, and `aether report` (tracer; UED-10, UED-15)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
