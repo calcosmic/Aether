@@ -344,7 +344,21 @@ func journeyDriveStep(t *testing.T, result *journeyStepResult, repo, repoRoot, b
 		t.Fatalf("step %q: %s", result.Name, result.Detail)
 	}
 	result.BashToolCalls = bashCalls
-	if bashCalls < 1 {
+	// The "start" step is the one legitimate exception to "at least one Bash
+	// tool call": scripts/build-messy-practice-project.sh's own `aether
+	// init` already established this practice project (so every trap has a
+	// .aether/ to seed into) before the chat ever runs -- verified live
+	// (2026-09-22): the real /ant-init wrapper, seeing an already-active
+	// colony in its own injected context, correctly explains why it is
+	// declining and names the real next step (/ant-plan) WITHOUT running
+	// any Bash command at all, avoiding a wasted, guaranteed-to-fail
+	// invocation. That is the wrapper behaving correctly, not a defect --
+	// requiring a Bash call here would fail a step that did exactly the
+	// right thing. Every other step drives a freshly-reached lifecycle
+	// state where a real Bash call is the only way the step's own on-disk
+	// fact could ever become true, so the requirement stays load-bearing
+	// everywhere else.
+	if bashCalls < 1 && journeyStep(result.Name) != journeyStepStart {
 		result.Status = "fail"
 		result.FailureKind = string(journeyFailureReal)
 		result.Detail = "the chat never ran a Bash tool call -- it never ran the underlying aether command at all"
