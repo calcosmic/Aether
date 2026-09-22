@@ -3164,6 +3164,47 @@ func taskGoalLooksLikeRecoveryTask(goal string) bool {
 	return recoveryTaskGoalGeneratedPrefix(goal) != ""
 }
 
+// tasksExcludingRecovery returns tasks with any recovery task
+// (recoveryTasksForBlockedContinue's own appended work, identified by
+// taskGoalLooksLikeRecoveryTask) filtered out. A recovery task was never
+// part of what a candidate proposed or a build manifest dispatched --
+// appendRecoveryTasks() is the only thing that ever adds one -- so any
+// comparison that assumes the phase's task list matches the accepted plan
+// revision or the build manifest must not see it (fix 208-04: a blocked
+// check's own recovery tasks otherwise trip the build-manifest task-set
+// check -- validateBuildManifestTaskSetForPhase -- and the accepted-plan
+// DeepEqual check -- validateCurrentPlanningState -- turning "never a dead
+// end" into a permanent one).
+func tasksExcludingRecovery(tasks []colony.Task) []colony.Task {
+	if len(tasks) == 0 {
+		return tasks
+	}
+	filtered := make([]colony.Task, 0, len(tasks))
+	for _, task := range tasks {
+		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+			continue
+		}
+		filtered = append(filtered, task)
+	}
+	return filtered
+}
+
+// planPhasesExcludingRecoveryTasks applies tasksExcludingRecovery to every
+// phase, leaving every other field (including each phase's own Status)
+// untouched. See tasksExcludingRecovery's doc comment for why a recovery
+// task must never reach a comparison against the accepted plan revision.
+func planPhasesExcludingRecoveryTasks(phases []colony.Phase) []colony.Phase {
+	if len(phases) == 0 {
+		return phases
+	}
+	result := make([]colony.Phase, len(phases))
+	for i, phase := range phases {
+		result[i] = phase
+		result[i].Tasks = tasksExcludingRecovery(phase.Tasks)
+	}
+	return result
+}
+
 // recoveryTasksForBlockedContinue turns a blocked continue's recovery plan
 // (assessment.Recovery.ReconcileTasks / RedispatchTasks) into pending tasks
 // that can be appended to the phase -- the unfinished work becomes tasks an

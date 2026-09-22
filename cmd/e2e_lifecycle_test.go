@@ -471,9 +471,17 @@ func runRealLifecycleToSealForTest(t *testing.T) (string, colony.ColonyState) {
 			preSealState.Plan.Phases[i].Tasks[j].Status = colony.TaskCompleted
 		}
 	}
+	// fix(208-04): a blocked continue (Step 5, above) may have written a
+	// recovery task back onto the phase (recoveryTasksForBlockedContinue).
+	// That task was never part of what the accepted candidate proposed, so
+	// it must never reach the accepted revision's own Phases snapshot --
+	// exclude it here the same way production does (planning_state.go's
+	// validateCurrentPlanningState), or this resync corrupts the
+	// revision's plan_hash self-consistency (it carries no evidence of its
+	// own status changes, only its own presence/absence).
 	for index := range preSealState.Plan.Revisions {
 		if preSealState.Plan.Revisions[index].ID == preSealState.Plan.ActiveRevisionID {
-			preSealState.Plan.Revisions[index].Phases = clonePhases(preSealState.Plan.Phases)
+			preSealState.Plan.Revisions[index].Phases = clonePhases(planPhasesExcludingRecoveryTasks(preSealState.Plan.Phases))
 		}
 	}
 	preSealState.GateResults = []colony.GateResultEntry{

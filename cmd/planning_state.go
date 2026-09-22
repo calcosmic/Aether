@@ -209,7 +209,17 @@ func validateCurrentPlanningState(state colony.ColonyState) error {
 	if !ok {
 		return fmt.Errorf("active_revision_id %q does not name a plan revision", state.Plan.ActiveRevisionID)
 	}
-	if !reflect.DeepEqual(state.Plan.Phases, active.Phases) {
+	// A blocked continue's own recovery tasks (208-04's
+	// recoveryTasksForBlockedContinue/appendRecoveryTasks) are owner-
+	// actionable work an in-progress check wrote back onto the live phase;
+	// they were never part of what the accepted candidate proposed, so
+	// they never reach the accepted revision's own Phases snapshot. Strip
+	// them from the live side before comparing -- fix(208-04): without
+	// this, the moment a blocked check added a recovery task to an
+	// explicit_owner phase, every later state load would refuse with
+	// "active plan phases do not match active revision", a brand-new
+	// permanent dead end this exact check exists to close.
+	if !reflect.DeepEqual(planPhasesExcludingRecoveryTasks(state.Plan.Phases), active.Phases) {
 		return fmt.Errorf("active plan phases do not match active revision %q", active.ID)
 	}
 	boundSpec, ok := specificationRevisionByID(*state.Specification, active.SpecificationRevisionID)
@@ -223,7 +233,13 @@ func validateCurrentPlanningState(state colony.ColonyState) error {
 	if err := validateCurrentPlanRevisionBindings(active, boundSpec); err != nil {
 		return fmt.Errorf("active revision: %w", err)
 	}
-	if err := validateCurrentPlanNodes(state.Plan.Phases, active, boundSpec); err != nil {
+	// A recovery task deliberately carries no SemanticID (see
+	// recoveryTaskSemanticID's doc comment in cmd/codex_continue.go) so it
+	// never becomes current planning-authority-bound content; exclude it
+	// here too, or validateBoundPlanNode would refuse it for lacking one --
+	// fix(208-04): the same brand-new dead end as the DeepEqual check
+	// above, one step later in the same validation pass.
+	if err := validateCurrentPlanNodes(planPhasesExcludingRecoveryTasks(state.Plan.Phases), active, boundSpec); err != nil {
 		return err
 	}
 	if active.SpecificationRevisionID != currentSpec.ID || active.SpecificationRevisionHash != currentSpec.ContentHash {

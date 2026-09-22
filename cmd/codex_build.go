@@ -3620,9 +3620,21 @@ func completedTaskEvidenceIDs(manifest codexBuildManifest) map[string]struct{} {
 	return completed
 }
 
+// phaseTaskIDSet returns the phase's task IDs, excluding any recovery task
+// a blocked continue wrote back onto the phase (208-04's
+// recoveryTasksForBlockedContinue). A recovery task was never part of what
+// a build manifest dispatched, so it must never make the build-manifest
+// task-set check (validateBuildManifestTaskSetForPhase) or the trusted-
+// evidence check (trustedCompletedPhaseTaskEvidence) see a mismatch --
+// fix(208-04): this was a real regression, a blocked check's own recovery
+// task made every later `aether continue` refuse with a manifest/state
+// task-set mismatch, a brand-new dead end.
 func phaseTaskIDSet(phase colony.Phase) []string {
 	ids := make([]string, 0, len(phase.Tasks))
 	for idx, task := range phase.Tasks {
+		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+			continue
+		}
 		ids = append(ids, buildTaskID(task, idx))
 	}
 	return uniqueSortedStrings(ids)
