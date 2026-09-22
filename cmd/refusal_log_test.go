@@ -49,14 +49,14 @@ func TestRefusalLogAppendsAndNeverBlocks(t *testing.T) {
 	}
 }
 
-// TestRefusalLogIsSkippedForHookCommands iterates refusalLogSkippedCommands
+// TestRefusalLogIsSkippedForHookCommands iterates refusalLogExcludedCommands
 // itself (not a re-typed copy) and asserts no file is created under the
 // store for each entry.
 func TestRefusalLogIsSkippedForHookCommands(t *testing.T) {
 	saveGlobals(t)
 	repo := bindCommandTestRepository(t)
 
-	for command := range refusalLogSkippedCommands {
+	for command := range refusalLogExcludedCommands {
 		t.Run(command, func(t *testing.T) {
 			currentStreamingCommand = command
 			t.Cleanup(func() { currentStreamingCommand = "" })

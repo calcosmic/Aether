@@ -30,13 +30,20 @@ type refusalLogEntry struct {
 	Command       string `json:"command"`
 }
 
-// refusalLogSkippedCommands are the command paths already proven to write
+// refusalLogExcludedCommands are the command paths already proven to write
 // nothing -- TestStatusLineChangesNothingAndRepeatsItself, TestDirectRouteWritesNothing,
 // TestStopHookScreenCheckDoesNotMutate. appendRefusalToLog must honour those
 // guarantees rather than quietly becoming a fifth writer. Held as one named
 // var so TestRefusalLogIsSkippedForHookCommands iterates the exact set this
 // function checks, rather than a re-typed copy that could drift from it.
-var refusalLogSkippedCommands = map[string]bool{
+//
+// Named "Excluded" rather than "Skip" deliberately: TestSkipListDivergence
+// (cmd/codex_colonize_test.go) guards against a *second* directory
+// skip-list re-emerging alongside the one shared list in
+// pkg/codegraph.ShouldSkipDir (fix(141-01)). This is a different concept
+// entirely -- a fixed set of command paths excluded from local log writes,
+// not a directory-walk skip list -- so it must not share that vocabulary.
+var refusalLogExcludedCommands = map[string]bool{
 	"hook-stop":          true,
 	"hook-post-tool-use": true,
 	"hook-session-start": true,
@@ -54,7 +61,7 @@ func appendRefusalToLog(r refusal) {
 	if store == nil {
 		return
 	}
-	if refusalLogSkippedCommands[currentStreamingCommand] {
+	if refusalLogExcludedCommands[currentStreamingCommand] {
 		return
 	}
 	entry := refusalLogEntry{
