@@ -59,6 +59,33 @@ var (
 	journeyTestSharedErr  error
 )
 
+// journeyFilteredSubprocessEnv returns a copy of the current process
+// environment with every COLONY_DATA_DIR entry removed.
+//
+// CR-02 (207-REVIEW.md): a prior test's own newTestStore(t) helper
+// (cmd/write_cmds_test.go) could leak an explicitly-empty COLONY_DATA_DIR
+// into this test binary's own process environment. A freshly built, freshly
+// spawned real aether binary re-evaluates that variable fresh at its own
+// startup and treats the leaked empty value as an explicit (empty)
+// data-root override, refusing to start with "repository containment
+// refused: data root path must not be empty" -- a failure that is
+// deterministic, not flaky, whenever a newTestStore-using test happens to
+// run earlier in the same `go test` process. Every aether/builder-script
+// subprocess this file and cmd/journey_live_test.go spawn is given this
+// filtered environment explicitly, rather than trusting whatever any other
+// test in this package left behind in the ambient process environment.
+func journeyFilteredSubprocessEnv() []string {
+	env := os.Environ()
+	filtered := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "COLONY_DATA_DIR=") {
+			continue
+		}
+		filtered = append(filtered, kv)
+	}
+	return filtered
+}
+
 // journeyTestRepoRoot resolves the real Aether module root -- the same
 // resolution journeyTrapsRepoRoot uses when no test override is set.
 func journeyTestRepoRoot(t *testing.T) string {
@@ -116,6 +143,7 @@ func journeyTestSharedProject(t *testing.T) (bin, dest string) {
 		builtDest := filepath.Join(tmp, "dest")
 		script := filepath.Join(root, "scripts", "build-messy-practice-project.sh")
 		runCmd := exec.Command(script, builtDest, "--aether-bin", builtBin)
+		runCmd.Env = journeyFilteredSubprocessEnv()
 		if out, err := runCmd.CombinedOutput(); err != nil {
 			journeyTestSharedErr = fmt.Errorf("build practice project: %w\n%s", err, out)
 			return
@@ -695,7 +723,9 @@ func TestMessyPracticeProjectBuilderRunsCleanTwice(t *testing.T) {
 	}
 
 	for run := 1; run <= 2; run++ {
-		out, err := exec.Command(script, dest, "--aether-bin", bin).CombinedOutput()
+		runCmd := exec.Command(script, dest, "--aether-bin", bin)
+		runCmd.Env = journeyFilteredSubprocessEnv()
+		out, err := runCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("run %d: builder script failed: %v\n%s", run, err, out)
 		}
@@ -732,7 +762,9 @@ func TestMessyPracticeProjectBuilderRefusesAForeignDirectory(t *testing.T) {
 		t.Fatalf("write unrelated fixture file: %v", err)
 	}
 
-	out, err := exec.Command(script, dest).CombinedOutput()
+	refuseCmd := exec.Command(script, dest)
+	refuseCmd.Env = journeyFilteredSubprocessEnv()
+	out, err := refuseCmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected the builder to refuse a foreign directory, but it exited 0:\n%s", out)
 	}
@@ -763,6 +795,7 @@ func TestMessyPracticeProjectBuilderRequiresADestination(t *testing.T) {
 
 	cmd := exec.Command(script)
 	cmd.Dir = dest
+	cmd.Env = journeyFilteredSubprocessEnv()
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected the builder to refuse with no destination argument, but it exited 0:\n%s", out)

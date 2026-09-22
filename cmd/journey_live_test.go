@@ -212,6 +212,12 @@ func journeyRunOneTrial(t *testing.T, index, trialCount int, repoRoot, builderSc
 	buildCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	buildCmd := exec.CommandContext(buildCtx, builderScript, dest)
+	// CR-02 (207-REVIEW.md): never trust the ambient process environment
+	// for a real, freshly spawned aether/builder subprocess -- see
+	// journeyFilteredSubprocessEnv's own doc comment
+	// (cmd/messy_practice_project_test.go) for the leaked-COLONY_DATA_DIR
+	// failure mode this guards against.
+	buildCmd.Env = journeyFilteredSubprocessEnv()
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("trial %d: scripts/build-messy-practice-project.sh failed: %v\n%s", index, err, buildOut)
@@ -827,6 +833,7 @@ func journeyFastForwardToStep(t *testing.T, repo, binDir string, target journeyS
 		case journeyStepSurvey:
 			cmd := exec.Command(aether, "colonize")
 			cmd.Dir = repo
+			cmd.Env = journeyFilteredSubprocessEnv()
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Logf("fast-forward: %q did not complete cleanly -- proceeding anyway (target step %q does not depend on it): %v\n%s", "aether colonize", target, err, out)

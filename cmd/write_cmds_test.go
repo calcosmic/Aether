@@ -20,9 +20,21 @@ import (
 // It sets COLONY_DATA_DIR so rootCmd.PersistentPreRunE resolves correctly.
 func newTestStore(t *testing.T) (*storage.Store, string) {
 	t.Helper()
-	origColonyDataDir := os.Getenv("COLONY_DATA_DIR")
+	// CR-02 (207-REVIEW.md): os.Getenv cannot distinguish "unset" from "set
+	// to empty", so the normal case (COLONY_DATA_DIR unset before this test
+	// runs) used to restore it via os.Setenv(..., "") -- leaking an
+	// explicitly-empty COLONY_DATA_DIR for the rest of the `go test`
+	// process. A later test spawning a real aether binary as a subprocess
+	// then inherits that leaked empty value and treats it as an explicit
+	// (empty) data-root override, refusing to start. os.LookupEnv plus
+	// os.Unsetenv restores the exact prior state instead.
+	origColonyDataDir, hadColonyDataDir := os.LookupEnv("COLONY_DATA_DIR")
 	t.Cleanup(func() {
-		os.Setenv("COLONY_DATA_DIR", origColonyDataDir)
+		if hadColonyDataDir {
+			os.Setenv("COLONY_DATA_DIR", origColonyDataDir)
+		} else {
+			os.Unsetenv("COLONY_DATA_DIR")
+		}
 	})
 	tmpDir := t.TempDir()
 	dataDir := tmpDir + "/.aether/data"
