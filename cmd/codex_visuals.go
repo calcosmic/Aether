@@ -2737,6 +2737,16 @@ func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, r
 	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
+	// 208-04: name how much unfinished work was just written back onto the
+	// phase as tasks, in plain English -- the check failing is never a dead
+	// end, it is the work list moving forward.
+	if added := intValue(result["recovery_tasks_added"]); added > 0 {
+		noun := "piece"
+		if added != 1 {
+			noun = "pieces"
+		}
+		b.WriteString(fmt.Sprintf("%d %s of unfinished work were written back onto the phase as tasks so they can be picked up next.\n", added, noun))
+	}
 	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
 	renderContinueVerificationDetail(&b, result["verification"])
 	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))

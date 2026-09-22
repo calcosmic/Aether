@@ -1008,7 +1008,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Next:                nextCommand,
 			LastContinueOptions: continueOptionsToJSON(options),
 		})
-		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
+		blockedState, recoveryTasksAdded, flowErr := recordBlockedContinueWorkerFlow(state, phase.ID, assessment, now, workerFlow)
 		if flowErr != nil {
 			if errors.Is(flowErr, errRuntimeStateSuperseded) {
 				runStatus = "superseded"
@@ -1038,6 +1038,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
 			"operational_issues":      assessment.OperationalIssues,
 			"recovery":                assessment.Recovery,
+			"recovery_tasks_added":    recoveryTasksAdded,
 			"reconciled_tasks":        assessment.ReconciledTasks,
 			"blocking_issues":         blockers,
 			"review_depth":            string(reviewDepth),
@@ -1107,7 +1108,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			Next:                nextCommand,
 			LastContinueOptions: continueOptionsToJSON(options),
 		})
-		blockedState, flowErr := recordBlockedContinueWorkerFlow(state, now, workerFlow)
+		blockedState, recoveryTasksAdded, flowErr := recordBlockedContinueWorkerFlow(state, phase.ID, assessment, now, workerFlow)
 		if flowErr != nil {
 			if errors.Is(flowErr, errRuntimeStateSuperseded) {
 				runStatus = "superseded"
@@ -1138,6 +1139,7 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 			"autopilot_signals":       continueReviewAutopilotSignals(workerFlow, runtimeCheckpoints),
 			"operational_issues":      append(append([]string{}, assessment.OperationalIssues...), review.BlockingIssues...),
 			"recovery":                assessment.Recovery,
+			"recovery_tasks_added":    recoveryTasksAdded,
 			"reconciled_tasks":        assessment.ReconciledTasks,
 			"blocking_issues":         append([]string{}, review.BlockingIssues...),
 			"review_depth":            string(reviewDepth),
@@ -3091,6 +3093,181 @@ func buildTargetedRedispatchCommand(phaseID int, taskIDs []string) string {
 	return b.String()
 }
 
+// recoveryTaskSemanticID derives a stable, deterministic identity for a
+// recovery task a blocked continue would write back onto phase for taskID
+// under kind ("reconcile" or "redispatch") -- of the form
+// "recovery/{phase id}/{kind}/{task id}". It is used ONLY as an in-memory
+// de-duplication key while recoveryTasksForBlockedContinue builds its
+// candidate list for a single call (the "seen" map below).
+//
+// It is deliberately NEVER written to colony.Task.SemanticID or any other
+// on-disk field. SemanticID belongs to the specification/candidate
+// planning-authority system: pkg/colony's planHasCurrentBindings and
+// cmd/planning_state.go's validatePlanningState reject ANY task carrying a
+// non-empty SemanticID once acceptance_policy is "legacy_unbound" -- the
+// common historical shape -- with "legacy_unbound plan cannot contain
+// current candidate or acceptance bindings". A recovery task marked that
+// way would make `aether continue` (and any later `aether status`) fail
+// outright the moment a blocked check wrote it back. Found directly by
+// this plan's own idempotency proof (TestFailedCheckAddsTheSameTasksOnlyOnce
+// calling `aether continue` a second time), not assumed. Cross-run
+// idempotency instead reads recoveryTaskGoalPrefix, a plain-English marker
+// embedded in the (worker-facing, already-displayed) Goal text itself.
+func recoveryTaskSemanticID(phaseID int, taskID string, kind string) string {
+	return fmt.Sprintf("recovery/%d/%s/%s", phaseID, strings.TrimSpace(kind), strings.TrimSpace(taskID))
+}
+
+// recoveryTaskVerb is the plain-English phrase recoveryTaskGoalPrefix uses
+// for each recovery kind.
+func recoveryTaskVerb(kind string) string {
+	if kind == "reconcile" {
+		return "needs reconciling"
+	}
+	return "needs redispatching"
+}
+
+// recoveryTaskGoalPrefix is the deterministic, plain-English text every
+// recovery task's Goal begins with for a given (taskID, kind) pair --
+// stable across repeated blocked checks even if the trailing reason text
+// (drawn from the current assessment's Summary) drifts between runs. This,
+// not colony.Task.SemanticID, is what a recovery task's identity is judged
+// by on disk -- see recoveryTaskSemanticID's doc comment for why.
+func recoveryTaskGoalPrefix(taskID, kind string) string {
+	return fmt.Sprintf("Finish task %s (%s)", strings.TrimSpace(taskID), recoveryTaskVerb(kind))
+}
+
+// recoveryTaskGoalGeneratedPrefix returns "" for a Goal that does not have
+// the recoveryTaskGoalPrefix shape (an ordinary, human-authored task), and
+// otherwise the exact deterministic prefix portion (before ": <reason>", if
+// any) -- used both to recognise an existing recovery task
+// (appendRecoveryTasks) and to stop a recovery task, which by construction
+// carries no dispatch evidence of its own, from being classified as
+// needing recovery AGAIN on the next blocked check
+// (recoveryTaskAlreadyOnPhase / taskGoalLooksLikeRecoveryTask below) --
+// without that guard a recovery task's own fresh (never built) taskID would
+// otherwise spawn a recovery task for a recovery task, without limit, on
+// every repeat of the same failing check.
+func recoveryTaskGoalGeneratedPrefix(goal string) string {
+	goal = strings.TrimSpace(goal)
+	if !strings.HasPrefix(goal, "Finish task ") {
+		return ""
+	}
+	if idx := strings.Index(goal, ": "); idx >= 0 {
+		return goal[:idx]
+	}
+	return goal
+}
+
+// taskGoalLooksLikeRecoveryTask reports whether goal is itself a task a
+// prior blocked check already wrote back onto the phase.
+func taskGoalLooksLikeRecoveryTask(goal string) bool {
+	return recoveryTaskGoalGeneratedPrefix(goal) != ""
+}
+
+// recoveryTasksForBlockedContinue turns a blocked continue's recovery plan
+// (assessment.Recovery.ReconcileTasks / RedispatchTasks) into pending tasks
+// that can be appended to the phase -- the unfinished work becomes tasks an
+// owner can act on, rather than living only inside a JSON report (208-04
+// objective: "carrying on means the work list moves, never the phase").
+// Each task's Goal names the original task id and, when the assessment
+// recorded one, the reason recovery is needed -- never invented text.
+//
+// A taskID that is itself a previously-appended recovery task (its OWN
+// Goal already has the recoveryTaskGoalPrefix shape) is never turned into
+// a candidate -- see recoveryTaskGoalGeneratedPrefix's doc comment.
+//
+// Every appended task deliberately carries no SuccessCriteria and no
+// EvidenceRequirements: a recovery task must never change the flattened
+// criterion requirement list (flattenPhaseCriterionEvidenceRequirements,
+// cmd/criterion_evidence.go) or phaseCriterionEvidencePolicy, which is what
+// keeps criterionRequirementsEqual from ever failing because of a task this
+// function added rather than the build manifest.
+func recoveryTasksForBlockedContinue(phase colony.Phase, assessment codexContinueAssessment) []colony.Task {
+	reasons := make(map[string]string, len(assessment.Tasks))
+	for _, task := range assessment.Tasks {
+		taskID := strings.TrimSpace(task.TaskID)
+		if taskID == "" {
+			continue
+		}
+		reasons[taskID] = strings.TrimSpace(task.Summary)
+	}
+
+	alreadyRecoveryTaskIDs := make(map[string]bool, len(phase.Tasks))
+	for idx, task := range phase.Tasks {
+		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+			alreadyRecoveryTaskIDs[buildTaskID(task, idx)] = true
+		}
+	}
+
+	var tasks []colony.Task
+	// seen dedupes a task ID across the two lists: assessCodexContinue's
+	// current classification (classifyContinueTaskAssessment) has no
+	// distinct "reconcile" RecoveryAction today -- every task it marks
+	// "redispatch" is collected into BOTH Recovery.ReconcileTasks (via
+	// tasksNeedingRecovery) and Recovery.RedispatchTasks, so the same task
+	// ID commonly appears in both. One unfinished task must become one
+	// recovery task, never two, so the first list a task ID is found in
+	// wins.
+	seen := map[string]bool{}
+	appendKind := func(taskIDs []string, kind string) {
+		for _, taskID := range uniqueSortedStrings(taskIDs) {
+			taskID = strings.TrimSpace(taskID)
+			if taskID == "" || seen[taskID] || alreadyRecoveryTaskIDs[taskID] {
+				continue
+			}
+			seen[taskID] = true
+			prefix := recoveryTaskGoalPrefix(taskID, kind)
+			goal := prefix
+			if reason := reasons[taskID]; reason != "" {
+				goal = fmt.Sprintf("%s: %s", prefix, reason)
+			}
+			tasks = append(tasks, colony.Task{
+				Goal:   goal,
+				Status: colony.TaskPending,
+			})
+		}
+	}
+	// Reconcile first: a task the recovery plan says can be marked done by
+	// hand (`aether continue --reconcile-task`) is a lighter recovery than
+	// a full rebuild, matching continueNextCommandForBlocked's own
+	// reconcile-before-redispatch priority.
+	appendKind(assessment.Recovery.ReconcileTasks, "reconcile")
+	appendKind(assessment.Recovery.RedispatchTasks, "redispatch")
+	return tasks
+}
+
+// appendRecoveryTasks appends each task in tasks to phase.Tasks whose
+// recoveryTaskGoalGeneratedPrefix is not already present there, returning
+// how many were actually added. Skipping an already-present prefix is what
+// makes repeating the same blocked check idempotent (208-04 must_haves:
+// "Running the same blocked check twice adds the recovery tasks once, not
+// twice") -- see recoveryTaskSemanticID's doc comment for why this matches
+// on the Goal prefix rather than a dedicated ID field.
+func appendRecoveryTasks(phase *colony.Phase, tasks []colony.Task) int {
+	if phase == nil || len(tasks) == 0 {
+		return 0
+	}
+	existing := make(map[string]bool, len(phase.Tasks))
+	for _, task := range phase.Tasks {
+		if prefix := recoveryTaskGoalGeneratedPrefix(task.Goal); prefix != "" {
+			existing[prefix] = true
+		}
+	}
+	added := 0
+	for _, task := range tasks {
+		prefix := recoveryTaskGoalGeneratedPrefix(task.Goal)
+		if prefix != "" && existing[prefix] {
+			continue
+		}
+		phase.Tasks = append(phase.Tasks, task)
+		if prefix != "" {
+			existing[prefix] = true
+		}
+		added++
+	}
+	return added
+}
+
 func buildForceRedispatchCommand(phaseID int) string {
 	return fmt.Sprintf("aether build %d --force", phaseID)
 }
@@ -3146,7 +3323,23 @@ func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers 
 	}
 	next := strings.TrimSpace(continueNextCommandForAssessment(assessment))
 	if next == "aether continue" && len(blockers) > 0 {
-		return "" // Don't suggest looping back to continue with blockers (D-08 preserved).
+		// D-08, restated (208-04): a blocked check must never suggest looping
+		// back to a bare `aether continue` with nothing changed -- but it
+		// must also never end with nothing at all. Before 208-04 this branch
+		// returned the empty string, which was a literal dead end: the check
+		// failed and the screen named no way forward. Name the one command
+		// that works on the unfinished work recordBlockedContinueWorkerFlow
+		// writes back onto the phase as recovery tasks: the reconcile
+		// command when there is reconciliation pending, else the targeted
+		// redispatch command when there is redispatch pending, else the
+		// safe universal fallback -- never empty.
+		if reconcileCmd := buildContinueReconcileCommand(assessment.Recovery.ReconcileTasks); reconcileCmd != "" {
+			return reconcileCmd
+		}
+		if redispatchCmd := buildTargetedRedispatchCommand(phaseID, assessment.Recovery.RedispatchTasks); redispatchCmd != "" {
+			return redispatchCmd
+		}
+		return "aether status"
 	}
 	return next
 }
@@ -4945,14 +5138,25 @@ func continueWorkerFlowEvents(now time.Time, workerFlow []codexContinueWorkerFlo
 	return events
 }
 
-func recordBlockedContinueWorkerFlow(state colony.ColonyState, now time.Time, workerFlow []codexContinueWorkerFlowStep) (colony.ColonyState, error) {
-	if len(workerFlow) == 0 {
-		return state, nil
+// recordBlockedContinueWorkerFlow records a blocked continue's worker flow
+// and, in the same atomic write, writes the unfinished work back onto the
+// phase as pending recovery tasks (208-04) -- never advancing the phase or
+// changing its Status, only appending tasks an owner can act on. phaseID
+// identifies which phase in updated.Plan.Phases to append to; assessment
+// carries the recovery plan (ReconcileTasks/RedispatchTasks) those tasks
+// are built from. Returns the updated state and how many recovery tasks
+// were actually added (0 when the phase already carries them from a prior
+// blocked check -- the idempotency guarantee).
+func recordBlockedContinueWorkerFlow(state colony.ColonyState, phaseID int, assessment codexContinueAssessment, now time.Time, workerFlow []codexContinueWorkerFlowStep) (colony.ColonyState, int, error) {
+	hasRecovery := len(assessment.Recovery.ReconcileTasks) > 0 || len(assessment.Recovery.RedispatchTasks) > 0
+	if len(workerFlow) == 0 && !hasRecovery {
+		return state, 0, nil
 	}
 	if err := recordContinueWorkerFlow(workerFlow); err != nil {
-		return state, err
+		return state, 0, err
 	}
 
+	recoveryTasksAdded := 0
 	var updated colony.ColonyState
 	if err := store.UpdateJSONAtomically("COLONY_STATE.json", &updated, func() error {
 		if err := validateRuntimeStateStillCurrent(updated, state.CurrentPhase, state.BuildStartedAt, colony.StateEXECUTING, colony.StateBUILT); err != nil {
@@ -4960,11 +5164,25 @@ func recordBlockedContinueWorkerFlow(state colony.ColonyState, now time.Time, wo
 		}
 		updated.Events = append(trimmedEvents(updated.Events), continueWorkerFlowEvents(now, workerFlow)...)
 		updated.Events = append(updated.Events, fmt.Sprintf("%s|continue_blocked|continue|Continue blocked before advancement", now.Format(time.RFC3339)))
+
+		if hasRecovery {
+			for phaseIdx := range updated.Plan.Phases {
+				if updated.Plan.Phases[phaseIdx].ID != phaseID {
+					continue
+				}
+				recoveryTasks := recoveryTasksForBlockedContinue(updated.Plan.Phases[phaseIdx], assessment)
+				recoveryTasksAdded = appendRecoveryTasks(&updated.Plan.Phases[phaseIdx], recoveryTasks)
+				break
+			}
+			if recoveryTasksAdded > 0 {
+				updated.Events = append(updated.Events, fmt.Sprintf("%s|continue_recovery_tasks_added|continue|%d recovery task(s) added to phase %d, carrying the unfinished work forward", now.Format(time.RFC3339), recoveryTasksAdded, phaseID))
+			}
+		}
 		return nil
 	}); err != nil {
-		return state, fmt.Errorf("failed to save colony state: %w", err)
+		return state, 0, fmt.Errorf("failed to save colony state: %w", err)
 	}
-	return updated, nil
+	return updated, recoveryTasksAdded, nil
 }
 
 func appendRuntimeStateEventsIfCurrent(expected colony.ColonyState, events []string) error {
