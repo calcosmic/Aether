@@ -36,7 +36,7 @@ requirement is unmet (CLAUDE.md, Definition of Done). "Proof" names that command
 
 - [x] **UED-07** — A committed script builds the practice project with every trap listed in the roadmap. Proof: the script runs clean twice and a test asserts each trap exists.
 - [x] **UED-08** — The whole journey runs through a real chat with hooks and menu commands loaded, asserting on files and recorded commands, never wording; three trials; money and turn caps. Proof: the journey command itself.
-- [x] **UED-09** — The journey catches each of 2026-09-21's six blockers. Proof: with each fix reverted in turn, the journey fails at that step.
+- [x] **UED-09** — The journey catches each of 2026-09-21's six blockers. Proof: with each fix reverted in turn, the journey fails at that step. (Owner ruling D-01, 2026-09-22: five fixes had landed and are proven; the sixth has no fix yet, so its check is built and stays honestly red until Phase 208.)
 
 ### Never a dead end (Phase 208)
 

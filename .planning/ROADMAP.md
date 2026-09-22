@@ -51,7 +51,7 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   on his own screen, and a permanent status line (phase, task, next command). Proof: real chats in
   a scratch project show the screens unchanged.
 
-- [ ] **Phase 207 — A Messy Practice Project Is the Release Gate.** A practice project built by a
+- [x] **Phase 207 — A Messy Practice Project Is the Release Gate.** A practice project built by a (completed 2026-09-22)
   committed script with the traps real projects have (a shortcut to a folder, a shortcut loop, two
   names differing only by letter case, a nested project, long folder names, an out-of-date code
   map, a specification corrected mid-planning, leftover junk data, unsaved changes). The whole
