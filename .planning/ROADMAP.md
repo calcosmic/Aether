@@ -1132,7 +1132,34 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 0 plans
+**Plans:** 8 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 208-01-PLAN.md — One refusal end to end: typed refusal with a required next command, both exit lanes, the refusal log, and `aether report` (tracer; UED-10, UED-15)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 208-02-PLAN.md — The check's two field-reported bugs: a per-task verdict from that task's own criteria, and a `cd dir &&` verification command that actually runs (UED-10, UED-12; WINDOWS 50, 51)
+- [ ] 208-03-PLAN.md — The failure log reachable and readable: `/ant-midden-review`, the sixth 2026-09-21 blocker closed, guidance widened to program commands, rejected failures recorded in readable words (UED-13, UED-14)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 208-04-PLAN.md — A failed check adds the unfinished work as tasks and always names the way forward; status worked out from disk, less-finished record believed (UED-12)
+- [ ] 208-05-PLAN.md — Criterion-evidence dead ends: a folder bound as evidence refused early with a way past, and a stuck criterion routed to the owner's own answer instead of a false record (UED-10; WINDOWS 49, 52)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 208-06-PLAN.md — The sorted refusal table: classify, convert the ones that do not guard work into warnings that carry on, and count the rest on a floor that may only shrink (UED-11)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 208-07-PLAN.md — The journey runs each printed next command for real in the practice project (UED-10)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 208-08-PLAN.md — The real run in a real chat, measured; gate re-sized; WINDOWS rows 49-53 resolved (all six requirements)
 
 ### Phase 209: A Light Default Path
 
