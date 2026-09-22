@@ -1089,16 +1089,31 @@ Plans:
    check for the sixth — the status card advising `aether midden-review`, a command with no
    menu wrapper — is built too and stays honestly red until Phase 208 lands the fix: a
    standing, named, expected-red case, never a silent pass and never a claim of six.
+
 4. The journey is the gate for every release from here on.
 
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 207-01-PLAN.md — One lifecycle step end to end: builder script, real chat, transcript assertions, journey report, `journey` gate registered (tracer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 207-02-PLAN.md — Every trap the roadmap names, built by the script and proven by one named check each (UED-07)
 - [ ] 207-03-PLAN.md — The sixth blocker's check, built now, honestly red, recorded with what closes it (D-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 207-04-PLAN.md — All fourteen lifecycle steps in one chat, three trials, flaky versus real, the finished gate verdict (UED-08)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 207-05-PLAN.md — Revert each of the five landed fixes in a throwaway copy and prove the journey fails at that step (UED-09)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 207-06-PLAN.md — The real three-trial run, measured; the journey becomes the step before every release; owner sign-off
 
 ### Phase 208: Never a Dead End
