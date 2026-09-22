@@ -137,23 +137,52 @@ func feedFailedCheckWorker(phase colony.Phase, step codexContinueWorkerFlowStep)
 func recordFailedChecksToMidden(phase colony.Phase, result deterministicFloorResult) {
 	for _, issue := range result.BlockingIssues {
 		trimmed := strings.TrimSpace(issue)
+		// 208-03-PLAN.md Task 3: an empty or whitespace-only blocking issue
+		// still records a row naming the check and the phase, rather than
+		// being silently dropped -- a nil-shaped record here is exactly the
+		// "says nothing" failure this task closes, even though a real
+		// BlockingIssues entry is never blank in practice.
+		var sanitized string
 		if trimmed == "" {
-			continue
-		}
-		// CR-02 (198.1-REVIEW.md): trimmed is raw build/type/lint/test tool
-		// output -- untrusted input that resolveRecentFailuresSection reads
-		// back verbatim into a future worker's prompt. Sanitise the same way
-		// middenMessageForFailedWorker and recordSwarmWorkerFailureToMidden
-		// already do before it is ever stored.
-		sanitized, err := colony.SanitizeSignalContent(trimmed)
-		if err != nil {
-			sanitized = "a check failure could not be safely recorded"
+			sanitized = fallbackCheckFailureText("")
+		} else {
+			// CR-02 (198.1-REVIEW.md): trimmed is raw build/type/lint/test
+			// tool output -- untrusted input that resolveRecentFailuresSection
+			// reads back verbatim into a future worker's prompt. Sanitise the
+			// same way middenMessageForFailedWorker and
+			// recordSwarmWorkerFailureToMidden already do before it is ever
+			// stored.
+			var err error
+			sanitized, err = colony.SanitizeSignalContent(trimmed)
+			if err != nil {
+				sanitized = colony.NeutralizeForRecord(trimmed)
+				if sanitized == "" {
+					sanitized = fallbackCheckFailureText(trimmed)
+				}
+			}
 		}
 		message := fmt.Sprintf("%s — check on phase %d", sanitized, phase.ID)
 		if err := recordWorkerFailureToMidden(middenCategoryCheckFailed, "aether continue", message, []string{"check"}); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: could not record failed check to memory: %v\n", err)
 		}
 	}
+}
+
+// fallbackCheckFailureText names the concrete fact recordFailedChecksToMidden
+// already has when neither the raw blocking issue nor its neutralised form
+// can be safely recorded: the check kind, read from the blocking issue's own
+// leading token (deterministicFloorResult.BlockingIssues entries are shaped
+// "<check> failed: <summary>", cmd/deterministic_floor.go), or a generic
+// "a check" when even that cannot be recovered (an empty issue). The phase
+// number is named separately, by the caller's own "— check on phase %d"
+// suffix -- never a row whose message names nothing.
+func fallbackCheckFailureText(rawBlockingIssue string) string {
+	if idx := strings.Index(rawBlockingIssue, " failed:"); idx > 0 {
+		if kind := strings.TrimSpace(rawBlockingIssue[:idx]); kind != "" {
+			return kind + " check failed (its own text could not be safely recorded)"
+		}
+	}
+	return "a check failed (its own text could not be safely recorded)"
 }
 
 // recordQuickFailureToMidden records a /ant-quick dispatch failure. Only the
@@ -179,7 +208,13 @@ func recordQuickFailureToMidden(question, attemptID string, err error) {
 	// before storing, same as recordFailedChecksToMidden above.
 	sanitized, sanitizeErr := colony.SanitizeSignalContent(errText)
 	if sanitizeErr != nil {
-		sanitized = "a quick query failure could not be safely recorded"
+		sanitized = colony.NeutralizeForRecord(errText)
+		if sanitized == "" {
+			// 208-03-PLAN.md Task 3: name the concrete fact this call site
+			// already has -- the question -- rather than a sentence that
+			// says nothing.
+			sanitized = fmt.Sprintf("quick query %q failed (its own error text could not be safely recorded)", strings.TrimSpace(question))
+		}
 	}
 	message := fmt.Sprintf("%s — quick query %q failed", sanitized, strings.TrimSpace(question))
 	tags := []string{"quick"}
@@ -199,7 +234,13 @@ func recordSwarmWorkerFailureToMidden(swarmID, target string, execution swarmWor
 	sentence := firstNonEmptySwarmSentence(execution)
 	sanitized, err := colony.SanitizeSignalContent(sentence)
 	if err != nil {
-		sanitized = "the swarm worker's reported reason could not be safely recorded"
+		sanitized = colony.NeutralizeForRecord(sentence)
+		if sanitized == "" {
+			// 208-03-PLAN.md Task 3: name the concrete fact this call site
+			// already has -- the worker and its status -- rather than a
+			// sentence that says nothing.
+			sanitized = fmt.Sprintf("worker %s (%s), status %s (its own reported reason could not be safely recorded)", execution.Name, execution.Caste, execution.Status)
+		}
 	}
 	attribution := fmt.Sprintf("swarm %s, worker %s (%s), target %q, status %s", swarmID, execution.Name, execution.Caste, target, execution.Status)
 	message := sanitized + " — " + attribution

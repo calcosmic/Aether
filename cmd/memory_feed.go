@@ -198,7 +198,15 @@ func sanitizedWorkerSentence(facts workerOutcomeFacts) string {
 	// prompt (T-198.1-01) -- sanitise before it is ever stored.
 	sanitized, err := colony.SanitizeSignalContent(sentence)
 	if err != nil {
-		return "the worker's reported reason could not be safely recorded"
+		// 208-03-PLAN.md Task 3: a rejected sentence still keeps its own
+		// words wherever the rejection rules allow it -- only when nothing
+		// readable survives does this fall back to naming the concrete
+		// fact this call site already has (the worker and its status).
+		neutralized := colony.NeutralizeForRecord(sentence)
+		if neutralized == "" {
+			return fmt.Sprintf("worker %s, status %s (its own reported reason could not be safely recorded)", facts.WorkerName, facts.Status)
+		}
+		return neutralized
 	}
 	return sanitized
 }
