@@ -19,14 +19,17 @@
 # scripts/build-messy-practice-project.sh already follow.
 #
 # WORKING-COPY RULE, followed throughout this script: the owner's own
-# checkout at $ROOT is NEVER switched, shelved, reset, or modified. Every
-# revert is applied inside an ADDITIONAL working copy this script creates
-# with `git worktree add --detach` from $ROOT's own HEAD, under the
+# checkout at $ROOT is NEVER switched, shelved, reset, cleaned, or modified.
+# Every revert is applied inside an ADDITIONAL working copy this script
+# creates with `git worktree add --detach` from $ROOT's own HEAD, under the
 # scratch directory, and removed again before this script moves on to the
 # next entry. Other sessions share $ROOT; this project has already lost
 # work to a script that forgot that (CLAUDE.md's "Concurrent sessions in
 # one repo" note). This script never runs `git checkout`, `git stash`,
-# `git reset`, or `git restore` anywhere, and never creates a bare clone.
+# `git reset`, `git restore`, or `git clean` anywhere (WR-03,
+# 207-REVIEW.md: `git clean -fd` would silently delete untracked files in
+# $ROOT and is at least as dangerous as the other four), and never creates a
+# bare clone.
 #
 # Each throwaway working copy's own directory name carries the project's
 # name ("Aether") -- a throwaway checkout whose path lacks it has tripped a

@@ -330,8 +330,12 @@ func journeyFixRevertScriptNonCommentLines(t *testing.T, path string) string {
 
 // TestFixRevertHarnessNeverTouchesTheOwnersCheckout proves the harness
 // script uses git's own additional-working-copy mechanism (git worktree
-// add) and never a working-copy-switching or change-shelving git operation
-// (checkout, stash, reset, restore) anywhere outside its own comments.
+// add) and never a working-copy-switching or content-destroying git
+// operation (checkout, stash, reset, restore, clean) anywhere outside its
+// own comments. WR-03 (207-REVIEW.md): "git clean" added -- `git clean -fd`
+// would silently delete untracked files in the owner's own checkout and is
+// at least as dangerous as the other four, so it belongs in the same
+// forbidden list even though the script does not use it today.
 func TestFixRevertHarnessNeverTouchesTheOwnersCheckout(t *testing.T) {
 	repoRoot := findTestModuleRoot(t)
 	scriptPath := filepath.Join(repoRoot, "scripts", "prove-journey-catches-the-2026-09-21-fixes.sh")
@@ -341,10 +345,10 @@ func TestFixRevertHarnessNeverTouchesTheOwnersCheckout(t *testing.T) {
 		t.Error("the harness script does not use git worktree add anywhere outside its own comments -- " +
 			"the only permitted mechanism for applying a revert is an additional working copy")
 	}
-	for _, forbidden := range []string{"git checkout", "git stash", "git reset", "git restore"} {
+	for _, forbidden := range []string{"git checkout", "git stash", "git reset", "git restore", "git clean"} {
 		if strings.Contains(code, forbidden) {
-			t.Errorf("the harness script contains %q outside a comment -- this could switch or "+
-				"shelve changes in the owner's own checkout, which is never permitted", forbidden)
+			t.Errorf("the harness script contains %q outside a comment -- this could switch, "+
+				"shelve, or delete changes in the owner's own checkout, which is never permitted", forbidden)
 		}
 	}
 }
