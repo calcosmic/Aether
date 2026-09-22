@@ -1092,7 +1092,7 @@ Plans:
 
 4. The journey is the gate for every release from here on.
 
-**Plans:** 1/6 plans executed
+**Plans:** 2/6 plans executed
 
 Plans:
 **Wave 1**
@@ -1101,7 +1101,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 207-02-PLAN.md — Every trap the roadmap names, built by the script and proven by one named check each (UED-07)
+- [x] 207-02-PLAN.md — Every trap the roadmap names, built by the script and proven by one named check each (UED-07)
 - [ ] 207-03-PLAN.md — The sixth blocker's check, built now, honestly red, recorded with what closes it (D-01)
 
 **Wave 3** *(blocked on Wave 2 completion)*

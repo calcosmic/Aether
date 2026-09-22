@@ -5,16 +5,16 @@ milestone_name: Use It Every Day
 current_phase: 207
 current_phase_name: A Messy Practice Project Is the Release Gate
 status: executing
-stopped_at: Completed 207-01-PLAN.md
-last_updated: "2026-09-22T10:47:48.636Z"
+stopped_at: Completed 207-02-PLAN.md
+last_updated: "2026-09-22T11:25:49.448Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 207 execution started
-state_head: 8ed66d06932bf86c99cbd2b412d0045f90186f1d
+state_head: 05631cc2c87510171e67dd0ee58331d9f24e3a07
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 3
+  completed_plans: 4
   percent: 20
 ---
 
@@ -37,7 +37,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 207 (A Messy Practice Project Is the Release Gate) — EXECUTING
 Next phase: 207 (messy practice project as the release gate)
 Status: Ready to execute
-Plan: 2 of 6
+Plan: 3 of 6
 Last activity: 2026-09-22 — Phase 207 execution started
 
 ## Performance Metrics
@@ -210,6 +210,7 @@ Last activity: 2026-09-22 — Phase 207 execution started
 | Phase 206 P01 | 40min | 3 tasks | 8 files |
 | Phase 206 P02 | ~65min active | 3 tasks | 10 files |
 | Phase 207 P01 | 65min | 3 tasks | 9 files |
+| Phase 207 P02 | 130min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -660,6 +661,9 @@ Last activity: 2026-09-22 — Phase 207 execution started
 - [Phase 206]: Reachability ratchet's hookSettingsCommandArgs extended to recognize the statusLine top-level settings key as a genuine caller, not just hooks — Without this the new aether status-line command would be a permanent false orphan in TestNoRegisteredSubcommandIsUnreferenced
 - [Phase 206]: Owner reviewed the direct screen route and the status line on his own screen 2026-09-22 and answered keep-on, verbatim, with no accompanying sentence — Recorded in 206-OWNER-VERDICT.md; the direct route stays on by default, the Stop-hook backstop remains as the safety net underneath
 - [Phase 207]: The tracer's <command-name> assertion must read Claude Code's own on-disk session transcript (~/.claude/projects/<encoded-cwd>/<session-id>.jsonl), never the --output-format stream-json stdout, which never echoes the outgoing user turn
+- [Phase 207]: Self-authenticating fixtures (stale survey snapshot, superseded planning run) are constructed via new hidden aether commands calling the real runtime writers, never hand-typed JSON
+- [Phase 207]: journeyTrapAssertion carries a Kind field distinct from trap id so the Go test never re-types a declared trap id
+- [Phase 207]: UED-07 not marked complete this plan -- requirements.ready-ids reports it blocked, shared with 207-01/207-06
 
 ### Pending Todos
 
@@ -781,8 +785,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T10:47:48.567Z
-Stopped at: Completed 207-01-PLAN.md
+Last session: 2026-09-22T11:25:49.381Z
+Stopped at: Completed 207-02-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
