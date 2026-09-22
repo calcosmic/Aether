@@ -1045,6 +1045,7 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	var phaseName string
 	displayPhase := recoveryPhase(&state)
 	displayPhaseNum := 0
+	var progressDisagreementLine string
 	if displayPhase != nil {
 		displayPhaseNum = displayPhase.ID
 		phase := *displayPhase
@@ -1059,6 +1060,16 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		// when the phase itself has already been marked completed.
 		if state.State == colony.StateCOMPLETED && phase.Status == colony.PhaseCompleted && tasksCompleted < tasksTotal {
 			tasksCompleted = tasksTotal
+		} else if progress := resolvePhaseProgressFromDisk(phase); progress.Disagreed {
+			// 208-04: work the status out from what is on disk, and believe
+			// the less-finished record when the stored phase and the last
+			// check's own record disagree about how far the work got.
+			tasksTotal = progress.TasksTotal
+			tasksCompleted = progress.TasksDone
+			progressDisagreementLine = fmt.Sprintf(
+				"The saved project record and the last check's own record disagree about how finished phase %d is; showing the less-finished one: %s (from %s).",
+				displayPhaseNum, progress.Status, progress.Source,
+			)
 		}
 	}
 	taskBar := generateProgressBar(tasksCompleted, tasksTotal, 20)
@@ -1074,10 +1085,14 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 		taskPercent = cappedTasks * 100 / tasksTotal
 	}
 	if phaseName != "" {
-		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)))
+		fmt.Fprintf(&b, "   %s\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d (%s)", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum, phaseName)))
 	} else {
-		fmt.Fprintf(&b, "   %s\n\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)))
+		fmt.Fprintf(&b, "   %s\n", voiceLine("task", fmt.Sprintf("Tasks: [Tasks %d/%d] %s %d%% in Phase %d", tasksCompleted, tasksTotal, taskBar, taskPercent, displayPhaseNum)))
 	}
+	if progressDisagreementLine != "" {
+		fmt.Fprintf(&b, "   %s\n", voiceLine("warning", progressDisagreementLine))
+	}
+	b.WriteString("\n")
 
 	// Constraints
 	focusCount, avoidCount := countConstraints(s)

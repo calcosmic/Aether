@@ -1730,8 +1730,15 @@ func TestContinueBlocksWhenContinueWatcherRejectsPhase(t *testing.T) {
 	if advanced, _ := result["advanced"].(bool); advanced {
 		t.Fatalf("expected advanced:false, got %v", result)
 	}
-	if next := result["next"].(string); next != "" {
-		t.Fatalf("next = %q, want empty guidance so blocked watcher output does not suggest an identical retry", next)
+	// 208-04: a blocked check must never end with nothing to run next (the
+	// dead end this plan closes) -- with no reconcile/redispatch tasks
+	// recorded for this rejection, the safe universal fallback is used
+	// instead of the identical-retry `aether continue` this guard still
+	// exists to avoid suggesting.
+	if next := result["next"].(string); next == "" {
+		t.Fatalf("next is empty, want a real next command (208-04: a blocked check never ends with nothing to run)")
+	} else if next == "aether continue" {
+		t.Fatalf("next = %q, want something other than an identical retry", next)
 	}
 
 	verification := result["verification"].(map[string]interface{})
