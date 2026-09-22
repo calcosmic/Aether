@@ -8,7 +8,7 @@ VERSION := $(shell \
 BINARY  := aether
 LDFLAGS := -X github.com/calcosmic/Aether/cmd.Version=$(VERSION)
 
-.PHONY: build test lint clean install smoke bench-selftest bench-acceptance-order bench-dry-run version-sync vulncheck eval-gate-fast eval-gate-focused eval-gate-integration eval-gate-provider eval-gate-overnight eval-gate-race eval-gate-release
+.PHONY: build test lint clean install smoke bench-selftest bench-acceptance-order bench-dry-run version-sync vulncheck eval-gate-fast eval-gate-focused eval-gate-integration eval-gate-provider eval-gate-overnight eval-gate-race eval-gate-release eval-gate-journey
 
 smoke:
 	./scripts/smoke-daily-driver.sh
@@ -132,3 +132,11 @@ eval-gate-race:
 # Budget 1800s (gates.json).
 eval-gate-release:
 	$(call EVAL_GATE_CHECK,release,-race -tags=integration -count=1 -timeout=1800s ./...,-tags=integration -list=. ./...)
+
+# journey: the full messy-practice-project lifecycle, driven through a real
+# claude -p chat with hooks and menu commands loaded. Requires a local,
+# interactively-authenticated claude CLI; never runs in CI. Sets no
+# environment variable that could turn this into a skip. Budget 5400s,
+# provisional (gates.json).
+eval-gate-journey:
+	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=5400s ./...,-tags=journey -list=TestJourney ./...)

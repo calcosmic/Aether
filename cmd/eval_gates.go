@@ -1,15 +1,22 @@
 package cmd
 
 // LEARN-05 (204-07-PLAN.md): splits this project's one enormous test run
-// into seven named gates -- fast, focused, integration, provider, overnight,
-// race and release -- each with its own declared selection, environment and
-// observable time budget, so nobody has to choose between twenty-one
-// minutes and nothing. This is the documented root cause behind three
-// separate entries in this project's own defect register: an unqualified
-// full-suite run reported a result after executing roughly a third of the
-// tests, printing a complete-looking summary of the fraction it finished.
-// Every gate this file declares carries the discovered-equals-executed
-// check that would have caught that defect on day one.
+// into eight named gates -- fast, focused, integration, provider, overnight,
+// race, release and journey -- each with its own declared selection,
+// environment and observable time budget, so nobody has to choose between
+// twenty-one minutes and nothing. This is the documented root cause behind
+// three separate entries in this project's own defect register: an
+// unqualified full-suite run reported a result after executing roughly a
+// third of the tests, printing a complete-looking summary of the fraction
+// it finished. Every gate this file declares carries the
+// discovered-equals-executed check that would have caught that defect on
+// day one.
+//
+// The journey gate (207-01-PLAN.md, UED-08) is where "the journey is the
+// gate for every release from here on" (ROADMAP.md Phase 207 success
+// criterion 4) plugs in -- a procedural addition to this manifest and the
+// Makefile, never a new hard refusal added to the aether binary itself
+// (the milestone's "no new strict rules" rule).
 //
 // Nothing here builds a second test runner or task orchestrator. Every gate
 // is a `go test` invocation against the corpus that already exists, tiered
@@ -84,7 +91,7 @@ func evalGateRepoRoot() (string, error) {
 // fixtureAllowedMutationVocabulary: const block, names slice, names()
 // helper, declared-membership predicate.
 
-// evalGateName is the declared, closed vocabulary of the seven named gates.
+// evalGateName is the declared, closed vocabulary of the eight named gates.
 type evalGateName string
 
 const (
@@ -95,6 +102,7 @@ const (
 	evalGateOvernight   evalGateName = "overnight"
 	evalGateRace        evalGateName = "race"
 	evalGateRelease     evalGateName = "release"
+	evalGateJourney     evalGateName = "journey"
 )
 
 var evalGateNameVocabulary = []evalGateName{
@@ -105,6 +113,7 @@ var evalGateNameVocabulary = []evalGateName{
 	evalGateOvernight,
 	evalGateRace,
 	evalGateRelease,
+	evalGateJourney,
 }
 
 func evalGateNames() []string {
@@ -133,6 +142,14 @@ const (
 	evalGateRequiresNetwork             evalGateRequirement = "network"
 	evalGateRequiresProviderCredentials evalGateRequirement = "provider_credentials"
 	evalGateRequiresLongWallClock       evalGateRequirement = "long_wall_clock"
+	// evalGateRequiresClaudeCLICredentials is deliberately distinct from
+	// evalGateRequiresProviderCredentials: "provider_credentials" means an
+	// LLM worker under test has API keys, this means the developer's own
+	// machine has an interactively signed-in `claude` CLI -- different
+	// failure modes (a missing env var vs. a missing local login), and
+	// conflating them would make a CI/local decision wrong (207-RESEARCH.md
+	// Assumption A3).
+	evalGateRequiresClaudeCLICredentials evalGateRequirement = "claude_cli_credentials"
 )
 
 var evalGateRequirementVocabulary = []evalGateRequirement{
@@ -140,6 +157,7 @@ var evalGateRequirementVocabulary = []evalGateRequirement{
 	evalGateRequiresNetwork,
 	evalGateRequiresProviderCredentials,
 	evalGateRequiresLongWallClock,
+	evalGateRequiresClaudeCLICredentials,
 }
 
 func evalGateRequirementNames() []string {

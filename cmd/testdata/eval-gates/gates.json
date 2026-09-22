@@ -81,6 +81,15 @@
       "budget_seconds": 1800,
       "purpose": "The union of fast, focused, integration and race, plus the sentinel list -- the gate that must pass before anything is published.",
       "race": true
+    },
+    {
+      "name": "journey",
+      "packages": ["./..."],
+      "build_tags": ["journey"],
+      "run_pattern": "TestJourney",
+      "requires": "claude_cli_credentials",
+      "budget_seconds": 5400,
+      "purpose": "The full messy-practice-project lifecycle, driven through a real claude -p chat with hooks and menu commands loaded, asserting on the transcript and on-disk state -- never on wording. Requires a local, interactively-authenticated claude CLI; never runs in CI (no credential is configured there). Budget is provisional -- 5400s covers three trials of a fourteen-step chat with margin, sized from no real cost data yet (207-RESEARCH.md Assumption A2); 207-06-PLAN.md's real run tightens this once it records observed wall clock. The gate for every release from here on -- see .aether/docs/publish-update-runbook.md's Preflight checklist."
     }
   ]
 }
