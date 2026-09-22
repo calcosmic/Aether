@@ -344,6 +344,8 @@ it only stays quiet once it can prove you already got the whole thing. This
 new path is off wherever the older one already was: for Aether's own
 background helpers, and if you've switched screen relaying off yourself.*
 
+The owner looked at this on his own screen on 2026-09-22 and kept the direct route on by default (`.planning/phases/206-screens-reach-the-owner/206-OWNER-VERDICT.md`).
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users
