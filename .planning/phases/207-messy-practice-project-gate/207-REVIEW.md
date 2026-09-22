@@ -28,7 +28,7 @@ findings:
   warning: 3
   info: 0
   total: 5
-status: issues_found
+status: fixed
 ---
 
 # Phase 207: Code Review Report
@@ -260,6 +260,111 @@ that must never run against `$ROOT`.
 
 ---
 
+## Fixes Applied
+
+All 5 findings (2 critical, 3 warning) were fixed on branch `oracle-reinstate`,
+one atomic commit per finding, in the main working tree (no worktree
+isolation, per explicit instruction).
+
+### CR-01: Hidden production commands can fabricate approved specification history and overwrite real survey data
+
+**Commit:** `50c3d55c`
+
+`cmd/journey_seed.go` is now gated behind `//go:build journey` (excluded from
+`go build ./cmd/aether`, the shipped release binary), and both
+`journeySeedStaleSurvey` and `journeySeedSupersededPlan` refuse to run
+against any directory that does not already carry the exact
+`.journey-practice-project.json` marker
+`scripts/build-messy-practice-project.sh` writes. The script's own `go build`
+call and `cmd/messy_practice_project_test.go`'s test-fixture build now both
+pass `-tags=journey`; the script writes the marker into the practice repo
+before trap construction so the runtime guard does not break the harness
+that legitimately needs these commands.
+
+**Proving commands:**
+- `go build ./cmd/aether && ./aether journey-seed-stale-survey --help` →
+  `Error: unknown command "journey-seed-stale-survey" for "aether"` (exit 1)
+- `go build -tags=journey ./cmd/aether && ./aether journey-seed-stale-survey --help`
+  → prints usage (exit 0)
+- `go test -tags=journey ./cmd -run 'TestJourneySeedStaleSurveyRefusesWithoutMarker|TestJourneySeedSupersededPlanRefusesWithoutMarker' -v`
+  → both `PASS` (new test, `cmd/journey_seed_reachability_test.go`)
+- `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced -v` → only the
+  pre-existing, out-of-scope `aether codex-native-worker context-ack` orphan
+  remains; both `journey-seed-*` orphan entries are gone.
+
+### CR-02: The new offline test suite fails deterministically when run with other `cmd` package tests
+
+**Commit:** `ba2ef3be`
+
+`newTestStore` (`cmd/write_cmds_test.go`) now uses `os.LookupEnv` /
+`os.Unsetenv` instead of `os.Getenv` / `os.Setenv("", "")`, so it no longer
+leaks an explicitly-empty `COLONY_DATA_DIR` into the rest of the `go test`
+process. Defensively, every aether/builder-script subprocess spawned by
+`cmd/messy_practice_project_test.go` and `cmd/journey_live_test.go` is now
+given an explicit, filtered copy of the process environment
+(`journeyFilteredSubprocessEnv`, `COLONY_DATA_DIR` stripped) rather than
+trusting the ambient environment.
+
+**Proving command:**
+- `go test ./cmd -run 'TestSixthBlockerCheckIsStillRed|TestMessyPracticeProjectHasEveryTrap' -count=1 -timeout 200s -v`
+  → `--- PASS: TestSixthBlockerCheckIsStillRed (0.01s)` followed by
+  `--- PASS: TestMessyPracticeProjectHasEveryTrap (12.88s)` with all 9 trap
+  subtests passing (this exact invocation deterministically failed before
+  the fix, per the review's own reproduction).
+
+### WR-01: `eval-gate-journey`'s Makefile budget is stale and inconsistent with `gates.json`
+
+**Commit:** `8359b95e`
+
+The Makefile's `eval-gate-journey` comment and `-timeout` now read `1500s`
+(headroom above `gates.json`'s measured `budget_seconds: 1100`), and the
+comment no longer calls the figure "provisional".
+
+**Proving command:** `make -n eval-gate-journey` shows `-timeout=1500s` in the
+generated command; no automated Makefile/gates.json parity test exists in
+this repo today.
+
+### WR-02: The persisted failure classification can disagree with the retry decision that was actually made
+
+**Commit:** `03852ed8`
+
+`journeyRunClaudeWithRetry` now returns stderr alongside stdout (never
+merged into stdout itself, which remains the parsed stream-json/JSON
+artifact). `journeyRunStep` persists stderr to a sibling file
+(`journeyStreamStderrPath`), and `journeyDriveStep` derives
+`result.FailureKind` from the stdout+stderr concatenation -- the same text
+the retry decision itself was classified from -- so the two can no longer
+diverge.
+
+**Proving command:** `go vet -tags=journey ./cmd/` is clean; `go test -tags=journey -run '^$' -count=1 ./cmd` compiles cleanly (this code only compiles under `-tags=journey`, and driving it live requires a paid `claude -p` invocation this fix run was instructed not to spend).
+
+### WR-03: The harness safety-net test doesn't check for `git clean`
+
+**Commit:** `ae235972`
+
+Added `"git clean"` to the forbidden-operations list in both
+`TestFixRevertHarnessNeverTouchesTheOwnersCheckout`
+(`cmd/journey_fix_reverts_test.go`) and the script's own WORKING-COPY RULE
+comment (`scripts/prove-journey-catches-the-2026-09-21-fixes.sh`).
+
+**Proving command:** `go test ./cmd -run 'TestFixRevert' -count=1 -timeout 300s -v` → all 6 `TestFixRevert*` tests `PASS`, including
+`TestFixRevertHarnessNeverTouchesTheOwnersCheckout`.
+
+### Final verification
+
+- `go build ./cmd/aether` -- clean
+- `go vet ./cmd/` -- clean
+- `go vet -tags=journey ./cmd/` -- clean
+- `go test ./cmd -run 'TestJourney|TestMessyPracticeProject|TestExpectedRed|TestSixthBlocker|TestFixRevert|TestEvalGate|TestNoRegisteredSubcommandIsUnreferenced' -count=1 -timeout 900s -v`
+  -- every test passes except `TestNoRegisteredSubcommandIsUnreferenced`,
+  which fails on exactly one pre-existing, out-of-scope orphan
+  (`aether codex-native-worker context-ack`), unrelated to this phase's
+  findings.
+
+---
+
 _Reviewed: 2026-09-22_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Fixed: 2026-09-22_
+_Fixer: Claude (gsd-code-fixer)_
