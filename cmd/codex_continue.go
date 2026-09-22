@@ -2732,6 +2732,12 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 	tasks := make([]codexContinueTaskAssessment, 0, len(phase.Tasks))
 	redispatchTasks := make([]string, 0, len(phase.Tasks))
 
+	// byTask (WINDOWS.md row 50): a criterion bound to one task must never
+	// unverify a sibling task just because it shares the phase-wide
+	// checksPassed flag. Computed once, outside the loop, from the same
+	// verification.Criteria every task below reads.
+	byTask := criterionVerdictsByTask(verification.Criteria)
+
 	for idx, task := range phase.Tasks {
 		taskID := buildTaskID(task, idx)
 		statuses := uniqueSortedStrings(dispatchStatuses[taskID])
@@ -2743,13 +2749,14 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		if _, fromPriorAttempt := priorTrusted[taskID]; fromPriorAttempt {
 			taskDispatchEvidenceTrusted = true
 		}
-		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, verification.ChecksPassed, reconciledTask, taskDispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
+		taskVerified := taskVerifiedFromCriteria(taskID, verification.ChecksPassed, byTask)
+		outcome, summary, recovery := classifyContinueTaskAssessment(taskID, statuses, taskVerified, reconciledTask, taskDispatchEvidenceTrusted, taskArtifactEvidenceTrusted)
 		taskAssessment := codexContinueTaskAssessment{
 			TaskID:           taskID,
 			Goal:             strings.TrimSpace(task.Goal),
 			Outcome:          outcome,
 			Summary:          summary,
-			Verified:         verification.ChecksPassed,
+			Verified:         taskVerified,
 			Reconciled:       reconciledTask,
 			DispatchStatuses: statuses,
 			RecoveryAction:   recovery,
@@ -2775,6 +2782,13 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 				blockingIssues = append(blockingIssues, verification.Claims.Summary)
 				blockingIssues = append(blockingIssues, verification.Claims.Mismatches...)
 			}
+		} else if causal := causalCriterionSummary(verification.Criteria); causal != "" {
+			// One cause, one line: a criterion already named in
+			// verification.BlockingIssues (via the deterministic floor) must
+			// not ALSO surface here as the generic "no implementation
+			// evidence" line -- that is the exact phantom-second-defect shape
+			// WINDOWS.md row 50 reported.
+			blockingIssues = append(blockingIssues, causal)
 		} else {
 			blockingIssues = append(blockingIssues, "verification passed but no implementation evidence was recorded; reconcile completed tasks or redispatch missing work")
 		}
@@ -2837,7 +2851,7 @@ func assessCodexContinue(phase colony.Phase, manifest codexContinueManifest, ver
 		OperationalIssues:  operationalIssues,
 		ReconciledTasks:    append([]string{}, options.ReconcileTaskIDs...),
 		RedispatchTasks:    recovery.RedispatchTasks,
-		BlockingIssues:     uniqueSortedStrings(blockingIssues),
+		BlockingIssues:     uniqueStringsPreserveOrder(blockingIssues),
 		Passed:             passed,
 		Summary:            summary,
 		Recovery:           recovery,
@@ -2926,6 +2940,95 @@ func classifyContinueTaskAssessment(taskID string, statuses []string, verificati
 		return "implemented_unverified", "A worker reported completion for this task, but phase verification failed.", "reverify"
 	}
 	return "needs_redispatch", fmt.Sprintf("Worker evidence is incomplete or failed for this task: %s.", strings.Join(statuses, ", ")), "redispatch"
+}
+
+// criterionVerdictsByTask reduces a verification report's criteria to one
+// verdict per task (WINDOWS.md row 50): whether every ENFORCED criterion
+// bound to that task passed. Only criteria carrying a non-empty TaskID are
+// considered -- a phase-level criterion (empty TaskID) is deliberately
+// excluded, so it can never unverify an individual task on its own. It
+// already blocks phase advancement on its own terms, through the
+// deterministic floor's own criteria.Enforced/criteria.Passed fold
+// (cmd/deterministic_floor.go, unchanged by this function).
+//
+// A task with no entry in the returned map has no enforced criteria bound
+// to it -- taskVerifiedFromCriteria treats that exactly like today's
+// behaviour (Verified tracks checksPassed alone).
+func criterionVerdictsByTask(criteria []codexCriterionVerification) map[string]bool {
+	verdicts := make(map[string]bool, len(criteria))
+	seen := make(map[string]bool, len(criteria))
+	for _, criterion := range criteria {
+		taskID := strings.TrimSpace(criterion.TaskID)
+		if taskID == "" || !criterion.Enforced {
+			continue
+		}
+		if !seen[taskID] {
+			verdicts[taskID] = true
+			seen[taskID] = true
+		}
+		if !criterion.Passed {
+			verdicts[taskID] = false
+		}
+	}
+	return verdicts
+}
+
+// taskVerifiedFromCriteria returns whether one task should be reported
+// Verified, given the phase-wide checksPassed flag and the per-task
+// criterion verdicts criterionVerdictsByTask computed. A task with no
+// enforced criteria bound to it (byTask carries no entry) keeps today's
+// meaning exactly: Verified tracks checksPassed alone, so a shell-check
+// failure or a phase-level criterion failure still unverifies it exactly as
+// before. A task whose own bound criteria did not all pass is never
+// Verified, regardless of checksPassed.
+func taskVerifiedFromCriteria(taskID string, checksPassed bool, byTask map[string]bool) bool {
+	verdict, bound := byTask[strings.TrimSpace(taskID)]
+	if !bound {
+		return checksPassed
+	}
+	return checksPassed && verdict
+}
+
+// causalCriterionSummary names the first enforced, failing criterion in
+// criteria -- its own text, plus the task it is bound to when it names one
+// -- or "" when nothing enforced failed. Used to give the "verification
+// passed but no implementation evidence was recorded" blocking line one
+// causal name instead of firing generically alongside a criterion failure
+// that already explains the exact same cause (WINDOWS.md row 50's "two
+// failures for one cause").
+func causalCriterionSummary(criteria []codexCriterionVerification) string {
+	for _, criterion := range criteria {
+		if !criterion.Enforced || criterion.Passed {
+			continue
+		}
+		text := strings.TrimSpace(criterion.Criterion)
+		if text == "" {
+			continue
+		}
+		if taskID := strings.TrimSpace(criterion.TaskID); taskID != "" {
+			return fmt.Sprintf("criterion %q (task %s) was not met", text, taskID)
+		}
+		return fmt.Sprintf("criterion %q was not met", text)
+	}
+	return ""
+}
+
+// uniqueStringsPreserveOrder trims, drops blanks, and de-duplicates exact
+// repeats while keeping first-seen order -- unlike uniqueSortedStrings,
+// which alphabetises. Used for BlockingIssues, where the first entry is
+// meant to read as the leading cause, not whichever string sorts first.
+func uniqueStringsPreserveOrder(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		result = append(result, value)
+	}
+	return result
 }
 
 func tasksNeedingRecovery(tasks []codexContinueTaskAssessment) []string {
