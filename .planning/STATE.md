@@ -4,17 +4,17 @@ milestone: v1.29
 milestone_name: Use It Every Day
 current_phase: 207
 current_phase_name: A Messy Practice Project Is the Release Gate
-status: executing
-stopped_at: Completed 207-05-PLAN.md
-last_updated: "2026-09-22T12:41:55.166Z"
+status: verifying
+stopped_at: Completed 207-06-PLAN.md
+last_updated: "2026-09-22T13:42:13.111Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 207 plan 03 (sixth-blocker check) complete
-state_head: 838eba9b83d8f5270df29017f9815b6f56b4b7f2
+state_head: b0d202d13f42f83a95291e139cc090bd516b4e0e
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 20
 ---
 
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 207 (A Messy Practice Project Is the Release Gate) — EXECUTING
 Next phase: 207 (messy practice project as the release gate)
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Plan: 6 of 6
 Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 
@@ -214,6 +214,7 @@ Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 | Phase 207 P03 | 45 min | 2 tasks | 3 files |
 | Phase 207 P04 | 38min | 3 tasks | 3 files |
 | Phase 207 P05 | 55min | 3 tasks | 5 files |
+| Phase 207 P06 | 57min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -672,6 +673,7 @@ Last activity: 2026-09-22 — Phase 207 plan 03 (sixth-blocker check) complete
 - [Phase 207]: The start step legitimately needs no Bash call when a colony already exists; the wrapper correctly declines rather than running a guaranteed-to-fail command — Verified live 2026-09-22; every other step still requires a Bash call
 - [Phase 207]: Per-step chat caps for the journey harness were raised from a real measured cost (survey: four real surveyor subagents, $2.09), never a guess — 207-RESEARCH.md Assumption A2 instructed instrumenting and adjusting rather than fixing numbers blind
 - [Phase 207]: Redesigned every fix-revert mutation to a single physical line after the plan's own verify pipeline (jq @tsv + grep -cF) proved unable to verify multi-line finds -- jq escapes embedded newlines to literal backslash-n, and grep -F treats a real multi-line pattern as an OR of its lines, not a block match. — Each single-line swap was independently re-derived from current source and proven (compile+vet, live for pause-follows-shortcuts) to reproduce the real bug, not merely to differ from the fix.
+- [Phase 207]: [Phase 207 P06] Both real gate runs (three-trial journey, five-fix revert proof) ran live 2026-09-22; all three trials stopped at the same real 'survey' dead end (WINDOWS.md entry 53, Phase 208's job); all five landed fixes caught. journey gate budget_seconds set to 1100 from the measured run. Owner chose to keep the three-trial shape (Option A) as-is.
 
 ### Pending Todos
 
@@ -794,8 +796,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T12:41:55.092Z
-Stopped at: Completed 207-05-PLAN.md
+Last session: 2026-09-22T13:42:13.026Z
+Stopped at: Completed 207-06-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

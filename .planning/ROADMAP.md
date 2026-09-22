@@ -1092,7 +1092,7 @@ Plans:
 
 4. The journey is the gate for every release from here on.
 
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -1114,7 +1114,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 207-06-PLAN.md — The real three-trial run, measured; the journey becomes the step before every release; owner sign-off
+- [x] 207-06-PLAN.md — The real three-trial run, measured; the journey becomes the step before every release; owner sign-off
 
 ### Phase 208: Never a Dead End
 
