@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 **Wave 1**
@@ -1147,7 +1147,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 208-04-PLAN.md — A failed check adds the unfinished work as tasks and always names the way forward; status worked out from disk, less-finished record believed (UED-12)
-- [ ] 208-05-PLAN.md — Criterion-evidence dead ends: a folder bound as evidence refused early with a way past, and a stuck criterion routed to the owner's own answer instead of a false record (UED-10; WINDOWS 49, 52)
+- [x] 208-05-PLAN.md — Criterion-evidence dead ends: a folder bound as evidence refused early with a way past, and a stuck criterion routed to the owner's own answer instead of a false record (UED-10; WINDOWS 49, 52)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
