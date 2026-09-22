@@ -2,19 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 208
-current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-02-PLAN.md
-last_updated: "2026-09-22T16:49:48.918Z"
+stopped_at: Completed 208-03-PLAN.md
+last_updated: "2026-09-22T17:16:13.587Z"
 last_activity: 2026-09-22
-state_head: b2e9cf7679249c5d3307c92f21f55f2c19a0d96c
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 16
-  completed_plans: 10
-  percent: 40
+  total_phases: 18
+  completed_phases: 10
+  total_plans: 231
+  completed_plans: 217
+  percent: 56
 ---
 
 # Project State
@@ -36,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 208 (never a dead end)
 Status: Ready to execute
-Plan: 3 of 8
+Plan: 4 of 8
 Last activity: 2026-09-22
 
 ## Performance Metrics
@@ -216,6 +213,7 @@ Last activity: 2026-09-22
 | Phase 207 P06 | 57min | 3 tasks | 4 files |
 | Phase 208 P01 | 26min | 3 tasks | 22 files |
 | Phase 208 P02 | 45min | 2 tasks | 6 files |
+| Phase 208 P03 | 24min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -679,6 +677,9 @@ Last activity: 2026-09-22
 - [Phase 208]: friendlyErrorForPattern resolves matching ties by longest-pattern-wins rather than table position — alphabetical id order and legacy most-specific-first substring precedence are two different orderings for the same table; only pattern-length satisfies both
 - [Phase 208]: Task Verified now comes from that task's own bound criteria (taskVerifiedFromCriteria), decoupled from the phase-wide checksPassed flag; deterministic_floor.go's own criteria fold is deliberately left unchanged and still gates phase advancement.
 - [Phase 208]: runVerificationStepInDir wraps the existing runVerificationStep rather than changing its signature, so the pre-existing call sites and tests outside this plan's files_modified stay untouched.
+- [Phase 208]: The sixth 2026-09-21 blocker was closed by shipping the missing /ant-midden-review menu wrapper, not by editing the expected-red register.
+- [Phase 208]: Widened the guidance check from slash commands to every program command a screen can advise; its first real run found and fixed a genuine gap (aether pheromone-display had no wrapper -- renamed advice to its already-wrapped alias aether pheromones).
+- [Phase 208]: colony.NeutralizeForRecord keeps a rejected failure's own words instead of a canned could-not-be-safely-recorded sentence, across all four midden-recording fallback sites.
 
 ### Pending Todos
 
@@ -801,8 +802,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-22T16:49:48.767Z
-Stopped at: Completed 208-02-PLAN.md
+Last session: 2026-09-22T17:16:13.575Z
+Stopped at: Completed 208-03-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
