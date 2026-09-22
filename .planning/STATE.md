@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 206
-current_phase_name: Screens Reach the Owner
-status: verifying
-stopped_at: Completed 206-02-PLAN.md
-last_updated: "2026-09-22T08:16:05.651Z"
+current_phase: 207
+current_phase_name: A Messy Practice Project Is the Release Gate
+status: planning
+stopped_at: Phase 206 complete, ready to plan Phase 207
+last_updated: "2026-09-22T08:37:16.864Z"
 last_activity: 2026-09-22
-last_activity_desc: Phase 206 complete (2/2 plans), ready for phase verification
-state_head: 1ca7ca1e47fca8f852edc4395015fe6744c00fed
+last_activity_desc: Phase 206 complete, transitioned to Phase 207
+state_head: efe402ba27cadc3a69dbc861b18f327cb9dc3869
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
   completed_plans: 2
-  percent: 0
+  percent: 20
 ---
 
 # Project State
@@ -25,7 +25,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 206 — Screens Reach the Owner
+**Current focus:** Phase 207 — A Messy Practice Project Is the Release Gate
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 206 (Screens Reach the Owner) — plans complete, awaiting phase verification
+Phase: 207 — A Messy Practice Project Is the Release Gate
 Next phase: 207 (messy practice project as the release gate)
-Status: Phase complete — ready for verification
-Plan: 2 of 2 (both complete)
-Last activity: 2026-09-22 — Completed 206-02-PLAN.md
+Status: Ready to plan
+Plan: Not started
+Last activity: 2026-09-22 — Phase 206 complete, transitioned to Phase 207
 
 ## Performance Metrics
 
@@ -780,7 +780,7 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 ## Session Continuity
 
 Last session: 2026-09-22T08:16:05.639Z
-Stopped at: Completed 206-02-PLAN.md
+Stopped at: Phase 206 complete, ready to plan Phase 207
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
