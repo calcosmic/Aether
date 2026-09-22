@@ -1,0 +1,72 @@
+{
+  "schema_version": "journey-fix-reverts/v1",
+  "note": "Five entries: only five of the six 2026-09-21 blockers have a landed fix (owner ruling D-01, .planning/decisions/2026-09-21-v1.29-use-it-every-day.md, .planning/phases/207-messy-practice-project-gate/207-CONTEXT.md). The sixth (a status card advising aether midden-review, a command with no menu wrapper) is carried as the standing expected-red case cmd/testdata/journey/expected-red.json declares, and closes in Phase 208 (UED-13). This file must never grow a sixth entry without a real, landed commit to point at. Every mutation.find below is a single physical line, occurring exactly once in its file, so it can be verified by a plain grep -cF as well as applied by a plain string replace.",
+  "reverts": [
+    {
+      "id": "write-allowlist",
+      "blocker": "a folder missing from a write allowlist",
+      "commit": "cc0d2d07",
+      "file": "cmd/hook_cmds.go",
+      "symbol": "sanctionedDataWritePrefixes",
+      "journey_step": "survey",
+      "mutation": {
+        "find": "\"/.aether/data/territory-candidates/\"",
+        "replace": "\"/.aether/data/territory-candidates-DISABLED/\""
+      },
+      "expected_failure": "the territory refresh's write to .aether/data/territory-candidates/ is blocked by the runtime's own protected-path hook, because the allowlist entry no longer matches the real path"
+    },
+    {
+      "id": "archive-name-case",
+      "blocker": "two archive names differing only by letter case",
+      "commit": "57e563ba",
+      "file": "cmd/entomb_cmd.go",
+      "symbol": "entombArchiveKey",
+      "journey_step": "archive",
+      "mutation": {
+        "find": "return strings.ToLower(filepath.ToSlash(archivePath))",
+        "replace": "return filepath.ToSlash(archivePath)"
+      },
+      "expected_failure": "aether entomb collides .aether/HANDOFF.md and .aether/data/handoff.md into the same archive name because the comparison is no longer case-insensitive"
+    },
+    {
+      "id": "helper-fingerprint",
+      "blocker": "a fingerprint no helper can compute",
+      "commit": "0c14cd8f",
+      "file": "cmd/codex_plan_finalize.go",
+      "symbol": "normalizePlanningScoutStageContent",
+      "journey_step": "plan-second",
+      "mutation": {
+        "find": "Sources:        newSources,",
+        "replace": "Existing:       result.NewEvidence,"
+      },
+      "expected_failure": "the second /ant-plan pass refuses the Scout's new_evidence as not content-addressed, because it is trusted (and hash-validated) as an already-hashed existing record instead of being derived fresh from disk"
+    },
+    {
+      "id": "superseded-specification",
+      "blocker": "a planning run pinned to a superseded specification",
+      "commit": "f210d5d4",
+      "file": "cmd/codex_plan_stage_resume.go",
+      "symbol": "planningRunIsSuperseded",
+      "journey_step": "plan-second",
+      "mutation": {
+        "find": "return !samePlanningScoutSpecification(state.Specification, approved)",
+        "replace": "return false"
+      },
+      "expected_failure": "the second /ant-plan pass resumes the parked run against the specification the owner already corrected and re-approved, instead of refusing it as history"
+    },
+    {
+      "id": "pause-follows-shortcuts",
+      "blocker": "a pause fingerprint that followed folder shortcuts",
+      "commit": "b74d25d8",
+      "file": "cmd/session_flow_cmds.go",
+      "symbol": "pauseDirtyPathDigest",
+      "journey_step": "pause",
+      "mutation": {
+        "find": "switch mode := info.Mode(); {",
+        "replace": "switch mode := info.Mode() &^ (os.ModeSymlink | os.ModeDir); {"
+      },
+      "expected_failure": "aether pause fails with \"is a directory\" (or pulls an outside file's bytes into the fingerprint) on an uncommitted shortcut to a folder, because masking off the symlink/directory bits forces every path through the raw os.ReadFile path the fix removed",
+      "note": "this fix covers both the folder-shortcut trap and the nested-project trap, per the commit's own wording -- the pause step drives both"
+    }
+  ]
+}
