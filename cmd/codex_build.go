@@ -325,8 +325,25 @@ type codexBuildClaims struct {
 	TestsWritten     []string                     `json:"tests_written,omitempty"`
 	TaskClaims       []codexBuildTaskClaim        `json:"task_claims,omitempty"`
 	ArtifactEvidence []codexBuildArtifactEvidence `json:"artifact_evidence,omitempty"`
-	BuildPhase       int                          `json:"build_phase"`
-	Timestamp        string                       `json:"timestamp"`
+	// RejectedArtifacts records, path by path, a claimed artifact
+	// attachBuildArtifactEvidence could not snapshot because it is a folder
+	// (or a shortcut to one) rather than a regular file (WINDOWS.md row 49).
+	// It is computed wholesale by attachBuildArtifactEvidence from the
+	// claimed file lists, the same way ArtifactEvidence is -- never accepted
+	// from a worker's own completion packet.
+	RejectedArtifacts []codexRejectedArtifactEvidence `json:"rejected_artifacts,omitempty"`
+	BuildPhase        int                             `json:"build_phase"`
+	Timestamp         string                          `json:"timestamp"`
+}
+
+// codexRejectedArtifactEvidence names one claimed path attachBuildArtifactEvidence
+// could not turn into evidence, and why in plain words -- so
+// evaluatePhaseCriterionEvidence can report what actually happened ("this
+// path is a folder") instead of the misleading "was not claimed by the
+// current build" the field report named.
+type codexRejectedArtifactEvidence struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
 }
 
 var newCodexWorkerInvoker = codex.NewWorkerInvoker
@@ -549,7 +566,7 @@ func prepareDirectCodexBuild(root string, state colony.ColonyState, phaseNum int
 	}
 
 	phase := state.Plan.Phases[phaseNum-1]
-	if err := validatePhaseCriterionEvidence(phase); err != nil {
+	if err := validatePhaseCriterionEvidenceAgainstDisk(root, phase); err != nil {
 		return directCodexBuildPreparation{}, err
 	}
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {
@@ -681,7 +698,7 @@ func runCodexBuildPlanOnlyWithOptions(root string, phaseNum int, selectedTaskIDs
 	}
 	selectedTaskIDs = uniqueSortedStrings(selectedTaskIDs)
 	phase := state.Plan.Phases[phaseNum-1]
-	if err := validatePhaseCriterionEvidence(phase); err != nil {
+	if err := validatePhaseCriterionEvidenceAgainstDisk(root, phase); err != nil {
 		return nil, colony.ColonyState{}, colony.Phase{}, nil, err
 	}
 	if err := validateSelectedBuildTasks(phase, selectedTaskIDs); err != nil {

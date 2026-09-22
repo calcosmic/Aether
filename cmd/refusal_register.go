@@ -61,6 +61,17 @@ var refusalRegistry = []refusalRow{
 		ExtraSteps:   []string{"Check `.aether/data/COLONY_STATE.json` for syntax errors."},
 	},
 	{
+		ID:           "criterion-artifact-is-a-directory",
+		What:         "A phase criterion is bound to a folder instead of a file.",
+		Why:          "Aether checks evidence one file at a time; it cannot check a whole folder, so a folder bound this way could never be satisfied by any build.",
+		NextCommand:  "aether plan --refresh",
+		ProtectsWork: false,
+		ExtraSteps: []string{
+			"Bind the specific files inside the folder instead of the folder itself.",
+			"Or bind a verification check (for example a test or lint run) instead of an artifact path.",
+		},
+	},
+	{
 		ID:           "failed-to-initialize-store",
 		Pattern:      "failed to initialize store",
 		What:         "Aether could not set up its own data storage.",

@@ -242,6 +242,71 @@ func validatePhaseCriterionEvidence(phase colony.Phase) error {
 	return nil
 }
 
+// validatePhaseCriterionEvidenceAgainstDisk runs the existing structural
+// validation first (validatePhaseCriterionEvidence, unchanged), then walks
+// every bound artifact a second time against the real filesystem under root
+// and refuses, by name, a binding no build could ever satisfy: an artifact
+// that already exists as a directory, or as a symlink whose target resolves
+// to a directory (WINDOWS.md row 49). A path that does not exist yet is left
+// alone -- a criterion may legitimately name a file the build is about to
+// create. Called from the earliest point a phase is used (the two
+// validatePhaseCriterionEvidence call sites in cmd/codex_build.go where root
+// is already in scope), so the refusal lands before any worker is
+// dispatched, never after a phase has already been built against.
+func validatePhaseCriterionEvidenceAgainstDisk(root string, phase colony.Phase) error {
+	if err := validatePhaseCriterionEvidence(phase); err != nil {
+		return err
+	}
+	if phaseCriterionEvidencePolicy(phase) != criterionEvidencePolicyBoundV1 {
+		return nil
+	}
+	for _, requirement := range flattenPhaseCriterionEvidenceRequirements(phase) {
+		for _, artifact := range requirement.Artifacts {
+			if !criterionArtifactBindingIsDirectory(root, artifact) {
+				continue
+			}
+			detail := fmt.Sprintf(
+				"Criterion %q%s binds %s, which is a folder (or a shortcut to one).",
+				requirement.Criterion, criterionTaskSuffix(requirement.TaskID), artifact,
+			)
+			return refuse("criterion-artifact-is-a-directory", detail)
+		}
+	}
+	return nil
+}
+
+// criterionArtifactBindingIsDirectory reports whether a criterion evidence
+// artifact resolves, right now, to a directory -- either directly, or via a
+// symlink whose target resolves to a directory. It follows
+// snapshotBuildArtifact's own lstat-and-mode discipline (never following a
+// symlink blindly) rather than writing a second one. A path that does not
+// exist on disk yet is NOT reported as a directory binding -- a criterion
+// may legitimately name a file the build has not created yet -- so any stat
+// error, including "not found", reports false here, same as it does for
+// snapshotBuildArtifact's own callers.
+func criterionArtifactBindingIsDirectory(root, rel string) bool {
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	if info.IsDir() {
+		return true
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	target, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		return false
+	}
+	return targetInfo.IsDir()
+}
+
 func flattenPhaseCriterionEvidenceRequirements(phase colony.Phase) []colony.CriterionEvidenceRequirement {
 	flattened := make([]colony.CriterionEvidenceRequirement, 0, len(phase.EvidenceRequirements))
 	for _, requirement := range phase.EvidenceRequirements {
@@ -306,6 +371,7 @@ func attachBuildArtifactEvidence(root string, claims *codexBuildClaims) {
 	}
 	paths := append(append(append([]string{}, claims.FilesCreated...), claims.FilesModified...), claims.TestsWritten...)
 	evidence := make([]codexBuildArtifactEvidence, 0, len(paths))
+	rejected := make([]codexRejectedArtifactEvidence, 0)
 	for _, path := range uniqueSortedStrings(paths) {
 		normalized, err := normalizeCriterionArtifactPath(path)
 		if err != nil {
@@ -313,11 +379,27 @@ func attachBuildArtifactEvidence(root string, claims *codexBuildClaims) {
 		}
 		item, err := snapshotBuildArtifact(root, normalized)
 		if err != nil {
+			// Previously dropped silently, which is what left
+			// evaluatePhaseCriterionEvidence with nothing to say but "was not
+			// claimed by the current build" for a path that WAS claimed, just
+			// not a regular file (the field report called this message
+			// misleading). Record it, but only for the specific shape this
+			// phase closes -- a directory (or a shortcut to one) -- so any
+			// other snapshot failure (a broken symlink, an unreadable file)
+			// keeps its existing silent-drop behaviour rather than being
+			// reported as something it is not.
+			if criterionArtifactBindingIsDirectory(root, normalized) {
+				rejected = append(rejected, codexRejectedArtifactEvidence{
+					Path:   normalized,
+					Reason: "is a folder, and Aether checks evidence file by file, never a whole folder",
+				})
+			}
 			continue
 		}
 		evidence = append(evidence, item)
 	}
 	claims.ArtifactEvidence = evidence
+	claims.RejectedArtifacts = rejected
 }
 
 func snapshotBuildArtifact(root, rel string) (codexBuildArtifactEvidence, error) {
@@ -429,6 +511,10 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 	for _, item := range claims.ArtifactEvidence {
 		evidenceByPath[filepath.ToSlash(strings.TrimSpace(item.Path))] = item
 	}
+	rejectedByPath := map[string]string{}
+	for _, item := range claims.RejectedArtifacts {
+		rejectedByPath[filepath.ToSlash(strings.TrimSpace(item.Path))] = item.Reason
+	}
 
 	// D-04: computed at most once per evaluation, and only if a "claims"
 	// check actually needs the fallback (see the loop below) -- re-running a
@@ -454,6 +540,8 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			RequiredArtifacts: append([]string{}, requirement.Artifacts...),
 			RequiredChecks:    append([]string{}, requirement.Checks...),
 		}
+		needsOwnerConfirmation := false
+		var ownerConfirmationIssues []string
 		claimed := claimSets[requirement.TaskID]
 		for _, artifact := range requirement.Artifacts {
 			if claimsErr != nil {
@@ -478,7 +566,16 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			// the test file an earlier task wrote.
 			buildClaimed := claimSets[""][artifact]
 			if !claimed[artifact] && !readOnlyMatch && !buildClaimed {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
+				// The field report called this message misleading when the
+				// real cause is that the artifact is a folder, not that it
+				// went unclaimed: attachBuildArtifactEvidence now records
+				// that distinction on the claims, so the criterion can say
+				// what actually happened instead.
+				if reason, rejected := rejectedByPath[artifact]; rejected {
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s %s", artifact, reason))
+				} else {
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
+				}
 				continue
 			}
 			if !ok || strings.TrimSpace(recorded.SHA256) == "" {
@@ -541,8 +638,6 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 		for _, missing := range criterionNamedCommandsWereRun(criterionNamedCommands(requirement.Criterion), executedCriterionCommands(steps)) {
 			result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("names command %q, which is not among the commands this phase actually ran", missing))
 		}
-		needsOwnerConfirmation := false
-		var ownerConfirmationIssues []string
 		for _, check := range requirement.Checks {
 			outcome := evaluateCriterionCheckDetail(check, steps, claimsVerification, watcher)
 			// D-04: the program's own re-run of what the builder's handoff
