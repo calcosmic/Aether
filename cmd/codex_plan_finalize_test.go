@@ -504,7 +504,12 @@ func TestPlanFinalizeRejectsEmptyPhasePlanBeforeStateMutation(t *testing.T) {
 		PlanManifest: testPlanManifest(root, goal, time.Now().UTC(), survey, dispatches),
 		Dispatches:   results,
 	})
-	assertPlanFinalizeErrorContains(t, err, "contains no phases")
+	// 208-06 retyped this refusal's wording from "contains no phases" to a
+	// plain-English sentence naming the way out
+	// ("The plan a planning worker produced has no phases in it. --
+	// next: aether plan --refresh"). Only the wording moved; the real
+	// assertion -- refusal before any state mutation -- is unchanged below.
+	assertPlanFinalizeErrorContains(t, err, "has no phases in it")
 	assertPlanFinalizeStateBytesUnchanged(t, stateBefore)
 	assertPlanFinalizeStateUnchanged(t, 0)
 }
