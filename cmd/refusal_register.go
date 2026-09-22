@@ -72,6 +72,17 @@ var refusalRegistry = []refusalRow{
 		},
 	},
 	{
+		ID:           "criterion-binding-unsatisfiable",
+		What:         "One criterion in this phase is bound to evidence no build could ever satisfy.",
+		Why:          "The bound artifact exists on disk as a folder, and Aether checks evidence file by file, never a whole folder.",
+		NextCommand:  "aether decision-answer",
+		ProtectsWork: false,
+		ExtraSteps: []string{
+			"Run `aether continue` on this phase to see the exact question and the exact command for this criterion.",
+			"Answer it in your own words once you have confirmed the criterion is genuinely true.",
+		},
+	},
+	{
 		ID:           "failed-to-initialize-store",
 		Pattern:      "failed to initialize store",
 		What:         "Aether could not set up its own data storage.",

@@ -307,6 +307,32 @@ func criterionArtifactBindingIsDirectory(root, rel string) bool {
 	return targetInfo.IsDir()
 }
 
+// criterionBindingIsUnsatisfiable reports whether the evidence binding named
+// by requirement is one no build could ever satisfy, and the reason in plain
+// words. It currently recognises exactly one case: every one of the
+// requirement's bound artifacts exists on disk as a directory (or a symlink
+// to one) -- the same shape validatePhaseCriterionEvidenceAgainstDisk now
+// refuses for a newly built phase, and the shape an already-bound,
+// in-progress phase can be permanently stuck on (WINDOWS.md row 52). This is
+// deliberately narrow: a requirement naming no artifacts, or naming even one
+// artifact that is not currently a directory (including one that simply does
+// not exist yet -- a real, ongoing build failure, not a binding mistake) is
+// never reported as unsatisfiable here.
+func criterionBindingIsUnsatisfiable(root string, requirement colony.CriterionEvidenceRequirement) (string, bool) {
+	if len(requirement.Artifacts) == 0 {
+		return "", false
+	}
+	for _, artifact := range requirement.Artifacts {
+		if !criterionArtifactBindingIsDirectory(root, artifact) {
+			return "", false
+		}
+	}
+	return fmt.Sprintf(
+		"the bound artifact(s) %s exist on disk as a folder, and Aether's evidence engine checks files one at a time, never a whole folder",
+		strings.Join(requirement.Artifacts, ", "),
+	), true
+}
+
 func flattenPhaseCriterionEvidenceRequirements(phase colony.Phase) []colony.CriterionEvidenceRequirement {
 	flattened := make([]colony.CriterionEvidenceRequirement, 0, len(phase.EvidenceRequirements))
 	for _, requirement := range phase.EvidenceRequirements {
@@ -542,87 +568,102 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 		}
 		needsOwnerConfirmation := false
 		var ownerConfirmationIssues []string
-		claimed := claimSets[requirement.TaskID]
-		for _, artifact := range requirement.Artifacts {
-			if claimsErr != nil {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no readable current-build claims: %v", artifact, claimsErr))
-				continue
-			}
-			// D-01 (amended): an artifact absent from the task's claim lists
-			// can still pass the claimed gate if it has evidence explicitly
-			// recorded as read-only. The recording is operator-authorized and
-			// hash-verified, and it attests the path's state for this continue
-			// run — so it satisfies EVERY requirement naming the path, task-
-			// bound or phase-level. Scoping it to one task made a phase whose
-			// two tasks both bind the same untouched file unsatisfiable (the
-			// recording guard allows one task per path per run). (D-02: claim
-			// sets stay disjoint; nothing here merges them.)
-			recorded, ok := evidenceByPath[artifact]
-			readOnlyMatch := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != ""
-			// A task-bound criterion may also verify against an artifact
-			// claimed by a different task in the same build: the artifact is
-			// hash-recorded at build time either way, so tamper detection is
-			// identical. TDD plans routinely bind a later task's criterion to
-			// the test file an earlier task wrote.
-			buildClaimed := claimSets[""][artifact]
-			if !claimed[artifact] && !readOnlyMatch && !buildClaimed {
-				// The field report called this message misleading when the
-				// real cause is that the artifact is a folder, not that it
-				// went unclaimed: attachBuildArtifactEvidence now records
-				// that distinction on the claims, so the criterion can say
-				// what actually happened instead.
-				if reason, rejected := rejectedByPath[artifact]; rejected {
-					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s %s", artifact, reason))
-				} else {
-					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
-				}
-				continue
-			}
-			if !ok || strings.TrimSpace(recorded.SHA256) == "" {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no build-time content hash", artifact))
-				continue
-			}
-			current, err := snapshotBuildArtifact(root, artifact)
-			if err != nil {
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s cannot be verified: %v", artifact, err))
-				continue
-			}
-			if current.SHA256 != recorded.SHA256 || current.Size != recorded.Size {
-				// The build photographs every artifact it claims, and this
-				// compares the photograph to what is on disk now. Its purpose is
-				// to catch a change slipped in after the build signed off.
-				//
-				// But the colony's own reviewers run inside the build, and
-				// fixing what they find necessarily lands after finalization.
-				// With no allowance for that, Aether refused the work its own
-				// Probe and Watcher had just asked for, and the only sanctioned
-				// route was re-running most of the phase to re-take the
-				// photograph — real cost, no new information.
-				//
-				// Continue re-runs the repository's real verification commands
-				// live before advancing, so a changed artifact whose suite is
-				// still green is an amendment, not tampering. A change that
-				// breaks the suite still blocks, which is the case the hash
-				// existed to catch. The evidence line names it as amended so the
-				// substitution is visible rather than silent.
-				// Only for artifacts the build actually wrote. A read-only
-				// recording is the operator attesting "this file was NOT
-				// modified"; if it changed, that attestation is false whatever
-				// the test suite says, so it stays a hard block.
-				if proof, ok := verificationReRunProvesArtifacts(steps); ok && !readOnlyMatch {
-					result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s amended after build evidence; %s", artifact, proof))
-					evaluation.Deterministic = true
+		var unsatisfiableReason string
+		// D-05 (extended, WINDOWS.md row 52): a binding no build could ever
+		// satisfy -- right now, only every one of its artifacts existing on
+		// disk as a directory -- is routed to the owner's own confirmation
+		// instead of the ordinary claim-matching loop below, which would
+		// otherwise report it as an unclaimed artifact forever. This is
+		// narrower than a genuine build failure (a missing file keeps
+		// failing the ordinary way) and never widens to a mixed requirement
+		// where at least one artifact is a real, satisfiable file.
+		if reason, unsatisfiable := criterionBindingIsUnsatisfiable(root, requirement); unsatisfiable {
+			unsatisfiableReason = reason
+			needsOwnerConfirmation = true
+			ownerConfirmationIssues = append(ownerConfirmationIssues, fmt.Sprintf("this criterion's evidence binding cannot be satisfied by any build: %s", reason))
+		} else {
+			claimed := claimSets[requirement.TaskID]
+			for _, artifact := range requirement.Artifacts {
+				if claimsErr != nil {
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no readable current-build claims: %v", artifact, claimsErr))
 					continue
 				}
-				result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded and verification did not re-run green", artifact))
-				continue
+				// D-01 (amended): an artifact absent from the task's claim lists
+				// can still pass the claimed gate if it has evidence explicitly
+				// recorded as read-only. The recording is operator-authorized and
+				// hash-verified, and it attests the path's state for this continue
+				// run — so it satisfies EVERY requirement naming the path, task-
+				// bound or phase-level. Scoping it to one task made a phase whose
+				// two tasks both bind the same untouched file unsatisfiable (the
+				// recording guard allows one task per path per run). (D-02: claim
+				// sets stay disjoint; nothing here merges them.)
+				recorded, ok := evidenceByPath[artifact]
+				readOnlyMatch := ok && recorded.ReadOnly && strings.TrimSpace(recorded.ReadOnlyTaskID) != ""
+				// A task-bound criterion may also verify against an artifact
+				// claimed by a different task in the same build: the artifact is
+				// hash-recorded at build time either way, so tamper detection is
+				// identical. TDD plans routinely bind a later task's criterion to
+				// the test file an earlier task wrote.
+				buildClaimed := claimSets[""][artifact]
+				if !claimed[artifact] && !readOnlyMatch && !buildClaimed {
+					// The field report called this message misleading when the
+					// real cause is that the artifact is a folder, not that it
+					// went unclaimed: attachBuildArtifactEvidence now records
+					// that distinction on the claims, so the criterion can say
+					// what actually happened instead.
+					if reason, rejected := rejectedByPath[artifact]; rejected {
+						result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s %s", artifact, reason))
+					} else {
+						result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s was not claimed by the current build%s", artifact, criterionTaskSuffix(requirement.TaskID)))
+					}
+					continue
+				}
+				if !ok || strings.TrimSpace(recorded.SHA256) == "" {
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s has no build-time content hash", artifact))
+					continue
+				}
+				current, err := snapshotBuildArtifact(root, artifact)
+				if err != nil {
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s cannot be verified: %v", artifact, err))
+					continue
+				}
+				if current.SHA256 != recorded.SHA256 || current.Size != recorded.Size {
+					// The build photographs every artifact it claims, and this
+					// compares the photograph to what is on disk now. Its purpose is
+					// to catch a change slipped in after the build signed off.
+					//
+					// But the colony's own reviewers run inside the build, and
+					// fixing what they find necessarily lands after finalization.
+					// With no allowance for that, Aether refused the work its own
+					// Probe and Watcher had just asked for, and the only sanctioned
+					// route was re-running most of the phase to re-take the
+					// photograph — real cost, no new information.
+					//
+					// Continue re-runs the repository's real verification commands
+					// live before advancing, so a changed artifact whose suite is
+					// still green is an amendment, not tampering. A change that
+					// breaks the suite still blocks, which is the case the hash
+					// existed to catch. The evidence line names it as amended so the
+					// substitution is visible rather than silent.
+					// Only for artifacts the build actually wrote. A read-only
+					// recording is the operator attesting "this file was NOT
+					// modified"; if it changed, that attestation is false whatever
+					// the test suite says, so it stays a hard block.
+					if proof, ok := verificationReRunProvesArtifacts(steps); ok && !readOnlyMatch {
+						result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s amended after build evidence; %s", artifact, proof))
+						evaluation.Deterministic = true
+						continue
+					}
+					result.BlockingIssues = append(result.BlockingIssues, fmt.Sprintf("artifact %s changed after build evidence was recorded and verification did not re-run green", artifact))
+					continue
+				}
+				if readOnlyMatch {
+					result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s (read-only)", artifact, recorded.SHA256))
+				} else {
+					result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
+				}
+				evaluation.Deterministic = true
 			}
-			if readOnlyMatch {
-				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s (read-only)", artifact, recorded.SHA256))
-			} else {
-				result.Evidence = append(result.Evidence, fmt.Sprintf("artifact %s sha256:%s", artifact, recorded.SHA256))
-			}
-			evaluation.Deterministic = true
 		}
 		// #3210-05 / field report 2026-09-14 finding 7: a criterion's own
 		// wording can name a specific command ("...and the operator broker
@@ -687,7 +728,11 @@ func evaluatePhaseCriterionEvidence(root string, phase colony.Phase, manifest co
 			// State field marks this criterion as needing the owner's
 			// confirmation. No worker is dispatched because of it.
 			result.State = criterionStateNeedsOwnerConfirmation
-			result.Summary = "no deterministic source or dispatched reviewer could prove this criterion; recorded for the owner to confirm"
+			if unsatisfiableReason != "" {
+				result.Summary = fmt.Sprintf("this criterion's evidence binding cannot be satisfied by any build (%s); recorded for the owner to confirm", unsatisfiableReason)
+			} else {
+				result.Summary = "no deterministic source or dispatched reviewer could prove this criterion; recorded for the owner to confirm"
+			}
 			result.Evidence = append(result.Evidence, fmt.Sprintf("needs_owner_confirmation: %s", strings.Join(ownerConfirmationIssues, "; ")))
 		default:
 			result.Summary = "criterion satisfied by fresh bound evidence"

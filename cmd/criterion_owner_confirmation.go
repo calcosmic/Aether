@@ -7,11 +7,15 @@ import (
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
-// criterionStateNeedsOwnerConfirmation marks a success criterion that no
-// deterministic source could prove and no reviewer was dispatched to judge
-// (D-05, 193-CONTEXT.md): the phase still advances, but `aether seal` blocks
-// until the owner has answered it through the existing decision-answer path
-// (`aether decision-answer`) -- no reviewer worker is ever spawned for it.
+// criterionStateNeedsOwnerConfirmation marks a success criterion the phase
+// cannot advance past normally: no deterministic source could prove it and
+// no reviewer was dispatched to judge it (D-05, 193-CONTEXT.md), OR its
+// evidence binding is one no build could ever satisfy (WINDOWS.md row 52,
+// criterionBindingIsUnsatisfiable in cmd/criterion_evidence.go). Either way
+// the phase still advances, but `aether seal` blocks until the owner has
+// answered it through the existing decision-answer path
+// (`aether decision-answer`) -- no reviewer worker is ever spawned for it,
+// and an unsatisfiable binding is never silently rewritten or made to pass.
 const criterionStateNeedsOwnerConfirmation = "needs_owner_confirmation"
 
 // ownerConfirmationQuestionText builds the stable, deterministic question

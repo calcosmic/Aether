@@ -182,6 +182,18 @@ func runSkipPhase(phaseNum int, force bool, reason string) (map[string]interface
 	return result, updated, skipped, nextPhase, nil
 }
 
+// skipPhaseTruthfulAlternativeNotice names the owner-answer route before the
+// rest of the skip-phase screen confirms what --force just did (WINDOWS.md
+// row 52). Before this, "aether skip-phase --force" was the ONLY exit from a
+// phase stuck on one criterion Aether could not verify, and it records the
+// phase as abandoned even when the work behind it is finished -- a
+// materially false statement. This does not block the skip and does not
+// change what it records: the owner may still genuinely want to abandon the
+// phase; it simply stops being the only door out.
+func skipPhaseTruthfulAlternativeNotice() string {
+	return "Before you rely on --force again: if this phase is genuinely finished and stuck only on one criterion Aether could not verify, `aether decision-answer` may resolve that criterion directly, without abandoning the phase -- run `aether continue` on this phase to see the exact question and command. Skipping with --force still records this phase as abandoned, even when the work behind it is finished.\n\n"
+}
+
 func validateSkipPhaseTarget(state colony.ColonyState, phaseNum int) error {
 	if len(state.Plan.Phases) == 0 {
 		return fmt.Errorf("No project plan. Run `aether plan` first.")
@@ -219,6 +231,7 @@ func renderSkipPhaseVisual(state colony.ColonyState, skipped colony.Phase, nextP
 	var b strings.Builder
 	b.WriteString(renderBanner(commandEmoji("skip-phase"), fmt.Sprintf("Skip Phase %d", skipped.ID)))
 	b.WriteString(visualDividerStr())
+	b.WriteString(skipPhaseTruthfulAlternativeNotice())
 	b.WriteString("Phase was force-skipped.\n")
 	b.WriteString(renderProgressSummary(skipped.ID, len(state.Plan.Phases)))
 	b.WriteString("\n")
