@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -355,8 +356,8 @@ func TestDeterministicChecksAreUnchangedByTheBoundary(t *testing.T) {
 	// takes only a root path. Lock that independence down explicitly so a
 	// future change cannot thread the boundary into check-command
 	// resolution without this test naming it.
-	if got := resolveCodexVerificationCommands("/tmp"); got != resolveCodexVerificationCommands("/tmp") {
-		t.Fatalf("resolveCodexVerificationCommands is not stable across calls for the same root: %+v vs %+v", got, resolveCodexVerificationCommands("/tmp"))
+	if got, want := resolveCodexVerificationCommands("/tmp"), resolveCodexVerificationCommands("/tmp"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolveCodexVerificationCommands is not stable across calls for the same root: %+v vs %+v", got, want)
 	}
 }
 

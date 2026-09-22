@@ -113,6 +113,13 @@ var refusalRegistry = []refusalRow{
 		ProtectsWork: false,
 		ExtraSteps:   []string{"Check file permissions. On macOS/Linux: `ls -la <path>` to inspect."},
 	},
+	{
+		ID:           "verification-command-not-understood",
+		What:         "A verification command line Aether found could not be understood.",
+		Why:          "Aether recognises only a fixed set of build/type/lint/test command shapes; a line whose kind is labelled (for example \"- tests: ...\") but whose command doesn't match one of them is never silently dropped or reported as absent.",
+		NextCommand:  "aether patrol",
+		ProtectsWork: false,
+	},
 }
 
 // refusalForID looks up a registered row by id. Two calls with the same id

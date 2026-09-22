@@ -54,6 +54,11 @@ type codexVerificationStep struct {
 	// same figure both the live progress line (emitVerificationStepFinish)
 	// and the closing verification summary read.
 	Duration float64 `json:"duration_seconds,omitempty"`
+	// WorkingDir is the directory (relative to the project root) a
+	// `cd <dir> &&`-prefixed verification command actually ran in, set by
+	// runVerificationStepInDir. Empty means the command ran at the project
+	// root, exactly as every step did before this field existed.
+	WorkingDir string `json:"working_dir,omitempty"`
 }
 
 type codexClaimVerification struct {
@@ -156,6 +161,25 @@ type codexVerificationCommands struct {
 	Type  string
 	Lint  string
 	Test  string
+	// BuildDir/TypeDir/LintDir/TestDir carry a per-check working directory
+	// recovered from a `cd <dir> &&` prefix on the verification-commands
+	// line (WINDOWS.md row 51) -- set by setVerificationCommand, and
+	// preserved automatically when deriveVerificationScopeAtCyclePoint
+	// rewrites Test (it copies the whole struct before touching Test).
+	// Empty means "run at the project root", exactly as before these
+	// fields existed.
+	BuildDir string
+	TypeDir  string
+	LintDir  string
+	TestDir  string
+	// Unreadable collects the whole original line for every
+	// verification-commands entry that carried a recognised kind label
+	// (build/types/lint/tests) but whose command could not be classified.
+	// runDeterministicFloorAtCyclePoint turns a missing command for that
+	// same kind into a named refusal instead of a silent "no command
+	// configured" -- a line with no recognised label at all is not
+	// collected here and behaves exactly as before.
+	Unreadable []string
 }
 
 type codexContinueOptions struct {
@@ -3384,16 +3408,25 @@ func resolveCodexVerificationCommands(root string) codexVerificationCommands {
 func mergeCodexVerificationCommands(dst *codexVerificationCommands, src codexVerificationCommands) {
 	if dst.Build == "" {
 		dst.Build = strings.TrimSpace(src.Build)
+		dst.BuildDir = src.BuildDir
 	}
 	if dst.Type == "" {
 		dst.Type = strings.TrimSpace(src.Type)
+		dst.TypeDir = src.TypeDir
 	}
 	if dst.Lint == "" {
 		dst.Lint = strings.TrimSpace(src.Lint)
+		dst.LintDir = src.LintDir
 	}
 	if dst.Test == "" {
 		dst.Test = strings.TrimSpace(src.Test)
+		dst.TestDir = src.TestDir
 	}
+	// Unreadable accumulates across every source file merged in -- unlike
+	// Build/Type/Lint/Test, it is never "first source wins" (a later
+	// source's unreadable line must still be named, not silently dropped
+	// just because an earlier source already resolved a different check).
+	dst.Unreadable = append(dst.Unreadable, src.Unreadable...)
 }
 
 func loadVerificationCommandsFromMarkdown(path, heading string) codexVerificationCommands {
@@ -3534,9 +3567,20 @@ func extractVerificationCommands(content string) codexVerificationCommands {
 			setVerificationCommand(&commands, kind, command)
 			pendingKind = ""
 			continue
+		} else if kind != "" {
+			// A recognised label ("| Tests | ... |") whose command could not
+			// be classified -- named, not silently dropped (WINDOWS.md row
+			// 51). A row with no recognised label at all never reaches here.
+			commands.Unreadable = append(commands.Unreadable, line)
+			pendingKind = ""
+			continue
 		}
 		if kind, command, ok := parseLabeledVerificationCommand(line); ok {
 			setVerificationCommand(&commands, kind, command)
+			pendingKind = ""
+			continue
+		} else if kind != "" {
+			commands.Unreadable = append(commands.Unreadable, line)
 			pendingKind = ""
 			continue
 		}
@@ -3572,12 +3616,27 @@ func parseVerificationCommandTableLine(line string) (string, string, bool) {
 	if kind == "" {
 		return "", "", false
 	}
+	// kind is returned even when the command could not be extracted, so a
+	// caller can tell "no recognised label" (kind=="") apart from
+	// "recognised label, unreadable command" (kind!="", ok==false) and
+	// collect the line by name instead of dropping it (WINDOWS.md row 51).
 	command := extractVerificationCommandValue(strings.TrimSpace(parts[2]))
-	if command == "" {
-		return "", "", false
-	}
-	return kind, command, true
+	return kind, command, command != ""
 }
+
+// verificationCommandLabelMaxChars/Words bound how long the text before the
+// FIRST colon on a line may be before parseLabeledVerificationCommand will
+// still consider it a label attempt. A genuine label is a short word or two
+// ("tests", "Build Command") -- never an entire shell command with flags
+// that happens to contain a colon deep inside it (a Windows path like
+// "go build -o C:\Users\..." or a URL). Without this bound, that command
+// line was misread as a labelled "build:" line whose command could not be
+// classified -- discarding the command a later, unlabelled fallback branch
+// would otherwise have correctly extracted.
+const (
+	verificationCommandLabelMaxChars = 20
+	verificationCommandLabelMaxWords = 2
+)
 
 func parseLabeledVerificationCommand(line string) (string, string, bool) {
 	line = strings.TrimSpace(strings.TrimLeft(line, "-* "))
@@ -3585,15 +3644,18 @@ func parseLabeledVerificationCommand(line string) (string, string, bool) {
 	if idx <= 0 {
 		return "", "", false
 	}
-	kind := normalizeVerificationCommandKind(line[:idx])
+	label := line[:idx]
+	if len(label) > verificationCommandLabelMaxChars || len(strings.Fields(label)) > verificationCommandLabelMaxWords {
+		return "", "", false
+	}
+	kind := normalizeVerificationCommandKind(label)
 	if kind == "" {
 		return "", "", false
 	}
+	// See parseVerificationCommandTableLine's comment: kind is preserved
+	// even when the command is unreadable.
 	command := extractVerificationCommandValue(line[idx+1:])
-	if command == "" {
-		return "", "", false
-	}
-	return kind, command, true
+	return kind, command, command != ""
 }
 
 func parseVerificationCommandComment(line string) string {
@@ -3635,6 +3697,15 @@ func extractVerificationCommandValue(text string) string {
 }
 
 func looksLikeVerificationCommand(text string) bool {
+	// A `cd <dir> &&` prefix is a prefix, not a command kind: classify
+	// whatever comes after it. An unsafe prefix (splitVerificationCommandDirectoryPrefix
+	// returns ok=false) leaves text untouched, so "cd /abs && go test ./..."
+	// classifies its own literal, unrecognised text -- which is exactly
+	// what makes it collectible as an unreadable line rather than quietly
+	// accepted with a dangerous working directory.
+	if _, remainder, ok := splitVerificationCommandDirectoryPrefix(text); ok {
+		text = remainder
+	}
 	if detectVerificationCommandKind(text) != "" {
 		return true
 	}
@@ -3651,6 +3722,9 @@ func looksLikeVerificationCommand(text string) bool {
 }
 
 func detectVerificationCommandKind(command string) string {
+	if _, remainder, ok := splitVerificationCommandDirectoryPrefix(command); ok {
+		command = remainder
+	}
 	lower := strings.ToLower(strings.TrimSpace(command))
 	switch {
 	case strings.HasPrefix(lower, "go build"),
@@ -3717,24 +3791,100 @@ func setVerificationCommand(commands *codexVerificationCommands, kind, command s
 	if command == "" {
 		return
 	}
+	dir := ""
+	if d, remainder, ok := splitVerificationCommandDirectoryPrefix(command); ok {
+		dir = d
+		command = remainder
+	}
 	switch kind {
 	case "build":
 		if commands.Build == "" {
 			commands.Build = command
+			commands.BuildDir = dir
 		}
 	case "types":
 		if commands.Type == "" {
 			commands.Type = command
+			commands.TypeDir = dir
 		}
 	case "lint":
 		if commands.Lint == "" {
 			commands.Lint = command
+			commands.LintDir = dir
 		}
 	case "tests":
 		if commands.Test == "" {
 			commands.Test = command
+			commands.TestDir = dir
 		}
 	}
+}
+
+// splitVerificationCommandDirectoryPrefix recognises a leading `cd <dir> &&`
+// or `cd <dir>;` prefix on a verification command line (WINDOWS.md row 51):
+// it returns the directory and everything after the separator, trimmed. The
+// directory may be double- or single-quoted (to allow a space) or bare.
+//
+// It never accepts an absolute path or a path that would escape the project
+// root once cleaned -- both return ok=false with dir preserved so the
+// caller can refuse by name rather than silently running at an unintended
+// or dangerous location. A line with no `cd` prefix at all returns ok=false
+// with dir and remainder both empty.
+func splitVerificationCommandDirectoryPrefix(command string) (dir string, remainder string, ok bool) {
+	trimmed := strings.TrimSpace(command)
+	if !strings.HasPrefix(trimmed, "cd ") && trimmed != "cd" {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "cd"))
+	if rest == "" {
+		return "", "", false
+	}
+
+	var rawDir, afterDir string
+	if rest[0] == '"' || rest[0] == '\'' {
+		quote := rest[0]
+		closeIdx := strings.IndexByte(rest[1:], quote)
+		if closeIdx < 0 {
+			return "", "", false
+		}
+		rawDir = rest[1 : 1+closeIdx]
+		afterDir = strings.TrimSpace(rest[1+closeIdx+1:])
+	} else {
+		fields := strings.SplitN(rest, " ", 2)
+		rawDir = fields[0]
+		if len(fields) > 1 {
+			afterDir = strings.TrimSpace(fields[1])
+		}
+	}
+	rawDir = strings.TrimSpace(rawDir)
+	if rawDir == "" {
+		return "", "", false
+	}
+
+	var sepRemainder string
+	switch {
+	case strings.HasPrefix(afterDir, "&&"):
+		sepRemainder = strings.TrimSpace(strings.TrimPrefix(afterDir, "&&"))
+	case strings.HasPrefix(afterDir, ";"):
+		sepRemainder = strings.TrimSpace(strings.TrimPrefix(afterDir, ";"))
+	default:
+		// "cd <dir>" with no "&& <command>"/"; <command>" after it is not a
+		// verification command line at all -- nothing for the caller to run.
+		return "", "", false
+	}
+	if sepRemainder == "" {
+		return "", "", false
+	}
+
+	if filepath.IsAbs(rawDir) {
+		return rawDir, "", false
+	}
+	cleaned := filepath.Clean(rawDir)
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return rawDir, "", false
+	}
+
+	return cleaned, sepRemainder, true
 }
 
 // blockedVerificationConfigGuidance names every location a user can configure
@@ -3780,6 +3930,43 @@ func applyExpectedTestFailure(steps []codexVerificationStep, phase colony.Phase)
 		steps[i].Summary = "tests failed as expected — this phase's deliverable is failing tests that prove the defect (" + strings.TrimSpace(steps[i].Summary) + ")"
 	}
 	return steps
+}
+
+// runVerificationStepInDir is runVerificationStep plus an optional per-check
+// working directory (WINDOWS.md row 51): dir, when non-empty, is resolved
+// against root with filepath.Join + filepath.Clean, and the command runs
+// there instead of at the project root. A dir that resolves outside root is
+// refused by name rather than silently run at root or escaping it. Passing
+// an empty dir is byte-identical to calling runVerificationStep directly --
+// this wrapper never duplicates runVerificationStep's own body, it only
+// substitutes the root the shell-out uses and tags the result with the
+// directory that was actually used.
+func runVerificationStepInDir(ctx context.Context, root, name string, required bool, command string, dir string, timeout time.Duration) codexVerificationStep {
+	trimmedDir := strings.TrimSpace(dir)
+	if trimmedDir == "" || strings.TrimSpace(command) == "" {
+		return runVerificationStep(ctx, root, name, required, command, timeout)
+	}
+
+	rootClean := filepath.Clean(root)
+	resolved := filepath.Clean(filepath.Join(rootClean, trimmedDir))
+	rel, err := filepath.Rel(rootClean, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		emitVerificationStepStart(name)
+		step := codexVerificationStep{
+			Name:     name,
+			Command:  command,
+			Blocked:  true,
+			Required: required,
+			Passed:   false,
+			Summary:  fmt.Sprintf("blocked: verification working directory %q for %s resolves outside the project; %s", trimmedDir, name, blockedVerificationConfigGuidance()),
+		}
+		emitVerificationStepFinish(step)
+		return step
+	}
+
+	step := runVerificationStep(ctx, resolved, name, required, command, timeout)
+	step.WorkingDir = trimmedDir
+	return step
 }
 
 // runVerificationStep runs one of the four shell checks (build, types, lint,

@@ -46,13 +46,14 @@ func TestVerificationCommandWithADirectoryPrefixRuns(t *testing.T) {
 			t.Fatalf("write marker: %v", err)
 		}
 		if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte(
-			"## Verification Commands\n\n- tests: cd server && test -f marker.txt\n"), 0644); err != nil {
+			"## Verification Commands\n\n- tests: cd server && sh -c \"test -f marker.txt\"\n"), 0644); err != nil {
 			t.Fatalf("write CLAUDE.md: %v", err)
 		}
 
 		commands := resolveCodexVerificationCommands(root)
-		if commands.Test != "test -f marker.txt" {
-			t.Fatalf("commands.Test = %q, want the cd prefix stripped: %q", commands.Test, "test -f marker.txt")
+		wantTest := `sh -c "test -f marker.txt"`
+		if commands.Test != wantTest {
+			t.Fatalf("commands.Test = %q, want the cd prefix stripped: %q", commands.Test, wantTest)
 		}
 		if commands.TestDir != "server" {
 			t.Fatalf("commands.TestDir = %q, want %q", commands.TestDir, "server")

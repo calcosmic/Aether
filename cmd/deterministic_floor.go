@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
@@ -84,12 +85,18 @@ func runDeterministicFloorAtCyclePoint(ctx context.Context, root string, phase c
 	commands = scopedCommands
 	requiredChecks := requiredVerificationChecks(phase)
 	steps := []codexVerificationStep{
-		runVerificationStep(ctx, root, "build", requiredChecks["build"], commands.Build, verificationTimeout),
-		runVerificationStep(ctx, root, "types", requiredChecks["types"], commands.Type, verificationTimeout),
-		runVerificationStep(ctx, root, "lint", requiredChecks["lint"], commands.Lint, verificationTimeout),
-		runVerificationStep(ctx, root, "tests", requiredChecks["tests"], commands.Test, verificationTimeout),
+		runVerificationStepInDir(ctx, root, "build", requiredChecks["build"], commands.Build, commands.BuildDir, verificationTimeout),
+		runVerificationStepInDir(ctx, root, "types", requiredChecks["types"], commands.Type, commands.TypeDir, verificationTimeout),
+		runVerificationStepInDir(ctx, root, "lint", requiredChecks["lint"], commands.Lint, commands.LintDir, verificationTimeout),
+		runVerificationStepInDir(ctx, root, "tests", requiredChecks["tests"], commands.Test, commands.TestDir, verificationTimeout),
 	}
 	steps = applyExpectedTestFailure(steps, phase)
+	// WINDOWS.md row 51: a check that quietly skipped for lack of a
+	// resolved command becomes a loud, named refusal when the real cause is
+	// a labelled verification-commands line Aether found and could not
+	// read -- never silently reported as "no command configured". A check
+	// with genuinely nothing configured for it at all is untouched.
+	steps = applyUnreadableVerificationCommandRefusals(steps, commands)
 	claims := verifyCodexBuildClaims(root, manifest)
 
 	shellChecksPassed := true
@@ -153,4 +160,59 @@ func runDeterministicFloorAtCyclePoint(ctx context.Context, root string, phase c
 		recordFailedChecksToMidden(phase, result)
 	}
 	return result
+}
+
+// applyUnreadableVerificationCommandRefusals turns a check that quietly
+// skipped for lack of a resolved command back into a loud, named refusal
+// when the real cause is that Aether found a labelled verification-commands
+// line for that check and could not read it (WINDOWS.md row 51) -- never
+// silently reported as "no command configured" the way the old
+// looksLikeVerificationCommand gap used to leave it. A check with
+// genuinely nothing configured for it at all (no matching Unreadable entry)
+// is left completely untouched -- the existing "no tests to run in this
+// project" warning still covers that case exactly as before.
+func applyUnreadableVerificationCommandRefusals(steps []codexVerificationStep, commands codexVerificationCommands) []codexVerificationStep {
+	if len(commands.Unreadable) == 0 {
+		return steps
+	}
+	for i := range steps {
+		if strings.TrimSpace(steps[i].Command) != "" || !steps[i].Skipped {
+			continue
+		}
+		line := unreadableLineForKind(commands, steps[i].Name)
+		if line == "" {
+			continue
+		}
+		r := refuse("verification-command-not-understood", fmt.Sprintf("Aether could not understand this %s line: %s", steps[i].Name, line))
+		steps[i].Skipped = false
+		steps[i].Blocked = true
+		steps[i].Passed = false
+		steps[i].Summary = strings.TrimSpace(strings.TrimSpace(r.What) + " " + strings.TrimSpace(r.Why))
+	}
+	return steps
+}
+
+// unreadableLineForKind returns the first line in commands.Unreadable whose
+// own recognised label matches kind ("build", "types", "lint", "tests"), or
+// "" when none does. It re-derives the label with the same two parsers
+// extractVerificationCommands used to collect the line in the first place,
+// rather than threading a second, kind-tagged type through
+// codexVerificationCommands for one lookup.
+func unreadableLineForKind(commands codexVerificationCommands, kind string) string {
+	for _, line := range commands.Unreadable {
+		if verificationCommandLineKind(line) == kind {
+			return line
+		}
+	}
+	return ""
+}
+
+func verificationCommandLineKind(line string) string {
+	if kind, _, _ := parseVerificationCommandTableLine(line); kind != "" {
+		return kind
+	}
+	if kind, _, _ := parseLabeledVerificationCommand(line); kind != "" {
+		return kind
+	}
+	return ""
 }
