@@ -8,7 +8,7 @@ VERSION := $(shell \
 BINARY  := aether
 LDFLAGS := -X github.com/calcosmic/Aether/cmd.Version=$(VERSION)
 
-.PHONY: build test lint clean install smoke bench-selftest bench-acceptance-order bench-dry-run version-sync vulncheck eval-gate-fast eval-gate-focused eval-gate-integration eval-gate-provider eval-gate-overnight eval-gate-race eval-gate-release eval-gate-journey
+.PHONY: build test lint clean install smoke bench-selftest bench-acceptance-order bench-dry-run version-sync vulncheck eval-gate-fast eval-gate-focused eval-gate-integration eval-gate-provider eval-gate-overnight eval-gate-race eval-gate-release eval-gate-journey prove-journey-fix-reverts
 
 smoke:
 	./scripts/smoke-daily-driver.sh
@@ -140,3 +140,14 @@ eval-gate-release:
 # provisional (gates.json).
 eval-gate-journey:
 	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=5400s ./...,-tags=journey -list=TestJourney ./...)
+
+# prove-journey-fix-reverts (207-05-PLAN.md, UED-09, owner ruling D-01): the
+# journey gate above proves the product works; this proves the gate is
+# worth running -- reverting each of the five landed 2026-09-21 fixes in a
+# throwaway working copy and watching the journey fail at the step it
+# protects. Deliberately NOT folded into eval-gate-journey: the two cost
+# very differently (this rebuilds a binary and drives a real chat per
+# entry) and answer different questions. Requires a local, interactively-
+# authenticated claude CLI; never runs in CI.
+prove-journey-fix-reverts:
+	./scripts/prove-journey-catches-the-2026-09-21-fixes.sh
