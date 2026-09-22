@@ -397,6 +397,53 @@ func nonWrapping(name string) error {
 	}
 }
 
+// refusalIDUsagesByDisposition walks the declared files (reusing
+// refusalCallCallee/refusalCallLiteralID, the same AST helpers
+// enumerateRefusalSitesInSource uses) and reports, separately: every
+// refuse(...) call id used directly inside a return statement (a "stop"
+// use), and every refuse(...) call id passed as an argument to
+// warnAndCarryOn(...) (a "warn" use). TestNoRefusalBothWarnsAndStops
+// (cmd/refusal_behaviour_test.go) is the one caller.
+func refusalIDUsagesByDisposition(files []string) (stopIDs map[string]bool, warnIDs map[string]bool, err error) {
+	stopIDs = map[string]bool{}
+	warnIDs = map[string]bool{}
+	for _, f := range files {
+		data, readErr := os.ReadFile(filepath.Clean(f))
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("read declared refusal file %s: %w", f, readErr)
+		}
+		fset := token.NewFileSet()
+		file, parseErr := parser.ParseFile(fset, f, data, 0)
+		if parseErr != nil {
+			return nil, nil, fmt.Errorf("parse %s: %w", f, parseErr)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			switch node := n.(type) {
+			case *ast.ReturnStmt:
+				for _, result := range node.Results {
+					if call, ok := result.(*ast.CallExpr); ok && refusalCallCallee(call) == "refuse" {
+						if id, ok := refusalCallLiteralID(call); ok {
+							stopIDs[id] = true
+						}
+					}
+				}
+			case *ast.CallExpr:
+				if refusalCallCallee(node) == "warnAndCarryOn" {
+					for _, arg := range node.Args {
+						if call, ok := arg.(*ast.CallExpr); ok && refusalCallCallee(call) == "refuse" {
+							if id, ok := refusalCallLiteralID(call); ok {
+								warnIDs[id] = true
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+	return stopIDs, warnIDs, nil
+}
+
 // TestEveryRowCarriesAClassificationReason: every row in refusalRegistry
 // carries a non-empty Reason and a Disposition of exactly "stop" or "warn";
 // a row whose ProtectsWork is true must never carry Disposition "warn".

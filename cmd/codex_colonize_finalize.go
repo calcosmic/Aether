@@ -368,7 +368,7 @@ func runCodexColonizeFinalize(root string, completion codexExternalColonizeCompl
 
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	if surveyDocsExist(surveyDir) && !manifest.ForceResurvey && !manifest.ExistingSurvey && surveyDocsExistedInManifest(*manifest) {
-		return nil, refuse("colonize-existing-survey-found")
+		return nil, refuse("colonize-finalize-existing-survey-found")
 	}
 	if err := os.MkdirAll(surveyDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create survey directory: %w", err)

@@ -681,9 +681,12 @@ func TestColonizeRequiresForceResurveyWhenSurveyExists(t *testing.T) {
 
 	// 208-06: this dead end is now the typed "colonize-existing-survey-found"
 	// refusal (cmd/refusal_register.go) -- its own What text, not the old
-	// bare error string, is what the owner now sees.
+	// bare error string, is what the owner now sees. This is the direct
+	// (non --plan-only) dispatch lane, so the next command is the plain
+	// `aether colonize --force-resurvey`, not the plan-only variant the
+	// sibling "colonize-finalize-existing-survey-found" row carries.
 	if !strings.Contains(errBuf.String(), "A territory survey already exists for this project") ||
-		!strings.Contains(errBuf.String(), "aether colonize --plan-only --force-resurvey") {
+		!strings.Contains(errBuf.String(), "aether colonize --force-resurvey") {
 		t.Fatalf("expected force-resurvey guidance, got: %s", errBuf.String())
 	}
 }

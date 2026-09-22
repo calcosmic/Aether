@@ -187,7 +187,11 @@ func applyUnreadableVerificationCommandRefusals(steps []codexVerificationStep, c
 		steps[i].Skipped = false
 		steps[i].Blocked = true
 		steps[i].Passed = false
-		steps[i].Summary = strings.TrimSpace(strings.TrimSpace(r.What) + " " + strings.TrimSpace(r.Why))
+		// 208-06 (UED-11): every refusal prints its own next command, this
+		// site included -- Summary used to carry only What+Why, leaving the
+		// owner with no way forward on screen even though the row itself
+		// (cmd/refusal_register.go) has always carried one.
+		steps[i].Summary = strings.TrimSpace(strings.TrimSpace(r.What) + " " + strings.TrimSpace(r.Why) + fmt.Sprintf(" Next: `%s`.", strings.TrimSpace(r.NextCommand)))
 	}
 	return steps
 }

@@ -385,11 +385,11 @@ func pauseColonyInMutationSession(now time.Time, mutation *planningMutationSessi
 		return pauseResumeLifecycleOutcome{}, err
 	}
 	if facts.State.Source.Provenance != LifecycleFactConfirmed {
-		return pauseResumeLifecycleOutcome{}, refuse("resume-colony-state-unconfirmed", fmt.Sprintf("Aether's own project state came back %s: %s.", facts.State.Source.Provenance, facts.State.Source.Diagnostic))
+		return pauseResumeLifecycleOutcome{}, refuse("pause-colony-state-unconfirmed", fmt.Sprintf("Aether's own project state came back %s: %s.", facts.State.Source.Provenance, facts.State.Source.Diagnostic))
 	}
 	state := normalizeLegacyColonyState(facts.State.Value)
 	if !resumeStateIsRunnable(state) {
-		return pauseResumeLifecycleOutcome{}, refuse("resume-colony-state-not-runnable")
+		return pauseResumeLifecycleOutcome{}, refuse("pause-colony-state-not-runnable")
 	}
 	session := pauseResumeSessionFromFacts(facts, state, now)
 

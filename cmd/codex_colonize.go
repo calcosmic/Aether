@@ -140,7 +140,7 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	existingSurvey := surveyDocsExist(surveyDir)
 	if existingSurvey && !opts.ForceResurvey {
-		return nil, fmt.Errorf("existing territory survey found; rerun with `aether colonize --force-resurvey` to refresh it")
+		return nil, refuse("colonize-existing-survey-found")
 	}
 
 	if err := os.MkdirAll(surveyDir, 0755); err != nil {
@@ -351,7 +351,7 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	existingSurvey := surveyDocsExist(surveyDir)
 	if existingSurvey && !opts.ForceResurvey {
-		return nil, fmt.Errorf("existing territory survey found; rerun with `aether colonize --force-resurvey` to refresh it")
+		return nil, refuse("colonize-existing-survey-found")
 	}
 
 	dispatchMode := "plan-only"
