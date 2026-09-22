@@ -187,6 +187,21 @@ re-measuring from that run, honestly, the same way this one was.
 
 ---
 
-## Owner's answer (Task 3)
+## Owner's answer (Task 3), 2026-09-22
 
-*(recorded below once the owner has answered; see the checkpoint in 207-06-PLAN.md Task 3)*
+The owner was shown the plain-English summary above (how long the three walks took and what
+they cost, whether breaking each of the five old problems again stopped the walk where it
+should, the honest sixth-problem and territory-refresh findings, and the three options with
+their per-release cost) and asked which of three options he wants running before every release:
+keep three walks, drop to one, or also re-break the five old problems before every release.
+
+**His answer, verbatim:** "Three walks (Recommended)" — Option A: keep the current setup
+(three trials via `make eval-gate-journey`, budget 1100s), and keep `make
+prove-journey-fix-reverts` as an occasional hand-run check rather than folding it into every
+release.
+
+**Result:** no change to the gate. `cmd/testdata/eval-gates/gates.json`'s `journey` gate stays
+at three trials minimum (`journeyMinimumTrials = 3`) and `budget_seconds: 1100`, exactly as
+measured and recorded above. The publish runbook's Preflight bullet (`.aether/docs/publish-update-runbook.md`)
+already reflects this shape and needed no edit. `go test -run "TestEvalGate" -count=1 -timeout
+600s ./cmd` re-run after this decision still passes, confirming nothing was left inconsistent.
