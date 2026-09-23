@@ -30,12 +30,17 @@ type refusalLogEntry struct {
 	Command       string `json:"command"`
 }
 
-// refusalLogExcludedCommands are the command paths already proven to write
-// nothing -- TestStatusLineChangesNothingAndRepeatsItself, TestDirectRouteWritesNothing,
-// TestStopHookScreenCheckDoesNotMutate. appendRefusalToLog must honour those
-// guarantees rather than quietly becoming a fifth writer. Held as one named
+// refusalLogExcludedCommands are the NON-hook command paths already proven
+// to write nothing -- TestStatusLineChangesNothingAndRepeatsItself,
+// TestDirectRouteWritesNothing. appendRefusalToLog must honour that
+// guarantee rather than quietly becoming a fifth writer. Held as one named
 // var so TestRefusalLogIsSkippedForHookCommands iterates the exact set this
 // function checks, rather than a re-typed copy that could drift from it.
+//
+// Every "hook-*" command is excluded structurally by
+// refusalLogWriteExcludedForCommand below, never enumerated here one name
+// at a time -- see that function's own doc comment for why (WR-03,
+// 208-REVIEW.md).
 //
 // Named "Excluded" rather than "Skip" deliberately: TestSkipListDivergence
 // (cmd/codex_colonize_test.go) guards against a *second* directory
@@ -44,10 +49,30 @@ type refusalLogEntry struct {
 // entirely -- a fixed set of command paths excluded from local log writes,
 // not a directory-walk skip list -- so it must not share that vocabulary.
 var refusalLogExcludedCommands = map[string]bool{
-	"hook-stop":          true,
-	"hook-post-tool-use": true,
-	"hook-session-start": true,
-	"status-line":        true,
+	"status-line": true,
+}
+
+// refusalLogWriteExcludedForCommand reports whether command must never
+// trigger a refusal-log write.
+//
+// Before this (WR-03, 208-REVIEW.md), the exclusion was a fixed
+// enumeration of exactly the four commands proven never to mutate at the
+// time it was written (hook-stop, hook-post-tool-use, hook-session-start,
+// status-line). hook-pre-tool-use and hook-pre-compact
+// (cmd/hook_cmds.go) call no refuse()/outputRefusal()/warnAndCarryOn()
+// path today, so the gap was latent rather than active -- but nothing
+// structurally stopped a future refusal being wired into either of those
+// two hook commands, at which point appendRefusalToLog would have begun
+// writing to refusals.jsonl during a hook invocation with no test catching
+// the new mutation the way TestRefusalLogIsSkippedForHookCommands catches
+// the four named ones.
+//
+// Every command whose own name starts with "hook-" now shares this
+// exclusion structurally, so a future hook command never needs a new,
+// easy-to-forget entry here. status-line is not a "hook-*" name, so it
+// stays an explicit, named entry in refusalLogExcludedCommands above.
+func refusalLogWriteExcludedForCommand(command string) bool {
+	return strings.HasPrefix(command, "hook-") || refusalLogExcludedCommands[command]
 }
 
 // appendRefusalToLog appends one line to the local refusal log. It returns
@@ -55,13 +80,13 @@ var refusalLogExcludedCommands = map[string]bool{
 // still reach the owner's screen even when the log append itself fails, and
 // the rendered screen must be byte-identical whether or not the append
 // succeeded (TestRefusalLogAppendsAndNeverBlocks). It writes nothing when
-// there is no project in this folder, and nothing for the command paths
-// named above.
+// there is no project in this folder, and nothing for a command
+// refusalLogWriteExcludedForCommand names.
 func appendRefusalToLog(r refusal) {
 	if store == nil {
 		return
 	}
-	if refusalLogExcludedCommands[currentStreamingCommand] {
+	if refusalLogWriteExcludedForCommand(currentStreamingCommand) {
 		return
 	}
 	entry := refusalLogEntry{

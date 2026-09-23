@@ -50,13 +50,36 @@ func TestRefusalLogAppendsAndNeverBlocks(t *testing.T) {
 }
 
 // TestRefusalLogIsSkippedForHookCommands iterates refusalLogExcludedCommands
-// itself (not a re-typed copy) and asserts no file is created under the
-// store for each entry.
+// itself (not a re-typed copy), plus two known "hook-*" commands and one
+// deliberately never-before-registered "hook-*" name, and asserts no file
+// is created under the store for any of them.
+//
+// The never-before-registered case (WR-03, 208-REVIEW.md) is the point:
+// before refusalLogWriteExcludedForCommand existed, the exclusion was a
+// fixed enumeration of exactly the commands known at the time -- a future
+// hook command would have started writing to refusals.jsonl with nothing
+// catching it. This proves the exclusion is now structural (every
+// "hook-*" name), not a list that has to remember to grow.
 func TestRefusalLogIsSkippedForHookCommands(t *testing.T) {
 	saveGlobals(t)
 	repo := bindCommandTestRepository(t)
 
+	commands := map[string]bool{}
 	for command := range refusalLogExcludedCommands {
+		commands[command] = true
+	}
+	commands["hook-stop"] = true
+	commands["hook-post-tool-use"] = true
+	commands["hook-session-start"] = true
+	// hook-pre-tool-use and hook-pre-compact call no refuse(...) path
+	// today (see refusalLogWriteExcludedForCommand's doc comment), and a
+	// wholly synthetic name proves the exclusion is not a lookup table at
+	// all -- any future "hook-*" command is covered the same way.
+	commands["hook-pre-tool-use"] = true
+	commands["hook-pre-compact"] = true
+	commands["hook-a-command-nobody-has-registered-yet"] = true
+
+	for command := range commands {
 		t.Run(command, func(t *testing.T) {
 			currentStreamingCommand = command
 			t.Cleanup(func() { currentStreamingCommand = "" })
@@ -69,6 +92,29 @@ func TestRefusalLogIsSkippedForHookCommands(t *testing.T) {
 				t.Fatalf("unexpected error checking for refusal log: %v", err)
 			}
 		})
+	}
+}
+
+// TestRefusalLogIsNotSkippedForAnOrdinaryCommand is the guard on the guard:
+// proves refusalLogWriteExcludedForCommand can return false, and that an
+// ordinary (non-hook, non-status-line) command really does write a log
+// entry -- without this, TestRefusalLogIsSkippedForHookCommands passing
+// would prove nothing, since a function that always returns true would
+// pass it too.
+func TestRefusalLogIsNotSkippedForAnOrdinaryCommand(t *testing.T) {
+	saveGlobals(t)
+	repo := bindCommandTestRepository(t)
+
+	if refusalLogWriteExcludedForCommand("continue") {
+		t.Fatal("expected an ordinary command like \"continue\" to not be excluded")
+	}
+
+	currentStreamingCommand = "continue"
+	t.Cleanup(func() { currentStreamingCommand = "" })
+	appendRefusalToLog(refuse("colonize-finalize-missing-timestamp"))
+
+	if _, err := os.Stat(filepath.Join(repo.DataDir, refusalLogPath)); err != nil {
+		t.Fatalf("expected a refusal log to be written for an ordinary command, stat err = %v", err)
 	}
 }
 
