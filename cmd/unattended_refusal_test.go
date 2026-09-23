@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -196,5 +197,62 @@ func TestUnattendedFactIsSetByTheJourneyHarness(t *testing.T) {
 	}
 	if !strings.Contains(src, "func journeyRunClaudeWithRetry(") {
 		t.Fatal("journeyRunClaudeWithRetry no longer exists in journey_live_test.go -- this test's own anchor for \"the one place both the session-establishing call and every driven step build their env\" is gone")
+	}
+}
+
+// TestColonizeWrapperCarriesTheActWhenAloneRule proves all three colonize
+// command sources -- the YAML documented source of truth and both platform
+// wrappers -- carry D-01's rule (208-CONTEXT.md "Gap-closure decisions"):
+// act on the runtime's own recovery guidance when no one is here to answer,
+// ask and wait for an answer when someone is there. One test, three files,
+// named failures -- a future edit that drops the rule from just one of the
+// three is caught by the file that lost it, not by a diff nobody reads.
+func TestColonizeWrapperCarriesTheActWhenAloneRule(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+
+	// The two halves of D-01's rule, each proven by two distinct phrases so
+	// a partial rewording that keeps only one half's vocabulary is still
+	// caught: acting alone must both run the command AND carry on without
+	// asking; asking must both notice someone is there AND wait for their
+	// answer.
+	actPhrases := []string{"run the command it names", "carry on without asking"}
+	askPhrases := []string{"someone is there", "wait for their answer"}
+
+	files := []struct {
+		name string
+		path string
+	}{
+		{"aether-yaml", filepath.Join(repoRoot, ".aether", "commands", "colonize.yaml")},
+		{"claude-wrapper", filepath.Join(repoRoot, ".claude", "commands", "ant", "colonize.md")},
+		{"opencode-wrapper", filepath.Join(repoRoot, ".opencode", "commands", "ant", "colonize.md")},
+	}
+
+	for _, f := range files {
+		path := f.path
+		t.Run(f.name, func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			text := string(data)
+
+			var missing []string
+			for _, phrase := range actPhrases {
+				if !strings.Contains(text, phrase) {
+					missing = append(missing, "act-when-alone phrase: "+phrase)
+				}
+			}
+			for _, phrase := range askPhrases {
+				if !strings.Contains(text, phrase) {
+					missing = append(missing, "ask-when-present phrase: "+phrase)
+				}
+			}
+			if len(missing) > 0 {
+				t.Fatalf("%s does not carry D-01's act-when-alone / ask-when-present rule in full; missing:\n  %s", path, strings.Join(missing, "\n  "))
+			}
+		})
 	}
 }

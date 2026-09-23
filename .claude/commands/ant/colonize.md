@@ -22,7 +22,7 @@ Save the full JSON envelope to a temporary manifest file outside `.aether/data/`
 
 If the runtime returns `dispatch_mode: agent-delegate`, this is the expected hosted-agent path. Do not run nested subprocess surveyors. Dispatch the manifest workers through the current platform.
 
-If the runtime reports an existing survey, follow the runtime recovery guidance before spawning workers.
+If the runtime reports an existing survey, follow the runtime's recovery guidance before spawning workers: if that guidance says no one is here to answer, run the command it names -- re-running `aether host colonize --force-resurvey` -- and carry on without asking; if it does not say that, someone is there, so show them the screen, say which command you would run, and wait for their answer before running it.
 
 ## Runtime Spawn Ceremony
 

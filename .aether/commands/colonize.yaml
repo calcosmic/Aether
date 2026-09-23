@@ -12,6 +12,7 @@ wrapper_additions:
   orchestration: |
     Restore host-visible surveyor orchestration:
     1. Run `aether host colonize $ARGUMENTS` and save the full JSON envelope to a temporary manifest file outside `.aether/data/`.
+    If the runtime reports an existing survey, follow the runtime's recovery guidance before spawning workers: if that guidance says no one is here to answer, run the command it names -- re-running `aether host colonize --force-resurvey` -- and carry on without asking; if it does not say that, someone is there, so show them the screen, say which command you would run, and wait for their answer before running it.
     2. Parse `result.colonize_manifest`; do not parse visual output.
     3. Render `AETHER_OUTPUT_MODE=visual aether ceremony spawn-plan --workflow colonize --manifest-file <manifest_file>` so the surveyor stack appears before live workers.
     4. Use visible live Task/subagent panels as the survey ceremony. Do not set `run_in_background`, do not describe surveyors as background agents, and do not replace the live stack with a markdown worker table.
