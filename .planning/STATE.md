@@ -5,16 +5,16 @@ milestone_name: Use It Every Day
 current_phase: 208
 current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-09-PLAN.md
-last_updated: "2026-09-23T13:53:35.163Z"
+stopped_at: "Completed 208-10-PLAN.md (phase 208: 10/10 plans executed; WINDOWS row 53 stays honestly open)"
+last_updated: "2026-09-23T14:08:49.735Z"
 last_activity: 2026-09-23
-last_activity_desc: Phase 208 execution started
-state_head: a56496a3112f875774028f5023307d6c51d8915e
+last_activity_desc: Phase 208 execution complete (10/10 plans); WINDOWS row 53 (survey step live proof) stays open
+state_head: af165ebfdd752d4245419a2fa23307c50d0e5e6f
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
   percent: 40
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 208 (Never a Dead End) — EXECUTING
-Next phase: 208 (never a dead end)
-Status: Ready to execute
-Plan: 2 of 10
-Last activity: 2026-09-23 — Phase 208 execution started
+Phase: 208 (Never a Dead End) — 10/10 plans executed; WINDOWS row 53 (survey step live proof) stays honestly open
+Next phase: 209 (A Light Default Path) — not yet planned
+Status: Awaiting re-verification / next-phase planning
+Plan: 10 of 10
+Last activity: 2026-09-23 — Phase 208 execution complete (208-10: second real walk measured, same dead end)
 
 ## Performance Metrics
 
@@ -224,6 +224,7 @@ Last activity: 2026-09-23 — Phase 208 execution started
 | Phase 208 P07 | 55min | 2 tasks | 4 files |
 | Phase 208 P08 | 50min | 3 tasks | 5 files |
 | Phase 208 P09 | 101min | 3 tasks | 13 files |
+| Phase 208 P10 | 13 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -699,6 +700,7 @@ Last activity: 2026-09-23 — Phase 208 execution started
 - [Phase 208]: journey gate budget kept provisional (6662s) rather than fabricating a final figure the incomplete run could not honestly produce
 - [Phase 208]: [Phase 208-09]: The is-anyone-here fact is opt-in (AETHER_UNATTENDED=1), never inferred from a terminal check or unobserved signal; guidance is gated on ProtectsWork AND a next command AND the fact, on both refusal lanes, from one shared string.
 - [Phase 208]: [Phase 208-09]: colonize.md is a four-way hand-kept copy, not three (canonical nested Claude, the flat installed-consumer mirror .claude/commands/ant-colonize.md, OpenCode, and the YAML source); the missed fourth copy and a stale CMD-04 content hash were both caught by the plan's own full-suite run and fixed in the same wave.
+- [Phase 208]: WINDOWS row 53 stays open after a second real journey walk: 208-09's act-when-alone fix rendered correctly in the live transcript, but the driving chat asked the owner anyway instead of running the named --force-resurvey. — The survey step's on-disk fact check failed again and colonize-finalize was never reached; a code-level fix proven correct is not the same as a live chat proven to follow it.
 
 ### Pending Todos
 
@@ -821,8 +823,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-23T13:53:35.020Z
-Stopped at: Completed 208-09-PLAN.md
+Last session: 2026-09-23T14:08:44.294Z
+Stopped at: Completed 208-10-PLAN.md (phase 208: 10/10 plans executed; WINDOWS row 53 stays honestly open)
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
