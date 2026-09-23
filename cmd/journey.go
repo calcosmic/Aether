@@ -289,17 +289,28 @@ type journeyPrintedRefusal struct {
 var journeyPrintedRefusalNextLineRe = regexp.MustCompile("(?m)^Next: `([^`\n]+)`")
 
 // journeyPrintedRefusals reads the transcript at transcriptPath and returns
-// every printed refusal found, in the order they appear. It looks only at
-// the two places a real renderRefusal block can appear in a transcript: an
-// assistant's own text block (the chat relaying what it saw), and a
-// user-role tool_result block (a Bash call's own captured stdout/stderr) --
-// the same two shapes journeyMenuCommandNames and owedScreenFrom already
-// read. A transcript line that does not decode, or an empty transcript,
-// yields no refusals and no error.
+// every printed refusal found, in the order they appear. It looks ONLY at
+// user-role tool_result blocks -- a Bash call's own captured stdout/stderr,
+// genuine tool output the model cannot author -- the same shape owedScreenFrom
+// (cmd/hook_cmds.go) trusts for the identical "did a screen genuinely get
+// drawn" question. A transcript line that does not decode, or an empty
+// transcript, yields no refusals and no error.
+//
+// WR-05 (208-REVIEW.md): this used to also scan an assistant's own text
+// block, on the theory that "the chat relaying what it saw" is an
+// equally-trustworthy sighting of a real renderRefusal block. It is not --
+// the assistant's own text is free-form model output, not genuine tool
+// output, and journeyRunPrintedNextCommands (cmd/journey_live_test.go)
+// actually executes whatever NextCommand this function returns. A
+// hallucinated or copy-pasted line that happens to match the "Next: `aether
+// ...`" shape would have been treated identically to a real, verbatim block
+// of Aether's own rendered output. Restricting extraction to tool_result
+// blocks means only text Aether itself actually printed can ever be found
+// here.
 func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, error) {
 	var found []journeyPrintedRefusal
 	err := journeyScanTranscriptLines(transcriptPath, func(entry journeyTranscriptEntry) {
-		if len(entry.Message.Content) == 0 {
+		if entry.Message.Role != "user" || len(entry.Message.Content) == 0 {
 			return
 		}
 		var blocks []journeyContentBlock
@@ -307,15 +318,10 @@ func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, err
 			return // content is a bare string on this line, not a block array
 		}
 		for _, b := range blocks {
-			var text string
-			switch {
-			case b.Type == "text" && entry.Message.Role == "assistant":
-				text = b.Text
-			case b.Type == "tool_result" && entry.Message.Role == "user":
-				text = toolResultText(b.Content)
-			default:
+			if b.Type != "tool_result" {
 				continue
 			}
+			text := toolResultText(b.Content)
 			for _, m := range journeyPrintedRefusalNextLineRe.FindAllStringSubmatch(text, -1) {
 				found = append(found, journeyPrintedRefusal{
 					NextCommand: strings.TrimSpace(m[1]),

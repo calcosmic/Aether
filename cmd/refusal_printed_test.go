@@ -212,6 +212,74 @@ func TestPrintedRefusalExtractorIgnoresOrdinaryOutput(t *testing.T) {
 	}
 }
 
+// TestPrintedRefusalExtractorIgnoresAssistantOwnText is WR-05's own
+// regression guard (208-REVIEW.md). Before this fix, journeyPrintedRefusals
+// also scanned an assistant's own text block for the "Next: `...`" shape,
+// on the theory that "the chat relaying what it saw" was an equally
+// trustworthy sighting of a real renderRefusal block -- but the assistant's
+// own text is free-form model output, not genuine tool output, and
+// journeyRunPrintedNextCommands (cmd/journey_live_test.go) actually
+// executes whatever NextCommand comes back. This derives a fixture from a
+// real captured session (cmd/testdata/stop-hook/show-screen-transcript.jsonl,
+// the same discipline journeyWriteRefusalTranscript uses) whose LAST
+// assistant text block -- never a tool_result -- carries a real
+// renderRefusal(...) block's "Next:" line, and asserts it is found nowhere:
+// only genuine tool_result output is ever trusted.
+func TestPrintedRefusalExtractorIgnoresAssistantOwnText(t *testing.T) {
+	if len(refusalRegistry) == 0 {
+		t.Fatal("refusalRegistry needs at least 1 row for this test's fixture")
+	}
+	row := refusalRegistry[0]
+	rendered := renderRefusal(refuse(row.ID))
+
+	data, err := os.ReadFile(filepath.Join("testdata", "stop-hook", "show-screen-transcript.jsonl"))
+	if err != nil {
+		t.Fatalf("read real transcript fixture: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) != 5 {
+		t.Fatalf("expected the real transcript to carry 5 lines, got %d", len(lines))
+	}
+
+	// Line 4 (0-indexed) is the transcript's own final assistant text
+	// block -- verified above by decoding every line's shape.
+	var lastLine map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[4]), &lastLine); err != nil {
+		t.Fatalf("unmarshal real transcript line 4 (assistant text): %v", err)
+	}
+	message, ok := lastLine["message"].(map[string]interface{})
+	if !ok || message["role"] != "assistant" {
+		t.Fatalf("expected line 4's message.role to be assistant, got: %#v", lastLine["message"])
+	}
+	content, ok := message["content"].([]interface{})
+	if !ok || len(content) == 0 {
+		t.Fatalf("expected line 4's message.content to be a non-empty array, got: %#v", message["content"])
+	}
+	block, ok := content[0].(map[string]interface{})
+	if !ok || block["type"] != "text" {
+		t.Fatalf("expected line 4's first content block to be type=text, got: %#v", content[0])
+	}
+	block["text"] = rendered
+	mutated, err := json.Marshal(lastLine)
+	if err != nil {
+		t.Fatalf("marshal mutated transcript line: %v", err)
+	}
+	lines[4] = string(mutated)
+
+	path := filepath.Join(t.TempDir(), "assistant-text-refusal.jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatalf("write derived transcript: %v", err)
+	}
+
+	refusals, err := journeyPrintedRefusals(path)
+	if err != nil {
+		t.Fatalf("journeyPrintedRefusals(%s): %v", path, err)
+	}
+	if len(refusals) != 0 {
+		t.Fatalf("journeyPrintedRefusals(%s) = %+v, want zero -- a refusal block sitting only in the assistant's own text must never be trusted", path, refusals)
+	}
+}
+
 // TestMenuFormNextCommandMapsBackToTheRuntimeCommand table-drives the three
 // behaviour cases and asserts arguments survive unchanged. It derives the
 // menu form by calling platformCommandName rather than typing "/ant-…" by
