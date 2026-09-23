@@ -5,16 +5,16 @@ milestone_name: Use It Every Day
 current_phase: 208
 current_phase_name: Never a Dead End
 status: executing
-stopped_at: "Completed 208-10-PLAN.md (phase 208: 10/10 plans executed; WINDOWS row 53 stays honestly open)"
-last_updated: "2026-09-23T14:08:49.735Z"
+stopped_at: "Completed 208-11-PLAN.md (phase 208: 11/12 plans executed)"
+last_updated: "2026-09-23T16:26:52.379Z"
 last_activity: 2026-09-23
-last_activity_desc: Phase 208 execution complete (10/10 plans); WINDOWS row 53 (survey step live proof) stays open
-state_head: af165ebfdd752d4245419a2fa23307c50d0e5e6f
+last_activity_desc: Phase 208 plan 11 executed (self-recovery, D-03)
+state_head: 5d6cddad0c8d616b440c57926e63aa2a9feacaea
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 18
-  completed_plans: 18
+  total_plans: 20
+  completed_plans: 19
   percent: 40
 ---
 
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 208 (Never a Dead End) — 10/10 plans executed; WINDOWS row 53 (survey step live proof) stays honestly open
+Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
-Status: Awaiting re-verification / next-phase planning
-Plan: 10 of 10
-Last activity: 2026-09-23 — Phase 208 execution complete (208-10: second real walk measured, same dead end)
+Status: Executing Phase 208
+Plan: 11 of 12 (208-12 remains)
+Last activity: 2026-09-23 — Phase 208 plan 11 executed (self-recovery, D-03)
 
 ## Performance Metrics
 
@@ -225,6 +225,7 @@ Last activity: 2026-09-23 — Phase 208 execution complete (208-10: second real 
 | Phase 208 P08 | 50min | 3 tasks | 5 files |
 | Phase 208 P09 | 101min | 3 tasks | 13 files |
 | Phase 208 P10 | 13 min | 3 tasks | 3 files |
+| Phase 208 P11 | 52min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -701,6 +702,7 @@ Last activity: 2026-09-23 — Phase 208 execution complete (208-10: second real 
 - [Phase 208]: [Phase 208-09]: The is-anyone-here fact is opt-in (AETHER_UNATTENDED=1), never inferred from a terminal check or unobserved signal; guidance is gated on ProtectsWork AND a next command AND the fact, on both refusal lanes, from one shared string.
 - [Phase 208]: [Phase 208-09]: colonize.md is a four-way hand-kept copy, not three (canonical nested Claude, the flat installed-consumer mirror .claude/commands/ant-colonize.md, OpenCode, and the YAML source); the missed fourth copy and a stale CMD-04 content hash were both caught by the plan's own full-suite run and fixed in the same wave.
 - [Phase 208]: WINDOWS row 53 stays open after a second real journey walk: 208-09's act-when-alone fix rendered correctly in the live transcript, but the driving chat asked the owner anyway instead of running the named --force-resurvey. — The survey step's on-disk fact check failed again and colonize-finalize was never reached; a code-level fix proven correct is not the same as a live chat proven to follow it.
+- [Phase 208]: 208-11: attemptRefusalSelfRecovery is the one decision for whether Aether carries out a refusal's own recovery itself; opt-in table currently holds exactly colonize-existing-survey-found; both colonize lanes route through it.
 
 ### Pending Todos
 
@@ -823,8 +825,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-23T14:08:44.294Z
-Stopped at: Completed 208-10-PLAN.md (phase 208: 10/10 plans executed; WINDOWS row 53 stays honestly open)
+Last session: 2026-09-23T16:26:52.193Z
+Stopped at: Completed 208-11-PLAN.md (phase 208: 11/12 plans executed)
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
