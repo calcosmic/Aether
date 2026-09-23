@@ -120,7 +120,8 @@ func buildReportBundleBody() string {
 	b.WriteString("# Aether report bundle\n\n")
 
 	b.WriteString("## What this is\n\n")
-	b.WriteString("This file is for sending to whoever maintains Aether. Nothing in it changes this project.\n\n")
+	b.WriteString("This file is for sending to whoever maintains Aether. Nothing in it changes this project. ")
+	b.WriteString("Aether removes anything in the \"What went wrong\" section below that looks like a password, API key, or other secret before writing this file -- but that check cannot catch every shape a secret can take, so please skim the file yourself before sending it anywhere.\n\n")
 
 	b.WriteString("## Version\n\n")
 	b.WriteString(resolveVersion())
@@ -187,6 +188,15 @@ func reportBundleRefusalsSection() string {
 // reportBundleFailuresSection lists the last reportBundleRecentLimit
 // recorded failures, newest first, read through the same failure-log store
 // (cmd/midden_shared.go) `aether midden-recent-failures` reads.
+//
+// Each entry's Message is drawn from real, captured build/type/lint/test
+// tool output (failureSummaryForStep) -- text this project's own sanitizers
+// (colony.SanitizeSignalContent / colony.NeutralizeForRecord) were built to
+// catch prompt-injection and shell-injection shapes in, never a literal
+// secret VALUE a failing command happened to print. `aether report`'s
+// entire purpose is packaging this data for a third party, so every
+// Message is additionally passed through colony.RedactSecretValues before
+// it is ever written to the bundle (CR-03, 208-REVIEW.md).
 func reportBundleFailuresSection() string {
 	if store == nil {
 		return "No project set up, so nothing has been recorded.\n"
@@ -204,7 +214,7 @@ func reportBundleFailuresSection() string {
 	}
 	var b strings.Builder
 	for _, e := range entries {
-		fmt.Fprintf(&b, "- [%s] %s: %s\n", e.Timestamp, e.Category, e.Message)
+		fmt.Fprintf(&b, "- [%s] %s: %s\n", e.Timestamp, e.Category, colony.RedactSecretValues(e.Message))
 	}
 	return b.String()
 }

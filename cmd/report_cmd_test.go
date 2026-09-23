@@ -236,6 +236,53 @@ func TestReportBundleCarriesNoEnvironmentSecrets(t *testing.T) {
 	}
 }
 
+// TestReportBundleRedactsASecretValueInFailureText is CR-03's own
+// regression guard (208-REVIEW.md): the sanitizers a midden entry's
+// Message already passes through (colony.SanitizeSignalContent /
+// colony.NeutralizeForRecord) catch prompt-injection and shell-injection
+// shapes and secrets-file PATHS, never a literal secret VALUE a failing
+// build or test genuinely printed to stdout/stderr. This seeds exactly
+// that shape -- a fake API key embedded in captured failure output -- and
+// asserts it never reaches the bundle `aether report` writes for a third
+// party to read.
+func TestReportBundleRedactsASecretValueInFailureText(t *testing.T) {
+	saveGlobals(t)
+	repo := bindCommandTestRepository(t)
+
+	goal := "Prove secret values never reach the report bundle"
+	createTestColonyState(t, repo.DataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+		Plan:    colony.Plan{Phases: []colony.Phase{}},
+	})
+
+	fakeKey := "sk-livefakekey1234567890abcdef"
+	middenJSON := `{"entries":[{"id":"secret-1","timestamp":"2026-09-22T12:00:00Z","category":"test","source":"test","message":"test failed: auth rejected using ` + fakeKey + `","reviewed":false}]}`
+	if err := os.WriteFile(filepath.Join(repo.DataDir, "midden.json"), []byte(middenJSON), 0644); err != nil {
+		t.Fatalf("seed midden file: %v", err)
+	}
+
+	path, err := runReportBundle(repo.Root)
+	if err != nil {
+		t.Fatalf("runReportBundle: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read report bundle: %v", err)
+	}
+	body := string(data)
+	if strings.Contains(body, fakeKey) {
+		t.Fatalf("expected the report bundle to never carry the secret value from a failure record, found it in:\n%s", body)
+	}
+	if !strings.Contains(body, "auth rejected using") {
+		t.Errorf("expected the rest of the failure message to survive redaction, got:\n%s", body)
+	}
+	if !strings.Contains(body, "secret") {
+		t.Errorf("expected the bundle's own \"What this is\" section to warn that raw output may still carry a secret, got:\n%s", body)
+	}
+}
+
 // appendRawLine writes raw content, verbatim, appended to path -- used to
 // seed a JSONL line (or a whole raw JSON file body) carrying bytes
 // encoding/json's own Marshal would otherwise sanitize away, so a test can
