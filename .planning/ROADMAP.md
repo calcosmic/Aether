@@ -1132,13 +1132,14 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 11/12 plans executed (10 executed; 2 planned for the second gap-closure round)
+**Plans:** 12/12 plans executed
 
-**Result:** two owner-approved real walks both stopped at "survey" for three separate reasons in
-turn (a missing `generated_at` field, then an ambiguous instruction, then — after that
-instruction was made unambiguous — a chat that read "do not ask first" and asked anyway), so the
-out-of-date-code-map dead end is still open; WINDOWS rows 49-52 and 55 are fixed with evidence,
-row 53 stays honestly open with the second run's evidence recorded — see `208-JOURNEY-RUN.md`.
+**Result:** the third owner-approved real walk, run after the program was taught to repair the
+stale map of the code itself, shows real progress — it silently fixed the map without asking
+anyone and the survey finished and saved successfully for the first time — but the saved map
+still didn't match the project's real state afterward, for a fourth, not-yet-explained reason, so
+WINDOWS row 53's dead end stays honestly open with this run's own evidence recorded; rows 49-52
+and 55 are fixed with evidence — see `208-JOURNEY-RUN.md`.
 
 Plans:
 **Wave 1**
@@ -1181,7 +1182,7 @@ Plans:
 
 **Wave 10** *(blocked on Wave 9 completion)*
 
-- [ ] 208-12-PLAN.md — The one authorised walk after the runtime fix, measured and honestly recorded; WINDOWS row 53 resolved or left open (UED-10; D-04)
+- [x] 208-12-PLAN.md — The one authorised walk after the runtime fix, measured and honestly recorded; WINDOWS row 53 resolved or left open (UED-10; D-04)
 
 ### Phase 209: A Light Default Path
 

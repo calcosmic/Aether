@@ -423,3 +423,230 @@ Both figures are again far under the owner's approved range for one walk (~£12�
 minutes) — the run was cheap and fast precisely because it stopped after two of fourteen steps,
 same as the first run, not because the full chain is actually this inexpensive.
 
+---
+
+# Third Real Run: One More Walk, After the Program Recovers Itself (2026-09-23)
+
+This is a third, separate factual record, made the same day as the first two, after a fix had
+landed that made the program carry out the survey-refresh recovery itself instead of printing an
+instruction for a chat to follow. As before, nothing below is projected or estimated — every
+figure is read from a log, a session transcript, or a process timestamp captured during this run
+itself; nothing is carried over from either earlier run.
+
+**In plain words first:** this walk took under three minutes and cost a little under two dollars
+(the chat's own recorded total was $1.84). As with both earlier runs, this machine's `claude`
+sign-in is a paid subscription, not pay-as-you-go, so that figure is the tool's own internal
+estimate of what the work was worth, never an actual bill. This time the picture is genuinely
+better than either earlier walk: the program repaired the out-of-date map of the code itself,
+silently, without asking anyone anything, and the survey step finished and saved its results
+successfully — the first time that has ever happened in a real walk of this rehearsal. But the
+one check this whole exercise turns on — does the saved map now match the project's real,
+current state — still failed. The map that got saved does not match the project's real state at
+the moment the check ran, for a new, fourth reason this run's own evidence does not explain. So
+this walk still did not get past the survey step, even though almost everything about how it got
+there was fixed.
+
+## Owner's decision this plan executed against
+
+D-02 and D-04 (`.planning/phases/208-never-a-dead-end/208-CONTEXT.md`, "Gap-closure decisions"):
+exactly one more real walk was authorised after 208-11's runtime fix landed, run with the trial
+count overridden to one, as a measurement rather than a passed release gate. No second walk and
+no three-trial release-gate run were authorised or started.
+
+## Run identity
+
+- **Date:** 2026-09-23
+- **`claude` CLI version:** `2.1.280 (Claude Code)` — unchanged from both earlier runs.
+- **`aether` binary version:** `1.0.88` (the version string checked in at the commit this run was
+  made at; the journey harness builds its own temporary binary from the same source tree).
+- **Repository commit the run was made at:** `61d4ce7214c97b9e23e1650e65ea7bdc7b41dbe5`
+  (`docs(208-11): complete self-recovery plan`) — confirmed against `git rev-parse HEAD`
+  immediately before the walk started, matching the commit the orchestrator's preconditions named
+  (`dde5a85b`, `3a80f55f`, both present in this HEAD's ancestry).
+- **Working tree before the run:** clean except the same pre-existing, unrelated
+  `.aether/CONTEXT.md` edit from another session, present before this plan started and untouched
+  by it (confirmed via `git status --short` immediately before the walk started).
+- **Working tree after the run:** unchanged by the run itself. `git diff --stat` against
+  `cmd/journey*.go`, every `cmd/refusal*.go` file, `scripts/build-messy-practice-project.sh`, and
+  `Makefile` shows no lines changed. The only changes made after the run are this plan's own
+  edits: `.planning/WINDOWS.md` (row 53's reason), this file, and `.planning/ROADMAP.md`.
+
+## Command and timing
+
+**Command:** `AETHER_JOURNEY_TRIALS=1 make eval-gate-journey` (which itself runs `go test
+-tags=journey -run=TestJourney -count=1 -timeout=6662s ./...`), started in the background at
+`2026-09-23T16:31:22Z`, polled to completion at `2026-09-23T16:34:13Z` — **171 seconds** of total
+wall clock for the whole `make eval-gate-journey` invocation (building the test binary, running
+every `./...` package under the `journey` tag, and the one live trial itself). Within that, the
+`go test` run for the `cmd` package took `160.118s`, and the `TestJourney` test itself took
+`158.70s` (`start` subtest `7.79s`, `survey` subtest `126.91s` — noticeably longer than either
+earlier run's survey subtest, consistent with this being the first run where the survey step
+actually completed its full work: four real surveyor dispatches plus a real `colonize-finalize`
+call, rather than stopping on an early refusal or an unanswered question).
+
+The gate's own coverage check passed before the pass/fail verdict was ever evaluated:
+`eval-gate-journey: discovered=17 executed=17` — the suite ran every test it found, so the
+failure below is a real, complete result, not a truncated run reading clean.
+
+## Caps in force per step
+
+Unchanged from both earlier runs and from 207-04's own measured, safety-margined figures
+(`cmd/journey_live_test.go`):
+
+| Step | Max turns | Wall-clock cap | Budget cap |
+|---|---|---|---|
+| start | 4 | 120s | $0.50 |
+| survey | 20 | 600s | $4.00 |
+| discuss | 12 | 400s | $2.00 |
+| specification | 15 | 400s | $2.00 |
+| plan-first | 25 | 700s | $4.00 |
+| plan-second | 25 | 700s | $4.00 |
+| build | 40 | 1200s | $6.00 |
+| check | 40 | 1200s | $6.00 |
+| status | 4 | 120s | $0.50 |
+| pause | 4 | 120s | $0.50 |
+| resume | 4 | 120s | $0.50 |
+| finish | 12 | 400s | $2.00 |
+| archive | 12 | 400s | $2.00 |
+| start-again | 4 | 120s | $0.50 |
+
+The survey step's own cap is 20 turns / 600s / $4.00. This trial's survey subtest used 126.91 of
+its 600 allowed seconds — well inside every one of its caps, not cut off. (Go's own test-runner
+summary line prints only the caps of the *first* step driven, "start" — 4 turns/120s/$0.50 —
+alongside the trial's overall pass/fail verdict; that figure describes "start", not "survey", and
+is not the cap that governed the step that failed — the same distinction the first run's own
+record already had to draw.)
+
+## Result: FAILED, as expected for a below-minimum trial count
+
+Exactly as it should — `journeyGateVerdict` refused the report before it was ever considered a
+pass: *"journey report carries 1 trial(s), want at least 3 -- a reduced trial count can never
+satisfy the release gate."* **This run is a measurement, never a passed gate**, exactly as D-02
+and D-04 authorise, and no three-trial release-gate run was started.
+
+### The one trial
+
+| Trial | Session id | Steps reached | Outcome | `TestJourney` subtest wall clock | Cost (from the session's own `cost-state` total) |
+|---|---|---|---|---|---|
+| 0 | `ac607cb5-4d63-40a1-83ff-e98d823d23a4` | start (pass, 7.79s), survey (fail, 126.91s) | stopped at survey — real failure | 158.70s (`TestJourney`) | $1.8408548999999996 (~$1.84) |
+
+Cost is read from the session's own final `cost-state` record in the real, persisted transcript
+(`~/.claude/projects/-private-var-folders-pj-fn0nrs6s1zj-pm7s486lnnz40000gn-T-TestJourney2674590305-001-repo/ac607cb5-4d63-40a1-83ff-e98d823d23a4.jsonl`,
+line 148 of 148) — not the chat's own prose. The transcript records three successive `cost-state`
+snapshots, one per driven step: $0.3674468 after the session-establishing "ready" call,
+$0.7920664 after `/ant-init` (the "start" step), $1.8408548999999996 after `/ant-colonize` (the
+"survey" step, where the trial stopped) — a larger jump than either earlier run's survey step,
+consistent with the extra real work this trial's survey step actually did (four surveyor
+dispatches plus a real finalize, not an early stop).
+
+## Why it stopped: the recovery worked silently; the underlying map-freshness check still failed
+
+**The "start" step passed correctly, for the same designed reason as both earlier runs** — the
+practice project's colony was already active from the builder script's own seeding `aether init`,
+so `/ant-init` correctly declined and named `/ant-plan` next, without running any Bash command.
+
+**The "survey" step (`/ant-colonize`) got further than either earlier run, and for the first time
+ever in a live run, the whole survey-and-finalize sequence completed successfully — but the
+step's own on-disk fact check still failed.** The real transcript (parent session plus all four
+surveyor subagent transcripts, checked in full) shows:
+
+1. The assistant ran `aether host colonize`, and this time the JSON response itself already
+   carried `"existing_survey":true,"force_resurvey":true` — **no refusal text printed at all**.
+   This is 208-11's self-recovery working exactly as designed: `attemptRefusalSelfRecovery`
+   decided, inside the Go runtime itself, to carry out the forced re-survey before ever returning
+   a refusal to the chat, because nobody was there to ask. The chat never had a choice to make —
+   there was no instruction to follow or ignore, unlike both earlier runs.
+2. The assistant rendered the spawn-plan and wave-start ceremony screens, then dispatched four
+   real surveyor subagents (`Grid-56`, `Chart-86`, `Scope-7`, `Atlas-14`) as visible Task calls,
+   exactly as `.aether/commands/colonize.yaml` specifies. All four completed, each writing its
+   assigned survey document(s) under `.aether/data/survey/`.
+3. The assistant assembled the completion packet and ran `AETHER_OUTPUT_MODE=json aether
+   colonize-finalize --completion-file ...`, which returned `fin=0` — **success**, the first time
+   `colonize-finalize` has ever succeeded in a live run of this rehearsal. The closeout screen
+   correctly reported `Workers: 4 completed 0 blocked 0 failed` and `Territory surveyed: 7
+   documents`, then correctly routed to `/ant-plan` as the next step — an honest, accurate
+   completion, unlike the very first Phase 207 run's false "completed clean" claim.
+4. Despite all of that succeeding, `journeyAssertStepFact`'s own on-disk check then failed:
+
+   ```
+   step "survey": territory snapshot source_revision is ae99c04fdea8e4effac559c3bf36f0faec60012f,
+   want current HEAD bc807c989d82928be77bc777bfd9e7cee4332606
+   ```
+
+   The published territory snapshot's recorded `source_revision` does not match the practice
+   project's real current HEAD, measured by the same `git -C <repo> rev-parse HEAD` command both
+   the publishing code and the test itself use.
+
+**This is a new, fourth proximate cause, not yet diagnosed by this run's evidence.** Both
+previously-found causes are confirmed fixed, live, in this same run: the missing `generated_at`
+defect (208-01) did not recur (finalize succeeded), and the ask-vs-act ambiguity (WINDOWS row 55,
+closed by D-03/208-11) did not recur either (nothing was ever asked). To rule out the most obvious
+remaining explanation — that something committed to the practice project's git history between
+`colonize-finalize` publishing the snapshot and the test reading it back — every Bash command run
+by the parent chat session and by all four surveyor subagent sessions was searched in the real,
+persisted transcripts for any `git commit` or `git add` invocation. **None was found anywhere.**
+Surveyors are read-only repo explorers except for their own assigned survey outputs (which are
+plain files, not git operations), and no other part of this run's transcript ever invoked git in a
+way that could move `HEAD`. The mismatch therefore appears to originate in how or when the
+published `source_revision` was computed or written, not in a commit made during the run — but the
+exact mechanism is not established by this run's own evidence, and per D-02/D-04 this round's one
+authorised walk was already spent reaching this finding; no second live run was made to diagnose
+it further.
+
+## Answering the three questions this run exists to settle
+
+1. **Did the survey step's own on-disk fact check pass?** No. Recorded snapshot revision
+   `ae99c04fdea8e4effac559c3bf36f0faec60012f` versus the practice project's real current HEAD
+   `bc807c989d82928be77bc777bfd9e7cee4332606` at the moment the check ran — they do not match,
+   even though the survey and finalize sequence that should have produced a matching value
+   completed successfully.
+2. **Did any step run a printed refusal's own next command for real?** No refusal was ever
+   printed to begin with — this run's own report line reads *"trial 0: 0 printed refusal(s)
+   found, 0 next command(s) run"*, and this time that reading is literally accurate, not an
+   artifact of check ordering: `attemptRefusalSelfRecovery` intercepted the existing-survey
+   condition inside the Go runtime, before any refusal was ever constructed or returned to the
+   chat, so there was nothing for `journeyPrintedRefusals` to find. This is different from both
+   earlier runs, where a refusal *was* printed (verbatim, in the transcript) but either the chat
+   asked instead of acting on it (run 2) or the fact-check-before-extraction ordering meant the
+   printed-refusal search was never reached (both runs) — in this run, the refusal genuinely never
+   printed, because the runtime resolved the condition before it would have.
+3. **If it stopped, where and with what values?** At the survey step (step 2 of 14) — the same
+   step every real run of this rehearsal has stopped at so far, but for the first time with the
+   survey-and-finalize sequence itself completing successfully. The two compared values are named
+   above (`ae99c04fdea8e4effac559c3bf36f0faec60012f` vs. `bc807c989d82928be77bc777bfd9e7cee4332606`).
+
+## Not proven by this run
+
+- **The survey step did not pass.** This plan's own must-have truth ("the survey step either
+  passed its own on-disk fact check ... or the record names both observed values and the phase is
+  not reported as proven") is met by recording the failure honestly, above — the out-of-date
+  code-map dead end is still real, live, and reproducible, for a new reason.
+- **Why the published source_revision does not match current HEAD is not established.** This run
+  rules out a mid-run git commit as the explanation (no such command appears anywhere in the real
+  transcripts) but does not identify the actual mechanism. A future plan should trace
+  `publishTerritorySnapshot`'s revision computation (`cmd/codex_colonize_finalize.go`,
+  `currentTerritoryRevision`, `cmd/survey_staleness.go`) and the seeded out-of-date-code-map
+  trap's placeholder snapshot against real on-disk state directly — not via another paid live
+  walk, per D-02/D-04's one-walk limit for this round.
+- **This run does not show 208-11's self-recovery fix does not work.** The opposite: this run is
+  the first live confirmation that it works exactly as designed — no refusal printed, no question
+  asked, the runtime carried out the recovery itself. What remains unproven is a separate,
+  downstream fact about the published snapshot's own correctness.
+- **The three-trial minimum was not met, by design** — one walk, per D-02/D-04, measured and
+  reported as a measurement rather than a passed gate.
+- **No steps past "survey" were exercised** — discuss, specification, plan-first, plan-second,
+  build, check, status, pause, resume, finish, archive, start-again remain unmeasured by any real
+  run so far.
+
+## Combined totals for this run
+
+- **Wall clock:** 171s (the whole `make eval-gate-journey` invocation, `AETHER_JOURNEY_TRIALS=1`).
+- **Cost:** $1.8408548999999996 (~$1.84), read from the one session's final `cost-state` total —
+  an API-equivalent usage estimate against this machine's subscription, not a charge.
+
+Both figures are again far under the owner's approved range for one walk (~£12–25, 20–40
+minutes). This run took noticeably longer than either earlier run (171s vs. 90s and 86s) because
+it is the first run where the survey step actually completed its full work — four real surveyor
+dispatches and a real, successful finalize call — rather than stopping on an early refusal or an
+unanswered question.
+
