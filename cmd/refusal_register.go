@@ -237,7 +237,7 @@ var refusalRegistry = []refusalRow{
 		ID:           "invalid-timeout-value",
 		What:         "A timeout you gave Aether was zero or negative.",
 		Why:          "A timeout of zero or less has no sensible meaning here, so Aether falls back to its own built-in default instead of guessing what you meant.",
-		NextCommand:  "aether <command> --help",
+		NextCommand:  "aether status",
 		ProtectsWork: false,
 		Disposition:  "warn",
 		Reason:       "Aether's own built-in timeout is a safe, defined fallback; carrying on with it risks nothing, so this warns and continues rather than stopping the command entirely.",
@@ -247,7 +247,7 @@ var refusalRegistry = []refusalRow{
 		Pattern:      "flag --",
 		What:         "This command needs more information to run.",
 		Why:          "This command needs more information to run. Check the required flags and try again.",
-		NextCommand:  "aether <command> --help",
+		NextCommand:  "aether status",
 		ProtectsWork: false,
 		Disposition:  "stop",
 		Reason:       "A command missing a required flag has not done anything yet; refusing before running loses nothing.",
@@ -397,9 +397,12 @@ func refusalRowForPattern(message string) (refusalRow, bool) {
 // and TestRefusalRegisterIsSortedAndUnique run against the real refusalRegistry,
 // and TestRefusalCheckCanFail runs against an isolated, fabricated slice --
 // proof the check itself can fail rather than passing no matter what it is
-// given. It reports, by row id: a missing next command, a duplicate id, an
-// id out of ascending order, and -- if the whole slice is empty -- that the
-// enumeration itself is broken rather than vacuously valid.
+// given. It reports, by row id: a missing next command, a next command that
+// is not a real, runnable command (still carrying a template placeholder
+// like `<command>` -- CR-01, 208-REVIEW.md: a placeholder rendered verbatim
+// is a dead end, not a way out), a duplicate id, an id out of ascending
+// order, and -- if the whole slice is empty -- that the enumeration itself
+// is broken rather than vacuously valid.
 func refusalRegistryProblems(rows []refusalRow) []string {
 	var problems []string
 	if len(rows) == 0 {
@@ -409,6 +412,8 @@ func refusalRegistryProblems(rows []refusalRow) []string {
 	for i, row := range rows {
 		if strings.TrimSpace(row.NextCommand) == "" {
 			problems = append(problems, fmt.Sprintf("refusal row %q has no next_command", row.ID))
+		} else if strings.ContainsAny(row.NextCommand, "<>") {
+			problems = append(problems, fmt.Sprintf("refusal row %q's next_command %q still carries an unsubstituted template placeholder", row.ID, row.NextCommand))
 		}
 		if seen[row.ID] {
 			problems = append(problems, fmt.Sprintf("duplicate refusal id %q", row.ID))

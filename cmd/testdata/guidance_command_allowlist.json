@@ -1,6 +1,1 @@
-[
-  {
-    "verb": "<command>",
-    "reason": "This is a template placeholder inside the generic \"missing required flag\" refusal (cmd/refusal_register.go), rendered verbatim as `aether <command> --help` -- it is never a real command name, so no menu command can back it. The refusal's own message names the actual command that failed; this placeholder is only ever shown alongside that context."
-  }
-]
+[]

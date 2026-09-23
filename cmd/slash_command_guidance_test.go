@@ -255,9 +255,13 @@ func loadGuidanceCommandAllowlist(t *testing.T) []guidanceCommandAllowlistRow {
 // verb removes it here; adding a NEW verb to the allowlist requires the
 // same written-reason discipline as raising journeyExpectedRedCeiling, and
 // TestGuidanceCommandAllowlistOnlyShrinks is what enforces it.
-var guidanceCommandAllowlistCeiling = []string{
-	"<command>",
-}
+//
+// "<command>" was removed here 208-REVIEW.md CR-01: the "missing-required-flag"
+// and "invalid-timeout-value" refusal rows no longer render an unsubstituted
+// `<command>` placeholder (cmd/refusal_register.go), so no screen advises it
+// anymore -- the allowlist entry that excused it is fixed, not merely edited
+// away.
+var guidanceCommandAllowlistCeiling = []string{}
 
 // TestScreenGuidanceNamesCommandsTheOwnerCanRun fails naming any `aether
 // <verb>` command an owner-facing screen advises that has no menu wrapper

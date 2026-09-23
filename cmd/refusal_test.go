@@ -70,6 +70,39 @@ func TestRefusalCheckCanFail(t *testing.T) {
 	}
 }
 
+// TestRefusalCheckCatchesAnUnsubstitutedPlaceholder is CR-01's own guard on
+// the guard: a row whose NextCommand still carries a template placeholder
+// like `<command>` is not a real, runnable command -- a copy-pasted
+// `aether <command> --help` fails in a shell with an unknown-command error,
+// not help text (208-REVIEW.md CR-01). This proves refusalRegistryProblems
+// actually catches that shape, on a fabricated slice isolated from the real
+// registry, the same discipline TestRefusalCheckCanFail already uses for a
+// blank next_command.
+func TestRefusalCheckCatchesAnUnsubstitutedPlaceholder(t *testing.T) {
+	broken := []refusalRow{
+		{ID: "a-fine-row", NextCommand: "aether status"},
+		{ID: "z-placeholder-row", NextCommand: "aether <command> --help"},
+	}
+	problems := refusalRegistryProblems(broken)
+	found := false
+	for _, p := range problems {
+		if strings.Contains(p, "z-placeholder-row") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a problem naming z-placeholder-row's unsubstituted placeholder, got: %v", problems)
+	}
+
+	// The real, checked-in registry must never regress to this shape --
+	// this is the assertion that actually would have caught CR-01.
+	for _, row := range refusalRegistry {
+		if strings.ContainsAny(row.NextCommand, "<>") {
+			t.Errorf("refusal row %q's next_command %q is not a real, runnable command", row.ID, row.NextCommand)
+		}
+	}
+}
+
 // TestTwoRefusalsSharingANextCommandStaySeparate uses two real registered
 // rows that deliberately share the same next command (both freshness
 // refusals point at the same rerun command) and proves refuse/renderRefusal
