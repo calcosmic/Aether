@@ -136,11 +136,18 @@ eval-gate-release:
 # journey: the full messy-practice-project lifecycle, driven through a real
 # claude -p chat with hooks and menu commands loaded. Requires a local,
 # interactively-authenticated claude CLI; never runs in CI. Sets no
-# environment variable that could turn this into a skip. Budget 1100s,
-# measured from 207-06-PLAN.md's real three-trial run (gates.json) --
-# -timeout is set with headroom above that measured figure.
+# environment variable that could turn this into a skip. Budget 6662s
+# (PROVISIONAL, 208-08-PLAN.md Task 2): the 207-06 run's three trials each
+# stopped at step 2 of 14 ("survey"), so its 1100s figure only ever covered
+# two steps -- it cannot fit a full fourteen-step chain. This provisional
+# number is the sum of all fourteen steps' own per-step wall-clock caps
+# (journeyStepWallClockSecs in cmd/journey_live_test.go: 120+600+400+400+
+# 700+700+1200+1200+120+120+120+400+400+120 = 6600s) for one trial (the
+# owner-approved single walk, AETHER_JOURNEY_TRIALS=1), plus 207-06's own
+# measured per-trial build/setup headroom (61.93s), rounded up. Replaced
+# below by a figure re-measured from this phase's own real run.
 eval-gate-journey:
-	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=1500s ./...,-tags=journey -list=TestJourney ./...)
+	$(call EVAL_GATE_CHECK,journey,-tags=journey -run=TestJourney -count=1 -timeout=6662s ./...,-tags=journey -list=TestJourney ./...)
 
 # prove-journey-fix-reverts (207-05-PLAN.md, UED-09, owner ruling D-01): the
 # journey gate above proves the product works; this proves the gate is
