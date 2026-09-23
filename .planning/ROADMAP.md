@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 10/10 plans executed
+**Plans:** 12 plans (10 executed; 2 planned for the second gap-closure round)
 
 **Result:** two owner-approved real walks both stopped at "survey" for three separate reasons in
 turn (a missing `generated_at` field, then an ambiguous instruction, then — after that
@@ -1174,6 +1174,14 @@ Plans:
 **Wave 8** *(blocked on Wave 7 completion)*
 
 - [x] 208-10-PLAN.md — One more real walk, owner-approved and measured; WINDOWS row 53 resolved or honestly open (UED-10; D-02)
+
+**Wave 9** *(second gap-closure round — blocked on Wave 8 completion)*
+
+- [ ] 208-11-PLAN.md — The program does the recovery itself when nobody is there: one shared decision, both colonize lanes, attended behaviour untouched (UED-10; D-03)
+
+**Wave 10** *(blocked on Wave 9 completion)*
+
+- [ ] 208-12-PLAN.md — The one authorised walk after the runtime fix, measured and honestly recorded; WINDOWS row 53 resolved or left open (UED-10; D-04)
 
 ### Phase 209: A Light Default Path
 
