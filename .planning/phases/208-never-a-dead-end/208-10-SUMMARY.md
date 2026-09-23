@@ -232,6 +232,16 @@ Phase 209 ("A Light Default Path") depends on Phase 208 being complete; its own 
 this SUMMARY and `208-JOURNEY-RUN.md`'s second section before assuming Success Criterion 2 is
 fully met.
 
+## Self-Check: PASSED
+
+- `.planning/phases/208-never-a-dead-end/208-10-SUMMARY.md` — FOUND
+- `.planning/phases/208-never-a-dead-end/208-JOURNEY-RUN.md` (second section present, first section byte-identical, `git diff` head @@ -212,3 +212,213 @@ zero deletions) — FOUND
+- Task commit `af165ebf` (WINDOWS.md + ROADMAP.md + 208-JOURNEY-RUN.md) — FOUND in `git log --oneline --all`
+- Metadata commit `e26e3b5b` (SUMMARY.md + STATE.md) — FOUND in `git log --oneline --all`
+- WINDOWS.md row 53 — `status: open`, ledger open_count unchanged at 36, reason updated and confirmed surviving via `gsd-tools query windows status`
+- Verification command `go test ./cmd -run 'TestJourneyGateVerdictRefusals|TestJourneyIncompleteTrialIsNeverPassed|TestJourneyGateRefusesAPartialRun|TestEvalGateVocabularyMatchesTheManifest' -count=1 -timeout 8m` — PASS (all 4 test groups)
+- `git status --short` — only the pre-existing, unrelated `.aether/CONTEXT.md` edit remains; nothing under `cmd/journey*.go`, `cmd/refusal*.go`, or `scripts/build-messy-practice-project.sh` was touched
+
 ---
 *Phase: 208-never-a-dead-end*
 *Completed: 2026-09-23*
