@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 8/10 plans executed (208-09 and 208-10 close the one verification gap)
+**Plans:** 9/10 plans executed (208-09 and 208-10 close the one verification gap)
 
 **Result:** the one owner-approved real walk (90s, $0.93) stopped at "survey" again — not the
 generated_at defect Phase 207 found and this phase fixed, but a new, distinct cause (the
@@ -1169,7 +1169,7 @@ Plans:
 
 **Wave 7** *(gap closure — blocked on Wave 6 completion)*
 
-- [ ] 208-09-PLAN.md — Act when alone, ask when you're there: the is-anyone-here fact on both refusal lanes, the rule stated in the colonize wrapper, and a host-relayed refusal the journey can find (UED-10; WINDOWS 55; D-01)
+- [x] 208-09-PLAN.md — Act when alone, ask when you're there: the is-anyone-here fact on both refusal lanes, the rule stated in the colonize wrapper, and a host-relayed refusal the journey can find (UED-10; WINDOWS 55; D-01)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
