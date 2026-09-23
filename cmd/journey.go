@@ -289,17 +289,43 @@ type journeyPrintedRefusal struct {
 // refusal, because it is never preceded by this exact "Next:" label.
 var journeyPrintedRefusalNextLineRe = regexp.MustCompile("(?m)^Next: `([^`\n]+)`")
 
+// journeyRelayedRefusalPrefix is the TypeScript host's own fixed prefix for
+// a failed Go command (go-bridge.ts's three `Go command failed: ...` call
+// sites, via formatGoCommand/sanitizeBridgeMessage). It is what makes the
+// relayed form identifiable at all, and it is why the pattern below can be
+// anchored rather than floating: this prefix is the ONLY route by which
+// refusal.Error()'s one-line form ever reaches a transcript. A refusal that
+// reaches a terminal directly does not print this form -- ExitWithError
+// (cmd/root.go) matches the refusal with errors.As and renders the full
+// drawn block instead, which the block-form pattern above already finds.
+const journeyRelayedRefusalPrefix = "Go command failed:"
+
 // journeyPrintedRefusalRelayedLineRe matches refusal.Error()'s one-line
-// host-relayed form (cmd/refusal.go: "%s — next: %s"), found inline within
-// an ordinary line -- the TypeScript host's own "Fatal: Go command failed:
-// ...: <what> — next: <command>" relay (sanitizeBridgeMessage,
-// .aether/ts-host/src/go-bridge.ts) -- rather than on its own dedicated
-// "Next:" line the way renderRefusal's drawn block form is. It captures
-// everything from the " — next: " marker to the end of the line:
-// refusal.Error()'s own format (208-09-PLAN.md) keeps the next command the
-// LAST thing on the line with nothing after it, so there is no closing
-// delimiter to anchor on the way the block form's backtick pair provides.
-var journeyPrintedRefusalRelayedLineRe = regexp.MustCompile(`(?m)— next: (.+)$`)
+// host-relayed form (cmd/refusal.go: "%s — next: %s") as the TypeScript
+// host actually relays it: "Go command failed: <cmd>: <what> — next:
+// <command>", all on one line (sanitizeBridgeMessage redacts but never
+// truncates, .aether/ts-host/src/go-bridge.ts).
+//
+// The host prefix is part of the pattern on purpose. refusal.Error()'s own
+// format (208-09-PLAN.md) keeps the next command the LAST thing on the
+// line with nothing after it, so unlike the block form's backtick pair
+// there is no closing delimiter to anchor on -- and " — next: " alone is a
+// generic substring that ordinary captured output (a build log, a quoted
+// commit message) could carry by coincidence. Because whatever this
+// function returns is later EXECUTED as a subprocess by
+// journeyRunPrintedNextCommands, a coincidence is not an acceptable
+// trigger: requiring Aether's own relay prefix earlier on the same line
+// anchors the match to something only Aether's own error path produces.
+var journeyPrintedRefusalRelayedLineRe = regexp.MustCompile(`(?m)^[^\n]*` + regexp.QuoteMeta(journeyRelayedRefusalPrefix) + `[^\n]*?— next: ([^\n]+)$`)
+
+// journeyRelayedCommandTrailingPunctuation is the set of trailing
+// characters stripped from a relayed command before it is mapped. The
+// relayed form has no closing delimiter, so a message embedded in quoted
+// or parenthesised prose can carry a stray tail character into what would
+// otherwise be a clean command; refusal.Error() itself never emits any of
+// these after the command, so stripping them can only ever recover a
+// genuine command, never truncate one.
+const journeyRelayedCommandTrailingPunctuation = ".\"'),;"
 
 // journeyPrintedRefusals reads the transcript at transcriptPath and returns
 // every printed refusal found, in the order they appear. It looks ONLY at
@@ -391,7 +417,7 @@ func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, err
 			}
 			for _, m := range journeyPrintedRefusalRelayedLineRe.FindAllStringSubmatchIndex(text, -1) {
 				candidate := strings.TrimSpace(text[m[2]:m[3]])
-				candidate = strings.TrimSpace(strings.TrimSuffix(candidate, "."))
+				candidate = strings.TrimSpace(strings.TrimRight(candidate, journeyRelayedCommandTrailingPunctuation))
 				if _, ok := printedCommandToRuntimeCommand(candidate); !ok {
 					continue // ordinary prose that happens to carry the marker text -- not a refusal
 				}

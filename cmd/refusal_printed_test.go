@@ -388,6 +388,21 @@ func TestPrintedRefusalExtractorIgnoresRelayedProse(t *testing.T) {
 			name: "marker present but the tail is not a runnable command",
 			text: "Checking configuration — next: check with your admin before proceeding.\n",
 		},
+		{
+			// The whole reason the relayed pattern carries Aether's own
+			// host-relay prefix: whatever this extractor returns is later
+			// EXECUTED as a subprocess by journeyRunPrintedNextCommands, so
+			// a coincidental marker in genuine unrelated tool output (a
+			// build log, an echoed commit message) must never be treated as
+			// a refusal merely because a runnable-looking command follows
+			// it. Without the anchor this line matches and gets run.
+			name: "runnable tail but no host-relay prefix -- unrelated captured output",
+			text: "commit a1b2c3d: document recovery — next: aether colonize --force-resurvey\n",
+		},
+		{
+			name: "host-relay prefix on a different line from the marker",
+			text: "Fatal: Go command failed: colonize --plan-only\nSomething else — next: aether colonize --force-resurvey\n",
+		},
 	}
 
 	for _, tc := range cases {
@@ -399,6 +414,45 @@ func TestPrintedRefusalExtractorIgnoresRelayedProse(t *testing.T) {
 			}
 			if len(refusals) != 0 {
 				t.Fatalf("journeyPrintedRefusals(%s) = %+v, want zero -- relayed prose with no runnable command tail is not a refusal", path, refusals)
+			}
+		})
+	}
+}
+
+// TestRelayedCommandLosesTrailingPunctuation proves the trailing-punctuation
+// trim is a claim a command can fail on, rather than an assertion that only
+// passes because the one captured fixture happens not to exercise it. The
+// relayed form has no closing delimiter, so a relayed message quoted or
+// bracketed inside surrounding prose carries that stray tail character into
+// the command; without the trim the command maps to nothing and the refusal
+// is silently lost. The command itself is derived from a real registry row,
+// never typed.
+func TestRelayedCommandLosesTrailingPunctuation(t *testing.T) {
+	var row refusalRow
+	for _, candidate := range refusalRegistry {
+		if strings.TrimSpace(candidate.NextCommand) != "" {
+			row = candidate
+			break
+		}
+	}
+	if strings.TrimSpace(row.NextCommand) == "" {
+		t.Fatal("refusalRegistry needs at least one row naming a next command for this fixture")
+	}
+
+	for _, trailing := range []string{".", "\"", "'", ")", ",", ";", "\"."} {
+		t.Run("trailing "+trailing, func(t *testing.T) {
+			text := "Fatal: Go command failed: " + row.ID + ": " + strings.TrimSpace(row.What) +
+				" — next: " + row.NextCommand + trailing + "\n"
+			path := journeyWriteRefusalTranscript(t, text)
+			refusals, err := journeyPrintedRefusals(path)
+			if err != nil {
+				t.Fatalf("journeyPrintedRefusals(%s): %v", path, err)
+			}
+			if len(refusals) != 1 {
+				t.Fatalf("journeyPrintedRefusals(%s) = %+v, want exactly 1 -- a relayed command followed by %q must still be found", path, refusals, trailing)
+			}
+			if got := refusals[0].NextCommand; got != row.NextCommand {
+				t.Fatalf("NextCommand = %q, want %q -- the trailing %q must not ride along into the command", got, row.NextCommand, trailing)
 			}
 		})
 	}

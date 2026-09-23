@@ -14,8 +14,12 @@ package cmd
 // test run, never typed as plausible-looking literals.
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -147,37 +151,112 @@ func TestOnlyAWorkProtectingStopCarriesTheGuidance(t *testing.T) {
 }
 
 // TestTheIsAnyoneHereFactHasOneReader is the structural guard: exactly one
-// non-test file under cmd/ may perform the AETHER_UNATTENDED environment
-// lookup (cmd/unattended_session.go). A second reader is how two surfaces
-// in this repository have drifted apart before (CLAUDE.md).
+// non-test file in the whole module (cmd/unattended_session.go) may reach
+// the AETHER_UNATTENDED fact. A second reader is how two surfaces in this
+// repository have drifted apart before (CLAUDE.md), and this fact is
+// safety-relevant -- it is what flips a work-protecting refusal from "wait
+// for the owner" to "run the recovery command yourself", so a second reader
+// with a different threshold (say, any non-empty value rather than exactly
+// "1") could replace an owner's real work without asking.
+//
+// It is a genuine structural check, not a substring grep, because a grep
+// for one call shape is trivially bypassed: `os.Getenv(unattendedEnvVar)`,
+// `os.LookupEnv("AETHER_UNATTENDED")`, or any helper wrapping either, all
+// read the same fact while carrying none of the same text. Both routes to
+// the fact are therefore confined by parsing every non-test .go file in the
+// module and refusing:
+//
+//  1. the name as a string literal anywhere (the only way another package
+//     can name it at all -- unattendedEnvVar is unexported), and
+//  2. any use of the unattendedEnvVar identifier itself, whatever it is
+//     passed to, so routing it through a helper is caught as well.
+//
+// The one thing it does not catch is a name assembled at run time from
+// pieces ("AETHER_" + "UNATTENDED"). That is stated here rather than
+// claimed away: a test must be honest about its own edge, and nothing in
+// this repository writes environment names that way.
 func TestTheIsAnyoneHereFactHasOneReader(t *testing.T) {
-	entries, err := os.ReadDir(".")
+	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
-		t.Fatalf("read cmd/: %v", err)
+		t.Fatalf("failed to find repo root: %v", err)
 	}
 
-	const needle = `os.Getenv("` + unattendedEnvVar + `")`
-	var offenders []string
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		if entry.Name() == "unattended_session.go" {
-			continue
-		}
-		if strings.HasSuffix(entry.Name(), "_test.go") {
-			continue // test files are allowed to probe the raw env directly
-		}
-		data, err := os.ReadFile(entry.Name())
+	// The one file allowed to reach the fact, module-relative.
+	const soleReader = "cmd/unattended_session.go"
+
+	var goFiles []string
+	walkErr := filepath.Walk(repoRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			t.Fatalf("read %s: %v", entry.Name(), err)
+			return err
 		}
-		if strings.Contains(string(data), needle) {
-			offenders = append(offenders, entry.Name())
+		if info.IsDir() {
+			switch info.Name() {
+			case ".git", "vendor", "node_modules", "testdata", ".planning", "dist":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil // test files may probe the raw env directly
+		}
+		goFiles = append(goFiles, path)
+		return nil
+	})
+	if walkErr != nil {
+		t.Fatalf("walk %s: %v", repoRoot, walkErr)
+	}
+	if len(goFiles) < 50 {
+		t.Fatalf("only %d non-test .go files found under %s -- the walk is not reaching the module, so this guard would pass vacuously", len(goFiles), repoRoot)
+	}
+
+	var sawSoleReader bool
+	var offenders []string
+	fset := token.NewFileSet()
+	for _, path := range goFiles {
+		rel, relErr := filepath.Rel(repoRoot, path)
+		if relErr != nil {
+			rel = path
+		}
+		rel = filepath.ToSlash(rel)
+		if rel == soleReader {
+			sawSoleReader = true
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, path, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", rel, parseErr)
+		}
+		var reason string
+		ast.Inspect(file, func(n ast.Node) bool {
+			if reason != "" {
+				return false
+			}
+			switch node := n.(type) {
+			case *ast.BasicLit:
+				if node.Kind == token.STRING {
+					if value, unquoteErr := strconv.Unquote(node.Value); unquoteErr == nil && value == unattendedEnvVar {
+						reason = "names " + unattendedEnvVar + " as a string literal"
+						return false
+					}
+				}
+			case *ast.Ident:
+				if node.Name == "unattendedEnvVar" {
+					reason = "uses the unattendedEnvVar identifier"
+					return false
+				}
+			}
+			return true
+		})
+		if reason != "" {
+			offenders = append(offenders, rel+" ("+reason+")")
 		}
 	}
+
+	if !sawSoleReader {
+		t.Fatalf("%s was never visited by the walk -- this guard cannot be passing for the right reason", soleReader)
+	}
 	if len(offenders) > 0 {
-		t.Fatalf("only cmd/unattended_session.go may read %s directly; found it also in: %v -- everything else must call sessionHasNoOneToAsk()", unattendedEnvVar, offenders)
+		t.Fatalf("only %s may reach %s; found it also in: %v -- everything else must call sessionHasNoOneToAsk()", soleReader, unattendedEnvVar, offenders)
 	}
 }
 
