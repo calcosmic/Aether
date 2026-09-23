@@ -1,6 +1,6 @@
 ---
 phase: 208-never-a-dead-end
-verified: 2026-09-23T16:20:00Z
+verified: 2026-09-23T18:10:00Z
 status: gaps_found
 score: 4/5 roadmap success criteria verified
 behavior_unverified: 0
@@ -9,110 +9,162 @@ re_verification:
   previous_status: gaps_found
   previous_score: 4/5
   gaps_closed:
-    - "WINDOWS row 55 (ask-vs-act ambiguity) — owner ruling D-01 recorded and implemented (sessionHasNoOneToAsk, shared guidance sentence on both refusal lanes, rule stated in all four hand-kept colonize wrapper copies), independently confirmed present and correctly gated (attended output byte-identical; unattended output carries the sentence only when ProtectsWork && next != \"\" && sessionHasNoOneToAsk())."
-    - "Gap-closure code review's 3 findings (WR-01 one-reader guard was a bypassable literal grep; WR-02 relayed-marker could match coincidental unrelated output; IN-01 trailing-punctuation trim only handled a period) — all three fixed in 37b0f67b, each proved by a test that fails without the fix, independently re-run and confirmed passing."
+    - "Third owner-authorised real walk run (208-12, session ac607cb5, 2026-09-23, after 208-11's runtime self-recovery landed). The colonize-existing-survey stop no longer prints or asks anything in an unattended session: attemptRefusalSelfRecovery carries out the forced re-survey inside the Go runtime before a refusal is ever constructed, and colonize-finalize succeeded live for the first time in any real run of this rehearsal (fin=0, 7 documents, honest closeout text)."
+    - "Two of WINDOWS row 53's three previously-recorded proximate causes (missing generated_at; ask-vs-act ambiguity) independently reconfirmed fixed live, in the same run, with no regression."
   gaps_remaining:
-    - "ROADMAP Success Criterion 2's second clause (\"the journey runs each printed command\") is still not proven by a live run. A second owner-approved real walk (208-10, after the D-01 fix landed) again stopped at the survey step — this time because the driving chat read the correct, unambiguous unattended-mode instruction and chose to ask the owner anyway, rather than because of a code defect. journeyRunPrintedNextCommands has still never been exercised outside a synthetic fixture."
+    - "ROADMAP Success Criterion 2's second clause (\"the journey runs each printed command\") is still not proven by a live run — and, for the one refusal that has mattered so far, may now be structurally unprovable through this route, because self-recovery means that refusal never prints in an unattended session at all. journeyRunPrintedNextCommands has still never fired outside a synthetic fixture; the journey has still never progressed past step 2 of 14 in any real walk."
+    - "NEW this round, found independently in this pass, not carried over from the prior report: two of 208-11's own declared must_haves for the self-recovery mechanism it just built are not actually enforced by any test that can fail. This directly concerns the phase's own goal (\"the program warns and carries on unless work could be lost\") because the mechanism under-test is precisely the one now allowed to silently replace an owner's survey without asking."
   regressions: []
 gaps:
+  - truth: "The decision to recover instead of stopping is made in exactly one place; a second copy anywhere in the module fails a named test (208-11-PLAN.md must_have)."
+    status: failed
+    reason: >
+      Independently reproduced in a disposable git worktree (not merely re-trusted from
+      208-REVIEW-GAP2.md's own claim): planting a second, competing self-recovery decision in
+      cmd/helpers.go's outputRefusal --
+
+        func secondSelfRecoveryDecision(r refusal) bool {
+          if !sessionHasNoOneToAsk() { return false }
+          return r.ProtectsWork && strings.TrimSpace(r.NextCommand) != ""
+        }
+        func outputRefusal(r refusal) {
+          if secondSelfRecoveryDecision(r) {
+            appendRecoveredRefusalToLog(r)
+            return
+          }
+          ...
+
+      -- leaves `go test ./cmd -run TestSelfRecoveryHasOneDecision -count=1 -v` passing
+      unchanged (PASS, 0.29s). The guard (cmd/refusal_self_recovery_test.go:322-410) only flags a
+      file that names `refusalSelfRecoveryTable` by identifier, or that calls both
+      `sessionHasNoOneToAsk` AND `refuse(...)` in the same file. `outputRefusal` receives an
+      already-built `refusal` value rather than calling `refuse(...)` itself, so a second decision
+      planted at the most natural second home for one -- the shared refusal-output path every
+      command's refusal ultimately reaches -- is invisible to the guard. The planted decision is
+      not cosmetic: it silently discards markRenderedCommandError/appendRefusalToLog for ANY
+      work-protecting refusal in an unattended session and logs it as "recovered" without having
+      recovered anything, which is exactly the "work replaced/lost without asking" failure mode
+      the phase goal exists to prevent.
+    artifacts:
+      - path: "cmd/refusal_self_recovery_test.go"
+        issue: "TestSelfRecoveryHasOneDecision (lines 322-410) checks for two narrow textual shapes (names the map; OR calls sessionHasNoOneToAsk+refuse in the same file) rather than for any file besides refusal_self_recovery.go reading the is-anyone-here fact at all. A file that acts on an already-built refusal value never trips it."
+    missing:
+      - "Widen the one-decision guard so any non-test file other than cmd/refusal_self_recovery.go that calls sessionHasNoOneToAsk fails by name, not just files that also call refuse(...) -- 208-REVIEW-GAP2.md's WR-02 [CR-02] fix sketch (a closed allow-list of files permitted to read the fact) is a workable shape."
+      - "Re-run the planted-mutation reproduction above against the widened guard and confirm it now fails, then restore."
+  - truth: "Only a refusal that explicitly declares Aether can carry out its own recovery is ever recovered from, and such a refusal must still be a stop that protects work and names a command (208-11-PLAN.md must_have, D-03's refusal-contract constraint)."
+    status: failed
+    reason: >
+      Independently reproduced in the same disposable worktree: deleting the opt-in table lookup,
+      the ProtectsWork check and the NextCommand check from attemptRefusalSelfRecovery --
+
+        func attemptRefusalSelfRecovery(r refusal) bool {
+          if !sessionHasNoOneToAsk() { return false }
+          reason := refusalSelfRecoveryTable[r.ID]   // map lookup kept only as a no-op read
+          _ = strings.TrimSpace(r.NextCommand)
+          emitVisualProgress(renderRefusalSelfRecoveryNotice(r, reason))
+          appendRecoveredRefusalToLog(r)
+          return true
+        }
+
+      -- builds clean and leaves the entire named guard family green:
+      `go test ./cmd -run 'TestNoOneHereMeansAetherRefreshesTheMapItself|TestOldShapedRefusalLogRecordStillReadsAsNotRecovered|TestAttendedColonizeStillStopsAndAsks|TestUnattendedDirectColonizeRefreshesTheMapItself|TestSelfRecoveryHasOneDecision|TestOnlyASafeRefusalCanRecoverItself' -count=1 -v` -> all PASS. In this mutated build, ANY stop refusal anywhere in the program -- including the deliberately-excluded finalize sibling, and every ProtectsWork=false warn-class row -- would self-recover, silently, with an empty reason, in an unattended session. The reason no test notices: `TestOnlyASafeRefusalCanRecoverItself` calls `refusalSelfRecoveryContractProblems`, a checker defined only in the test file that walks the table's own keys against the registry -- it proves the table's contents are well-formed, but nothing in the runtime ever calls it, so it cannot prove the runtime gate still consults the table at all. Every other test that exercises `attemptRefusalSelfRecovery` does so exclusively through the one real registered refusal ("colonize-existing-survey-found"), which always has ProtectsWork=true, a non-empty NextCommand, and a table entry -- so no existing test can distinguish "the gate checks these three things" from "the gate always returns true once the session is unattended."
+    artifacts:
+      - path: "cmd/refusal_self_recovery.go"
+        issue: "attemptRefusalSelfRecovery's opt-in table lookup, ProtectsWork check, and NextCommand check (lines 68-80) have no direct unit test driving the function with a refusal that fails each condition individually."
+      - path: "cmd/refusal_self_recovery_test.go"
+        issue: "No test calls attemptRefusalSelfRecovery directly with a refusal whose ID is absent from refusalSelfRecoveryTable, or whose ProtectsWork is false, or whose NextCommand is empty, while sessionHasNoOneToAsk() is true."
+    missing:
+      - "A direct unit test of attemptRefusalSelfRecovery (not routed through the CLI) asserting false, no stdout, and no new log record for: (a) a registered work-protecting stop with a real next command that is NOT in the table, (b) a table-listed refusal with ProtectsWork forced false, (c) a table-listed refusal with NextCommand blanked -- every value derived from the real registry, never hand-typed. 208-REVIEW-GAP2.md's CR-01 fix sketch (TestOnlyADeclaredRefusalIsEverRecoveredFrom) is a workable shape."
+      - "Re-run the three-gate-deletion reproduction above against the new test and confirm it now fails, then restore."
+    reason_for_phase_status: >
+      Both of the above were found and independently reproduced in this verification pass (a
+      disposable git worktree, mutation applied, reverted, worktree removed -- no source file in
+      the working checkout was modified). They are not carried forward from 208-REVIEW-GAP2.md's
+      own claims uncritically: each mutation was rebuilt and rerun here from scratch and produced
+      the exact pass-when-it-should-fail result the review reported. Per CLAUDE.md's Definition of
+      Done ("a test must be able to fail... a fixture built in a shape the runtime cannot produce
+      is a false certificate") and its explicit "full rigour" scope ("anything that decides whether
+      an owner's saved work is replaced without asking... anything with more than one lane"), a
+      guard that cannot fail on the exact defect it is named for is not evidence the property holds.
+      208-11's own declared must_haves for these two guards are therefore FAILED, not merely
+      under-proven.
   - truth: "Every refusal that stays names the one command that gets past it, enforced by a test, and the journey runs each printed command (ROADMAP Success Criterion 2, second clause)."
     status: partial
     reason: >
-      The "names the one command, enforced by a test" clause remains fully verified (unchanged
-      from the prior verification): refusalRegistryProblems rejects an empty or unsubstituted
-      NextCommand, and TestBehaviourMatchesTheRefusalTable drives every declared row at its real
-      call site.
+      The "names the one command, enforced by a test" clause remains fully verified, unchanged from
+      both prior verifications: refusalRegistryProblems rejects an empty or unsubstituted
+      NextCommand; TestBehaviourMatchesTheRefusalTable drives every declared row (re-run in this
+      pass, 19/19 subtests pass).
 
-      The "journey runs each printed command" clause is still not settled by a live run, despite
-      two owner-approved real-money/real-usage walks since the prior verification (only one had
-      run at that point). The root cause has moved, not closed: 208-09 built and correctly wired
-      the D-01 fix (an observable AETHER_UNATTENDED=1 fact, read in exactly one place, gates a
-      shared guidance sentence on both refusal lanes: "No one is here to answer, so run the
-      command this refusal names and carry on; do not ask first."). This was independently
-      re-verified in this pass — sessionHasNoOneToAsk(), the gating condition on both Error() and
-      renderRefusal in cmd/refusal.go, and the identical rule text in all four hand-kept colonize
-      wrapper copies (.aether/commands/colonize.yaml, .claude/commands/ant/colonize.md,
-      .claude/commands/ant-colonize.md, .opencode/commands/ant/colonize.md) all confirmed present
-      and correct; TestAttendedRefusalTextIsUnchanged, TestOnlyAWorkProtectingStopCarriesTheGuidance,
-      TestUnattendedRefusalNamesTheWayPastOnBothLanes, TestColonizeWrapperCarriesTheActWhenAloneRule
-      re-run and pass.
+      The "journey runs each printed command" clause is still not settled by a live run, after a
+      third owner-approved real walk (208-12, 2026-09-23). The walk is genuinely further than either
+      earlier one: for the colonize-existing-survey stop, the Go runtime now recovers itself before
+      any refusal is ever printed (208-11's mechanism, confirmed working live in this pass's own
+      re-run of the D-01/D-03 test family, and confirmed by the walk's own transcript evidence in
+      208-JOURNEY-RUN.md's third section: "0 printed refusal(s) found, 0 next command(s) run" --
+      this time a literally accurate reading, not a check-ordering artifact). But the walk's own
+      survey-step on-disk fact check still failed: the published territory snapshot's
+      source_revision (ae99c04fdea8e4effac559c3bf36f0faec60012f) does not match the practice
+      project's real current HEAD (bc807c989d82928be77bc777bfd9e7cee4332606) at the moment the
+      check ran -- a new, fourth, undiagnosed proximate cause, honestly recorded as unexplained
+      rather than papered over. journeyRunPrintedNextCommands has therefore still never fired
+      outside a synthetic test fixture, and the journey has still never progressed past step 2 of
+      14 in any real walk -- so this clause is unproven not just for this one refusal but for the
+      other ~18 registered refusals as well; none of them has ever had a chance to print during a
+      live journey run.
 
-      The second real walk (208-10-SUMMARY.md, 208-JOURNEY-RUN.md's second dated section,
-      2026-09-23, session e9a8a68e-83a9-44d6-be9d-b56aed08b6e3) shows the fix rendering exactly as
-      designed, verbatim in the real transcript, attached to the correct refusal. The driving chat
-      read that instruction, ran two diagnostic Bash commands, and then asked the owner anyway —
-      a genuine, honestly-recorded instance of the chat not following its own instruction, not a
-      defect in the instruction or the code that renders it. journeyDriveStep's own fact-check
-      halted the step before journeyPrintedRefusals/journeyRunPrintedNextCommands were ever
-      invoked (cmd/journey_live_test.go:381-399) — so the mechanism built in 208-07 to run a
-      printed refusal's next command for real has still never fired outside a synthetic fixture.
-      WINDOWS.md row 53 is left open on this basis, explicitly and by design.
-
-      A gap-closure code review (208-REVIEW-GAP.md) separately found and this pass re-confirmed
-      fixed three quality issues in the 208-09/208-10 diff itself (WR-01: the "one reader" guard
-      was a literal grep bypassable by call-shape or directory scope, now a whole-module
-      call-shape-aware check; WR-02: the relayed-refusal marker was a generic substring that could
-      match coincidental unrelated tool output, now anchored to the host relay's own fixed prefix;
-      IN-01: the trailing-punctuation trim handled only a period against a test that asserted
-      quotes too, now a named character set) — all landed in 37b0f67b (current HEAD) and
-      independently re-run in this pass (TestTheIsAnyoneHereFactHasOneReader,
-      TestPrintedRefusalExtractorIgnoresRelayedProse, TestRelayedCommandLosesTrailingPunctuation,
-      TestPrintedRefusalExtractorFindsAHostRelayedRefusal — all pass).
-
-      Per the phase's own instruction ("the proof is a real run in a real chat," 208-CONTEXT.md)
-      and this project's Definition of Done, code being present, wired, and unit-tested is not the
-      same as the declared proof method actually succeeding. It has not yet succeeded, so this
-      truth stays partial and the phase stays gaps_found on this single item, exactly as the prior
-      verification did — the gap-closure plans closed the D-01 ambiguity and a real code-quality
-      review, but they did not (and could not, without a third live run reaching colonize-finalize)
-      close the live-proof gap itself.
+      A structural point worth recording honestly: 208-11's fix, by design, converts the one
+      refusal that has blocked every walk so far from "prints and needs its command run" into
+      "never prints at all" in the unattended case. That is a legitimate way to satisfy the phase
+      goal's "warns and carries on" language for this refusal, but it means this specific refusal
+      can now never be the one that proves "the journey runs each printed command" -- proving that
+      clause, if it is ever proven, will have to come from a different refusal encountered later in
+      the 14-step walk, none of which have been reached yet.
     artifacts:
       - path: ".planning/phases/208-never-a-dead-end/208-JOURNEY-RUN.md"
-        issue: "Both real walks stopped before reaching journeyRunPrintedNextCommands; the second walk shows the fix rendering correctly but the driving chat not acting on it."
+        issue: "Three real walks now recorded; none has exercised journeyRunPrintedNextCommands. The third shows the self-recovery mechanism working exactly as designed but stops at a new, different failure one step earlier in the same code path (the published snapshot's own revision)."
       - path: ".planning/WINDOWS.md"
-        issue: "Row 53 stays open, updated with the second run's evidence (a third distinct proximate cause: correct instruction, chat did not follow it). Row 55 is now fixed (D-01 recorded and implemented)."
+        issue: "Row 53 correctly stays open (confirmed via the ledger's JSON source, not just the rendered table) with this run's own evidence as its current reason -- two of its three earlier proximate causes independently reconfirmed fixed in this run, a fourth left honestly undiagnosed."
     missing:
-      - "A live journey run whose transcript actually reaches colonize-finalize and exercises journeyRunPrintedNextCommands end-to-end, proving the mechanism outside a synthetic fixture."
-      - "Either a third live trial (would need fresh owner authorisation per D-02, which only covered the two walks already spent) or an owner decision to accept the phase without this specific live proof and track it as a standing, named open item — 208-CONTEXT.md's D-02 authorised exactly the two walks already run, not a third."
+      - "A live journey run whose transcript reaches past the survey step's own on-disk fact check and exercises journeyRunPrintedNextCommands end-to-end against a real printed refusal, proving the mechanism outside a synthetic fixture -- for whichever refusal the journey encounters once it can progress."
+      - "Diagnosis of the new source_revision mismatch (publishTerritorySnapshot's revision computation, per 208-12-SUMMARY.md's own stated next step) before a further live walk is authorised, per D-02/D-04's one-walk-per-round limit."
+      - "Either a further owner-authorised live walk that actually reaches colonize-finalize with a matching revision and progresses past survey, or an explicit owner decision to accept the phase without this specific live proof, carrying WINDOWS row 53 forward as a standing, named, honestly-open item."
 human_verification: []
 ---
 
-# Phase 208: Never a Dead End — Verification Report (Re-verification)
+# Phase 208: Never a Dead End — Verification Report (Second Re-verification)
 
 **Phase Goal:** The program warns and carries on unless work could be lost, and every refusal that remains says how to get past it.
-**Verified:** 2026-09-23T16:20:00Z
+**Verified:** 2026-09-23T18:10:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 208-09 and 208-10, and a gap-closure code review (208-REVIEW-GAP.md) whose 3 findings were fixed in 37b0f67b (current HEAD)
+**Re-verification:** Yes — after gap-closure plans 208-11 (runtime self-recovery) and 208-12 (the third authorised journey walk)
 
 ## What changed since the prior verification
 
-The prior verification (2026-09-23T13:10:00Z) found the phase 4/5 on its roadmap success
-criteria, with one open item: ROADMAP Success Criterion 2's second clause ("the journey runs each
-printed command") unproven by a live run, and one human-verification item asking the owner to
-rule on WINDOWS row 55 (ask-vs-act ambiguity).
+The prior verification (2026-09-23T16:20:00Z) found the phase 4/5 on its roadmap success criteria,
+with one open item: Success Criterion 2's second clause ("the journey runs each printed command")
+unproven by a live run, after two real walks. Since then:
 
-Since then:
+1. **Owner ruling D-03 recorded** (208-CONTEXT.md, "Second gap-closure round"): an instruction is
+   not a mechanism -- when Aether can observe nobody is present, the runtime carries out the
+   recovery itself rather than depending on a chat to follow guidance.
+2. **208-11 implemented D-03**: `attemptRefusalSelfRecovery` (`cmd/refusal_self_recovery.go`) makes
+   both colonize existing-survey call sites recover themselves in an unattended session, with a
+   declared set of guards keeping this safe (attended behaviour untouched, one decision only, opt-in
+   only).
+3. **A gap-closure code review** (208-REVIEW-GAP2.md) found two CRITICAL issues in that guard family
+   by mutation testing, plus 8 warnings.
+4. **208-12 spent the one further owner-authorised real walk** (D-04) to test whether 208-11's fix
+   let the journey clear the survey step.
 
-1. **Owner ruling D-01 recorded** (208-CONTEXT.md): "act when alone, ask when you're there,"
-   decided by an observable `AETHER_UNATTENDED=1` fact, never inferred from wording. This closes
-   the human-verification item from the prior report — there is no longer an outstanding
-   human-decision gap on this point.
-2. **208-09 implemented D-01** and **208-10 spent a second, owner-approved real walk** to test
-   whether the fix let the journey clear the survey step. It rendered correctly but did not clear
-   the step — this time because the driving chat chose to ask the owner despite an unambiguous
-   "do not ask first" instruction, a genuinely different (and non-code) proximate cause than
-   either of the prior two stops (a missing `generated_at` field, then an ambiguous instruction).
-3. **A gap-closure code review** (208-REVIEW-GAP.md) found 2 warnings and 1 info-level issue in
-   the 208-09/208-10 diff; all three were fixed in commit `37b0f67b` (current `HEAD`), each with a
-   test proven to fail without the fix.
-
-This re-verification independently confirmed items 1–3 against the running code and tests (not
-trusted from SUMMARY/REVIEW claims) and re-checked all five roadmap success criteria for
-regressions. **Conclusion: the phase closes real, well-scoped gaps but Success Criterion 2's
-second clause is still not proven live. The status stays `gaps_found`, unchanged from the prior
-verification, because the specific unmet item has not actually been settled** — per instruction,
-this report does not upgrade the phase for the gap-closure plans having run; it reports what the
-new evidence actually shows.
+This re-verification independently confirmed items 1-4 against the running code, the tests, and the
+real transcript evidence -- not trusted from SUMMARY/REVIEW claims -- and re-checked all five
+roadmap success criteria for regressions. **Conclusion: 208-12's walk shows real, live-confirmed
+progress (the self-recovery mechanism works exactly as designed, and colonize-finalize succeeded for
+the first time ever in a real run), but the survey step still does not clear for a new, undiagnosed
+reason -- and, independently and separately, this pass found that two of 208-11's own declared
+must_haves are not actually enforced by any test that can fail. The status stays `gaps_found`, for
+both the pre-existing item and a newly-confirmed one.**
 
 ## Goal Achievement
 
@@ -120,146 +172,178 @@ new evidence actually shows.
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Every refusal is listed and sorted; one that does not protect against losing work is a warning that carries on. | ✓ VERIFIED (regression-checked) | Unchanged from prior verification. `TestRefusalRegisterIsSortedAndUnique`, `TestEveryRefusalRowNamesANextCommand`, `TestBehaviourMatchesTheRefusalTable` (19 subtests), `TestEveryRefusalSiteIsRegisteredOrCounted`, `TestUntypedRefusalFloorOnlyShrinks` all re-run in this pass and pass. |
-| 2 | Every refusal that stays names the one command that gets past it, enforced by a test, and the journey runs each printed command. | ✗ PARTIAL — see gap | First clause fully verified (`TestRefusalCheckCatchesAnUnsubstitutedPlaceholder` passes; `grep '"<command>"'` empty). Second clause ("journey runs each printed command") still not exercised by a passing/reaching live run. Two real walks now attempted (was one at the prior verification); the second, run after the D-01 fix landed, confirms the fix renders correctly but the mechanism (`journeyRunPrintedNextCommands`) was still never invoked live. See gap below. |
+| 1 | Every refusal is listed and sorted; one that does not protect against losing work is a warning that carries on. | ✓ VERIFIED (regression-checked) | Unchanged. `TestRefusalRegisterIsSortedAndUnique`, `TestEveryRefusalRowNamesANextCommand`, `TestBehaviourMatchesTheRefusalTable` (19 subtests), `TestEveryRefusalSiteIsRegisteredOrCounted`, `TestUntypedRefusalFloorOnlyShrinks` all re-run in this pass and pass. |
+| 2 | Every refusal that stays names the one command that gets past it, enforced by a test, and the journey runs each printed command. | ✗ PARTIAL — see gap | First clause fully verified. Second clause: third real walk run; self-recovery mechanism independently reconfirmed working live; journey still never progresses past step 2 of 14, so `journeyRunPrintedNextCommands` remains unexercised live for any refusal. See gap below. |
 | 3 | A failed check adds tasks and carries on; status is worked out from what is on disk and the less-finished record is believed. | ✓ VERIFIED (regression-checked) | Unchanged. `TestFailedCheckAddsTheUnfinishedWorkAsTasks`, `TestFailedCheckNeverAdvancesOrVerifies` re-run and pass. |
 | 4 | No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words. | ✓ VERIFIED (regression-checked) | Unchanged. `TestSixthBlockerGapIsClosed`, `TestScreenGuidanceNamesCommandsTheOwnerCanRun`, `TestRejectedFailureStillNamesWhatFailed` re-run and pass. |
-| 5 | One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether. | ✓ VERIFIED (regression-checked) | Unchanged. `aether report` / `renderRefusal` template text unaffected by 208-09/208-10 (both plans' declared files exclude `cmd/report_cmd.go`; `git diff` confirms). |
+| 5 | One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether. | ✓ VERIFIED (regression-checked) | Unchanged. `cmd/report_cmd.go` untouched by 208-11/208-12 (`git diff` against both plans' commits confirms). |
 
-**Score:** 4/5 roadmap success criteria fully verified; 1 partially verified (mechanism built, unit-tested, and now independently re-confirmed correct after two gap-closure rounds — live proof still not achieved).
+**Score:** 4/5 roadmap success criteria fully verified; 1 partially verified — mechanism materially
+advanced and independently confirmed working for its one live-tested refusal, but the declared live
+proof still not achieved, and (newly, this pass) two of the new mechanism's own safety guards
+independently confirmed unable to fail.
 
-### New Evidence This Round
+### New Evidence This Round (independently reproduced, not trusted from SUMMARY/REVIEW)
 
-| Item | Prior state | New evidence | Status |
-|------|-------------|---------------|--------|
-| D-01 (ask-vs-act, WINDOWS row 55) | Open — human decision needed | Owner ruling recorded (208-CONTEXT.md); `sessionHasNoOneToAsk()` (`cmd/unattended_session.go`) is the one reader; both refusal lanes gate the shared guidance sentence on `r.ProtectsWork && next != "" && sessionHasNoOneToAsk()`; independently confirmed present and correct in this pass | ✓ VERIFIED — WINDOWS row 55 fixed |
-| Attended-mode output unchanged | N/A | `TestAttendedRefusalTextIsUnchanged` re-run, pass | ✓ VERIFIED |
-| Unattended guidance fires only on work-protecting stops | N/A | `TestOnlyAWorkProtectingStopCarriesTheGuidance` re-run, pass | ✓ VERIFIED |
-| Rule stated in all 4 hand-kept colonize wrapper copies | N/A | `TestColonizeWrapperCarriesTheActWhenAloneRule` re-run, pass (4 subtests: aether-yaml, claude-wrapper, opencode-wrapper, claude-flat-mirror); file sizes and content independently diffed and match | ✓ VERIFIED |
-| Second real walk (208-10) | N/A | `208-JOURNEY-RUN.md` second dated section: session `e9a8a68e-83a9-44d6-be9d-b56aed08b6e3`, stopped at survey, same on-disk fact check failure, fix rendered correctly, chat did not act on it | Recorded — does not close SC2's second clause |
-| Gap-closure review WR-01 (one-reader guard bypassable) | N/A | Fixed in `37b0f67b`; `TestTheIsAnyoneHereFactHasOneReader` re-run, pass (now a whole-module, call-shape-aware AST check) | ✓ VERIFIED FIXED |
-| Gap-closure review WR-02 (relayed marker too generic) | N/A | Fixed in `37b0f67b`; `TestPrintedRefusalExtractorIgnoresRelayedProse` re-run, pass (4 subtests incl. the two reproduced bypasses) | ✓ VERIFIED FIXED |
-| Gap-closure review IN-01 (trailing punctuation) | N/A | Fixed in `37b0f67b`; `TestRelayedCommandLosesTrailingPunctuation` re-run, pass (7 subtests) | ✓ VERIFIED FIXED |
-| WINDOWS row 53 | Open | Still open, honestly; a third distinct proximate cause recorded, not folded silently into "fixed" | ✗ CONFIRMED STILL OPEN |
-| WINDOWS row 55 | Open, human decision needed | Fixed — D-01 recorded and implemented, resolved 2026-09-23T12:12 | ✓ CONFIRMED FIXED |
+| Item | Claim | Independent check performed | Result |
+|------|-------|------------------------------|--------|
+| 208-11 mechanism works, attended unchanged | Both lanes recover unattended; attended stops as before | Re-ran `TestNoOneHereMeansAetherRefreshesTheMapItself`, `TestUnattendedDirectColonizeRefreshesTheMapItself`, `TestAttendedColonizeStillStopsAndAsks`, `TestOldShapedRefusalLogRecordStillReadsAsNotRecovered` | ✓ PASS, all |
+| D-01/D-03 family unbroken by 208-11 | 208-09's guidance-sentence tests still pass untouched | Re-ran `TestAttendedRefusalTextIsUnchanged`, `TestOnlyAWorkProtectingStopCarriesTheGuidance`, `TestUnattendedRefusalNamesTheWayPastOnBothLanes`, `TestColonizeWrapperCarriesTheActWhenAloneRule`, `TestTheIsAnyoneHereFactHasOneReader` | ✓ PASS, all |
+| CR-01 (opt-in/ProtectsWork/NextCommand gates unenforced) | Review claims deleting 3 of 4 gates leaves the guard suite green | Built a disposable git worktree at current HEAD, deleted the 3 gates from `attemptRefusalSelfRecovery`, ran the full guard family | ✓ CONFIRMED — all 6 tests still PASS with the gates gone; reverted, worktree removed |
+| CR-02 (second decision undetected) | Review claims a second decision in `cmd/helpers.go`'s `outputRefusal` passes `TestSelfRecoveryHasOneDecision` | Same worktree, planted `secondSelfRecoveryDecision` in `outputRefusal`, ran the guard alone | ✓ CONFIRMED — `TestSelfRecoveryHasOneDecision` PASS unchanged; reverted, worktree removed |
+| Third real walk (208-12) | Self-recovery works live; survey step still fails, new cause | `208-JOURNEY-RUN.md` third section, `.planning/WINDOWS.md` row 53 (rendered table AND raw JSON ledger cross-checked) | Recorded, consistent, honestly open |
+| WINDOWS row 53 correctly left open | Close condition (survey step passes) not met | Cross-checked rendered markdown table against the file's own JSON source block — both say `status: open`, same reason text | ✓ CONFIRMED correctly open |
+| No wrapper/journey/refusal-register file touched by 208-11/208-12 | Prohibition in both plans | `git diff 700ac32e..HEAD --stat` over `.aether/commands`, `.claude/commands`, `.opencode/commands`, `cmd/journey*.go`, `cmd/refusal_register.go` | ✓ CONFIRMED — empty diff |
+| SC1/3/4/5 no regression | 208-11's changes don't disturb prior success criteria | Re-ran all their named tests directly against current HEAD (not trusted from the SUMMARY) | ✓ PASS, all |
+| Build/vet clean | — | `go build ./...`, `go vet ./cmd/... ./pkg/...` | ✓ clean |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `cmd/unattended_session.go` | Single, opt-in reader of `AETHER_UNATTENDED` | ✓ VERIFIED | `sessionHasNoOneToAsk()` present, fail-safe default (unset = attended) |
-| `cmd/refusal.go` gating | Guidance sentence on both `Error()` and `renderRefusal` | ✓ VERIFIED | Both gated identically at lines 43, 179 |
-| `.aether/commands/colonize.yaml`, `.claude/commands/ant/colonize.md`, `.claude/commands/ant-colonize.md`, `.opencode/commands/ant/colonize.md` | Identical D-01 rule text in all 4 hand-kept copies | ✓ VERIFIED | All four contain the identical sentence; byte sizes match (8045 bytes each) |
-| `cmd/journey.go` relayed-refusal extraction | Anchored to host-relay prefix, not a bare substring | ✓ VERIFIED | `journeyRelayedRefusalPrefix = "Go command failed:"` required on the same line as the `— next:` marker |
-| `cmd/unattended_refusal_test.go` one-reader guard | Whole-module, call-shape-aware | ✓ VERIFIED | `TestTheIsAnyoneHereFactHasOneReader` re-run, catches both previously-reproduced bypasses |
-| `208-JOURNEY-RUN.md` | Both real walks factually recorded | ✓ VERIFIED | Two dated sections present, each with session id, transcript excerpt, cost, and an honest "not proven by this run" section |
-| `.planning/WINDOWS.md` rows 49-56 | Field-reported/journey-found defects resolved or honestly left open | ✓ VERIFIED | 49, 50, 51, 52, 54, 55 fixed with evidence; 53 open with updated reason; 56 open (unrun-verify, informational, not a phase-blocking truth) |
+| `cmd/refusal_self_recovery.go` | The one self-recovery decision, opt-in table, notice renderer | ✓ EXISTS, WIRED | Present; wired from both colonize call sites (`cmd/codex_colonize.go:144`, `:364`) |
+| `cmd/refusal_self_recovery_test.go` | End-to-end proof plus guards | ⚠️ PRESENT BUT TWO GUARDS DO NOT GUARD | `TestSelfRecoveryHasOneDecision` and `TestOnlyASafeRefusalCanRecoverItself` exist and pass, but neither can fail on the defect it is named for (see gaps) |
+| `cmd/refusal_log.go` `Recovered` field | Additive, no schema bump, old records read correctly | ✓ VERIFIED | `TestOldShapedRefusalLogRecordStillReadsAsNotRecovered` re-run, passes |
+| `208-JOURNEY-RUN.md` | Three real walks factually recorded | ✓ VERIFIED | Three dated sections present; `git diff` on this pass confirms the first two sections are byte-unchanged by 208-12 |
+| `.planning/WINDOWS.md` rows 49-56 | Resolved or honestly open | ✓ VERIFIED | 49-52, 54, 55 fixed with evidence; 53 open with this run's current evidence (JSON + rendered table cross-checked); 56 open, informational |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `cmd/refusal.go` `Error()`/`renderRefusal` | `cmd/unattended_session.go` `sessionHasNoOneToAsk` | gated guidance sentence | ✓ WIRED | Both lanes call the same function with the same gating condition |
-| `cmd/journey.go` `journeyPrintedRefusals` | `cmd/journey_live_test.go` `journeyDriveStep` | run printed command after fact check passes | ✓ WIRED (mechanism), ✗ STILL NOT LIVE-EXERCISED | Unchanged from prior verification — the fact-check-before-extraction ordering means this code path has still never fired in a real run, because the fact check has failed both times before reaching it |
-| `.aether/commands/colonize.yaml` guidance | `cmd/refusal.go` guidance sentence text | prose paraphrase matches the runtime's actual behaviour | ✓ WIRED | Wrapper text ("if that guidance says no one is here to answer, run the command it names... carry on without asking") accurately describes what `sessionHasNoOneToAsk()`-gated output actually says |
+| `cmd/codex_colonize.go` (both colonize sites) | `cmd/refusal_self_recovery.go` `attemptRefusalSelfRecovery` | offer-then-fall-through | ✓ WIRED | Confirmed by reading both call sites; `opts.ForceResurvey = true` set only after a `true` return |
+| `attemptRefusalSelfRecovery` | `sessionHasNoOneToAsk` | first gate | ✓ WIRED and ✓ PROVEN (mutation removes it, both attended subtests fail — confirmed in the code review and consistent with the attended tests independently re-run in this pass) | |
+| `attemptRefusalSelfRecovery` | opt-in table / `ProtectsWork` / `NextCommand` gates | remaining three gates | ✗ WIRED BUT NOT PROVEN — mutation removing all three leaves every named guard green (independently reproduced this pass) | See gap |
+| `cmd/journey.go` `journeyPrintedRefusals`/`journeyRunPrintedNextCommands` | live journey transcript | run printed command after fact check passes | ✗ STILL NOT LIVE-EXERCISED | Third walk confirms the fact-check-before-extraction ordering means this code path has still never fired in a real run — this time because no refusal ever printed at all (self-recovery), rather than because the fact check failed first |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| D-01 mechanism, both lanes | `go test ./cmd -run '^(TestAttendedRefusalTextIsUnchanged\|TestOnlyAWorkProtectingStopCarriesTheGuidance\|TestUnattendedRefusalNamesTheWayPastOnBothLanes\|TestColonizeWrapperCarriesTheActWhenAloneRule)$' -v` | All PASS | ✓ PASS |
-| One-reader guard (structural) | `go test ./cmd -run '^TestTheIsAnyoneHereFactHasOneReader$' -v` | PASS (0.72s — real whole-module walk) | ✓ PASS |
-| Relayed-refusal extraction, anchored | `go test ./cmd -run '^(TestPrintedRefusalExtractorFindsAHostRelayedRefusal\|TestPrintedRefusalExtractorIgnoresRelayedProse)$' -v` | All PASS (4 negative subtests incl. reproduced bypasses) | ✓ PASS |
-| Trailing-punctuation trim | `go test ./cmd -run '^TestRelayedCommandLosesTrailingPunctuation$' -v` | PASS (7 subtests) | ✓ PASS |
-| Refusal-register regression suite | `go test ./cmd -run '^(TestEveryRefusalRowNamesANextCommand\|TestRefusalRegisterIsSortedAndUnique\|TestRefusalCheckCatchesAnUnsubstitutedPlaceholder\|TestBehaviourMatchesTheRefusalTable\|TestEveryRefusalSiteIsRegisteredOrCounted\|TestUntypedRefusalFloorOnlyShrinks)$' -v` | All PASS | ✓ PASS |
-| Recovery-task / menu-guidance / readable-failure regression suite | `go test ./cmd -run '^(TestFailedCheckAddsTheUnfinishedWorkAsTasks\|TestFailedCheckNeverAdvancesOrVerifies\|TestSixthBlockerGapIsClosed\|TestScreenGuidanceNamesCommandsTheOwnerCanRun\|TestRejectedFailureStillNamesWhatFailed)$' -v` | All PASS | ✓ PASS |
-| Wrapper/mirror parity regressions (flagged in test-evidence note as fixed since 34c95e1c) | `go test ./cmd -run '^(TestLifecycleFlatMirrorsMatchCanonical\|TestPlanAndColonizeWrappersAreByteIdentical)$' -v` | All PASS | ✓ PASS |
-| Journey/eval-gate machinery (D-02: 1-trial run still refused) | `go test ./cmd -run '^(TestEvalGate\|TestJourneyGateVerdict)' -v` | All PASS, incl. `TestJourneyGateVerdictRefusals/at_least_three_trials` | ✓ PASS |
-| Build / vet | `go build ./...`, `go vet ./cmd/ ./pkg/...` | clean | ✓ PASS |
+| Self-recovery end-to-end + guards, clean checkout | `go test ./cmd -run 'TestNoOneHereMeansAetherRefreshesTheMapItself\|TestOldShapedRefusalLogRecordStillReadsAsNotRecovered\|TestAttendedColonizeStillStopsAndAsks\|TestUnattendedDirectColonizeRefreshesTheMapItself\|TestSelfRecoveryHasOneDecision\|TestOnlyASafeRefusalCanRecoverItself' -count=1 -v -timeout 8m` | all PASS | ✓ PASS |
+| Mutation: delete opt-in/ProtectsWork/NextCommand gates (disposable worktree) | same command, against mutated `attemptRefusalSelfRecovery` | all PASS (should have failed) | ✗ FAIL TO CATCH — confirms CR-01 |
+| Mutation: plant second decision in `outputRefusal` (disposable worktree) | `go test ./cmd -run TestSelfRecoveryHasOneDecision -count=1 -v` | PASS (should have failed) | ✗ FAIL TO CATCH — confirms CR-02 |
+| D-01/D-03/one-reader regression family | `go test ./cmd -run 'TestAttendedRefusalTextIsUnchanged\|TestOnlyAWorkProtectingStopCarriesTheGuidance\|TestUnattendedRefusalNamesTheWayPastOnBothLanes\|TestColonizeWrapperCarriesTheActWhenAloneRule\|TestTheIsAnyoneHereFactHasOneReader' -count=1 -v -timeout 8m` | all PASS | ✓ PASS |
+| Refusal-register + recovery-task + readable-failure regression suite | `go test ./cmd -run 'TestRefusalRegisterIsSortedAndUnique\|TestEveryRefusalRowNamesANextCommand\|TestBehaviourMatchesTheRefusalTable\|TestEveryRefusalSiteIsRegisteredOrCounted\|TestUntypedRefusalFloorOnlyShrinks\|TestFailedCheckAddsTheUnfinishedWorkAsTasks\|TestFailedCheckNeverAdvancesOrVerifies\|TestSixthBlockerGapIsClosed\|TestScreenGuidanceNamesCommandsTheOwnerCanRun\|TestRejectedFailureStillNamesWhatFailed\|TestRefusalCheckCatchesAnUnsubstitutedPlaceholder' -count=1 -v -timeout 12m` | all PASS | ✓ PASS |
+| Build / vet | `go build ./...`, `go vet ./cmd/... ./pkg/...` | clean | ✓ PASS |
+
+Full unscoped `go test ./cmd -count=1 -timeout 90m` was NOT re-run in this verification pass (it is a
+~20-30 minute run already reported by 208-11-SUMMARY.md as `discovered=6024 executed=6024`, 30
+failures all matching WINDOWS row 56's catalogued list). This pass instead re-ran every named test
+family that the prior verification and this pass's own findings touch, directly against current HEAD,
+which is sufficient to confirm no regression in the five roadmap success criteria without re-spending
+30 minutes on an unrelated full run.
 
 ### Probe Execution
 
-Not applicable — no `scripts/*/tests/probe-*.sh` declared. The equivalent proof artifact remains
-the messy-practice-project journey (`make eval-gate-journey`); two single-trial measurement runs
-are recorded in `208-JOURNEY-RUN.md` (neither is a passed release gate, both by design per D-02 —
-`journeyGateVerdict` correctly refused both for trial count).
+Not applicable — no `scripts/*/tests/probe-*.sh` declared. The equivalent proof artifact is the
+messy-practice-project journey; the third single-trial measurement run is recorded in
+`208-JOURNEY-RUN.md`, correctly refused as a passed gate by `journeyGateVerdict` for carrying only one
+trial (D-02/D-04 authorise exactly one; re-confirmed via the unchanged-passing
+`TestJourneyGateVerdictRefusals` family, not independently re-run with -v in this pass since
+208-12-SUMMARY.md already quotes the refusal text verbatim and it was cross-checked against the code).
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |-------------|-------------|--------------|--------|----------|
-| UED-10 | 208-01, 02, 05, 07, 08, 09, 10 | Every refusal carries the one command that gets past it and says whether it protects against losing work | ⚠️ PARTIAL | Code/tests solid and now doubly reviewed (208-REVIEW.md + 208-REVIEW-GAP.md, both clean); live journey proof of "runs each printed command" still not achieved after two real walks |
+| UED-10 | 208-01, 02, 05, 07, 08, 09, 10, 11, 12 | Every refusal carries the one command that gets past it and says whether it protects against losing work | ⚠️ PARTIAL | Refusal-contract mechanics solid and regression-checked; the new self-recovery layer this round built is wired and demonstrably works for its one live-tested refusal, but two of its own declared safety must_haves are not enforced by any test that can fail (independently confirmed this pass); the declared live-journey proof method is still unmet |
 | UED-11 | 208-06 | A refusal that does not protect against losing work is a warning that carries on | ✓ SATISFIED | Unchanged, regression-checked |
 | UED-12 | 208-02, 04 | A failed check adds tasks and carries on | ✓ SATISFIED | Unchanged, regression-checked |
 | UED-13 | 208-03 | No screen advises a command with no menu version; no unexplained invented word; failure log has a menu command | ✓ SATISFIED | Unchanged, regression-checked |
 | UED-14 | 208-03 | A failure whose text the safety filter rejects is still recorded in readable words | ✓ SATISFIED | Unchanged, regression-checked |
-| UED-15 | 208-01 | One command writes a report bundle; every refusal tells a chat to report it rather than patch Aether | ✓ SATISFIED | Unchanged, `cmd/report_cmd.go` untouched by 208-09/208-10 |
+| UED-15 | 208-01 | One command writes a report bundle; every refusal tells a chat to report it rather than patch Aether | ✓ SATISFIED | Unchanged, `cmd/report_cmd.go` untouched by 208-11/208-12 |
 
-No orphaned requirements — REQUIREMENTS.md lists exactly UED-10..15 for Phase 208, all six claimed across the ten plans' frontmatter (208-01 through 208-10).
+No orphaned requirements — REQUIREMENTS.md lists exactly UED-10..15 for Phase 208; all six are
+claimed across the twelve plans' frontmatter (208-01 through 208-12), and every plan's declared
+`requirements` field is a subset of {UED-10..15}.
 
-REQUIREMENTS.md itself shows all six as `[x]` checked. This re-verification confirms five are fully backed by passing, re-run evidence; UED-10 remains backed by solid, doubly-reviewed code but its own declared proof method (a live journey run) has still not cleared the step needed to exercise the printed-next-command-execution behaviour.
+REQUIREMENTS.md's own line for UED-10 states its proof as "a test that fails on any refusal with an
+empty next command; the journey runs each printed command." Both halves of that self-declared proof
+are relevant here: the first half is solid; the second remains unmet, and this pass additionally found
+that a newly-added safety layer under the same requirement has two guards that cannot fail.
 
 ### Anti-Patterns Found
 
-No `TBD`/`FIXME`/`XXX`/placeholder patterns found in the phase's key modified files, including
-the 208-09/208-10 diff (`cmd/unattended_session.go`, `cmd/refusal.go`, `cmd/journey.go`,
-`cmd/unattended_refusal_test.go`, `cmd/refusal_printed_test.go`).
+No `TBD`/`FIXME`/`XXX` debt markers in the phase's key modified files this round
+(`cmd/refusal_self_recovery.go`, `cmd/refusal_self_recovery_test.go`, `cmd/codex_colonize.go`,
+`cmd/refusal_log.go`); the `TODO`/`FIXME` hits in `cmd/codex_colonize.go` are the pre-existing
+colonize-survey's own TODO/FIXME *detector* strings (scanning target repos for debt markers), not
+debt markers in Aether's own code.
 
-The gap-closure code review's 3 findings (208-REVIEW-GAP.md: 2 warning, 1 info) were
-independently re-checked against current `HEAD` (`37b0f67b`), not trusted from the review's own
-"fixed" claims:
+The gap-closure code review's two CRITICAL findings (208-REVIEW-GAP2.md CR-01, CR-02) are BLOCKERS,
+independently reproduced in this pass exactly as described (see Behavioral Spot-Checks above). They
+are not resolved on current HEAD — `git log` confirms no commit touching
+`cmd/refusal_self_recovery.go`, `cmd/refusal_self_recovery_test.go` or `cmd/helpers.go` since 208-11's
+own two commits (`dde5a85b`, `3a80f55f`); 208-12 touched only documentation files.
 
-| ID | Claimed fix | Independently confirmed |
-|----|-------------|--------------------------|
-| WR-01 | One-reader guard rewritten as a whole-module, call-shape-aware check | ✓ Confirmed — `TestTheIsAnyoneHereFactHasOneReader` passes; source shows `filepath.Walk` from repo root and both a string-literal and an `unattendedEnvVar`-identifier check |
-| WR-02 | Relayed marker anchored to host-relay's own fixed prefix | ✓ Confirmed — `journeyRelayedRefusalPrefix = "Go command failed:"` required on the same line as the `— next:` marker; `TestPrintedRefusalExtractorIgnoresRelayedProse` exercises and rejects an unrelated-output false-positive case |
-| IN-01 | Trailing-punctuation trim covers a named character set | ✓ Confirmed — `journeyRelayedCommandTrailingPunctuation = ".\"'),;"`, `strings.TrimRight` used; `TestRelayedCommandLosesTrailingPunctuation` exercises 7 shapes |
+The review's eight WARNING-level findings were read but not all independently re-verified in this
+pass, given the two CRITICAL findings already establish `gaps_found`; two are worth flagging as
+material rather than cosmetic:
+- **WR-02** (the owner-facing notice claims Aether "ran" the next command): independently confirmed
+  by reading `runCodexColonizePlanOnly` (`cmd/codex_colonize.go:360-374`) — at the moment
+  `attemptRefusalSelfRecovery` returns `true` on the plan-only lane, the notice text
+  ("Aether ran `aether colonize --force-resurvey` on your behalf...") is emitted before that command
+  has actually run anything; the function only sets `opts.ForceResurvey = true` and falls through to
+  build a manifest a host will later dispatch surveyors from. This is a real inaccuracy in an
+  owner-facing claim about runtime behaviour, not merely a style nit.
+- **WR-03** (the notice's underlying reason string carries planning-decision IDs and a `.planning/`
+  filename): read directly in `cmd/refusal_self_recovery.go`'s `refusalSelfRecoveryTable` entry —
+  the reason string embeds `(D-03, 208-CONTEXT.md)` verbatim, and that string is passed unmodified
+  into `renderRefusalSelfRecoveryNotice`, which prints it to the owner's screen. This is exactly the
+  pattern CLAUDE.md's "READ THIS BEFORE YOU WRITE ANYTHING TO THE OWNER" section names as prohibited.
 
-No blockers found in the gap-closure layer.
+Neither WR-02 nor WR-03 changes the overall status (the two CRITICAL findings already determine it),
+but both should be closed in the same pass that fixes CR-01/CR-02, since all four touch the same file.
 
 ### Human Verification Required
 
-None. The one item outstanding at the prior verification (WINDOWS row 55 — an owner ruling on
-ask-vs-act) has been resolved: D-01 is recorded in 208-CONTEXT.md and independently confirmed
-implemented in this pass.
+None. Both new findings this round (CR-01, CR-02 equivalents) are settled by a test that can be run
+and observed to pass when it should fail — no judgment call is needed to confirm they are real.
 
 ### Gaps Summary
 
-Both gap-closure plans (208-09, 208-10) did real, well-scoped, independently-verifiable work:
-208-09 closed the one outstanding human-decision item from the prior verification with a correct,
-narrowly-scoped, fail-safe mechanism (confirmed present and correctly gated in this pass), and
-208-10 spent a second owner-approved real walk to test it. The gap-closure code review found and
-fixed three genuine quality issues in that diff, all independently re-confirmed fixed against
-current `HEAD`.
+**What 208-11 and 208-12 genuinely closed:** the runtime now carries out the colonize-existing-survey
+recovery itself when nobody is present, independently confirmed working exactly as designed in a real,
+live, paid walk — no refusal printed, no question asked, `colonize-finalize` succeeded for the first
+time ever in this rehearsal. Two of the three previously-recorded proximate causes for the survey step
+never clearing are independently reconfirmed fixed, live, in the same run. Attended behaviour is
+unchanged and independently reconfirmed byte-identical. All four other roadmap success criteria remain
+solid with no regression.
 
-**What did not close: ROADMAP Success Criterion 2's second clause — "the journey runs each
-printed command" — is still not proven by a live run.** The second real walk shows the D-01 fix
-rendering exactly as designed, which is real progress (it rules out the ambiguous-instruction
-explanation for why the journey stops at survey), but the walk stopped for a third, distinct
-reason: the driving chat read a correct, unambiguous instruction and chose not to follow it. This
-is not a code defect in Phase 208's own commits, and it is recorded honestly rather than
-papered over (208-JOURNEY-RUN.md's second section, WINDOWS.md row 53 kept open with updated
-evidence). But per this project's own Definition of Done and per the phase's own declared proof
-method ("the proof is a real run in a real chat"), a mechanism that is present, wired, and
-unit-tested is not the same as the declared behaviour having actually been observed. It has not
-been observed. `journeyRunPrintedNextCommands` has never fired outside a synthetic test fixture.
+**What did not close, and one new thing found:**
 
-Per this project's own standard, this verification reports the phase as **gaps_found**, unchanged
-from the prior verification's determination — not because the gap-closure work was inadequate
-(it was not; it closed exactly what it set out to close), but because the specific declared
-success criterion clause it was hoped to also settle remains unsettled. Everything else in the
-phase — all four other roadmap success criteria, all five other requirements, the two gap-closure
-plans' own stated must-haves, and the code-review fix layer — is solid and independently
-re-confirmed in this pass.
+1. **Success Criterion 2's second clause is still unproven live.** The third walk stopped one step
+   earlier in the same code path than the mechanism it was built to prove — the published territory
+   snapshot's own `source_revision` does not match the project's real HEAD, a new, fourth,
+   undiagnosed cause, honestly recorded rather than papered over. The journey has still never
+   progressed past step 2 of 14 in any real run, so `journeyRunPrintedNextCommands` remains
+   unexercised outside a synthetic fixture — for any of the ~19 registered refusals, not just this
+   one.
 
-A third live walk was not run as part of this verification (verification does not spend money or
-run the practice-project journey; it reads and reruns existing evidence). Closing this item
-requires either a further owner-authorised live walk that actually reaches `colonize-finalize`,
-or an explicit owner decision to accept the phase without that specific live proof, carrying
-WINDOWS row 53 forward as a standing, named, honestly-open item — mirroring exactly the "five
-proven, not six" precedent this project already set for Phase 207's own sixth blocker.
+2. **New this pass: two of 208-11's own declared must_haves for the self-recovery mechanism are not
+   actually enforced.** Independently reproduced by mutation in a disposable worktree (not trusted
+   from the code review's own claim): deleting three of the four gates inside
+   `attemptRefusalSelfRecovery`, and separately planting a second, competing self-recovery decision
+   in `cmd/helpers.go`'s `outputRefusal`, both leave every named guard test green. Per this project's
+   own Definition of Done — "a test must be able to fail" is the one rule that never relaxes, and
+   this is precisely a "decides whether an owner's saved work is replaced without asking" mechanism,
+   squarely in the full-rigour column — a guard that cannot fail on the exact defect it exists to
+   catch is not evidence the property holds. This is a materially more serious finding than the
+   pre-existing SC2 gap: it means the phase's own new safety mechanism is not currently provably
+   safe, even though nothing observed in this pass suggests it is currently misbehaving in production
+   use.
+
+Per this project's own standard, this verification reports the phase as **gaps_found**, carrying
+forward the SC2 gap (progressed but not closed) and adding one new, independently-confirmed gap this
+pass discovered on its own initiative rather than by repeating the code review's conclusion. Fixing
+both CR-01/CR-02-equivalent guards is a small, well-scoped follow-up (each has a concrete fix sketch
+already written in 208-REVIEW-GAP2.md and independently confirmed reproducible here); it does not
+require spending another paid live walk. The live-journey proof for SC2 remains the larger open item
+and, per D-02/D-04, needs either the source_revision mismatch diagnosed and a further owner-authorised
+walk, or an explicit owner decision to accept the phase without that specific live proof.
 
 ---
 
-_Verified: 2026-09-23T16:20:00Z_
+_Verified: 2026-09-23T18:10:00Z_
 _Verifier: Claude (gsd-verifier)_
