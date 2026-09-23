@@ -28,6 +28,14 @@ type refusalLogEntry struct {
 	NextCommand   string `json:"next_command"`
 	ProtectsWork  bool   `json:"protects_work"`
 	Command       string `json:"command"`
+	// Recovered is additive (208-11-PLAN.md): true when Aether carried out
+	// this refusal's own recovery itself (attemptRefusalSelfRecovery,
+	// cmd/refusal_self_recovery.go) rather than the refusal stopping the
+	// command. omitempty and no schema-version bump on purpose -- a record
+	// written before this field existed has no "recovered" key at all, and
+	// must still unmarshal cleanly and read as false (not recovered), the
+	// only honest default for a record that predates the concept.
+	Recovered bool `json:"recovered,omitempty"`
 }
 
 // refusalLogExcludedCommands are the NON-hook command paths already proven
@@ -83,6 +91,21 @@ func refusalLogWriteExcludedForCommand(command string) bool {
 // there is no project in this folder, and nothing for a command
 // refusalLogWriteExcludedForCommand names.
 func appendRefusalToLog(r refusal) {
+	appendRefusalLogEntry(r, false)
+}
+
+// appendRecoveredRefusalToLog is refusal-self-recovery's own writer
+// (attemptRefusalSelfRecovery, cmd/refusal_self_recovery.go). It records
+// the identical entry appendRefusalToLog would, with Recovered set true, so
+// the local log shows Aether carried out this refusal's own recovery
+// itself rather than the owner having to answer it.
+func appendRecoveredRefusalToLog(r refusal) {
+	appendRefusalLogEntry(r, true)
+}
+
+// appendRefusalLogEntry is the one write both appendRefusalToLog and
+// appendRecoveredRefusalToLog share, differing only in the Recovered flag.
+func appendRefusalLogEntry(r refusal, recovered bool) {
 	if store == nil {
 		return
 	}
@@ -97,6 +120,7 @@ func appendRefusalToLog(r refusal) {
 		NextCommand:   strings.TrimSpace(r.NextCommand),
 		ProtectsWork:  r.ProtectsWork,
 		Command:       currentStreamingCommand,
+		Recovered:     recovered,
 	}
 	_ = store.AppendJSONL(refusalLogPath, entry)
 }

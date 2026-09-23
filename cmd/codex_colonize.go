@@ -351,7 +351,18 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	existingSurvey := surveyDocsExist(surveyDir)
 	if existingSurvey && !opts.ForceResurvey {
-		return nil, refuse("colonize-existing-survey-found")
+		r := refuse("colonize-existing-survey-found")
+		if !attemptRefusalSelfRecovery(r) {
+			return nil, r
+		}
+		// 208-11-PLAN.md (D-03): nobody was here to ask, and Aether already
+		// announced and recorded the recovery above. Falling through with
+		// ForceResurvey now set carries the rest of this function into the
+		// exact same forced-resurvey path an owner-typed
+		// `aether colonize --plan-only --force-resurvey` would take -- the
+		// manifest, its receipt and the result map below all already read
+		// this option, so nothing downstream needs to change.
+		opts.ForceResurvey = true
 	}
 
 	dispatchMode := "plan-only"
