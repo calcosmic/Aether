@@ -3367,6 +3367,19 @@ func buildSkipPhaseCommand(phaseID int) string {
 func continueNextCommandForBlocked(assessment codexContinueAssessment, blockers []string, options codexContinueOptions, phaseID int) string {
 	lastOptions := loadLastContinueOptions(phaseID)
 
+	// WR-01 (208-REVIEW.md): this blocked continue's own owner-facing "what
+	// to run next" used to have entirely independent fallback logic
+	// (reconcile/redispatch/`aether status` below) that never read the
+	// "verification-command-not-understood" row's registered NextCommand
+	// (`aether patrol`) -- so that command was never actually what the
+	// owner saw next for this specific refusal, despite the row naming it.
+	if continueBlockersContainUnreadableVerificationLine(blockers) {
+		if row, ok := refusalForID("verification-command-not-understood"); ok {
+			if command := strings.TrimSpace(row.NextCommand); command != "" {
+				return command
+			}
+		}
+	}
 	if continueBlockersContainVerificationTimeout(blockers) {
 		cmd := buildContinueVerificationTimeoutRecoveryCommand(options, lastOptions)
 		// If the generated command matches current options exactly, fall back to build --force (D-10).
@@ -3440,6 +3453,25 @@ func buildContinueReconcileFlagSuffix(taskIDs []string) string {
 		b.WriteString(taskID)
 	}
 	return b.String()
+}
+
+// continueBlockersContainUnreadableVerificationLine reports whether blockers
+// carries the "verification-command-not-understood" refusal's own What text
+// (cmd/refusal_register.go, cmd/deterministic_floor.go's
+// applyUnreadableVerificationCommandRefusals) -- matched the same
+// substring-on-lowercased-text way every other continueBlockersContain*
+// helper below already matches its own blocker shape.
+func continueBlockersContainUnreadableVerificationLine(blockers []string) bool {
+	for _, blocker := range blockers {
+		lower := strings.ToLower(strings.TrimSpace(blocker))
+		if lower == "" {
+			continue
+		}
+		if strings.Contains(lower, "could not be understood") {
+			return true
+		}
+	}
+	return false
 }
 
 func continueBlockersContainWatcherFailure(blockers []string) bool {

@@ -141,6 +141,44 @@ func TestUnreadableVerificationLineIsNamedNotDropped(t *testing.T) {
 	}
 }
 
+// TestBlockedContinueSurfacesUnreadableVerificationLineNextCommand is
+// WR-01's own regression guard (208-REVIEW.md): continueNextCommandForBlocked
+// used to have entirely independent fallback logic (reconcile/redispatch/
+// `aether status`) that never read the "verification-command-not-understood"
+// row's own registered NextCommand (`aether patrol`) -- so that command was
+// never actually what the owner saw next for this specific refusal, despite
+// the row naming it. This drives a real blocked continue with an unreadable
+// verification line and asserts the returned next command is the row's own
+// registered NextCommand, not a generic fallback.
+func TestBlockedContinueSurfacesUnreadableVerificationLineNextCommand(t *testing.T) {
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+
+	unreadableLine := "- tests: frobnicate the widgets"
+	if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte(
+		"## Verification Commands\n\n"+unreadableLine+"\n"), 0644); err != nil {
+		t.Fatalf("write CLAUDE.md: %v", err)
+	}
+
+	phase := colony.Phase{ID: 1, Name: "Unreadable verification line"}
+	manifest := codexContinueManifest{}
+	floor := runDeterministicFloor(context.Background(), root, phase, manifest, codexWatcherVerification{}, 5*time.Second)
+	if floor.ChecksPassed {
+		t.Fatalf("expected an unreadable required-kind line to block, not silently pass")
+	}
+
+	row, ok := refusalForID("verification-command-not-understood")
+	if !ok || strings.TrimSpace(row.NextCommand) == "" {
+		t.Fatalf("expected the verification-command-not-understood refusal row to carry a next command")
+	}
+
+	got := continueNextCommandForBlocked(codexContinueAssessment{}, floor.BlockingIssues, codexContinueOptions{}, phase.ID)
+	if got != row.NextCommand {
+		t.Fatalf("continueNextCommandForBlocked = %q, want the refusal row's own registered next command %q", got, row.NextCommand)
+	}
+}
+
 // TestNoVerificationSectionStillWarnsQuietly proves the "no tests to run in
 // this project" warning is unaffected for a project with no verification
 // section at all -- this change must never turn a quiet, unconfigured
