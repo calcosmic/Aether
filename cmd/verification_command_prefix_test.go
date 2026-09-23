@@ -170,3 +170,62 @@ func TestNoVerificationSectionStillWarnsQuietly(t *testing.T) {
 		}
 	}
 }
+
+// TestVerificationWorkingDirSymlinkEscapeIsBlocked is WR-04's own
+// regression guard (208-REVIEW.md): the containment check in
+// runVerificationStepInDir previously used only filepath.Clean and a
+// leading-".." check, which never resolves symlinks. A directory NAME
+// that is itself a symlink pointing outside the project root -- a
+// `vendor` or `shared` symlink some monorepo layouts use -- passed that
+// check as a clean, in-tree relative path, even though the shell that
+// actually runs the command follows the symlink to wherever it really
+// points once it gets there. This creates exactly that shape (a symlink
+// inside root pointing at a genuinely separate temp directory) and asserts
+// the step is blocked, never run.
+func TestVerificationWorkingDirSymlinkEscapeIsBlocked(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	linkPath := filepath.Join(root, "escape")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Fatalf("create escaping symlink: %v", err)
+	}
+
+	step := runVerificationStepInDir(context.Background(), root, "tests", false, "echo hi", "escape", 5*time.Second)
+	if !step.Blocked {
+		t.Fatalf("expected a symlinked working directory that resolves outside the project root to be blocked, got %+v", step)
+	}
+	if step.Passed {
+		t.Fatalf("expected a blocked step to never report Passed=true, got %+v", step)
+	}
+	if !strings.Contains(step.Summary, "escape") {
+		t.Errorf("expected the blocked summary to name the offending directory %q, got: %q", "escape", step.Summary)
+	}
+}
+
+// TestVerificationWorkingDirSymlinkWithinRootStillRuns is the control case
+// beside TestVerificationWorkingDirSymlinkEscapeIsBlocked: a symlink whose
+// real target is still INSIDE the project root must keep working exactly
+// as before -- the fix must not turn every symlinked working directory
+// into a false-positive block.
+func TestVerificationWorkingDirSymlinkWithinRootStillRuns(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "real-server")
+	if err := os.MkdirAll(real, 0755); err != nil {
+		t.Fatalf("mkdir real-server: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(real, "marker.txt"), []byte("x"), 0644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+	linkPath := filepath.Join(root, "server-link")
+	if err := os.Symlink(real, linkPath); err != nil {
+		t.Fatalf("create in-tree symlink: %v", err)
+	}
+
+	step := runVerificationStepInDir(context.Background(), root, "tests", false, `sh -c "test -f marker.txt"`, "server-link", 5*time.Second)
+	if step.Blocked {
+		t.Fatalf("expected a symlink resolving inside the project root to be allowed, got blocked: %+v", step)
+	}
+	if !step.Passed {
+		t.Fatalf("expected the step to pass (proving it ran inside the real, linked-to directory), got %+v", step)
+	}
+}

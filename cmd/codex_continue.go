@@ -4198,6 +4198,18 @@ func applyExpectedTestFailure(steps []codexVerificationStep, phase colony.Phase)
 // this wrapper never duplicates runVerificationStep's own body, it only
 // substitutes the root the shell-out uses and tags the result with the
 // directory that was actually used.
+//
+// The containment check resolves symlinks (WR-04, 208-REVIEW.md) before
+// deciding, the same way criterionArtifactBindingIsDirectory's own
+// containment check does (cmd/criterion_evidence.go): a directory NAME
+// that is itself a symlink pointing outside the project root (a `vendor`
+// or `shared` symlink some monorepo layouts use) previously passed the
+// plain string/path-cleaning check as a clean, in-tree relative path, even
+// though the shell that actually runs the command follows the symlink to
+// wherever it really points once it gets there. Resolution falls back to
+// the unresolved path when EvalSymlinks fails -- that happens when the
+// directory does not exist yet, a real "no such directory" condition for
+// runVerificationStep to report, not something this check should swallow.
 func runVerificationStepInDir(ctx context.Context, root, name string, required bool, command string, dir string, timeout time.Duration) codexVerificationStep {
 	trimmedDir := strings.TrimSpace(dir)
 	if trimmedDir == "" || strings.TrimSpace(command) == "" {
@@ -4206,7 +4218,17 @@ func runVerificationStepInDir(ctx context.Context, root, name string, required b
 
 	rootClean := filepath.Clean(root)
 	resolved := filepath.Clean(filepath.Join(rootClean, trimmedDir))
-	rel, err := filepath.Rel(rootClean, resolved)
+
+	resolvedRoot := rootClean
+	if evaluated, err := filepath.EvalSymlinks(rootClean); err == nil {
+		resolvedRoot = evaluated
+	}
+	containmentTarget := resolved
+	if evaluated, err := filepath.EvalSymlinks(resolved); err == nil {
+		containmentTarget = evaluated
+	}
+
+	rel, err := filepath.Rel(resolvedRoot, containmentTarget)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		emitVerificationStepStart(name)
 		step := codexVerificationStep{
