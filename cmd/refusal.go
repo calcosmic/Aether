@@ -27,8 +27,23 @@ type refusal struct {
 // Error satisfies the error interface with one line: what stopped, and the
 // one command that gets past it. A caller that only has a string -- a log
 // line, an error wrapped three layers up -- still carries the way out.
+//
+// 208-09-PLAN.md (D-01): when sessionHasNoOneToAsk is true and this refusal
+// both protects work and names a next command, the shared guidance
+// sentence is inserted between "what stopped" and the " — next: " clause,
+// so the next command stays the LAST thing on the line with nothing after
+// it. This ordering is load-bearing: the TypeScript host relays this exact
+// string to the chat unchanged (sanitizeBridgeMessage,
+// .aether/ts-host/src/go-bridge.ts, redacts but never truncates), and
+// journeyPrintedRefusals' relayed-line extractor (cmd/journey.go) depends
+// on the command being everything after the marker.
 func (r refusal) Error() string {
-	return fmt.Sprintf("%s — next: %s", strings.TrimSpace(r.What), strings.TrimSpace(r.NextCommand))
+	what := strings.TrimSpace(r.What)
+	next := strings.TrimSpace(r.NextCommand)
+	if r.ProtectsWork && next != "" && sessionHasNoOneToAsk() {
+		return fmt.Sprintf("%s %s — next: %s", what, unattendedGuidanceSentence, next)
+	}
+	return fmt.Sprintf("%s — next: %s", what, next)
 }
 
 // refuse looks up a registered refusal row by id and returns a refusal
@@ -150,9 +165,21 @@ func renderRefusal(r refusal) string {
 		b.WriteString(voiceLine("evidence", "Why: "+why))
 		b.WriteString("\n")
 	}
+	next := strings.TrimSpace(r.NextCommand)
 	b.WriteString("Next: `")
-	b.WriteString(strings.TrimSpace(r.NextCommand))
+	b.WriteString(next)
 	b.WriteString("`\n")
+	// 208-09-PLAN.md (D-01): the same shared guidance sentence Error()
+	// carries, drawn through voiceLine like every other line in this
+	// block -- never a bare line, which would drag this screen's symbol
+	// density below TestEveryVoicedScreenMeetsTheReferenceDensity's floor.
+	// The "Next: `...`" line above is left untouched: two extractors
+	// (journeyPrintedRefusalNextLineRe, cmd/journey.go, and the printed
+	// command runner it feeds) anchor on its exact shape.
+	if r.ProtectsWork && next != "" && sessionHasNoOneToAsk() {
+		b.WriteString(voiceLine("next", unattendedGuidanceSentence))
+		b.WriteString("\n")
+	}
 	for _, step := range r.ExtraSteps {
 		step = strings.TrimSpace(step)
 		if step == "" {

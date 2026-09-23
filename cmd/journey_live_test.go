@@ -1133,7 +1133,19 @@ func journeyRunClaudeWithRetry(t *testing.T, dir, binDir string, args []string, 
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "claude", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		// 208-09-PLAN.md (D-01): AETHER_UNATTENDED=1 goes on this `claude`
+		// child's own env here -- nowhere else carries it explicitly. From
+		// here it inherits down through the operating system's own
+		// fork/exec chain alone: this `claude` process -> every Bash tool
+		// call the chat makes -> every `aether`/`aether host ...` process
+		// those Bash calls start -> sessionHasNoOneToAsk (cmd/unattended_session.go).
+		// journeyCaptureSessionID (the session-establishing call) and
+		// journeyRunStep (every driven step) both call this one function,
+		// so setting it here covers the whole chain in one place.
+		cmd.Env = append(os.Environ(),
+			"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+			unattendedEnvVar+"=1",
+		)
 		var stdoutBuf, stderrBuf bytes.Buffer
 		cmd.Stdout = &stdoutBuf
 		cmd.Stderr = &stderrBuf
