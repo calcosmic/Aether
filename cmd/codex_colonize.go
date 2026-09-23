@@ -140,7 +140,16 @@ func runCodexColonizeWithOptions(root string, opts codexColonizeOptions) (map[st
 	surveyDir := filepath.Join(store.BasePath(), "survey")
 	existingSurvey := surveyDocsExist(surveyDir)
 	if existingSurvey && !opts.ForceResurvey {
-		return nil, refuse("colonize-existing-survey-found")
+		r := refuse("colonize-existing-survey-found")
+		if !attemptRefusalSelfRecovery(r) {
+			return nil, r
+		}
+		// 208-11-PLAN.md (D-03), same shape as the plan-only site above:
+		// Aether already announced and recorded the recovery. Falling
+		// through with ForceResurvey set carries the rest of this function
+		// into the same forced-resurvey path an owner-typed
+		// `aether colonize --force-resurvey` would take.
+		opts.ForceResurvey = true
 	}
 
 	if err := os.MkdirAll(surveyDir, 0755); err != nil {
