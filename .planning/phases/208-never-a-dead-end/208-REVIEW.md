@@ -48,7 +48,13 @@ findings:
   warning: 5
   info: 0
   total: 8
-status: issues_found
+status: partial
+fixed_at: 2026-09-23T00:00:00Z
+fixed:
+  critical: 3
+  warning: 4
+  partial: 1
+  none: 0
 ---
 
 # Phase 208: Code Review Report
@@ -167,6 +173,27 @@ If `MkdirAll` or `Rename` fails — e.g. a cross-device rename (common when `--o
 
 ---
 
+## Fix Status
+
+Fixed on branch `oracle-reinstate`, one commit per finding, `fix(208): <ID> — <summary>`:
+
+| ID | Status | Commit | Notes |
+|----|--------|--------|-------|
+| CR-01 | fixed | `5bbe27a2` | Both placeholder rows now point at `aether status` (a real, always-valid command); `refusalRegistryProblems` gained a structural check that fails any row whose `NextCommand` still carries a `<`/`>` placeholder. |
+| CR-02 | fixed | `7f90e728` | Added `colony.Task.Origin` (`TaskOriginRecovery`), a structural marker only `appendRecoveryTasks` ever sets; `taskIsRecoveryTask` replaces the Goal-prefix classifier at every call site. Regression test: a human task Goal beginning "Finish task queue implementation" is no longer excluded. |
+| CR-03 | fixed | `7d4ca54f` | Added `colony.RedactSecretValues` (AWS keys, GitHub tokens, `sk-` keys, bearer tokens, auth header lines, `KEY=value` assignments, credentialed URLs, a generic base64-ish catch-all); every midden `Message` is redacted before reaching the `aether report` bundle. Bundle's "What this is" section now also tells the owner to skim before sending. |
+| WR-01 | **partial** | `1dd99adb` | `continueNextCommandForBlocked` now recognises this blocker and surfaces the refusal row's own registered `aether patrol` — fixes what the owner actually sees as "next command." **Not fixed:** routing this refusal through `outputRefusal`/`renderRefusal` so the journey harness's line-anchored extractor can prove it — every other blocker is joined onto one `"; "`-separated line (`cmd/codex_continue.go`), and no other blocker type expects to carry an independently-renderable refusal block; changing that is a rendering-architecture decision, not a contained fix. Left for a follow-up phase. |
+| WR-02 | fixed | `d0651ea5` | Extracted `applyReportOutputOverride`; a failed `MkdirAll`/`Rename` now returns a plain-English warning naming the real (unmoved) path, surfaced in both the visual screen and the JSON result (`output_warning`). |
+| WR-03 | fixed | `af475464` | `refusalLogWriteExcludedForCommand` excludes every `hook-*` command structurally (`strings.HasPrefix`), not a fixed enumeration; proven against a wholly synthetic, never-registered `hook-*` name. |
+| WR-04 | fixed | `820e2c28` | `runVerificationStepInDir`'s containment check now resolves both root and the candidate directory with `filepath.EvalSymlinks` before deciding, matching `criterionArtifactBindingIsDirectory`'s existing pattern; falls back to the unresolved path when the directory doesn't exist yet. |
+| WR-05 | fixed | `f9ca4e34` | `journeyPrintedRefusals` now scans only `tool_result` blocks (genuine captured Bash stdout/stderr), never an assistant's own free-form text. Every existing fixture already exercised the `tool_result` path, so this is a pure narrowing with no lost coverage. |
+
+Final gate run: `go build ./...` clean, `go vet ./cmd/` clean, `TestRefusal*` family green, the 12 named lifecycle tests green, `cmd/failed_check_carries_on_test.go`'s tests green, `TestReport*` family green.
+
+---
+
 _Reviewed: 2026-09-23T09:49:48Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Fixed: 2026-09-23_
+_Fixer: Claude (gsd-code-fixer)_
