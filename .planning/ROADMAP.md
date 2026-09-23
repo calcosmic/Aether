@@ -1132,13 +1132,13 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 9/10 plans executed (208-09 and 208-10 close the one verification gap)
+**Plans:** 10/10 plans executed
 
-**Result:** the one owner-approved real walk (90s, $0.93) stopped at "survey" again — not the
-generated_at defect Phase 207 found and this phase fixed, but a new, distinct cause (the
-assistant asked the owner before running a `--force-resurvey` an automated chat cannot answer);
-WINDOWS rows 49, 50, 51, 52 fixed with evidence, row 53 stays honestly open, row 55 opened for
-the new finding — see `208-JOURNEY-RUN.md`.
+**Result:** two owner-approved real walks both stopped at "survey" for three separate reasons in
+turn (a missing `generated_at` field, then an ambiguous instruction, then — after that
+instruction was made unambiguous — a chat that read "do not ask first" and asked anyway), so the
+out-of-date-code-map dead end is still open; WINDOWS rows 49-52 and 55 are fixed with evidence,
+row 53 stays honestly open with the second run's evidence recorded — see `208-JOURNEY-RUN.md`.
 
 Plans:
 **Wave 1**
@@ -1173,7 +1173,7 @@ Plans:
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 208-10-PLAN.md — One more real walk, owner-approved and measured; WINDOWS row 53 resolved or honestly open (UED-10; D-02)
+- [x] 208-10-PLAN.md — One more real walk, owner-approved and measured; WINDOWS row 53 resolved or honestly open (UED-10; D-02)
 
 ### Phase 209: A Light Default Path
 
