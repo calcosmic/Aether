@@ -38,24 +38,57 @@ var reportCmd = &cobra.Command{
 			outputError(1, err.Error(), nil)
 			return renderedErrorExit(1)
 		}
-		if outputDir, _ := cmd.Flags().GetString("output"); strings.TrimSpace(outputDir) != "" {
-			target := outputDir
-			if !filepath.IsAbs(target) {
-				target = filepath.Join(root, target)
-			}
-			if mkErr := os.MkdirAll(target, 0755); mkErr == nil {
-				dest := filepath.Join(target, filepath.Base(path))
-				if renameErr := os.Rename(path, dest); renameErr == nil {
-					path = dest
-				}
-			}
-		}
+		// WR-02 (208-REVIEW.md): a failed MkdirAll/Rename used to fall
+		// through silently -- the command still reported success and
+		// printed the DEFAULT path as if --output had been honored, with
+		// nothing telling the owner their explicit flag was ignored. Now
+		// a failure is surfaced as a plain warning naming the real path
+		// the bundle actually landed at, both in the visual screen and
+		// the JSON result.
+		outputDir, _ := cmd.Flags().GetString("output")
+		path, outputWarning := applyReportOutputOverride(root, outputDir, path)
 		visual := renderBanner("\U0001F4C4", "Report") + visualDividerStr() +
 			"Wrote a bundle you can send to whoever maintains Aether:\n" +
 			"  " + path + "\n"
-		outputWorkflow(map[string]interface{}{"path": path}, visual)
+		result := map[string]interface{}{"path": path}
+		if outputWarning != "" {
+			visual += "\nNote: " + outputWarning + "\n"
+			result["output_warning"] = outputWarning
+		}
+		outputWorkflow(result, visual)
 		return nil
 	},
+}
+
+// applyReportOutputOverride moves the bundle at path into outputDir, when
+// outputDir is non-blank, returning the (possibly unchanged) final path and
+// a plain-English warning naming what went wrong -- empty when outputDir is
+// blank, or the move succeeded.
+//
+// Before this existed (WR-02, 208-REVIEW.md), a failed os.MkdirAll or
+// os.Rename -- a cross-device rename (--output on a different filesystem
+// or mounted volume than .aether/reports/), a permissions error, or a
+// non-existent parent -- fell straight through with no error and no
+// warning: the command still reported success and printed the DEFAULT
+// location as though --output had been honored, with nothing telling the
+// owner their explicit flag was silently ignored.
+func applyReportOutputOverride(root, outputDir, path string) (finalPath string, warning string) {
+	outputDir = strings.TrimSpace(outputDir)
+	if outputDir == "" {
+		return path, ""
+	}
+	target := outputDir
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(root, target)
+	}
+	if mkErr := os.MkdirAll(target, 0755); mkErr != nil {
+		return path, fmt.Sprintf("Could not create --output directory %s (%v) -- the bundle stayed at %s instead.", target, mkErr, path)
+	}
+	dest := filepath.Join(target, filepath.Base(path))
+	if renameErr := os.Rename(path, dest); renameErr != nil {
+		return path, fmt.Sprintf("Could not move the bundle into --output directory %s (%v) -- it stayed at %s instead.", target, renameErr, path)
+	}
+	return dest, ""
 }
 
 // runReportBundle assembles a paste-ready markdown bundle describing this

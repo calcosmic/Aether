@@ -283,6 +283,70 @@ func TestReportBundleRedactsASecretValueInFailureText(t *testing.T) {
 	}
 }
 
+// TestApplyReportOutputOverrideMovesTheBundle proves the happy path: a
+// valid --output directory receives the bundle, and the returned path
+// points at it with no warning.
+func TestApplyReportOutputOverrideMovesTheBundle(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "report-source.md")
+	if err := os.WriteFile(src, []byte("bundle body"), 0644); err != nil {
+		t.Fatalf("seed source bundle: %v", err)
+	}
+	outputDir := filepath.Join(root, "wherever")
+
+	finalPath, warning := applyReportOutputOverride(root, outputDir, src)
+	if warning != "" {
+		t.Fatalf("expected no warning for a valid --output directory, got: %q", warning)
+	}
+	wantPath := filepath.Join(outputDir, "report-source.md")
+	if finalPath != wantPath {
+		t.Fatalf("finalPath = %q, want %q", finalPath, wantPath)
+	}
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("expected the bundle to exist at %q: %v", wantPath, err)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatalf("expected the source bundle to be moved (gone), stat err = %v", err)
+	}
+}
+
+// TestApplyReportOutputOverrideWarnsWhenMkdirFails is WR-02's own
+// regression guard (208-REVIEW.md): before this fix, a failed MkdirAll or
+// Rename fell through silently -- the command reported success and printed
+// the DEFAULT path as if --output had been honored, with nothing telling
+// the owner their explicit flag was ignored. This forces MkdirAll to fail
+// (--output names a path THROUGH an existing regular file, which cannot
+// have a directory created inside it) and asserts a warning is returned
+// naming the real, unmoved path -- and that the source bundle is left
+// exactly where it was, never silently dropped.
+func TestApplyReportOutputOverrideWarnsWhenMkdirFails(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "report-source.md")
+	if err := os.WriteFile(src, []byte("bundle body"), 0644); err != nil {
+		t.Fatalf("seed source bundle: %v", err)
+	}
+
+	blocker := filepath.Join(root, "not-a-directory")
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatalf("seed blocking file: %v", err)
+	}
+	outputDir := filepath.Join(blocker, "sub")
+
+	finalPath, warning := applyReportOutputOverride(root, outputDir, src)
+	if warning == "" {
+		t.Fatal("expected a warning naming the failed --output move, got none")
+	}
+	if !strings.Contains(warning, src) {
+		t.Errorf("expected the warning to name the real, unmoved path %q, got: %q", src, warning)
+	}
+	if finalPath != src {
+		t.Fatalf("finalPath = %q, want the unmoved source path %q", finalPath, src)
+	}
+	if _, err := os.Stat(src); err != nil {
+		t.Fatalf("expected the source bundle to remain at %q, stat err = %v", src, err)
+	}
+}
+
 // appendRawLine writes raw content, verbatim, appended to path -- used to
 // seed a JSONL line (or a whole raw JSON file body) carrying bytes
 // encoding/json's own Marshal would otherwise sanitize away, so a test can
