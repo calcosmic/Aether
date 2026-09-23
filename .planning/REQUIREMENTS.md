@@ -40,12 +40,12 @@ requirement is unmet (CLAUDE.md, Definition of Done). "Proof" names that command
 
 ### Never a dead end (Phase 208)
 
-- [ ] **UED-10** — Every refusal carries the one command that gets past it and says whether it protects against losing work. Proof: a test that fails on any refusal with an empty next command; the journey runs each printed command.
-- [ ] **UED-11** — A refusal that does not protect against losing work is a warning that carries on. Proof: the sorted refusal list is a checked-in table and a test asserts the program's behaviour matches it.
-- [ ] **UED-12** — A failed check adds tasks and carries on. Proof: a real-flow test.
-- [ ] **UED-13** — No screen advises a command that has no menu version, and no invented word is unexplained; the failure log has a menu command. Proof: `TestSlashCommandGuidancePointsAtRealCommands` extended to program-command advice; voice plain-English test on the status warnings.
-- [ ] **UED-14** — A failure whose text the safety filter rejects is still recorded in readable words. Proof: a test feeding a backtick-bearing failure and asserting the log names what failed.
-- [ ] **UED-15** — One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether. Proof: a test on the bundle contents and on refusal text.
+- [x] **UED-10** — Every refusal carries the one command that gets past it and says whether it protects against losing work. Proof: a test that fails on any refusal with an empty next command; the journey runs each printed command.
+- [x] **UED-11** — A refusal that does not protect against losing work is a warning that carries on. Proof: the sorted refusal list is a checked-in table and a test asserts the program's behaviour matches it.
+- [x] **UED-12** — A failed check adds tasks and carries on. Proof: a real-flow test.
+- [x] **UED-13** — No screen advises a command that has no menu version, and no invented word is unexplained; the failure log has a menu command. Proof: `TestSlashCommandGuidancePointsAtRealCommands` extended to program-command advice; voice plain-English test on the status warnings.
+- [x] **UED-14** — A failure whose text the safety filter rejects is still recorded in readable words. Proof: a test feeding a backtick-bearing failure and asserting the log names what failed.
+- [x] **UED-15** — One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether. Proof: a test on the bundle contents and on refusal text.
 
 ### A light default path (Phase 209)
 
