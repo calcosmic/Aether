@@ -551,19 +551,24 @@ var specialistCommandSurfaceHashes = map[string]string{
 	// example command was also reflowed from 7 continuation lines to 4 so the
 	// relay sentence lands within the shared 6-line proximity window. Content
 	// addition/reflow only -- no flow, tool, or ceremony contract changed.
-	".claude/commands/ant/chaos.md":         "bd08ddc078e66e105f93b42bd2aba2171d6966d3ed01b9e5439fb2ddcd94cafc",
-	".claude/commands/ant/archaeology.md":   "21c10cedf021404ca6e3016aa455789850f5447e78c0de09ccde03749d9136dc",
-	".claude/commands/ant/dream.md":         "d5ce1a7a54d27cb0c4d40b230d6e739456474694f32394007bd86260251a4dac",
-	".claude/commands/ant/oracle.md":        "95310f0c6072bab981436a687d2f6803258ab69ab89cf56130e243dffea6a31d",
-	".claude/commands/ant/swarm.md":         "eb48775763319c63b01e5c2923e3bd814533427b6837451a5cd1767e71f7da9b",
-	".claude/commands/ant/colonize.md":      "15070f997fadfe1a2da0f5ad5a91d0020de9d5da9361ab5d689835e96b0450fe",
+	".claude/commands/ant/chaos.md":       "bd08ddc078e66e105f93b42bd2aba2171d6966d3ed01b9e5439fb2ddcd94cafc",
+	".claude/commands/ant/archaeology.md": "21c10cedf021404ca6e3016aa455789850f5447e78c0de09ccde03749d9136dc",
+	".claude/commands/ant/dream.md":       "d5ce1a7a54d27cb0c4d40b230d6e739456474694f32394007bd86260251a4dac",
+	".claude/commands/ant/oracle.md":      "95310f0c6072bab981436a687d2f6803258ab69ab89cf56130e243dffea6a31d",
+	".claude/commands/ant/swarm.md":       "eb48775763319c63b01e5c2923e3bd814533427b6837451a5cd1767e71f7da9b",
+	// colonize.md hash updated 2026-09-23 (208-09-PLAN.md, D-01): the
+	// existing-survey sentence was replaced with the owner's act-when-alone
+	// / ask-when-present ruling. Content wording change only -- no flow,
+	// tool, or ceremony contract changed; TestColonizeWrapperCarriesTheActWhenAloneRule
+	// covers the new content itself.
+	".claude/commands/ant/colonize.md":      "7c8b3918aeace20d166691154e7d1991cceabe054aecad0b2971d59db0f05ce9",
 	".claude/commands/ant/council.md":       "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	".opencode/commands/ant/chaos.md":       "bd08ddc078e66e105f93b42bd2aba2171d6966d3ed01b9e5439fb2ddcd94cafc",
 	".opencode/commands/ant/archaeology.md": "21c10cedf021404ca6e3016aa455789850f5447e78c0de09ccde03749d9136dc",
 	".opencode/commands/ant/dream.md":       "d5ce1a7a54d27cb0c4d40b230d6e739456474694f32394007bd86260251a4dac",
 	".opencode/commands/ant/oracle.md":      "95310f0c6072bab981436a687d2f6803258ab69ab89cf56130e243dffea6a31d",
 	".opencode/commands/ant/swarm.md":       "eb48775763319c63b01e5c2923e3bd814533427b6837451a5cd1767e71f7da9b",
-	".opencode/commands/ant/colonize.md":    "15070f997fadfe1a2da0f5ad5a91d0020de9d5da9361ab5d689835e96b0450fe",
+	".opencode/commands/ant/colonize.md":    "7c8b3918aeace20d166691154e7d1991cceabe054aecad0b2971d59db0f05ce9",
 	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
 	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the
 	// worker response contract gained completed_no_change as a first-class
