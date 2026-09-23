@@ -204,7 +204,7 @@ func TestUnattendedFactIsSetByTheJourneyHarness(t *testing.T) {
 // command sources -- the YAML documented source of truth and both platform
 // wrappers -- carry D-01's rule (208-CONTEXT.md "Gap-closure decisions"):
 // act on the runtime's own recovery guidance when no one is here to answer,
-// ask and wait for an answer when someone is there. One test, three files,
+// ask and wait for an answer when someone is there. One test, four files,
 // named failures -- a future edit that drops the rule from just one of the
 // three is caught by the file that lost it, not by a diff nobody reads.
 func TestColonizeWrapperCarriesTheActWhenAloneRule(t *testing.T) {
@@ -228,6 +228,10 @@ func TestColonizeWrapperCarriesTheActWhenAloneRule(t *testing.T) {
 		{"aether-yaml", filepath.Join(repoRoot, ".aether", "commands", "colonize.yaml")},
 		{"claude-wrapper", filepath.Join(repoRoot, ".claude", "commands", "ant", "colonize.md")},
 		{"opencode-wrapper", filepath.Join(repoRoot, ".opencode", "commands", "ant", "colonize.md")},
+		// The flat installed-consumer mirror is a fourth hand-kept copy;
+		// TestLifecycleFlatMirrorsMatchCanonical requires it byte-identical
+		// to the nested Claude wrapper, so it must carry the rule too.
+		{"claude-flat-mirror", filepath.Join(repoRoot, ".claude", "commands", "ant-colonize.md")},
 	}
 
 	for _, f := range files {
