@@ -820,7 +820,24 @@ type Task struct {
 	PlanningTimelineDigest    string                         `json:"planning_timeline_digest,omitempty"`
 	AffectedSemanticIDs       []string                       `json:"affected_semantic_ids,omitempty"`
 	PreservedSemanticIDs      []string                       `json:"preserved_semantic_ids,omitempty"`
+
+	// Origin is a structural marker naming what created this task. It is
+	// empty for every planner- or human-authored task and is set to
+	// TaskOriginRecovery ONLY by a blocked `aether continue`'s own
+	// appendRecoveryTasks (cmd/codex_continue.go) -- never derived from
+	// Goal text. Before this field existed, recovery-task recognition was
+	// a plain string prefix match on Goal ("Finish task "), which a
+	// genuinely human- or route-setter-authored task could collide with
+	// (e.g. "Finish task queue implementation"), silently dropping it from
+	// the exact consistency checks that exist to catch a false record of
+	// what was built (CR-02, 208-REVIEW.md). omitempty means an older,
+	// on-disk task with no Origin still loads exactly as before.
+	Origin string `json:"origin,omitempty"`
 }
+
+// TaskOriginRecovery marks a colony.Task that a blocked continue's own
+// recovery pass appended to a phase -- see Task.Origin's doc comment.
+const TaskOriginRecovery = "recovery"
 
 // CriterionEvidenceRequirement binds one success criterion to exact project
 // artifacts and/or named verification checks. TaskID is omitted in task-local

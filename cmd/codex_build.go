@@ -3632,7 +3632,7 @@ func completedTaskEvidenceIDs(manifest codexBuildManifest) map[string]struct{} {
 func phaseTaskIDSet(phase colony.Phase) []string {
 	ids := make([]string, 0, len(phase.Tasks))
 	for idx, task := range phase.Tasks {
-		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+		if taskIsRecoveryTask(task) {
 			continue
 		}
 		ids = append(ids, buildTaskID(task, idx))

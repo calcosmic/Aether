@@ -3137,13 +3137,16 @@ func recoveryTaskGoalPrefix(taskID, kind string) string {
 }
 
 // recoveryTaskGoalGeneratedPrefix returns "" for a Goal that does not have
-// the recoveryTaskGoalPrefix shape (an ordinary, human-authored task), and
-// otherwise the exact deterministic prefix portion (before ": <reason>", if
-// any) -- used both to recognise an existing recovery task
-// (appendRecoveryTasks) and to stop a recovery task, which by construction
+// the recoveryTaskGoalPrefix shape, and otherwise the exact deterministic
+// prefix portion (before ": <reason>", if any) -- used to identify WHICH
+// existing recovery task a candidate matches (appendRecoveryTasks), always
+// scoped first to tasks taskIsRecoveryTask already confirms are recovery
+// tasks via the structural Origin marker (CR-02, 208-REVIEW.md), so this
+// text match is never what decides whether a task IS a recovery task in
+// the first place. This also stops a recovery task, which by construction
 // carries no dispatch evidence of its own, from being classified as
-// needing recovery AGAIN on the next blocked check
-// (recoveryTaskAlreadyOnPhase / taskGoalLooksLikeRecoveryTask below) --
+// needing recovery AGAIN on the next blocked check (see the
+// alreadyRecoveryTaskIDs map in recoveryTasksForBlockedContinue below) --
 // without that guard a recovery task's own fresh (never built) taskID would
 // otherwise spawn a recovery task for a recovery task, without limit, on
 // every repeat of the same failing check.
@@ -3158,16 +3161,27 @@ func recoveryTaskGoalGeneratedPrefix(goal string) string {
 	return goal
 }
 
-// taskGoalLooksLikeRecoveryTask reports whether goal is itself a task a
-// prior blocked check already wrote back onto the phase.
-func taskGoalLooksLikeRecoveryTask(goal string) bool {
-	return recoveryTaskGoalGeneratedPrefix(goal) != ""
+// taskIsRecoveryTask reports whether task is itself a task a prior blocked
+// check already wrote back onto the phase (appendRecoveryTasks). This is
+// decided structurally -- task.Origin == colony.TaskOriginRecovery, a
+// marker only appendRecoveryTasks's own construction ever sets -- never by
+// pattern-matching the Goal text.
+//
+// Before CR-02 (208-REVIEW.md), this was a plain string-prefix check on
+// Goal ("Finish task "), which a genuinely human- or route-setter-authored
+// task could collide with (e.g. a real task Goal of "Finish task queue
+// implementation"), silently excluding it from tasksExcludingRecovery,
+// phaseTaskIDSet (cmd/codex_build.go), and validateCurrentPlanningState
+// (cmd/planning_state.go) -- the exact comparisons that exist to catch a
+// false record of what was built.
+func taskIsRecoveryTask(task colony.Task) bool {
+	return strings.TrimSpace(task.Origin) == colony.TaskOriginRecovery
 }
 
 // tasksExcludingRecovery returns tasks with any recovery task
 // (recoveryTasksForBlockedContinue's own appended work, identified by
-// taskGoalLooksLikeRecoveryTask) filtered out. A recovery task was never
-// part of what a candidate proposed or a build manifest dispatched --
+// taskIsRecoveryTask) filtered out. A recovery task was never part of what
+// a candidate proposed or a build manifest dispatched --
 // appendRecoveryTasks() is the only thing that ever adds one -- so any
 // comparison that assumes the phase's task list matches the accepted plan
 // revision or the build manifest must not see it (fix 208-04: a blocked
@@ -3181,7 +3195,7 @@ func tasksExcludingRecovery(tasks []colony.Task) []colony.Task {
 	}
 	filtered := make([]colony.Task, 0, len(tasks))
 	for _, task := range tasks {
-		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+		if taskIsRecoveryTask(task) {
 			continue
 		}
 		filtered = append(filtered, task)
@@ -3235,7 +3249,7 @@ func recoveryTasksForBlockedContinue(phase colony.Phase, assessment codexContinu
 
 	alreadyRecoveryTaskIDs := make(map[string]bool, len(phase.Tasks))
 	for idx, task := range phase.Tasks {
-		if taskGoalLooksLikeRecoveryTask(task.Goal) {
+		if taskIsRecoveryTask(task) {
 			alreadyRecoveryTaskIDs[buildTaskID(task, idx)] = true
 		}
 	}
@@ -3265,6 +3279,7 @@ func recoveryTasksForBlockedContinue(phase colony.Phase, assessment codexContinu
 			tasks = append(tasks, colony.Task{
 				Goal:   goal,
 				Status: colony.TaskPending,
+				Origin: colony.TaskOriginRecovery,
 			})
 		}
 	}
@@ -3278,18 +3293,26 @@ func recoveryTasksForBlockedContinue(phase colony.Phase, assessment codexContinu
 }
 
 // appendRecoveryTasks appends each task in tasks to phase.Tasks whose
-// recoveryTaskGoalGeneratedPrefix is not already present there, returning
-// how many were actually added. Skipping an already-present prefix is what
-// makes repeating the same blocked check idempotent (208-04 must_haves:
-// "Running the same blocked check twice adds the recovery tasks once, not
-// twice") -- see recoveryTaskSemanticID's doc comment for why this matches
-// on the Goal prefix rather than a dedicated ID field.
+// recoveryTaskGoalGeneratedPrefix is not already present among the phase's
+// EXISTING recovery tasks (taskIsRecoveryTask -- the structural Origin
+// marker, checked first, CR-02), returning how many were actually added.
+// Skipping an already-present prefix is what makes repeating the same
+// blocked check idempotent (208-04 must_haves: "Running the same blocked
+// check twice adds the recovery tasks once, not twice") -- see
+// recoveryTaskSemanticID's doc comment for why identity within the
+// recovery-task set matches on the Goal prefix rather than a dedicated ID
+// field. Gating on taskIsRecoveryTask first means a human-authored task
+// whose Goal happens to share that prefix shape can never suppress a
+// genuinely needed recovery task by false match.
 func appendRecoveryTasks(phase *colony.Phase, tasks []colony.Task) int {
 	if phase == nil || len(tasks) == 0 {
 		return 0
 	}
 	existing := make(map[string]bool, len(phase.Tasks))
 	for _, task := range phase.Tasks {
+		if !taskIsRecoveryTask(task) {
+			continue
+		}
 		if prefix := recoveryTaskGoalGeneratedPrefix(task.Goal); prefix != "" {
 			existing[prefix] = true
 		}

@@ -461,3 +461,56 @@ func TestRecoveryTasksNeverSetSemanticID(t *testing.T) {
 		t.Fatalf("a legacy_unbound plan carrying recovery tasks must still validate, got: %v", err)
 	}
 }
+
+// TestHumanTaskWithRecoveryLikeGoalIsNeverExcluded is CR-02's own regression
+// guard (208-REVIEW.md). Before this fix, a task was recognised as a
+// system-generated recovery task purely by whether its free-text Goal
+// began with the literal substring "Finish task " -- a perfectly plausible
+// real task Goal ("Finish task queue implementation") collided with that
+// shape and was silently dropped from tasksExcludingRecovery and
+// phaseTaskIDSet, the exact comparisons validateCurrentPlanningState and
+// the build-manifest task-set check run to catch a false record of what
+// was actually built. Recognition is now structural (colony.Task.Origin,
+// set only by appendRecoveryTasks), never derived from Goal text -- this
+// test fails without that fix and passes with it.
+func TestHumanTaskWithRecoveryLikeGoalIsNeverExcluded(t *testing.T) {
+	humanTask := colony.Task{
+		Goal:   "Finish task queue implementation",
+		Status: colony.TaskPending,
+	}
+	genuineRecoveryTask := colony.Task{
+		Goal:   recoveryTaskGoalPrefix("task-1", "redispatch"),
+		Status: colony.TaskPending,
+		Origin: colony.TaskOriginRecovery,
+	}
+	phase := colony.Phase{
+		ID:    11,
+		Tasks: []colony.Task{humanTask, genuineRecoveryTask},
+	}
+
+	// The human task's colliding Goal must NOT make it look like a
+	// recovery task by structure.
+	if taskIsRecoveryTask(humanTask) {
+		t.Fatalf("a human-authored task with a Goal that merely looks like a recovery task's is being classified as one: %+v", humanTask)
+	}
+	if !taskIsRecoveryTask(genuineRecoveryTask) {
+		t.Fatalf("a real, Origin-marked recovery task is not being classified as one: %+v", genuineRecoveryTask)
+	}
+
+	filtered := tasksExcludingRecovery(phase.Tasks)
+	if len(filtered) != 1 || filtered[0].Goal != humanTask.Goal {
+		t.Fatalf("tasksExcludingRecovery excluded the human-authored task with a colliding Goal; got %+v", filtered)
+	}
+
+	ids := phaseTaskIDSet(phase)
+	humanTaskID := buildTaskID(humanTask, 0)
+	found := false
+	for _, id := range ids {
+		if id == humanTaskID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("phaseTaskIDSet excluded the human-authored task with a colliding Goal (id %q); got %v", humanTaskID, ids)
+	}
+}
