@@ -1,0 +1,10 @@
+exit=1
+
+added 61 packages in 966ms
+npm warn install-scripts 2 packages have install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+npm warn install-scripts   fsevents@2.3.3 (install: (install scripts present))
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+Fatal: Go command failed: colonize --plan-only: A territory survey already exists for this project. — next: aether colonize --force-resurvey
+Error: exit status 1

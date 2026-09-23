@@ -334,3 +334,98 @@ func TestMenuFormNextCommandMapsBackToTheRuntimeCommand(t *testing.T) {
 		})
 	}
 }
+
+// TestPrintedRefusalExtractorFindsAHostRelayedRefusal proves
+// journeyPrintedRefusals also finds refusal.Error()'s one-line host-relayed
+// form -- the shape the TypeScript host actually relays to a chat
+// (sanitizeBridgeMessage, .aether/ts-host/src/go-bridge.ts) -- not just the
+// drawn block form. The fixture is real captured text
+// (cmd/testdata/refusals/host-relay-refusal.txt), copied verbatim from the
+// one real journey walk's own on-disk session transcript
+// (208-JOURNEY-RUN.md), never typed by hand.
+func TestPrintedRefusalExtractorFindsAHostRelayedRefusal(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "refusals", "host-relay-refusal.txt"))
+	if err != nil {
+		t.Fatalf("read host-relay-refusal.txt fixture: %v", err)
+	}
+	fixture := string(data)
+	if !strings.Contains(fixture, "— next: ") {
+		t.Fatalf("fixture does not carry the relayed marker at all -- fixture may have been mis-captured: %q", fixture)
+	}
+
+	path := journeyWriteRefusalTranscript(t, fixture)
+	refusals, err := journeyPrintedRefusals(path)
+	if err != nil {
+		t.Fatalf("journeyPrintedRefusals(%s): %v", path, err)
+	}
+	if len(refusals) != 1 {
+		t.Fatalf("journeyPrintedRefusals(%s) = %d refusal(s), want 1: %+v", path, len(refusals), refusals)
+	}
+	want := "aether colonize --force-resurvey"
+	if refusals[0].NextCommand != want {
+		t.Fatalf("journeyPrintedRefusals(%s)[0].NextCommand = %q, want %q", path, refusals[0].NextCommand, want)
+	}
+	if strings.HasSuffix(refusals[0].NextCommand, ".") || strings.HasSuffix(refusals[0].NextCommand, `"`) {
+		t.Fatalf("journeyPrintedRefusals(%s)[0].NextCommand carries trailing punctuation: %q", path, refusals[0].NextCommand)
+	}
+}
+
+// TestPrintedRefusalExtractorIgnoresRelayedProse proves an ordinary
+// sentence -- either one that never carries the " — next: " marker at all,
+// or one that carries the marker but whose tail is not itself a runnable
+// command -- yields zero refusals, never a refusal fed to the subprocess
+// runner that would then fail the step for no real reason.
+func TestPrintedRefusalExtractorIgnoresRelayedProse(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+	}{
+		{
+			name: "no marker at all, just the word next",
+			text: "The next step is to review the logs before continuing.\n",
+		},
+		{
+			name: "marker present but the tail is not a runnable command",
+			text: "Checking configuration — next: check with your admin before proceeding.\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := journeyWriteRefusalTranscript(t, tc.text)
+			refusals, err := journeyPrintedRefusals(path)
+			if err != nil {
+				t.Fatalf("journeyPrintedRefusals(%s): %v", path, err)
+			}
+			if len(refusals) != 0 {
+				t.Fatalf("journeyPrintedRefusals(%s) = %+v, want zero -- relayed prose with no runnable command tail is not a refusal", path, refusals)
+			}
+		})
+	}
+}
+
+// TestPrintedRefusalsAreDeduplicatedWithinOneTranscript proves the same
+// next command appearing twice in one transcript -- once relayed on the
+// error stream, once on the output stream, or repeated across steps --
+// yields exactly one entry, first-seen order preserved, not two.
+func TestPrintedRefusalsAreDeduplicatedWithinOneTranscript(t *testing.T) {
+	if len(refusalRegistry) == 0 {
+		t.Fatal("refusalRegistry needs at least 1 row for this test's fixture")
+	}
+	row := refusalRegistry[0]
+
+	blockForm := renderRefusal(refuse(row.ID))
+	relayedForm := "Fatal: Go command failed: " + row.ID + ": " + strings.TrimSpace(row.What) + " — next: " + row.NextCommand + "\n"
+
+	path := journeyWriteRefusalTranscript(t, blockForm, relayedForm)
+	refusals, err := journeyPrintedRefusals(path)
+	if err != nil {
+		t.Fatalf("journeyPrintedRefusals(%s): %v", path, err)
+	}
+	if len(refusals) != 1 {
+		t.Fatalf("journeyPrintedRefusals(%s) = %d refusal(s), want 1 (the same next command relayed twice must dedupe): %+v", path, len(refusals), refusals)
+	}
+	if refusals[0].NextCommand != row.NextCommand {
+		t.Fatalf("journeyPrintedRefusals(%s)[0].NextCommand = %q, want %q", path, refusals[0].NextCommand, row.NextCommand)
+	}
+}

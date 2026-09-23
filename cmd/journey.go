@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -288,6 +289,18 @@ type journeyPrintedRefusal struct {
 // refusal, because it is never preceded by this exact "Next:" label.
 var journeyPrintedRefusalNextLineRe = regexp.MustCompile("(?m)^Next: `([^`\n]+)`")
 
+// journeyPrintedRefusalRelayedLineRe matches refusal.Error()'s one-line
+// host-relayed form (cmd/refusal.go: "%s — next: %s"), found inline within
+// an ordinary line -- the TypeScript host's own "Fatal: Go command failed:
+// ...: <what> — next: <command>" relay (sanitizeBridgeMessage,
+// .aether/ts-host/src/go-bridge.ts) -- rather than on its own dedicated
+// "Next:" line the way renderRefusal's drawn block form is. It captures
+// everything from the " — next: " marker to the end of the line:
+// refusal.Error()'s own format (208-09-PLAN.md) keeps the next command the
+// LAST thing on the line with nothing after it, so there is no closing
+// delimiter to anchor on the way the block form's backtick pair provides.
+var journeyPrintedRefusalRelayedLineRe = regexp.MustCompile(`(?m)— next: (.+)$`)
+
 // journeyPrintedRefusals reads the transcript at transcriptPath and returns
 // every printed refusal found, in the order they appear. It looks ONLY at
 // user-role tool_result blocks -- a Bash call's own captured stdout/stderr,
@@ -306,9 +319,43 @@ var journeyPrintedRefusalNextLineRe = regexp.MustCompile("(?m)^Next: `([^`\n]+)`
 // ...`" shape would have been treated identically to a real, verbatim block
 // of Aether's own rendered output. Restricting extraction to tool_result
 // blocks means only text Aether itself actually printed can ever be found
-// here.
+// here. That trust boundary does not move for the relayed one-line form
+// added by 208-09-PLAN.md below: it is found in exactly the same
+// user-role tool_result blocks and nowhere else.
+//
+// 208-09-PLAN.md (UED-10): alongside the drawn-block "Next: `...`" form,
+// this also finds refusal.Error()'s relayed one-line form (" — next:
+// <command>"). Unlike the block form -- delimited by backticks, so it can
+// only ever hold a command -- the relayed form is an ordinary sentence with
+// no delimiter: a match is only accepted when the text after the marker is
+// itself a runtime invocation or a menu command
+// (printedCommandToRuntimeCommand). A tail that is not one of those is
+// ordinary prose that happens to contain the marker text, not a refusal --
+// deliberately different from the block form, where an unmappable command
+// IS a hard failure downstream (journeyNextCommandFailureReason condition
+// 1): the relayed form has no delimiter promising a command was ever there
+// at all, so silently finding nothing is the honest outcome, not a failure
+// to report.
+//
+// Distinct next commands are returned once per transcript, first-seen
+// order preserved across both forms: the same command relayed on both the
+// error stream and the output stream is one refusal, and running it twice
+// proves nothing more than running it once.
 func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, error) {
 	var found []journeyPrintedRefusal
+	seen := map[string]bool{}
+	appendRefusal := func(nextCommand, raw string) {
+		nextCommand = strings.TrimSpace(nextCommand)
+		if nextCommand == "" || seen[nextCommand] {
+			return
+		}
+		seen[nextCommand] = true
+		found = append(found, journeyPrintedRefusal{
+			NextCommand: nextCommand,
+			Raw:         strings.TrimSpace(raw),
+		})
+	}
+
 	err := journeyScanTranscriptLines(transcriptPath, func(entry journeyTranscriptEntry) {
 		if entry.Message.Role != "user" || len(entry.Message.Content) == 0 {
 			return
@@ -322,11 +369,41 @@ func journeyPrintedRefusals(transcriptPath string) ([]journeyPrintedRefusal, err
 				continue
 			}
 			text := toolResultText(b.Content)
-			for _, m := range journeyPrintedRefusalNextLineRe.FindAllStringSubmatch(text, -1) {
-				found = append(found, journeyPrintedRefusal{
-					NextCommand: strings.TrimSpace(m[1]),
-					Raw:         strings.TrimSpace(m[0]),
+
+			// Collect both forms' matches with their start offset in text,
+			// then sort by position -- a single tool_result can in
+			// principle carry both shapes, and first-seen order must
+			// reflect where each one actually sits in the text, not which
+			// pattern happened to run first.
+			type positionedMatch struct {
+				pos  int
+				next string
+				raw  string
+			}
+			var matches []positionedMatch
+
+			for _, m := range journeyPrintedRefusalNextLineRe.FindAllStringSubmatchIndex(text, -1) {
+				matches = append(matches, positionedMatch{
+					pos:  m[0],
+					next: text[m[2]:m[3]],
+					raw:  text[m[0]:m[1]],
 				})
+			}
+			for _, m := range journeyPrintedRefusalRelayedLineRe.FindAllStringSubmatchIndex(text, -1) {
+				candidate := strings.TrimSpace(text[m[2]:m[3]])
+				candidate = strings.TrimSpace(strings.TrimSuffix(candidate, "."))
+				if _, ok := printedCommandToRuntimeCommand(candidate); !ok {
+					continue // ordinary prose that happens to carry the marker text -- not a refusal
+				}
+				matches = append(matches, positionedMatch{
+					pos:  m[0],
+					next: candidate,
+					raw:  text[m[0]:m[1]],
+				})
+			}
+			sort.Slice(matches, func(i, j int) bool { return matches[i].pos < matches[j].pos })
+			for _, pm := range matches {
+				appendRefusal(pm.next, pm.raw)
 			}
 		}
 	})
