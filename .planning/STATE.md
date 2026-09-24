@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 208
-current_phase_name: Never a Dead End
 status: executing
-stopped_at: "Planned the third gap-closure round (phase 208: plans 208-13..208-16 created; 12 of 16 executed)"
-last_updated: "2026-09-24T07:06:14.022Z"
+stopped_at: "Completed 208-13-PLAN.md (phase 208: 13/16 plans executed)"
+last_updated: "2026-09-24T07:37:38.669Z"
 last_activity: 2026-09-24
-last_activity_desc: Phase 208 third gap-closure round planned (208-13..16; owner rulings D-05, D-06)
-state_head: 0cc5fff086bfb5ea6c751cf09e7da50bbe0d8ef2
 progress:
-  total_phases: 5
-  completed_phases: 2
-  total_plans: 24
-  completed_plans: 20
-  percent: 40
+  total_phases: 18
+  completed_phases: 10
+  total_plans: 239
+  completed_plans: 228
+  percent: 56
 ---
 
 # Project State
@@ -34,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 208 (Never a Dead End) — READY TO EXECUTE
+Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
-Status: Ready to execute
-Plan: 12 of 16 (208-13, 208-14, 208-15, 208-16 remain)
-Last activity: 2026-09-24 — Phase 208 third gap-closure round planned (208-13..16; owner rulings D-05, D-06)
+Status: Executing Phase 208
+Plan: 13 of 16
+Last activity: 2026-09-24 — Completed 208-13-PLAN.md
 
 ## Performance Metrics
 
@@ -227,6 +223,7 @@ Last activity: 2026-09-24 — Phase 208 third gap-closure round planned (208-13.
 | Phase 208 P10 | 13 min | 3 tasks | 3 files |
 | Phase 208 P11 | 52min | 3 tasks | 4 files |
 | Phase 208 P12 | ~21 min | 2 tasks | 3 files |
+| Phase 208 P13 | 35 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -705,6 +702,7 @@ Last activity: 2026-09-24 — Phase 208 third gap-closure round planned (208-13.
 - [Phase 208]: WINDOWS row 53 stays open after a second real journey walk: 208-09's act-when-alone fix rendered correctly in the live transcript, but the driving chat asked the owner anyway instead of running the named --force-resurvey. — The survey step's on-disk fact check failed again and colonize-finalize was never reached; a code-level fix proven correct is not the same as a live chat proven to follow it.
 - [Phase 208]: 208-11: attemptRefusalSelfRecovery is the one decision for whether Aether carries out a refusal's own recovery itself; opt-in table currently holds exactly colonize-existing-survey-found; both colonize lanes route through it.
 - [Phase 208]: WINDOWS row 53 stays open: the third authorised journey walk confirmed 208-11's self-recovery works live and colonize-finalize succeeded for the first time, but the published territory snapshot's source_revision still doesn't match current HEAD, for a new, undiagnosed fourth cause.
+- [Phase 208]: 208-13: Widened the one-decision guard to a closed allow-list and added a direct-call test covering each self-recovery gate individually; both mutations 208-VERIFICATION.md reproduced now turn the suite red and are reverted.
 
 ### Pending Todos
 
@@ -827,8 +825,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-23T16:44:31.673Z
-Stopped at: Completed 208-12-PLAN.md (phase 208: 12/12 plans executed)
+Last session: 2026-09-24T07:37:38.656Z
+Stopped at: Completed 208-13-PLAN.md (phase 208: 13/16 plans executed)
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
