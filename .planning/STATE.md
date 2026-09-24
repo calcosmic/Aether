@@ -5,15 +5,15 @@ milestone_name: Use It Every Day
 current_phase: 208
 current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-18-PLAN.md — narrowed the self-recovery one-decision guard's excuse list from three whole files to the five specific already-reviewed places (CR-02), added the missing leftover-worktree skip (WR-01), and moved the self-recovery notice's hardcoded closing clause onto the table row that fires it (WR-03). 208-19 remains for this round's last finding.
-last_updated: "2026-09-24T10:49:37.000Z"
+stopped_at: Completed 208-19-PLAN.md — phase 208 closes here, 19/19 plans executed. Confirmed nothing outside plans 17/18's own three files moved (only the two already-known TestCodexNativeCancellation failures, WINDOWS row 56). WINDOWS rows 57 and 58 marked fixed on evidence, each naming the exact planted mutation that proved it; row 53 left untouched, still open. ROADMAP's Phase 208 account corrected to say the owner reopened it for a fourth round that closed all six review findings, rather than closing it with two gaps left open.
+last_updated: "2026-09-24T11:00:46.000Z"
 last_activity: 2026-09-24
-state_head: 1ae02c33
+state_head: 1eb1811f
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
   percent: 40
 ---
 
@@ -33,10 +33,10 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 208 (Never a Dead End) — EXECUTING
+Phase: 208 (Never a Dead End) — CLOSED (19/19 plans executed)
 Next phase: 209 (A Light Default Path) — not yet planned
-Status: Executing — 208-18 done (CR-02, WR-01, WR-03 closed); 208-19 remains for this round's last finding
-Plan: 18 of 19
+Status: Phase 208 closed — 208-19 confirmed nothing else moved and closed WINDOWS rows 57/58 on evidence; row 53 (the practice-project rehearsal has never finished all fourteen steps live) stays open, carried forward for Phase 209/210 per D-06
+Plan: 19 of 19
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -232,6 +232,7 @@ Last activity: 2026-09-24
 | Phase 208 P16 | ~20min | 2 tasks | 3 files |
 | Phase 208 P17 | ~25min | 2 tasks | 1 files |
 | Phase 208 P18 | 35min | 2 tasks | 2 files |
+| Phase 208 P19 | 30min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -715,6 +716,7 @@ Last activity: 2026-09-24
 - [Phase 208]: WINDOWS row 53 stays open (not fixed): its narrow close condition is met, but D-06 names this row as the vehicle for the still-open 'never proven end to end' item — the more recent, more specific owner ruling governs over the row's own older close condition
 - [Phase 208]: 208-17 (fourth gap-closure round, D-07): widened TestSavedMapPublicationHasOneBuilder to catch a composite-literal write to PublicationMode, not only an assignment statement (CR-01), and gave its doc comment an honest "what this still cannot catch" section matching TestSelfRecoveryHasOneDecision's standard (WR-04). Added TestALighterSurveyTeamStillPublishesTheSavedMap, the first executable proof that a light-depth colonize's smaller surveyor team still publishes the saved map through the transactional finalize lane's relaxed branch (WR-02) — confirmed by mutation that the pre-existing test never reached that branch. CR-02, WR-01 and WR-03 remain open for 208-18/19.
 - [Phase 208]: 208-18 (fourth gap-closure round, D-07): mayHoldASelfRecoveryDecision now keys the self-recovery excuse list by "file::enclosing declaration" instead of by whole file, so a rival decision planted anywhere else inside an already-reviewed file is caught by name (CR-02) — the third consecutive round this exact blind-spot-moves-not-closes defect had survived. Added the missing "worktrees" skip to the same walk (WR-01). refusalSelfRecoveryTable rows now carry two fields, Reason and Action, so the notice's closing clause is read from the row that fired instead of a fixed phrase baked into the renderer (WR-03) — what the owner reads today is unchanged, character for character. All four proved by planting the named mutation in a disposable worktree and watching the guard go red. WR-02 (208-13 finding: the decision announces/records before confirming) and WR-05 (a future quiet-classified command recovering invisibly) both stay honestly open, out of scope for this plan.
+- [Phase 208]: 208-19 (fourth gap-closure round, D-07, closing plan): re-ran every check family this round could have disturbed in fresh scoped commands — nothing new broke; the only failures seen were the two already-catalogued TestCodexNativeCancellation tests (WINDOWS row 56). Marked WINDOWS rows 57 and 58 fixed via the register tool's own subcommand, only after confirming each row's own named mutation was genuinely planted and turned its check red in 208-17/18-SUMMARY.md; each row's description now names that mutation, and row 57's backwards "Related:" clause (which had the two checks' worktree-skip status swapped) is corrected. Row 53 left byte-for-byte unchanged, still open. ROADMAP.md's Phase 208 account rewritten: the owner's 2026-09-24 close-the-phase decision was superseded the same day by reopening it for a fourth round covering all six review findings, and that round closed them — the paragraph now says so instead of describing the phase as closed with two gaps left open. Phase 208 now reads nineteen of nineteen plans executed.
 
 ### Pending Todos
 
@@ -837,8 +839,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T10:51:01.735Z
-Stopped at: Completed 208-18-PLAN.md — narrowed the self-recovery one-decision guard's excuse list from three whole files to the five specific already-reviewed places (CR-02), added the missing leftover-worktree skip (WR-01), and moved the self-recovery notice's hardcoded closing clause onto the table row that fires it (WR-03). 208-19 remains for this round's last finding.
+Last session: 2026-09-24T11:00:46.000Z
+Stopped at: Completed 208-19-PLAN.md — phase 208 closes here, 19/19 plans executed. WINDOWS rows 57/58 marked fixed on evidence, row 53 left open; ROADMAP's Phase 208 account corrected to describe the owner's fourth-round reopening and its outcome.
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
