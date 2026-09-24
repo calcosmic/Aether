@@ -183,6 +183,12 @@ This matches the exact set, order, grouping, and wording the owner approved on 2
 - Plan 209-04 ("One sentence reaches built work with no owner steps in between") and 209-05 (timing writeup) remain to execute this phase.
 - No blockers carried forward from this plan.
 
+## Self-Check: PASSED
+
+- `FOUND: .planning/phases/209-light-default-path/209-03-SUMMARY.md`
+- `FOUND: b57790dd` (Task 4 commit) in `git log --oneline --all`
+- `FOUND: fd8bbf61` (this SUMMARY's own metadata commit) in `git log --oneline --all`
+
 ---
 *Phase: 209-light-default-path*
 *Completed: 2026-09-24*
