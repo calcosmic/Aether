@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -308,4 +309,156 @@ func TestGoalReachesBuiltWorkWithNoExtraSteps(t *testing.T) {
 	if ownerTypedAfterSentence != 0 {
 		t.Fatalf("ownerTypedAfterSentence = %d, want 0 -- one sentence must reach built work with nothing further typed", ownerTypedAfterSentence)
 	}
+}
+
+// TestDiscussAndSpecStillBehaveExactlyAsBefore is the standing guard for
+// this milestone's "nothing is taken away" rule (209-CONTEXT.md), covering
+// the three things this plan comes closest to changing: clarifying intent
+// still runs and still records what it recorded before; drafting and
+// approving a specification by hand still produces the same revision and
+// approval shape; and a deeper planning preset is still selectable and
+// still returns its own deeper policy rather than being overridden by the
+// single door's default. No existing test file is modified to make this
+// pass -- if any of the three had to change, that would be the signal
+// something was taken away.
+func TestDiscussAndSpecStillBehaveExactlyAsBefore(t *testing.T) {
+	t.Run("clarifying intent still runs and still records what it recorded before", func(t *testing.T) {
+		saveGlobals(t)
+		dataDir := setupBuildFlowTest(t)
+		root := filepath.Dir(filepath.Dir(dataDir))
+		goal := "Choose the remaining owner contract boundaries"
+		sessionID := "session-209-04-discuss-unchanged"
+		initializedAt := time.Now().UTC()
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version:       "3.0",
+			Goal:          &goal,
+			State:         colony.StateREADY,
+			SessionID:     &sessionID,
+			InitializedAt: &initializedAt,
+		})
+
+		decision := PendingDecision{
+			ID:          "pd-209-04-material-scope",
+			Type:        clarificationDecisionType,
+			Description: formatClarificationDescription("Choose the scope contract", []string{"preserve current scope", "change scope"}),
+			Source:      "wrapper:scope:contract-scope",
+			GoalHash:    pendingDecisionGoalHash(goal),
+			SessionID:   sessionID,
+			Grounding:   "Repository evidence leaves two materially different scope outcomes.",
+			CreatedAt:   initializedAt.Add(time.Minute).Format(time.RFC3339),
+		}
+		if err := store.SaveJSON(pendingDecisionsFile, PendingDecisionFile{Decisions: []PendingDecision{decision}}); err != nil {
+			t.Fatalf("seed material decision: %v", err)
+		}
+
+		result, err := runDiscuss(root, 3, false)
+		if err != nil {
+			t.Fatalf("run discuss: %v", err)
+		}
+		if got := intValue(result["question_count"]); got != 1 {
+			t.Fatalf("question_count = %d, want 1 (clarifying intent still asks about an unresolved material decision)", got)
+		}
+		batch := discussResultJSONMap(t, result["material_batch"])
+		rawCards, ok := batch["cards"].([]interface{})
+		if !ok || len(rawCards) != 1 {
+			t.Fatalf("material batch cards = %#v, want 1", batch["cards"])
+		}
+		card := rawCards[0].(map[string]interface{})
+		if got := stringValue(card["domain"]); got != "scope" {
+			t.Fatalf("card domain = %q, want %q", got, "scope")
+		}
+		for _, field := range []string{"decision", "why_now", "queen_recommendation", "planning_resumes", "exact_answer_syntax"} {
+			if strings.TrimSpace(stringValue(card[field])) == "" {
+				t.Errorf("card lacks %s: %#v", field, card)
+			}
+		}
+
+		file := loadPendingDecisionFile()
+		if len(file.Decisions) != 1 || file.Decisions[0].ID != decision.ID {
+			t.Fatalf("discuss did not persist the unresolved decision it recorded before: %#v", file.Decisions)
+		}
+	})
+
+	t.Run("drafting and approving a specification by hand still produces the same shape", func(t *testing.T) {
+		saveGlobals(t)
+		s, root := newTestStore(t)
+		store = s
+		chdirForTest190_05(t, root)
+
+		goal := "ship the new invoicing flow"
+		sessionID := "sess-209-04-hand-drafted"
+		createdAt := time.Now().UTC()
+		writeGoRouteFixtureState(t, filepath.Join(root, ".aether", "data"), colony.ColonyState{
+			Version:   "3.0",
+			Goal:      &goal,
+			SessionID: &sessionID,
+			State:     colony.StateREADY,
+		})
+		request := specificationTestDraftRequest(t, colony.SpecScopeWholeGoal)
+		request.Scope.GoalID = pendingDecisionGoalHash(goal)
+		request.Scope.SessionID = sessionID
+		request.CreatedAt = createdAt
+
+		draft, err := createSpecificationDraft(root, request, specificationMutationOptions{})
+		if err != nil {
+			t.Fatalf("create hand-drafted specification: %v", err)
+		}
+		if draft.Revision.Status != colony.SpecStatusDraft {
+			t.Fatalf("draft status = %q, want %q", draft.Revision.Status, colony.SpecStatusDraft)
+		}
+		if draft.Revision.Approval != nil {
+			t.Fatalf("draft carries an approval before approving: %#v", draft.Revision.Approval)
+		}
+
+		approved, err := approveSpecification(root, specificationApprovalRequest{
+			RevisionID:          draft.Revision.ID,
+			RevisionContentHash: draft.Revision.ContentHash,
+			ApprovalToken:       specificationApprovalToken(draft.Specification.ID, draft.Revision.ID, draft.Revision.ContentHash),
+			ApprovedBy:          "owner",
+			ApprovedAt:          createdAt.Add(time.Minute),
+		}, specificationMutationOptions{})
+		if err != nil {
+			t.Fatalf("approve hand-drafted specification: %v", err)
+		}
+		if approved.Revision.Status != colony.SpecStatusApproved {
+			t.Fatalf("approved status = %q, want %q", approved.Revision.Status, colony.SpecStatusApproved)
+		}
+		if approved.Revision.Approval == nil {
+			t.Fatal("expected an approval receipt")
+		}
+		if approved.Revision.Approval.SpecificationID != draft.Specification.ID ||
+			approved.Revision.Approval.RevisionID != draft.Revision.ID ||
+			approved.Revision.Approval.RevisionContentHash != draft.Revision.ContentHash ||
+			approved.Revision.Approval.ApprovedBy != "owner" {
+			t.Fatalf("approval receipt shape changed: %#v", approved.Revision.Approval)
+		}
+		if len(approved.Specification.Revisions) != 1 {
+			t.Fatalf("hand approval produced %d revisions, want exactly 1", len(approved.Specification.Revisions))
+		}
+	})
+
+	t.Run("a deeper planning preset is still its own policy, never overridden by the single door's default", func(t *testing.T) {
+		for _, name := range []string{"balanced", "deep", "exhaustive"} {
+			name := name
+			t.Run(name, func(t *testing.T) {
+				want, ok := planningPresetPolicyByName(name, false)
+				if !ok {
+					t.Fatalf("planningPresetPolicyByName(%q) not found in planningPresetPolicies", name)
+				}
+				if want.ID == planningStagePreset(goDefaultPlanningPreset) {
+					t.Fatalf("fixture error: %q resolves to the single door's own default preset", name)
+				}
+				selection, err := resolvePlanningPreset(codexPlanOptions{Preset: name, PresetSet: true})
+				if err != nil {
+					t.Fatalf("resolvePlanningPreset(%q): %v", name, err)
+				}
+				if selection.PresetRequired {
+					t.Fatalf("resolvePlanningPreset(%q) unexpectedly requires a choice", name)
+				}
+				if selection.Policy != want {
+					t.Fatalf("resolvePlanningPreset(%q) = %+v, want the deeper policy %+v from planningPresetPolicies -- never the single door's default", name, selection.Policy, want)
+				}
+			})
+		}
+	})
 }
