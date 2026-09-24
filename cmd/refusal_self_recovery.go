@@ -30,36 +30,46 @@ var refusalSelfRecoveryTable = map[string]string{
 // whether Aether carries out a refusal's own recovery itself rather than
 // stopping and waiting for an owner to answer. Every call site that reaches
 // an existing-survey refusal must offer it to this function rather than
-// re-deriving the same four-part condition for itself
-// (TestSelfRecoveryHasOneDecision, 208-11-PLAN.md Task 2).
+// re-deriving the same conditions for itself (TestSelfRecoveryHasOneDecision,
+// 208-11-PLAN.md Task 2, widened by 208-13-PLAN.md Task 1).
 //
 // It returns false -- changing nothing, printing nothing, recording nothing
-// -- unless all four of these hold:
+// -- unless all of these hold:
 //
 //  1. sessionHasNoOneToAsk() is true (cmd/unattended_session.go) -- read
 //     only through that one function, never by reaching the environment
 //     variable directly here.
 //  2. r.ID is a key in refusalSelfRecoveryTable above.
-//  3. r.ProtectsWork is true -- a refusal that does not protect work is
-//     already a "warn" row (warnAndCarryOn, cmd/refusal.go) and has no
-//     business being offered here at all.
-//  4. strings.TrimSpace(r.NextCommand) is non-empty -- there must be an
-//     actual command to run on the owner's behalf.
+//  3. r.ProtectsWork is true (the caller's own copy) -- a refusal that does
+//     not protect work is already a "warn" row (warnAndCarryOn,
+//     cmd/refusal.go) and has no business being offered here at all.
+//  4. strings.TrimSpace(r.NextCommand) is non-empty (the caller's own copy)
+//     -- there must be an actual command to run on the owner's behalf.
+//  5. The AUTHORITATIVE registered row for r.ID (read back through
+//     refusalForID, never trusted from the caller's own struct a second
+//     time) also protects work and also names a non-empty command
+//     (208-13-PLAN.md Task 1, WR-08 / 208-REVIEW-GAP2.md). This is what
+//     makes the build-time contract checker
+//     (refusalSelfRecoveryContractProblems, in this package's test file) and
+//     this runtime gate agree on one source instead of two that could
+//     silently drift apart -- and it is also why the command named in the
+//     notice below is read from this registered row, not from the caller's
+//     own field.
 //
-// These four are deliberately not joined by any freshness or staleness
-// check of their own. The refusal itself consults no such classification
-// before firing -- surveyDocsExist alone decides whether
+// These are deliberately not joined by any freshness or staleness check of
+// their own. The refusal itself consults no such classification before
+// firing -- surveyDocsExist alone decides whether
 // "colonize-existing-survey-found" fires -- and adding a second condition
 // here would make the exact same refusal behave two different ways for
 // reasons the refusal itself never states.
 //
 // When it returns true, it has already done both of the things that make
-// the recovery visible and auditable, in this order: announced the
-// recovery to a person through emitVisualProgress (cmd/codex_visuals.go),
-// which is silent in machine-output mode -- this is the link that keeps a
-// host's JSON parse of a plan-only manifest intact; warnAndCarryOn's own
-// stdout write is a different link and must not be reused here, because it
-// writes unconditionally rather than through the machine-output gate -- and
+// the recovery visible and auditable, in this order: announced the recovery
+// to a person through emitVisualProgress (cmd/codex_visuals.go), which is
+// silent in machine-output mode -- this is the link that keeps a host's JSON
+// parse of a plan-only manifest intact; warnAndCarryOn's own stdout write is
+// a different link and must not be reused here, because it writes
+// unconditionally rather than through the machine-output gate -- and
 // appended a refusal-log record marked recovered rather than refused
 // (appendRecoveredRefusalToLog, cmd/refusal_log.go). A caller that receives
 // true from this function should fall through into the recovery path
@@ -69,18 +79,21 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 	if !sessionHasNoOneToAsk() {
 		return false
 	}
-	reason, ok := refusalSelfRecoveryTable[r.ID]
-	if !ok {
+	reason, listed := refusalSelfRecoveryTable[r.ID]
+	if !listed {
 		return false
 	}
 	if !r.ProtectsWork {
 		return false
 	}
-	next := strings.TrimSpace(r.NextCommand)
-	if next == "" {
+	if strings.TrimSpace(r.NextCommand) == "" {
 		return false
 	}
-	emitVisualProgress(renderRefusalSelfRecoveryNotice(r, reason))
+	row, ok := refusalForID(r.ID)
+	if !ok || !row.ProtectsWork || strings.TrimSpace(row.NextCommand) == "" {
+		return false
+	}
+	emitVisualProgress(renderRefusalSelfRecoveryNotice(r, reason, row.NextCommand))
 	appendRecoveredRefusalToLog(r)
 	return true
 }
@@ -90,9 +103,11 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 // machinery every other Aether screen uses rather than a bare line. It
 // names, in order: what Aether found, that nobody was there to ask, the
 // exact command Aether carried out on the owner's behalf, and that it is
-// carrying on.
-func renderRefusalSelfRecoveryNotice(r refusal, reason string) string {
-	next := strings.TrimSpace(r.NextCommand)
+// carrying on. next is read from the registered refusal row
+// (attemptRefusalSelfRecovery's own authoritative lookup, WR-08) rather than
+// a caller-supplied copy.
+func renderRefusalSelfRecoveryNotice(r refusal, reason string, next string) string {
+	next = strings.TrimSpace(next)
 	var b strings.Builder
 	b.WriteString(renderBanner("🙅", "Carrying On Without You"))
 	b.WriteString(visualDividerStr())

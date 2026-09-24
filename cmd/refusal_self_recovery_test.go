@@ -211,7 +211,14 @@ func TestAttendedColonizeStillStopsAndAsks(t *testing.T) {
 
 	t.Run("plan-only lane", func(t *testing.T) {
 		setupColonizeExistingSurveyFixture(t)
-		// Deliberately not setting unattendedEnvVar -- the ordinary case.
+		// WR-04 (208-REVIEW-GAP2.md): pinned explicitly to empty -- a person
+		// is present -- rather than left unset. The attended guarantee must
+		// not depend on the ambient shell/harness never having exported the
+		// unattended value (the journey gate's own unattended walks do
+		// exactly that on their `claude` children); this is the only proof
+		// of that guarantee, so it must not turn red for an environmental
+		// reason indistinguishable from a real regression.
+		t.Setenv(unattendedEnvVar, "")
 		t.Setenv("AETHER_OUTPUT_MODE", "json")
 
 		rootCmd.SetArgs([]string{"colonize", "--plan-only"})
@@ -231,6 +238,8 @@ func TestAttendedColonizeStillStopsAndAsks(t *testing.T) {
 
 	t.Run("direct lane", func(t *testing.T) {
 		setupColonizeExistingSurveyFixture(t)
+		// WR-04 (208-REVIEW-GAP2.md): see the plan-only lane's comment above.
+		t.Setenv(unattendedEnvVar, "")
 		t.Setenv("AETHER_OUTPUT_MODE", "json")
 
 		rootCmd.SetArgs([]string{"colonize"})
@@ -303,22 +312,55 @@ func TestUnattendedDirectColonizeRefreshesTheMapItself(t *testing.T) {
 	}
 }
 
-// TestSelfRecoveryHasOneDecision (208-11-PLAN.md Task 2): the one-decision
-// guard. It walks every non-test Go file in the module and fails by name if
-// any file other than cmd/refusal_self_recovery.go names the opt-in map, or
-// if any file other than that one both reads the is-anyone-here fact
-// (through sessionHasNoOneToAsk, the identifier this repository's existing
-// TestTheIsAnyoneHereFactHasOneReader already confines to
-// cmd/unattended_session.go) and acts on a refusal (calls refuse(...)) --
-// the second-copy failure mode this repository has hit before. It cannot
-// pass vacuously: it fails if the walk finds too few files, or if it never
-// actually visits the one file it expects to allow.
+// mayReadTheIsAnyoneHereFact is the closed, checked-in allow-list of
+// non-test files permitted to read the is-anyone-here fact
+// (sessionHasNoOneToAsk) or name the opt-in self-recovery table
+// (refusalSelfRecoveryTable) today. TestSelfRecoveryHasOneDecision fails by
+// name on any other non-test file that does either.
 //
-// What this cannot catch, stated honestly rather than claimed away: a
+// This widens 208-11's original guard (208-13-PLAN.md Task 1, WR-02 /
+// 208-REVIEW-GAP2.md CR-02): the old predicate only flagged a file that
+// named the map, or that called BOTH sessionHasNoOneToAsk AND refuse(...) in
+// the same file -- so a second decision planted in cmd/helpers.go's
+// outputRefusal (a file that receives an already-built refusal value and
+// never calls refuse(...) itself) sailed straight through. The new predicate
+// drops the "also calls refuse" requirement entirely: any non-test file
+// outside this list that so much as reads the fact is an offender.
+//
+// The list may shrink; it must not grow without its own owner ruling -- a
+// new entry here is exactly the "second decision" failure mode this guard
+// exists to catch, so adding one is a decision for a person, not a reflex to
+// make a test pass.
+//
+// What this still cannot catch, stated honestly rather than claimed away: a
 // second decision expressed without ever naming refusalSelfRecoveryTable or
-// calling both sessionHasNoOneToAsk and refuse in the same file -- for
-// example, a helper that always returns a hard-coded true. Nothing in this
-// repository writes a self-recovery decision that way.
+// calling sessionHasNoOneToAsk -- for example, a helper that always returns
+// a hard-coded true. Nothing in this repository writes a self-recovery
+// decision that way.
+var mayReadTheIsAnyoneHereFact = map[string]bool{
+	// Defines sessionHasNoOneToAsk and the opt-in env var it reads.
+	"cmd/unattended_session.go": true,
+	// Carries the shared guidance sentence on both refusal lanes (Error()
+	// and renderRefusal, 208-09-PLAN.md) -- reads the fact only to decide
+	// whether to append that sentence, never to decide whether to recover.
+	"cmd/refusal.go": true,
+	// The one decision: attemptRefusalSelfRecovery and its opt-in table.
+	"cmd/refusal_self_recovery.go": true,
+}
+
+// TestSelfRecoveryHasOneDecision (208-11-PLAN.md Task 2, widened by
+// 208-13-PLAN.md Task 1): the one-decision guard. It walks every non-test Go
+// file in the module and fails by name if any file outside
+// mayReadTheIsAnyoneHereFact either names the opt-in map
+// (refusalSelfRecoveryTable) or calls sessionHasNoOneToAsk at all. It cannot
+// pass vacuously: it fails if the walk finds too few files, or if it never
+// actually visits the one decision file it expects to allow.
+//
+// What this cannot catch, stated honestly rather than claimed away: a second
+// decision expressed without ever naming refusalSelfRecoveryTable or calling
+// sessionHasNoOneToAsk -- for example, a helper that always returns a
+// hard-coded true. Nothing in this repository writes a self-recovery
+// decision that way.
 func TestSelfRecoveryHasOneDecision(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -362,6 +404,8 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		rel = filepath.ToSlash(rel)
 		if rel == soleDecisionFile {
 			sawSoleDecisionFile = true
+		}
+		if mayReadTheIsAnyoneHereFact[rel] {
 			continue
 		}
 		file, parseErr := parser.ParseFile(fset, path, nil, 0)
@@ -371,19 +415,13 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 
 		var namesTheMap bool
 		var callsSessionHasNoOneToAsk bool
-		var callsRefuse bool
 		ast.Inspect(file, func(n ast.Node) bool {
-			switch node := n.(type) {
-			case *ast.Ident:
-				if node.Name == "refusalSelfRecoveryTable" {
+			if ident, ok := n.(*ast.Ident); ok {
+				if ident.Name == "refusalSelfRecoveryTable" {
 					namesTheMap = true
 				}
-				if node.Name == "sessionHasNoOneToAsk" {
+				if ident.Name == "sessionHasNoOneToAsk" {
 					callsSessionHasNoOneToAsk = true
-				}
-			case *ast.CallExpr:
-				if fn, ok := node.Fun.(*ast.Ident); ok && fn.Name == "refuse" {
-					callsRefuse = true
 				}
 			}
 			return true
@@ -393,8 +431,8 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		if namesTheMap {
 			reasons = append(reasons, "names refusalSelfRecoveryTable")
 		}
-		if callsSessionHasNoOneToAsk && callsRefuse {
-			reasons = append(reasons, "both calls sessionHasNoOneToAsk and refuse(...) in the same file")
+		if callsSessionHasNoOneToAsk {
+			reasons = append(reasons, "reads the is-anyone-here fact outside the allow-list")
 		}
 		if len(reasons) > 0 {
 			offenders = append(offenders, rel+" ("+strings.Join(reasons, "; ")+")")
@@ -405,7 +443,7 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		t.Fatalf("%s was never visited by the walk -- this guard cannot be passing for the right reason", soleDecisionFile)
 	}
 	if len(offenders) > 0 {
-		t.Fatalf("only %s may hold a self-recovery decision; found a second one also in: %v", soleDecisionFile, offenders)
+		t.Fatalf("only cmd/unattended_session.go, cmd/refusal.go and %s may hold a self-recovery decision or read the is-anyone-here fact; found a second reader also in: %v", soleDecisionFile, offenders)
 	}
 }
 
@@ -471,4 +509,91 @@ func refusalSelfRecoveryContractProblems(table map[string]string) []string {
 		}
 	}
 	return problems
+}
+
+// TestOnlyADeclaredRefusalIsEverRecoveredFrom (208-13-PLAN.md Task 1, CR-01 /
+// 208-REVIEW-GAP2.md): drives attemptRefusalSelfRecovery directly -- never
+// through a cobra command -- covering each of its remaining gates on its
+// own, with the session pinned as having nobody present. Every id, command
+// and flag is derived from the real refusalRegistry/refusalSelfRecoveryTable
+// through refuse/refusalForID; none is typed as a literal, so this test
+// cannot drift into a shape the runtime cannot produce.
+//
+// Before this test existed, deleting the opt-in table lookup, the
+// ProtectsWork check and the NextCommand check from attemptRefusalSelfRecovery
+// left every named guard in this file green, because every other test that
+// exercises the function does so exclusively through the one real registered
+// refusal that happens to satisfy all three conditions at once.
+func TestOnlyADeclaredRefusalIsEverRecoveredFrom(t *testing.T) {
+	setupColonizeExistingSurveyFixture(t)
+	t.Setenv(unattendedEnvVar, "1")
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+
+	// Case 1: a registered, work-protecting stop that names a real command
+	// but is NOT a key of the opt-in table -- found by scanning the real
+	// registry for the first row that qualifies, never by typing an id.
+	var notDeclared refusal
+	for _, row := range refusalRegistry {
+		if _, listed := refusalSelfRecoveryTable[row.ID]; listed {
+			continue
+		}
+		if row.Disposition == "stop" && row.ProtectsWork && strings.TrimSpace(row.NextCommand) != "" {
+			notDeclared = refuse(row.ID)
+			break
+		}
+	}
+	if notDeclared.ID == "" {
+		t.Fatal("no undeclared work-protecting stop row exists in refusalRegistry to drive this guard -- the test cannot proceed honestly")
+	}
+	assertRefusalNeverRecovered(t, notDeclared, "is not a key of the opt-in table")
+
+	// The one declared (opt-in) id, taken from the table's own key rather
+	// than typed -- so this test keeps covering the real opted-in row even
+	// if its id ever changes.
+	var declaredID string
+	for id := range refusalSelfRecoveryTable {
+		declaredID = id
+		break
+	}
+	if declaredID == "" {
+		t.Fatal("refusalSelfRecoveryTable is empty -- there is no declared row to drive this test with")
+	}
+	declared := refuse(declaredID)
+
+	// Case 2: the declared row with ProtectsWork forced false on a copy.
+	noWork := declared
+	noWork.ProtectsWork = false
+	assertRefusalNeverRecovered(t, noWork, "does not protect work")
+
+	// Case 3: the declared row with its next command blanked to whitespace
+	// on a copy.
+	noCommand := declared
+	noCommand.NextCommand = "   "
+	assertRefusalNeverRecovered(t, noCommand, "names no command")
+
+	// Positive control: the untouched declared row must still be recovered
+	// from. Without this, the three negative cases above could be passing
+	// only because the function returns false unconditionally.
+	if !attemptRefusalSelfRecovery(declared) {
+		t.Fatalf("%s is opted in, protects work, and names a real command -- it must be recovered from", declared.ID)
+	}
+}
+
+// assertRefusalNeverRecovered drives attemptRefusalSelfRecovery with r and
+// asserts it returned false, wrote nothing to stdout, and added no
+// refusal-log record -- the shape every negative case in
+// TestOnlyADeclaredRefusalIsEverRecoveredFrom must have.
+func assertRefusalNeverRecovered(t *testing.T, r refusal, because string) {
+	t.Helper()
+	captureStdoutBuffer(t).Reset()
+	before := len(refusalLogEntries(200))
+	if attemptRefusalSelfRecovery(r) {
+		t.Fatalf("%s %s and must never be recovered from", r.ID, because)
+	}
+	if got := captureStdoutBuffer(t).String(); got != "" {
+		t.Fatalf("a refused self-recovery must print nothing, got:\n%s", got)
+	}
+	if after := len(refusalLogEntries(200)); after != before {
+		t.Fatalf("a refused self-recovery must record nothing: %d -> %d", before, after)
+	}
 }
