@@ -6,13 +6,16 @@ runtime:
 wrapper_additions:
   routing: |
     Keep this the one door for ordinary work:
-    1. Pass the owner's sentence straight through as $ARGUMENTS. Do not paraphrase it, shorten it, or decide anything about it yourself.
-    2. Let the runtime pick the route. It measures how much of this project the sentence actually names and decides small or big from that — never from adjectives in the sentence.
-    3. Relay the route sentence the runtime prints — which route it picked and the recorded fact that picked it — unchanged, before anything else in your reply.
-    4. This command never refuses the job. It either does it (the small route) or names the route it picked instead (the big route).
+    1. Run `AETHER_OUTPUT_MODE=visual aether go "<the owner's sentence>"`. Pass the owner's own words straight through, unchanged — do not paraphrase, shorten, re-word, or decide anything about them yourself.
+    2. Relay the screen the runtime just drew, unchanged, before anything else in your reply. The runtime measures how much of this project the sentence actually names and decides small or big from that — never from adjectives in the sentence — and says in plain English which route it picked and the recorded fact that picked it.
+    3. If the screen says the quick route: there is nothing more to do. The job is already done.
+    4. If the screen says the planning route and no project is recorded here yet: run `aether init "<the same sentence>"`, then run `aether go "<the same sentence>"` again. This is the one case that takes two calls, and running it again is always safe (it is idempotent) — the second call now finds a recorded project and proceeds down the planning route from there.
+    5. If the screen says the planning route and a project is already recorded here: follow the planning route exactly the way `/ant-plan`'s own wrapper already does, using the same sentence as the job.
+    6. This command never refuses the job. It either does it (the small route) or names the route it picked instead and carries it onward (the big route).
 guardrails:
   - "Do not write colony state files, session files, or shadow/canary files by hand from this command spec."
   - "Do not decide the route yourself — the runtime's own decision is the only one that counts."
+  - "Never re-word the route sentence the runtime prints."
   - "If docs and runtime disagree, runtime wins."
   - "Show this output to the owner in your own reply, unchanged — you are only passing along what the command already produced, not deciding, checking, or changing anything yourself."
   - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

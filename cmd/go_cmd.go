@@ -49,9 +49,14 @@ func init() {
 // runGoJob is `/ant-go`'s command body: gather the read-only facts, ask the
 // one route authority once, and on the small route reuse the existing
 // single-helper quick-job implementation rather than re-dispatching or
-// re-checking anything of its own. The big route is filled in by a later
-// plan; for now it reports the route and reason and stops -- it never
-// refuses the owner's job.
+// re-checking anything of its own. On the small route, once the attempt has
+// run, the route authority is asked a second time with the attempt's own
+// measured facts (D-03): a small job that proves bigger is moved up to the
+// planning route by the program itself, never by asking. The big route
+// decides and hands over -- it plans, builds and writes nothing of its own;
+// it dispatches no helper and reports the route and reason for the owner
+// and for the shared next-action authority to carry onward. Neither route
+// ever refuses the owner's job.
 func runGoJob(job string, timeout time.Duration) (map[string]interface{}, error) {
 	root := skillWorkspaceRoot()
 	facts := gatherJobSizeFacts(root, job)
@@ -62,26 +67,41 @@ func runGoJob(job string, timeout time.Duration) (map[string]interface{}, error)
 		if err != nil {
 			return nil, err
 		}
-		result["route"] = string(decision.Route)
-		result["route_reason"] = decision.Reason
+		attempt := smallAttemptFactsFromQuickResult(result)
+		facts.Attempt = &attempt
+		finalDecision := resolveJobSizeRoute(facts)
+		result["route"] = string(finalDecision.Route)
+		result["route_reason"] = finalDecision.Reason
 		result["job"] = job
+		if finalDecision.Escalated {
+			result["escalated"] = true
+			result["escalation_reason"] = finalDecision.Reason
+		}
 		return result, nil
 	}
 
 	return map[string]interface{}{
-		"mode":         "go-big",
-		"job":          job,
-		"route":        string(decision.Route),
-		"route_reason": decision.Reason,
+		"mode":          "go-big",
+		"job":           job,
+		"goal":          job,
+		"route":         string(decision.Route),
+		"route_reason":  decision.Reason,
+		"colony_active": facts.ColonyActive,
 	}, nil
 }
 
 // renderGoVisual renders `/ant-go`'s screen: the banner, then the route
 // sentence as the FIRST content line -- the owner reads which route was
-// picked and why before anything else -- then, on the small route, the
-// existing quick-job lines exactly as renderQuickVisual renders them, then
-// the shared closing card. Every content line goes through voiceLine; this
-// file writes no symbol literal of its own.
+// picked and why before anything else -- then, when the small route's own
+// attempt was moved up to the planning route (D-03), exactly one escalation
+// line naming the measured fact that made that clear, then, whenever an
+// attempt actually ran, the existing quick-job lines exactly as
+// renderQuickVisual renders them (an escalation never hides or undoes the
+// attempt's own changes), then the shared closing card. Every content line
+// goes through voiceLine; this file writes no symbol literal of its own,
+// and it never asks a question or names a command of its own -- the
+// closing card's command comes solely from the shared next-action
+// authority.
 func renderGoVisual(result map[string]interface{}) string {
 	var b strings.Builder
 	b.WriteString(renderBanner("🧭", "Go"))
@@ -97,11 +117,15 @@ func renderGoVisual(result map[string]interface{}) string {
 		b.WriteString("\n\n")
 	}
 
-	if stringValue(result["route"]) == string(jobSizeRouteSmall) && stringValue(result["mode"]) == "quick-job" {
+	if escalated, _ := result["escalated"].(bool); escalated {
+		escalationReason := strings.TrimSpace(stringValue(result["escalation_reason"]))
+		b.WriteString(voiceLine("warning", "This turned out bigger than it looked -- "+escalationReason+
+			" -- so it has been moved up to the planning route."))
+		b.WriteString("\n\n")
+	}
+
+	if stringValue(result["mode"]) == "quick-job" {
 		b.WriteString(renderQuickJobBody(result))
-	} else if stringValue(result["mode"]) == "go-big" {
-		b.WriteString(voiceLine("warning", "The planning route is not wired up yet in this build -- nothing was done. Run `aether plan` directly for now."))
-		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")

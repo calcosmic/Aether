@@ -50,9 +50,8 @@ var jobSizeSkipDirNames = map[string]bool{
 // smallAttemptFacts are facts about a small-route attempt that already
 // ran -- all of them independently measured (the disk-measured
 // changed-file list and the project's own check outcome), never anything a
-// helper wrote about itself. This plan defines the shape; plan 02's
-// escalation branch is the first reader of it, and resolveJobSizeRoute
-// deliberately leaves a non-nil Attempt unread here.
+// helper wrote about itself. resolveJobSizeRoute's attempt branch (plan
+// 02) is the reader of it.
 type smallAttemptFacts struct {
 	FilesChanged int
 	ChecksStatus string
@@ -77,19 +76,51 @@ type jobSizeDecision struct {
 	Escalated bool
 }
 
-// resolveJobSizeRoute is the one route authority for `/ant-go`. Priority
-// order, exactly like resolveVerificationDepth (cmd/review_depth.go):
+// resolveJobSizeRoute is the one route authority for `/ant-go`. It has two
+// layers:
+//
+//  1. resolveJobSizeRouteBase decides from the pre-attempt facts alone, in
+//     priority order exactly like resolveVerificationDepth
+//     (cmd/review_depth.go).
+//  2. When facts.Attempt is non-nil (the small route's own attempt has
+//     already run), this is the highest-priority branch: a job already
+//     sized big before the attempt never comes back down (D-03 is a
+//     one-way move only, so the base decision wins unchanged and Escalated
+//     stays false); otherwise the attempt's own measured facts -- and
+//     nothing a helper wrote about itself -- decide whether the job is
+//     moved up to the big route, with Escalated set to true when it is.
+func resolveJobSizeRoute(facts jobSizeFacts) jobSizeDecision {
+	base := resolveJobSizeRouteBase(facts)
+	if facts.Attempt == nil {
+		return base
+	}
+	if base.Route == jobSizeRouteBig {
+		// Already big before the attempt: this is not a fresh escalation,
+		// and nothing ever moves a job back down to small.
+		return base
+	}
+	if reason, escalate := jobSizeAttemptEscalationReason(*facts.Attempt); escalate {
+		return jobSizeDecision{
+			Route:     jobSizeRouteBig,
+			Reason:    reason,
+			Escalated: true,
+		}
+	}
+	return base
+}
+
+// resolveJobSizeRouteBase is resolveJobSizeRoute's pre-attempt priority
+// chain:
 //
 //  1. an accepted plan with outstanding work always means the big route,
 //  2. zero matched paths means the big route (nothing in the project
 //     matches what the sentence named, so this reads as new work rather
-//     than a change to something that already exists),
+//     than a change to something that already exists) -- when no project
+//     is recorded at all, the reason says plainly that this job is being
+//     started as a piece of planned work under that sentence as its goal,
 //  3. more matched paths than smallJobFileBudget means the big route,
 //  4. otherwise the small route.
-//
-// facts.Attempt is read by a later escalation branch, not by this
-// function -- a non-nil Attempt is deliberately ignored here.
-func resolveJobSizeRoute(facts jobSizeFacts) jobSizeDecision {
+func resolveJobSizeRouteBase(facts jobSizeFacts) jobSizeDecision {
 	if facts.PlanAcceptedUnbuilt {
 		return jobSizeDecision{
 			Route: jobSizeRouteBig,
@@ -99,6 +130,13 @@ func resolveJobSizeRoute(facts jobSizeFacts) jobSizeDecision {
 	}
 	matched := len(facts.MatchedPaths)
 	if matched == 0 {
+		if !facts.ColonyActive {
+			return jobSizeDecision{
+				Route: jobSizeRouteBig,
+				Reason: fmt.Sprintf("no project is set up in this folder yet, so this job is being started "+
+					"as a piece of planned work under %q as its goal", facts.Job),
+			}
+		}
 		return jobSizeDecision{
 			Route: jobSizeRouteBig,
 			Reason: "nothing in this project matches what the sentence named, so this reads as " +
@@ -116,6 +154,47 @@ func resolveJobSizeRoute(facts jobSizeFacts) jobSizeDecision {
 		Route: jobSizeRouteSmall,
 		Reason: fmt.Sprintf("the sentence names %d file(s) already in this project, small enough for "+
 			"one helper to finish in one pass", matched),
+	}
+}
+
+// jobSizeAttemptEscalationReason is D-03's escalation rule for a small
+// attempt that already ran: escalate when it measurably changed more
+// files than the small-job budget, or when the project's own checks did
+// not pass on it (a partial or a blocker verdict). Both signals are
+// independently measured -- the disk-measured changed-file count and the
+// project's own check outcome -- never a helper's own account of its work.
+// Returns ("", false) when neither signal fires.
+func jobSizeAttemptEscalationReason(attempt smallAttemptFacts) (string, bool) {
+	if attempt.FilesChanged > smallJobFileBudget {
+		return fmt.Sprintf("the quick attempt actually changed %d file(s), more than the %d-file budget for "+
+			"a job one helper can finish in one pass", attempt.FilesChanged, smallJobFileBudget), true
+	}
+	switch attempt.Verdict {
+	case colony.WorkOutcomeBlocker, colony.WorkOutcomePartial:
+		status := strings.TrimSpace(attempt.ChecksStatus)
+		if status == "" {
+			status = "unresolved"
+		}
+		return fmt.Sprintf("the project's own checks did not pass on the quick attempt (status: %s)", status), true
+	}
+	return "", false
+}
+
+// smallAttemptFactsFromQuickResult reads only the independently measured
+// facts out of runQuickJob's own result map -- the disk-measured changed
+// file list ("files") and the project's own check outcome ("checks_status",
+// "work_outcome") -- and never a helper's own account of its work such as
+// "summary" or "raw_output".
+func smallAttemptFactsFromQuickResult(result map[string]interface{}) smallAttemptFacts {
+	var filesChanged int
+	if files, ok := result["files"].([]string); ok {
+		filesChanged = len(files)
+	}
+	verdict, _ := result["work_outcome"].(colony.WorkOutcome)
+	return smallAttemptFacts{
+		FilesChanged: filesChanged,
+		ChecksStatus: stringValue(result["checks_status"]),
+		Verdict:      verdict,
 	}
 }
 
