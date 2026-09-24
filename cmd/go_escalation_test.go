@@ -15,7 +15,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -53,12 +53,62 @@ func snapshotAetherData(t *testing.T, root string) map[string]string {
 	return snapshot
 }
 
+// aetherDataChangeOutsideSpecification returns, sorted, every relative path
+// that differs between two snapshotAetherData results and does not belong
+// to the specification machinery's own bookkeeping (COLONY_STATE.json,
+// where a derived specification is recorded, and its transaction/lock
+// scratch directories). Phase 209 plan 04's ensureGoPlanningSpecification
+// (cmd/go_default_path.go) deliberately writes exactly that, and only that,
+// when the big route runs for a project with a recorded goal -- this
+// helper is how tests written before that existed keep proving the big
+// route dispatches no helper and writes nothing else, without re-asserting
+// byte-for-byte equality that plan intentionally ended.
+func aetherDataChangeOutsideSpecification(before, after map[string]string) []string {
+	allowedPrefixes := []string{
+		".aether/data/transactions/",
+		".aether/data/.aether-transactions/",
+	}
+	allowed := func(rel string) bool {
+		switch rel {
+		case ".aether/data/COLONY_STATE.json", ".aether/data/.planning-repository-mutation-session":
+			return true
+		}
+		for _, prefix := range allowedPrefixes {
+			if strings.HasPrefix(rel, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+	changed := map[string]bool{}
+	for rel, sum := range after {
+		if before[rel] != sum {
+			changed[rel] = true
+		}
+	}
+	for rel := range before {
+		if _, ok := after[rel]; !ok {
+			changed[rel] = true
+		}
+	}
+	var outside []string
+	for rel := range changed {
+		if !allowed(rel) {
+			outside = append(outside, rel)
+		}
+	}
+	sort.Strings(outside)
+	return outside
+}
+
 // TestGoBigRouteTakesTheJobToPlanning drives the real `aether go` command
 // body (runGoJob) over two temporary repositories -- one with a recorded
 // project that already has outstanding work, one bare -- with the worker
 // invoker swapped for a capturing fake, and asserts the big route dispatches
-// no helper, writes nothing under .aether/data, and reports a route and
-// reason as the behaviour block describes.
+// no helper, writes nothing under .aether/data outside the specification
+// machinery's own bookkeeping (Phase 209 plan 04's ensureGoPlanningSpecification
+// derives and approves a specification there, deliberately), and reports a
+// route and reason as the behaviour block describes.
 func TestGoBigRouteTakesTheJobToPlanning(t *testing.T) {
 	t.Run("recorded project", func(t *testing.T) {
 		saveGlobals(t)
@@ -99,8 +149,11 @@ func TestGoBigRouteTakesTheJobToPlanning(t *testing.T) {
 		if strings.TrimSpace(stringValue(result["route_reason"])) == "" {
 			t.Fatal("route_reason is empty")
 		}
-		if !reflect.DeepEqual(before, after) {
-			t.Fatalf("the big route modified .aether/data:\nbefore=%v\nafter=%v", before, after)
+		if outside := aetherDataChangeOutsideSpecification(before, after); len(outside) != 0 {
+			t.Fatalf("the big route modified .aether/data outside the specification machinery's own bookkeeping: %v\nbefore=%v\nafter=%v", outside, before, after)
+		}
+		if got := stringValue(result["specification_source"]); got != goSpecificationSourceDerivedFromRequest {
+			t.Fatalf("specification_source = %q, want %q (the recorded project has a goal but no specification yet)", got, goSpecificationSourceDerivedFromRequest)
 		}
 
 		rendered := renderGoVisual(result)
