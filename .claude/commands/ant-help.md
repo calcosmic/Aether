@@ -18,6 +18,8 @@ The runtime output must preserve these visible contracts:
 
 For the runtime's detailed command contract, use `aether command-guide <command>`; use `aether recipes` to browse supported journeys.
 
+Every command below still runs exactly as shown when the everyday menu is shorter than this: check whether the full list shows by default on this machine with `aether advanced-commands get`, and turn it on with `aether advanced-commands set on` (or back off with `aether advanced-commands set off`).
+
 ## Normal journey
 
 - `/ant-init "goal"` — Start a guided colony for one goal.
