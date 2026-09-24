@@ -82,6 +82,10 @@ func TestSpecCommandIsRegistered(t *testing.T) {
 }
 
 func TestRootCodexHelpShowsRestoredLifecycleOrder(t *testing.T) {
+	// 209-03: this test asserts the full catalogue (discuss/plan/build/etc),
+	// which is now the "advanced" screen gated behind the advanced-commands
+	// setting; the default is the short six-command everyday menu (D-02).
+	frontDoorTurnOnAdvancedCommandsForTest(t)
 	output := rootHelpOutputForPlatform(t, "codex")
 	compact := strings.Join(strings.Fields(output), " ")
 

@@ -380,6 +380,12 @@ const (
 	frontDoorExpertGroupID  = "expert-maintenance"
 )
 
+// frontDoorDefaultGroupTitle is the single heading the short, everyday menu
+// (D-02) renders under when the advanced-commands setting is off -- the
+// default. It replaces the three full-catalogue groups entirely; it is
+// never rendered alongside them.
+const frontDoorDefaultGroupTitle = "Everyday commands"
+
 type frontDoorHelpEntry struct {
 	command     string
 	description string
@@ -434,6 +440,23 @@ var (
 		},
 	}
 )
+
+// frontDoorDefaultMenu is the everyday menu D-02 proposed: about six
+// commands instead of the full catalogue above. Its membership is data, not
+// code, so the owner's ruling at this plan's checkpoint is a straight edit
+// to this slice rather than a rewrite of the renderer that reads it.
+// Nothing named here is deleted, disabled, or deprecated by being on this
+// list -- frontDoorHelpGroups above stays the full, untouched catalogue,
+// and every command not on this list still runs exactly as it did before
+// when typed directly.
+var frontDoorDefaultMenu = []frontDoorHelpEntry{
+	{`/ant-go "<what you want>"`, "Do one piece of ordinary work, from a typo fix to a whole feature."},
+	{"/ant-status", "Show where the project actually stands right now."},
+	{"/ant-continue", "Check what was built, then move on."},
+	{"/ant-flags", "Show what is waiting on your decision."},
+	{"/ant-resume", "Pick back up after a break."},
+	{"/ant-seal", "Mark the work finished."},
+}
 
 // configureFrontDoorHelp runs lazily from Cobra's help hook. By then every
 // file-level init function has registered its command, so assigning groups
@@ -521,6 +544,22 @@ func frontDoorCommandForPlatform(command, platform string) string {
 	return rendered
 }
 
+// frontDoorRenderEntryLines is the one place a single help entry (a command
+// plus its one-line description) becomes rendered text, shared by the
+// full-catalogue rendering and the short everyday-menu rendering below --
+// neither grows its own copy of the responsive layout rule.
+func frontDoorRenderEntryLines(entry frontDoorHelpEntry, width int) []string {
+	if width < 64 {
+		lines := []string{"  " + entry.command}
+		for _, wrapped := range lifecycleStatusWrapLine(entry.description, width-4) {
+			lines = append(lines, "    "+strings.TrimSpace(wrapped))
+		}
+		return lines
+	}
+	row := fmt.Sprintf("  %-16s  %s", entry.command, entry.description)
+	return lifecycleStatusWrapLine(row, width)
+}
+
 func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 	if cmd != rootCmd {
 		frontDoorDefaultHelpFunc(cmd, args)
@@ -542,21 +581,29 @@ func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 		lines = append(lines, renderFrontDoorStanding(projection))
 	}
 	lines = append(lines, "", fmt.Sprintf("Usage: %s [command]", helpCommand))
-	for _, group := range frontDoorRenderedHelpGroups(platform) {
-		lines = append(lines, "", group.title)
-		for _, entry := range group.entries {
-			if width < 64 {
-				lines = append(lines, "  "+entry.command)
-				for _, wrapped := range lifecycleStatusWrapLine(entry.description, width-4) {
-					lines = append(lines, "    "+strings.TrimSpace(wrapped))
-				}
-				continue
+	// D-02: the advanced-commands setting gates which of two, and only two,
+	// screens renders here -- the short everyday list (default) or the full
+	// catalogue (today's screen, unchanged). readAdvancedCommandsSetting is
+	// a plain file read; asking for help never creates anything on disk.
+	showAdvanced, _ := readAdvancedCommandsSetting()
+	if showAdvanced {
+		for _, group := range frontDoorRenderedHelpGroups(platform) {
+			lines = append(lines, "", group.title)
+			for _, entry := range group.entries {
+				lines = append(lines, frontDoorRenderEntryLines(entry, width)...)
 			}
-			row := fmt.Sprintf("  %-16s  %s", entry.command, entry.description)
-			lines = append(lines, lifecycleStatusWrapLine(row, width)...)
 		}
+		lines = append(lines, "", fmt.Sprintf("Use %s <command> for expert detail outside this journey map.", helpCommand))
+	} else {
+		lines = append(lines, "", frontDoorDefaultGroupTitle)
+		for _, entry := range frontDoorDefaultMenu {
+			translated := entry
+			translated.command = frontDoorCommandForPlatform(entry.command, platform)
+			lines = append(lines, frontDoorRenderEntryLines(translated, width)...)
+		}
+		lines = append(lines, "",
+			"These are the everyday commands. Everything else still works exactly as before when you type it directly -- turn the full list back on for this machine with: aether advanced-commands set on")
 	}
-	lines = append(lines, "", fmt.Sprintf("Use %s <command> for expert detail outside this journey map.", helpCommand))
 	var rendered []string
 	for _, line := range lines {
 		rendered = append(rendered, lifecycleStatusWrapLine(line, width)...)

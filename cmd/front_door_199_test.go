@@ -14,7 +14,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// frontDoorTurnOnAdvancedCommandsForTest (209-03) turns the machine-wide
+// advanced-commands setting on for the duration of one test. Since 209-03,
+// the three-group screen this file was written against only renders when
+// that setting is on -- the default is now the short, six-command everyday
+// menu (D-02). Tests written against the full catalogue call this first so
+// their assertions keep exercising the screen they were written for.
+func frontDoorTurnOnAdvancedCommandsForTest(t *testing.T) {
+	t.Helper()
+	hubDir := t.TempDir()
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+	if err := writeAdvancedCommandsSetting(true); err != nil {
+		t.Fatalf("turn on advanced-commands setting for test: %v", err)
+	}
+}
+
 func TestFrontDoorHelpGroups(t *testing.T) {
+	// 209-03: this test asserts the full three-group catalogue, which is
+	// now the "advanced" screen gated behind the advanced-commands setting.
+	frontDoorTurnOnAdvancedCommandsForTest(t)
 	root := t.TempDir()
 	got := frontDoorHelpOutput199(t, root, 100)
 
@@ -94,6 +112,10 @@ func TestFrontDoorHelpActiveStanding(t *testing.T) {
 }
 
 func TestFrontDoorHelpResponsive(t *testing.T) {
+	// 209-03: this test asserts full-catalogue commands render at every
+	// width, which is now the "advanced" screen gated behind the
+	// advanced-commands setting.
+	frontDoorTurnOnAdvancedCommandsForTest(t)
 	for _, width := range []int{63, 64, 100} {
 		t.Run(fmt.Sprintf("width-%d", width), func(t *testing.T) {
 			got := frontDoorHelpOutput199(t, t.TempDir(), width)

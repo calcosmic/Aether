@@ -3348,6 +3348,10 @@ func TestCodexAntSkillDisplayRoutes(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 	setupBuildFlowTest(t)
+	// 209-03: this test asserts full-catalogue commands (discuss, oracle,
+	// colonize, plan, build, swarm) render in real root help, which is now
+	// the "advanced" screen gated behind the advanced-commands setting.
+	frontDoorTurnOnAdvancedCommandsForTest(t)
 	var help bytes.Buffer
 	rootCmd.SetOut(&help)
 	rootCmd.SetArgs([]string{"--help"})
