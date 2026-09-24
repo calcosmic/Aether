@@ -170,6 +170,15 @@ None - no external service configuration required.
 - Phase 209 (A Light Default Path) now has plans 01-07 all summarized. Per STATE.md, phase 209 was already at "GAP CLOSURE PLAN 06 EXECUTED" with re-verification pending before advancing to Phase 210; this plan closes gap-closure work for entry 61 on top of that. Re-verify phase 209 as a whole (209-VERIFICATION.md) before advancing to Phase 210.
 - No blockers.
 
+## Self-Check: PASSED
+
+- `cmd/go_route.go` — FOUND
+- `cmd/go_escalation_test.go` — FOUND
+- `.planning/phases/209-light-default-path/209-07-SUMMARY.md` — FOUND
+- Commit `f9ef68f6` (Task 1, test) — FOUND in `git log --oneline --all`
+- Commit `9b2135c5` (Task 2, fix) — FOUND in `git log --oneline --all`
+- Commit `2b7bcc75` (this SUMMARY) — FOUND in `git log --oneline --all`
+
 ---
 *Phase: 209-light-default-path*
 *Completed: 2026-09-24*
