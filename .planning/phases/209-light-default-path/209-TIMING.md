@@ -113,3 +113,47 @@ No make target, test, gate entry, or timing harness was added anywhere in this r
 `git diff --name-only` for this plan's own work touches only this file — no `Makefile`, no
 `cmd/testdata/eval-gates/gates.json`, no `_test.go` file. This is a report, run once by hand,
 for the owner to read.
+
+---
+
+## Run 5 — the live re-check after the fix (2026-09-24, owner authorised)
+
+After plan 209-06 fixed the planning hand-off, the owner authorised one more real session to
+see whether the stall recurred. Same job sentence as run 4, same wording telling it not to ask
+questions, same `--permission-mode bypassPermissions` with no tool allowlist, in a fresh
+practice project built by the same script. Session `92b11308-8302-4062-8d4d-59b7f1382d5e`.
+
+| | Run 4 (before the fix) | Run 5 (after the fix) |
+|---|---|---|
+| Wall clock | 833.4s | **76.6s** |
+| Cost | $6.44 | **$0.45** |
+| Turns | 2 calls + 1 owner reply | 3, no owner reply |
+| Stopped to ask the owner? | **Yes** | **No** |
+| Work landed? | Yes, after a nudge | Yes |
+
+The delivered code was checked by hand afterwards, not taken from the session's own account:
+`src/greeting/greeting.go` and `src/greeting/greeting_test.go` both exist, `Greet("Ada")`
+returns `"Hello, Ada!"`, and the test passes.
+
+### What this run does NOT prove
+
+**The fixed planning hand-off was never actually reached, so it is still unproven live.**
+
+What happened instead: the small route ran first and the helper did the whole job. The
+escalation then fired — not because the job was genuinely bigger, but because the practice
+project has no resolvable way to run its own checks, so the quick attempt came back
+`not_checked`. The screen said "this turned out bigger than it looked" and pointed at
+`/ant-plan`. The assistant, holding work that was already finished and passing, judged that
+planning it would add steps for nothing and skipped it, saying so plainly.
+
+That is defensible behaviour and it is not the run-4 failure. But it means the hand-off text
+plan 209-06 rewrote was never exercised. Defect register entry 60 therefore stays **open**.
+
+### New finding: the escalation fires on "could not check", not on "bigger than it looked"
+
+`status: not_checked` is being read as a failure signal for D-03's escalation. "The checks
+could not be run" and "the checks failed" are different facts, and only the second is evidence
+that a job was bigger than it looked. A project with no check command configured — which is
+the ordinary state of a new project, and exactly what the owner will meet in the two-week
+trial — would escalate every quick job this way, and then show a "this turned out bigger"
+screen about work that is already complete. Filed separately.
