@@ -1132,14 +1132,20 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 15/16 plans executed
+**Plans:** 16/16 plans executed
 
-**Result:** the third owner-approved real walk, run after the program was taught to repair the
-stale map of the code itself, shows real progress — it silently fixed the map without asking
-anyone and the survey finished and saved successfully for the first time — but the saved map
-still didn't match the project's real state afterward, for a fourth, not-yet-explained reason, so
-WINDOWS row 53's dead end stays honestly open with this run's own evidence recorded; rows 49-52
-and 55 are fixed with evidence — see `208-JOURNEY-RUN.md`.
+**Result:** the fourth owner-approved real walk — run after fixing the two safety checks that
+previously could not fail, and after finding and fixing the reason the program's saved picture of
+the code kept going stale — is the strongest yet: for the first time in a real run, that saved
+picture matched the project's actual code, and the walk went on to settle what to build and
+confirm that choice on its own, three steps further than it had ever reached before. It then
+stopped at a new point — being asked how thorough the planning should be, an ordinary question
+only a person can answer and not a refusal — because this automated rehearsal asks one question
+per step and has no way to hear an answer back. What is not yet proven: the rehearsal has still
+never finished all fourteen of its steps in a live run, and no walk has ever shown the program
+finding a warning on screen and running the exact next step that warning names, because no
+warning has needed to print. The phase closes here, with that remaining gap written down openly
+rather than left unmentioned, for the next two phases to pick up.
 
 Plans:
 **Wave 1**
@@ -1198,7 +1204,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
-- [ ] 208-16-PLAN.md — Close the phase with whatever is still unproven named in the open, for the next phases to pick up (UED-10; D-06)
+- [x] 208-16-PLAN.md — Close the phase with whatever is still unproven named in the open, for the next phases to pick up (UED-10; D-06)
 
 ### Phase 209: A Light Default Path
 
