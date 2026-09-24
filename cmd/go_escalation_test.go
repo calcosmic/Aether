@@ -629,3 +629,73 @@ func TestGoEscalationNeverAsksAndNeverBlocks(t *testing.T) {
 		})
 	}
 }
+
+// TestEscalationNeedsAFailedCheckNotAnUnrunnableOne is defect register
+// entry 61, measured live 2026-09-24 (209-TIMING.md, run 5): a quick
+// attempt in a project with no resolvable check command came back
+// "not_checked" and was announced as though the job had turned out bigger
+// than it looked. It had not -- the job was already finished and correct.
+//
+// It drives the real decision (jobSizeAttemptEscalationReason) over three
+// cases, with facts built the way the runtime builds them --
+// smallAttemptFactsFromQuickResult reading a result map shaped exactly
+// like runQuickJob's own, with the verdict itself derived through
+// quickWorkVerdict rather than hand-typed -- never a hand-typed
+// smallAttemptFacts struct the runtime could not produce.
+func TestEscalationNeedsAFailedCheckNotAnUnrunnableOne(t *testing.T) {
+	quickResult := func(files []string, checksStatus string) map[string]interface{} {
+		return map[string]interface{}{
+			"files":         files,
+			"checks_status": checksStatus,
+			"work_outcome":  quickWorkVerdict(files, checksStatus),
+		}
+	}
+
+	// Case 1 -- the checks genuinely FAILED. Unchanged behaviour: this
+	// must still escalate. This is the guard that the fix below does not
+	// over-reach.
+	t.Run("checks genuinely failed", func(t *testing.T) {
+		result := quickResult([]string{"widget.go"}, quickChecksFailed)
+		facts := smallAttemptFactsFromQuickResult(result)
+		reason, escalate := jobSizeAttemptEscalationReason(facts)
+		if !escalate {
+			t.Fatalf("expected escalation on a genuine check failure, facts=%+v", facts)
+		}
+		if !strings.Contains(reason, "checks") {
+			t.Errorf("reason does not name the failed checks: %q", reason)
+		}
+	})
+
+	// Case 2 -- the checks could NOT be run at all (no resolvable check
+	// command in the project, the exact shape of a brand-new project).
+	// This must NOT escalate, and the reason must not claim the checks
+	// "did not pass" -- they were never run. This is the case that must be
+	// RED before the fix in go_route.go.
+	t.Run("checks could not be run", func(t *testing.T) {
+		result := quickResult([]string{"widget.go"}, quickChecksNotResolved)
+		facts := smallAttemptFactsFromQuickResult(result)
+		reason, escalate := jobSizeAttemptEscalationReason(facts)
+		if escalate {
+			t.Fatalf("did not expect escalation when the checks could not be run at all, facts=%+v, reason=%q", facts, reason)
+		}
+		if strings.Contains(reason, "did not pass") {
+			t.Errorf("reason wrongly claims the checks did not pass: %q", reason)
+		}
+	})
+
+	// Case 3 -- more files changed than the small-job budget, with checks
+	// that could not be run either. The file-count signal must survive
+	// this fix untouched and still escalate on its own.
+	t.Run("file count over budget survives unresolved checks", func(t *testing.T) {
+		files := []string{"a.go", "b.go", "c.go", "d.go"}
+		result := quickResult(files, quickChecksNotResolved)
+		facts := smallAttemptFactsFromQuickResult(result)
+		reason, escalate := jobSizeAttemptEscalationReason(facts)
+		if !escalate {
+			t.Fatalf("expected escalation on file count over budget even with unresolved checks, facts=%+v", facts)
+		}
+		if !strings.Contains(reason, "4") {
+			t.Errorf("reason does not name the measured file count: %q", reason)
+		}
+	})
+}
