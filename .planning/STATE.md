@@ -5,17 +5,17 @@ milestone_name: Use It Every Day
 current_phase: 209
 current_phase_name: A Light Default Path
 status: verifying
-stopped_at: Completed 209-07-PLAN.md (gap closure)
+stopped_at: Phase 209 complete and signed off; phase 210 planned (2 plans), fixed build installed, ready to start the fortnight
 last_updated: "2026-09-24T20:22:49.000Z"
 last_activity: 2026-09-24
-state_head: 2b7bcc754074ba78b2ab931990ae70815724b204
+state_head: 2e9557bab0d9ee9945d620d052eb71f734944e51
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 34
   completed_plans: 34
   percent: 60
-last_activity_desc: Phase 209 plan 07 (gap closure) executed — TestEscalationNeedsAFailedCheckNotAnUnrunnableOne proved red then green; jobSizeAttemptEscalationReason no longer folds an unrunnable check into a failed one; defect register entry 61 closed
+last_activity_desc: Phase 209 signed off; 210 planned and checked; owner approved the install and the global catch-all
 ---
 
 # Project State
