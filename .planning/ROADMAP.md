@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 18/19 plans executed
+**Plans:** 19/19 plans executed
 
 **Result:** the fourth owner-approved real walk — run after fixing the two safety checks that
 previously could not fail, and after finding and fixing the reason the program's saved picture of
@@ -1149,10 +1149,14 @@ that read as thorough but can be slipped past — one that spots a second, compe
 when it is written one particular way, and one that was made to pass by excusing three whole files
 instead of the specific lines that were actually looked at. Both were proved by deliberately
 planting the mistake each is named for and watching the check stay green. The owner's decision on
-2026-09-24 was to close the phase here as ruled rather than open a fourth round, with both
-recorded as named, still-open entries on the defect list. The phase closes here, with every
-remaining gap written down openly rather than left unmentioned, for the next two phases to pick
-up.
+2026-09-24 was, at first, to close the phase here as ruled rather than open a fourth round, with
+both recorded as named, still-open entries on the defect list. The owner then reopened the phase
+that same day for one more short round, covering all six of that review's findings — the two
+checks that could be slipped past, plus four smaller findings alongside them. That round closed
+all six: each was proved by deliberately planting the exact mistake the check in question is
+named for, watching the check turn red, then confirming it passed again once fixed. No money was
+spent doing it. The phase closes here, with every remaining gap written down openly rather than
+left unmentioned, for the next two phases to pick up.
 
 Plans:
 **Wave 1**
@@ -1220,7 +1224,7 @@ Plans:
 
 **Wave 16** *(blocked on Wave 15 completion)*
 
-- [ ] 208-19-PLAN.md — Prove nothing else moved, close the two defect-register entries on the evidence each demanded, leave the oldest one open, and correct the phase's own account of itself (UED-10; D-07)
+- [x] 208-19-PLAN.md — Prove nothing else moved, close the two defect-register entries on the evidence each demanded, leave the oldest one open, and correct the phase's own account of itself (UED-10; D-07)
 
 ### Phase 209: A Light Default Path
 
