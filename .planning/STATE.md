@@ -5,10 +5,11 @@ milestone_name: Use It Every Day
 current_phase: 209
 current_phase_name: A Light Default Path
 status: verifying
-stopped_at: Completed 209-05-PLAN.md
+stopped_at: Phase 209 verified — 4/4 success criteria hold, UED-17 reopened on a real-session gap (defect 60); awaiting the owner's decision to close the gap or carry it forward
 last_updated: "2026-09-24T18:44:34.592Z"
 last_activity: 2026-09-24
-state_head: f84f4b936d1ffe8b315491b73a43d04bd2efb45a
+last_activity_desc: Phase 209 all five plans executed and verified; UED-17 reopened, defect 60 filed
+state_head: e019d6e077155aea627d542d4973c549696cb09c
 progress:
   total_phases: 5
   completed_phases: 3
