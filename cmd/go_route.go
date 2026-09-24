@@ -158,21 +158,32 @@ func resolveJobSizeRouteBase(facts jobSizeFacts) jobSizeDecision {
 
 // jobSizeAttemptEscalationReason is D-03's escalation rule for a small
 // attempt that already ran: escalate when it measurably changed more
-// files than the small-job budget, or when the project's own checks did
-// not pass on it (a partial or a blocker verdict). Both signals are
+// files than the small-job budget, or when the project's own checks
+// genuinely FAILED on it (a blocker verdict). Both signals are
 // independently measured -- the disk-measured changed-file count and the
 // project's own check outcome -- never a helper's own account of its work.
+//
+// An attempt whose checks could not be run at all (a partial verdict --
+// no verification command resolved, or it ran out of time) is deliberately
+// excluded here. That is not evidence the job was bigger than it looked;
+// it is the ordinary state of a brand-new project with no check command
+// configured. The quick path already keeps this distinction on purpose and
+// says so in its own words (cmd/command_truth.go, next to
+// quickChecksPassed/quickChecksFailed/quickChecksNotResolved): "not
+// checked" is never folded into either passed or failed. Defect register
+// entry 61 was exactly that fold happening here, one level up -- this rule
+// restores the existing distinction rather than inventing a new one.
+//
 // Returns ("", false) when neither signal fires.
 func jobSizeAttemptEscalationReason(attempt smallAttemptFacts) (string, bool) {
 	if attempt.FilesChanged > smallJobFileBudget {
 		return fmt.Sprintf("the quick attempt actually changed %d file(s), more than the %d-file budget for "+
 			"a job one helper can finish in one pass", attempt.FilesChanged, smallJobFileBudget), true
 	}
-	switch attempt.Verdict {
-	case colony.WorkOutcomeBlocker, colony.WorkOutcomePartial:
+	if attempt.Verdict == colony.WorkOutcomeBlocker {
 		status := strings.TrimSpace(attempt.ChecksStatus)
 		if status == "" {
-			status = "unresolved"
+			status = quickChecksFailed
 		}
 		return fmt.Sprintf("the project's own checks did not pass on the quick attempt (status: %s)", status), true
 	}
