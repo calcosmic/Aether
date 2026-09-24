@@ -1144,8 +1144,15 @@ only a person can answer and not a refusal — because this automated rehearsal 
 per step and has no way to hear an answer back. What is not yet proven: the rehearsal has still
 never finished all fourteen of its steps in a live run, and no walk has ever shown the program
 finding a warning on screen and running the exact next step that warning names, because no
-warning has needed to print. The phase closes here, with that remaining gap written down openly
-rather than left unmentioned, for the next two phases to pick up.
+warning has needed to print. A review of this round's own work then found two more safety checks
+that read as thorough but can be slipped past — one that spots a second, competing decision only
+when it is written one particular way, and one that was made to pass by excusing three whole files
+instead of the specific lines that were actually looked at. Both were proved by deliberately
+planting the mistake each is named for and watching the check stay green. The owner's decision on
+2026-09-24 was to close the phase here as ruled rather than open a fourth round, with both
+recorded as named, still-open entries on the defect list. The phase closes here, with every
+remaining gap written down openly rather than left unmentioned, for the next two phases to pick
+up.
 
 Plans:
 **Wave 1**
