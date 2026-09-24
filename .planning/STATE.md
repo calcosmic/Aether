@@ -5,15 +5,15 @@ milestone_name: Use It Every Day
 current_phase: 208
 current_phase_name: Never a Dead End
 status: executing
-stopped_at: Completed 208-17-PLAN.md — widened the one-builder AST guard past composite literals (CR-01), gave it an honest "what it can't see" note (WR-04), and proved a lighter-than-full survey team still publishes the saved map on the real transactional finalize path (WR-02). 208-18 and 208-19 remain for this round's other findings.
-last_updated: "2026-09-24T10:30:00.000Z"
+stopped_at: Completed 208-18-PLAN.md — narrowed the self-recovery one-decision guard's excuse list from three whole files to the five specific already-reviewed places (CR-02), added the missing leftover-worktree skip (WR-01), and moved the self-recovery notice's hardcoded closing clause onto the table row that fires it (WR-03). 208-19 remains for this round's last finding.
+last_updated: "2026-09-24T10:49:37.000Z"
 last_activity: 2026-09-24
-state_head: 3b697558
+state_head: 1ae02c33
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
   percent: 40
 ---
 
@@ -35,8 +35,8 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
-Status: Executing — 208-17 done (CR-01, WR-04, WR-02 closed); 208-18 and 208-19 remain for this round's remaining findings
-Plan: 17 of 19
+Status: Executing — 208-18 done (CR-02, WR-01, WR-03 closed); 208-19 remains for this round's last finding
+Plan: 18 of 19
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -231,6 +231,7 @@ Last activity: 2026-09-24
 | Phase 208 P15 | 65min | 2 tasks | 1 files |
 | Phase 208 P16 | ~20min | 2 tasks | 3 files |
 | Phase 208 P17 | ~25min | 2 tasks | 1 files |
+| Phase 208 P18 | 35min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -713,6 +714,7 @@ Last activity: 2026-09-24
 - [Phase 208]: The one authorised walk (D-05) cleared the survey step's own on-disk fact check live for the first time ever, reached discuss and specification, then stopped at plan-first on an ordinary owner decision (choosing a planning preset) the harness cannot answer -- a new, non-refusal stopping point, recorded honestly per D-05 with nothing fixed-and-retried.
 - [Phase 208]: WINDOWS row 53 stays open (not fixed): its narrow close condition is met, but D-06 names this row as the vehicle for the still-open 'never proven end to end' item — the more recent, more specific owner ruling governs over the row's own older close condition
 - [Phase 208]: 208-17 (fourth gap-closure round, D-07): widened TestSavedMapPublicationHasOneBuilder to catch a composite-literal write to PublicationMode, not only an assignment statement (CR-01), and gave its doc comment an honest "what this still cannot catch" section matching TestSelfRecoveryHasOneDecision's standard (WR-04). Added TestALighterSurveyTeamStillPublishesTheSavedMap, the first executable proof that a light-depth colonize's smaller surveyor team still publishes the saved map through the transactional finalize lane's relaxed branch (WR-02) — confirmed by mutation that the pre-existing test never reached that branch. CR-02, WR-01 and WR-03 remain open for 208-18/19.
+- [Phase 208]: 208-18 (fourth gap-closure round, D-07): mayHoldASelfRecoveryDecision now keys the self-recovery excuse list by "file::enclosing declaration" instead of by whole file, so a rival decision planted anywhere else inside an already-reviewed file is caught by name (CR-02) — the third consecutive round this exact blind-spot-moves-not-closes defect had survived. Added the missing "worktrees" skip to the same walk (WR-01). refusalSelfRecoveryTable rows now carry two fields, Reason and Action, so the notice's closing clause is read from the row that fired instead of a fixed phrase baked into the renderer (WR-03) — what the owner reads today is unchanged, character for character. All four proved by planting the named mutation in a disposable worktree and watching the guard go red. WR-02 (208-13 finding: the decision announces/records before confirming) and WR-05 (a future quiet-classified command recovering invisibly) both stay honestly open, out of scope for this plan.
 
 ### Pending Todos
 
@@ -835,8 +837,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T10:30:00.000Z
-Stopped at: Completed 208-17-PLAN.md — CR-01, WR-04 and WR-02 closed (fourth gap-closure round, D-07); 208-18 and 208-19 remain
+Last session: 2026-09-24T10:51:01.735Z
+Stopped at: Completed 208-18-PLAN.md — narrowed the self-recovery one-decision guard's excuse list from three whole files to the five specific already-reviewed places (CR-02), added the missing leftover-worktree skip (WR-01), and moved the self-recovery notice's hardcoded closing clause onto the table row that fires it (WR-03). 208-19 remains for this round's last finding.
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
