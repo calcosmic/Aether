@@ -378,3 +378,212 @@ func TestSavedMapPublicationHasOneBuilder(t *testing.T) {
 		t.Fatalf("only %s may set PublicationMode -- the saved map's publication binding must be built in exactly one shared place; found a second builder in: %v", soleBuilderFile, offenders)
 	}
 }
+
+// lightDepthColonizeState returns a colony.ColonyState carrying a light
+// verification depth, seeded with the same goal/state/plan shape the
+// existing fixtures in this file already use for a real colony. Passing
+// this to createTestColonyState is what makes queenSurveyorSpecsForState
+// (and therefore plannedSurveyors/queenSurveyorSpecs, which reads the
+// active colony state back off disk) select two surveyors instead of four.
+func lightDepthColonizeState(goal string) colony.ColonyState {
+	return colony.ColonyState{
+		Version:           "3.0",
+		Goal:              &goal,
+		State:             colony.StateREADY,
+		Plan:              colony.Plan{Phases: []colony.Phase{}},
+		VerificationDepth: string(colony.VerificationDepthLight),
+	}
+}
+
+// readColonizeActivityLogDetails reads .aether/data/activity.log -- a JSONL
+// file, one JSON object per line, appended by logActivity -- and returns the
+// "details" string of every line whose "command" field equals command.
+func readColonizeActivityLogDetails(t *testing.T, root, command string) []string {
+	t.Helper()
+	path := filepath.Join(root, ".aether", "data", "activity.log")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var details []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry struct {
+			Command string `json:"command"`
+			Details string `json:"details"`
+		}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("%s: line does not parse as JSON: %v\nline: %s", path, err, line)
+		}
+		if entry.Command == command {
+			details = append(details, entry.Details)
+		}
+	}
+	return details
+}
+
+// TestALighterSurveyTeamStillPublishesTheSavedMap supplies the missing
+// executable proof for 208-14-PLAN.md's D4 must-have and
+// 208-REVIEW-GAP3.md's WR-02: a forced resurvey with a lighter-than-full
+// surveyor team -- a light-depth colony's two surveyors, declaring four of
+// the seven required survey documents -- still finishes and publishes the
+// saved map, on the transactional finalize lane
+// (runTransactionalColonizeFinalize, cmd/codex_colonize_finalize.go) the
+// previous round's relaxation actually touched. Built on the same real
+// plan-only-manifest -> completion-packet -> finalize path
+// TestColonizeRefreshesTheSavedMapsRevision already establishes; the one
+// thing that differs is the seeded colony state's verification depth.
+func TestALighterSurveyTeamStillPublishesTheSavedMap(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	root := initColonizeSnapshotRefreshRepo(t)
+	dataDir := filepath.Join(root, ".aether", "data")
+	bindCommandTestRepositoryAt(t, root)
+	withWorkingDir(t, root)
+
+	// A software project, so the surveyors that do run have something to
+	// find.
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+		t.Fatalf("write fixture source file: %v", err)
+	}
+
+	goal := "Survey with a lighter-than-full team"
+	lightState := lightDepthColonizeState(goal)
+	createTestColonyState(t, dataDir, lightState)
+
+	// A genuinely valid saved map, pinned to the repository's revision at
+	// this moment, then made stale by further commits -- exactly the
+	// TestColonizeRefreshesTheSavedMapsRevision fixture shape.
+	writeFreshTerritorySnapshot199(t, root, time.Now().UTC().Add(-time.Hour))
+	for i := 0; i < 3; i++ {
+		gitColonizeSnapshotRefresh(t, root, "commit", "--allow-empty", "-m", fmt.Sprintf("further commit %d", i))
+	}
+
+	// Nobody is here to answer, so the existing-survey refusal recovers
+	// itself and falls through with ForceResurvey set -- the same route
+	// TestColonizeRefreshesTheSavedMapsRevision drives, reaching the same
+	// transactional lane.
+	t.Setenv("AETHER_UNATTENDED", "1")
+
+	planResult, err := runCodexColonizePlanOnly(root, codexColonizeOptions{PlanOnly: true})
+	if err != nil {
+		t.Fatalf("runCodexColonizePlanOnly: %v", err)
+	}
+	manifest, ok := planResult["colonize_manifest"].(codexColonizeManifest)
+	if !ok {
+		t.Fatalf("colonize_manifest has unexpected type %T", planResult["colonize_manifest"])
+	}
+	if !manifest.ForceResurvey {
+		t.Fatalf("expected the plan-only manifest to carry ForceResurvey=true from unattended self-recovery, got %#v", manifest)
+	}
+	if manifest.PublicationMode != territoryPublicationTransactional {
+		t.Fatalf("expected the transactional publication lane, got PublicationMode=%q", manifest.PublicationMode)
+	}
+
+	// The light-depth roster this state actually selects -- computed from
+	// the same production function the manifest's own dispatches came from,
+	// never typed as a literal, so this test cannot rot silently if the
+	// roster's composition ever changes.
+	expectedSpecs := queenSurveyorSpecsForState(lightState)
+	if len(manifest.Dispatches) != len(expectedSpecs) {
+		t.Fatalf("expected the plan-only manifest to dispatch the %d light-depth surveyors queenSurveyorSpecsForState selects, got %d dispatches: %+v", len(expectedSpecs), len(manifest.Dispatches), manifest.Dispatches)
+	}
+
+	// Guard against this test quietly stopping to exercise the relaxed
+	// branch it exists to prove: the light roster must declare strictly
+	// fewer distinct outputs than a survey requires, or a later change to
+	// the roster (or to requiredSurveyMarkdownFiles) could silently turn
+	// this into a full-roster run that never reaches
+	// runTransactionalColonizeFinalize's relaxed branch at all.
+	declaredOutputs := map[string]bool{}
+	for _, dispatch := range manifest.Dispatches {
+		for _, output := range dispatch.Outputs {
+			declaredOutputs[strings.TrimSpace(filepath.ToSlash(output))] = true
+		}
+	}
+	if len(declaredOutputs) >= len(requiredSurveyMarkdownFiles) {
+		t.Fatalf("the light-depth roster declared %d of %d required survey documents -- expected strictly fewer, or this test would exercise the full-roster path instead of the relaxed branch it exists to prove", len(declaredOutputs), len(requiredSurveyMarkdownFiles))
+	}
+
+	completeColonizeSnapshotRefreshDispatches(t, root, manifest.Dispatches)
+
+	completionPath := filepath.Join(t.TempDir(), "colonize-completion.json")
+	completionData, err := json.Marshal(map[string]interface{}{
+		"colonize_manifest": manifest,
+		"dispatches":        manifest.Dispatches,
+	})
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	if err := os.WriteFile(completionPath, completionData, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	t.Setenv("AETHER_UNATTENDED", "1")
+	stdout = &bytes.Buffer{}
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+	rootCmd.SetArgs([]string{"colonize-finalize", "--completion-file", completionPath})
+
+	// 1. The finalize succeeds -- no error, and it wrote something to
+	// standard output -- for a genuinely lighter-than-full survey team.
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("colonize-finalize returned error for a lighter-than-full survey team: %v; stderr=%s", err, errBuf.String())
+	}
+	if strings.TrimSpace(stdout.(*bytes.Buffer).String()) == "" {
+		t.Fatalf("colonize-finalize wrote no stdout; stderr=%s", errBuf.String())
+	}
+
+	// 2. The saved map's own record file names the repository's current
+	// revision, read back the same way the runtime and the journey check
+	// both read it, and compared against git asked directly at assertion
+	// time -- never a value carried over from earlier in this test.
+	snap := readColonizeSnapshotRefreshMetadata(t, root)
+	head := gitColonizeSnapshotRefresh(t, root, "rev-parse", "HEAD")
+	if snap.SourceRevision != head {
+		t.Fatalf("saved map's recorded revision is %s, want current HEAD %s", snap.SourceRevision, head)
+	}
+
+	// 3. The activity log records the expected note, naming both the count
+	// of documents actually preserved from worker claims and the total
+	// required -- both built at runtime from the roster and the
+	// required-documents list, never typed literals, and asserted on the
+	// numbers appearing rather than on a full copy of the sentence.
+	expectedPreserved := len(declaredOutputs)
+	expectedRequired := len(requiredSurveyMarkdownFiles)
+	wantFragment := fmt.Sprintf("%d of %d", expectedPreserved, expectedRequired)
+	details := readColonizeActivityLogDetails(t, root, "colonize-finalize")
+	var sawExpectedNote bool
+	for _, detail := range details {
+		if strings.Contains(detail, wantFragment) {
+			sawExpectedNote = true
+			break
+		}
+	}
+	if !sawExpectedNote {
+		t.Fatalf("expected a colonize-finalize activity log entry naming %q (documents preserved from worker claims of documents required); got: %v", wantFragment, details)
+	}
+
+	// 4. Every published survey document -- including the three nobody
+	// surveyed, synthesized from workspace facts -- still passes the
+	// program's own filler-content check on this specific lane. This is the
+	// specific assurance WR-02 says nothing currently makes: the three
+	// documents nobody surveyed must not read as a placeholder.
+	surveyDir := filepath.Join(dataDir, "survey")
+	for _, name := range requiredSurveyMarkdownFiles {
+		content, err := os.ReadFile(filepath.Join(surveyDir, name))
+		if err != nil {
+			t.Fatalf("read published survey document %s: %v", name, err)
+		}
+		if err := validateTerritoryPublicationMarkdown(content); err != nil {
+			t.Fatalf("published survey document %s fails the placeholder/synthetic content check: %v", name, err)
+		}
+	}
+}
