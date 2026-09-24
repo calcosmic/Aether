@@ -120,14 +120,45 @@ Actions already taken, so this cannot be lost between phases:
   that pre-fakes the planning stage is precisely the false-certificate pattern this project's
   Definition of Done exists to stop.
 
-Two honest resolutions, and the choice is the owner's:
+Two honest resolutions were put to the owner. **He chose to fix (2026-09-24).** Plan 209-06
+was written and executed the same day.
 
-1. **Close the gap now** — a further round giving `/ant-go`'s planning hand-off the dispatch
-   instructions `/ant-plan`'s wrapper already carries, proved by a check that fails on the
-   real wrapper text rather than on a pre-faked runtime path.
-2. **Accept the phase with the gap carried forward** — the same route the owner took for
-   phase 208 (D-06): sign off, and carry entry 60 and the un-ticked UED-17 openly into
-   phase 210, never quietly re-described as satisfied.
+### What plan 209-06 changed, and what is now proven
+
+`TestGoPlanningHandoffCanActuallyStartPlanning` (`cmd/go_planning_handoff_test.go`) reads the
+real, on-disk text of all four `/ant-go` wrapper sources and fails when the big-route hand-off
+names no way to actually start planning.
+
+**Proved red before the fix, independently — not taken from the executor's report.** The
+orchestrator created a disposable git worktree at commit `c041b515` (the test-only commit,
+before any wrapper edit), ran the test there, and watched it fail on all four sources, each
+failure quoting the dead-end sentence verbatim and naming `aether plan --preset fast` as the
+command that starts no worker. The worktree was removed immediately; the working checkout was
+never modified. A check that could not fail would have shown green there.
+
+The hand-off now delegates rather than duplicates: it skips `/ant-plan`'s specification
+preflight and preset card (both already settled by the single door), names
+`aether host plan --preset fast` — the real dispatch entry point that yields a manifest — and
+then names each of `/ant-plan`'s own stages to follow in order through to exact candidate
+acceptance, then `/ant-build`'s flow, then `/ant-continue`. It states plainly that the
+assistant must not hand any choice of how to proceed back to the owner. The 281-line planning
+flow was not copied into the door, so the two cannot drift.
+
+Green after the fix, together with the parity check and the tests this gap sits between
+(`TestClassicCommandParity`, `TestGoalReachesBuiltWorkWithNoExtraSteps`,
+`TestDiscussAndSpecStillBehaveExactlyAsBefore`), confirmed by the orchestrator directly.
+
+### What is still NOT proven, and why defect 60 stays open
+
+No real, unattended chat session has run the medium job end to end since the fix. The check
+that now exists proves the hand-off *names* the right commands; it cannot prove a live
+assistant *follows* them without stalling. Only another real, metered session can show that —
+the same kind of run that found the bug in the first place, and the only kind that has ever
+caught a fault of this shape here.
+
+Defect register entry 60 therefore stays **open**, with the wrapper fix landed and locked by a
+named test, and one live confirmation outstanding. UED-17's tick in REQUIREMENTS.md carries
+that same caveat in its own words rather than claiming more than was shown.
 
 ## Also filed this phase
 
