@@ -15,6 +15,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -165,6 +166,20 @@ func TestNoOneHereMeansAetherRefreshesTheMapItself(t *testing.T) {
 		want := translateHintCommandsForPlatform(row.NextCommand, "claude")
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("visual notice does not name the refusal's own next command (rendered as %q for this platform):\n%s", want, rendered)
+		}
+
+		// WR-07 (208-REVIEW-GAP2.md): anchor on the notice itself as well --
+		// its own banner heading (read from the real, unmutated renderBanner
+		// helper, not retyped as a copy of its formatted output) and its
+		// no-one-is-here line -- so this assertion cannot pass on unrelated
+		// colonize output that merely happens to mention the same command
+		// string.
+		bannerHeading := strings.TrimRight(renderBanner("🙅", "Carrying On Without You"), "\n")
+		if !strings.Contains(rendered, bannerHeading) {
+			t.Fatalf("the self-recovery notice's own banner heading never appeared:\n%s", rendered)
+		}
+		if !strings.Contains(rendered, "No one is here to answer") {
+			t.Fatalf("the self-recovery notice's own no-one-is-here line never appeared:\n%s", rendered)
 		}
 	})
 }
@@ -595,5 +610,69 @@ func assertRefusalNeverRecovered(t *testing.T, r refusal, because string) {
 	}
 	if after := len(refusalLogEntries(200)); after != before {
 		t.Fatalf("a refused self-recovery must record nothing: %d -> %d", before, after)
+	}
+}
+
+// planningDecisionIDPattern matches a planning-decision identifier like
+// "D-03" -- internal bookkeeping CLAUDE.md's "READ THIS BEFORE YOU WRITE
+// ANYTHING TO THE OWNER" section names as never belonging on the owner's
+// screen.
+var planningDecisionIDPattern = regexp.MustCompile(`\bD-\d+\b`)
+
+// TestSelfRecoveryNoticeSaysOnlyWhatActuallyHappened (208-13-PLAN.md Task 2,
+// WR-02 / 208-REVIEW-GAP2.md): the rendered notice never claims, in the past
+// tense, that the named command has already run. That claim is true on the
+// direct colonize lane but false on the plan-only lane -- at the moment this
+// notice prints, runCodexColonizePlanOnly has only set ForceResurvey and
+// gone on to build a manifest a host will later dispatch surveyors from;
+// nothing has actually re-surveyed the project yet. Reads the notice through
+// the real renderer; never compares against a full copy of the expected
+// sentence typed into the test.
+func TestSelfRecoveryNoticeSaysOnlyWhatActuallyHappened(t *testing.T) {
+	row, ok := refusalForID("colonize-existing-survey-found")
+	if !ok {
+		t.Fatal("refusalRegistry needs a colonize-existing-survey-found row for this test")
+	}
+	reason, ok := refusalSelfRecoveryTable[row.ID]
+	if !ok {
+		t.Fatalf("refusalSelfRecoveryTable needs an entry for %q", row.ID)
+	}
+	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), reason, row.NextCommand)
+
+	if strings.Contains(rendered, "ran `") || strings.Contains(rendered, "on your behalf") || strings.Contains(rendered, "carried out") {
+		t.Fatalf("the notice claims the command has already run, which is false on the plan-only lane at the moment it prints:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "going ahead") {
+		t.Fatalf("the notice must say Aether is going ahead instead of stopping to ask -- true on both colonize lanes:\n%s", rendered)
+	}
+}
+
+// TestSelfRecoveryNoticeSpeaksPlainEnglish (208-13-PLAN.md Task 2, WR-03 /
+// 208-REVIEW-GAP2.md): the rendered notice carries no planning-decision
+// identifier, no planning-directory filename, and no word this repository
+// invented left unexplained -- reusing untranslatedRepoWords
+// (next_action_card_test.go), the same predicate every other voiced screen
+// is checked against, rather than a second, competing definition of plain
+// English. Reads the notice through the real renderer; never compares
+// against a full copy of the expected sentence typed into the test.
+func TestSelfRecoveryNoticeSpeaksPlainEnglish(t *testing.T) {
+	row, ok := refusalForID("colonize-existing-survey-found")
+	if !ok {
+		t.Fatal("refusalRegistry needs a colonize-existing-survey-found row for this test")
+	}
+	reason, ok := refusalSelfRecoveryTable[row.ID]
+	if !ok {
+		t.Fatalf("refusalSelfRecoveryTable needs an entry for %q", row.ID)
+	}
+	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), reason, row.NextCommand)
+
+	if m := planningDecisionIDPattern.FindString(rendered); m != "" {
+		t.Fatalf("the notice carries a planning-decision identifier (%q):\n%s", m, rendered)
+	}
+	if strings.Contains(rendered, ".planning") || strings.Contains(rendered, ".md") {
+		t.Fatalf("the notice carries a planning-directory filename:\n%s", rendered)
+	}
+	if violations := untranslatedRepoWords(rendered); len(violations) > 0 {
+		t.Fatalf("the notice uses words this repository invented without explaining them:\n  %s\n\nfull notice:\n%s", strings.Join(violations, "\n  "), rendered)
 	}
 }

@@ -3,12 +3,25 @@ package cmd
 import "strings"
 
 // refusalSelfRecoveryTable is the checked-in, opt-in list of refusals Aether
-// is allowed to recover from itself when nobody is present to answer (D-03,
-// 208-CONTEXT.md "Second gap-closure round": "the program does it itself
-// when nobody is there"). It holds exactly one entry this round -- the
-// colonize existing-survey stop -- carrying a one-line reason that says what
-// Aether does instead of stopping and why that is safe without asking.
-// Nothing else goes in this map without its own owner ruling.
+// is allowed to recover from itself when nobody is present to answer
+// (sessionHasNoOneToAsk, cmd/unattended_session.go). It holds exactly one
+// entry this round -- the colonize existing-survey stop.
+//
+// The value stored here is printed VERBATIM to the owner
+// (renderRefusalSelfRecoveryNotice below). It must stay a short,
+// plain-English sentence an owner can read with no file open -- nothing
+// else. A developer's rationale or a planning-decision citation belongs in a
+// Go comment beside the row, never inside the string itself: 208-13-PLAN.md
+// (WR-03, 208-REVIEW-GAP2.md) found a planning-decision id and a
+// `.planning/` filename embedded in this string and printed straight to the
+// owner's screen. A future row must not reintroduce that by accident.
+//
+// Developer rationale for the one row below (not printed to the owner):
+// nobody is present to ask, the refusal's own next command is safe for
+// Aether to run on its own, and the alternative -- printing an instruction
+// and hoping an unattended chat follows it -- is a rehearsal that can never
+// finish (owner ruling D-03, recorded in this phase's second gap-closure
+// round).
 //
 // The finalize sibling ("colonize-finalize-existing-survey-found")
 // deliberately stays out. Its own NextCommand
@@ -20,10 +33,8 @@ import "strings"
 // actually dispatch workers from inside colonize-finalize, which does not
 // exist yet.
 var refusalSelfRecoveryTable = map[string]string{
-	"colonize-existing-survey-found": "nobody is present to ask, the refusal's own next command " +
-		"(aether colonize --force-resurvey) is safe for Aether to run itself, and the alternative -- " +
-		"printing an instruction and hoping an unattended chat follows it -- is a rehearsal that can " +
-		"never finish (D-03, 208-CONTEXT.md).",
+	"colonize-existing-survey-found": "nobody is here to answer, and rebuilding the map of your code is something " +
+		"Aether can safely do on its own rather than leaving the project stuck waiting for a reply.",
 }
 
 // attemptRefusalSelfRecovery is the ONE place this repository decides
@@ -101,11 +112,18 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 // renderRefusalSelfRecoveryNotice draws the person-facing notice for a
 // self-recovered refusal, through the same banner/divider/voiceLine
 // machinery every other Aether screen uses rather than a bare line. It
-// names, in order: what Aether found, that nobody was there to ask, the
-// exact command Aether carried out on the owner's behalf, and that it is
-// carrying on. next is read from the registered refusal row
-// (attemptRefusalSelfRecovery's own authoritative lookup, WR-08) rather than
-// a caller-supplied copy.
+// names, in order: what Aether found, that nobody was there to ask, and that
+// Aether is going ahead instead of stopping to ask.
+//
+// It deliberately never claims, in the past tense, that the named command
+// has already run (208-13-PLAN.md Task 2, WR-02 / 208-REVIEW-GAP2.md): on
+// colonize's plan-only lane, at the moment this notice prints, nothing has
+// actually re-surveyed the project yet -- runCodexColonizePlanOnly only sets
+// ForceResurvey and goes on to build a manifest a host will later dispatch
+// surveyors from. The command name (next) is kept visible as supporting
+// evidence, not as the claim itself, and is read from the registered refusal
+// row (attemptRefusalSelfRecovery's own authoritative lookup) rather than a
+// caller-supplied copy.
 func renderRefusalSelfRecoveryNotice(r refusal, reason string, next string) string {
 	next = strings.TrimSpace(next)
 	var b strings.Builder
@@ -113,9 +131,9 @@ func renderRefusalSelfRecoveryNotice(r refusal, reason string, next string) stri
 	b.WriteString(visualDividerStr())
 	b.WriteString(voiceLine("blocked", strings.TrimSpace(r.What)))
 	b.WriteString("\n")
-	b.WriteString(voiceLine("question", "No one is here to answer, so Aether is doing this itself: "+reason))
+	b.WriteString(voiceLine("question", "No one is here to answer, so Aether is going ahead on its own: "+reason))
 	b.WriteString("\n")
-	b.WriteString(voiceLine("next", "Aether ran `"+next+"` on your behalf and is carrying on."))
+	b.WriteString(voiceLine("next", "Aether is going ahead and rebuilding the map of your code instead of stopping to ask (`"+next+"`)."))
 	b.WriteString("\n")
 	return b.String()
 }
