@@ -83,3 +83,50 @@ D-02 continues to govern: this round may run exactly ONE real walk, and the
 three-walk release gate remains unauthorised. A single-trial run stays a
 measurement, never a passed gate. If the walk gets past `survey` and stops
 somewhere new, that is reported to the owner before anything further is spent.
+
+## Third gap-closure round (owner, 2026-09-24, after the 208-12 walk)
+
+Recorded after the second re-verification (`208-VERIFICATION.md`,
+2026-09-23T18:10) kept `gaps_found` for two reasons: the pre-existing live
+proof of Success Criterion 2's second clause, and a NEW finding this pass made
+on its own initiative — two of 208-11's own declared must_haves are enforced by
+tests that cannot fail, independently reproduced by mutation in a disposable
+worktree.
+
+**D-05 — Fix the cause first, then spend exactly one more walk.**
+The owner's ruling, chosen from three options: diagnose and fix the
+`source_revision` mismatch locally, prove the fix on this machine, and only
+then spend ONE real walk. The three prior walks cost $0.93, ~$1 and $1.84 and
+took 90s / 86s / 171s — well inside the owner's approved ~£12–25 range. If the
+walk stops again, stop there and report; no second paid walk this round, and
+no permission to fix-and-retry a new stopping point without asking again.
+Rejected: "fix only, spend nothing" (leaves the whole question unanswered
+again) and "try once, and again if it moves forward, up to ~£5" (the owner
+kept the one-walk-per-round discipline of D-02/D-04 rather than widening it).
+D-02 and D-04 remain binding and are extended, not replaced: one walk, a
+single-trial run is a measurement and never a passed gate, and
+`journeyGateVerdict` must keep refusing it.
+
+**D-06 — If it still does not run through, the phase closes with the gap named.**
+The owner's ruling: once the two unfalsifiable guards are genuinely fixed,
+Phase 208 is signed off even if no real walk has ever carried the practice
+project past step 2 of 14. "Never proven end to end" is carried forward as a
+named, visible entry on `.planning/WINDOWS.md` (row 53), honestly open with the
+current evidence, for Phase 209/210 to pick up — never quietly dropped, never
+re-described as satisfied. Rejected: keeping the phase open until a real walk
+runs through, however many rounds and however much money that takes.
+
+**What this round covers, in scope order:**
+1. The two guards that cannot fail (the one-decision guard, and the guard that
+   is meant to prove only a declared refusal is ever recovered from). Full
+   rigour: each fix proved by re-running the exact planted mutation the
+   verification reproduced, confirming it now fails, then restoring.
+2. The two owner-facing wording defects in the same file: the notice claiming
+   Aether "ran" a command it has only queued on the plan-only lane, and the
+   notice's reason string printing planning-decision IDs and a `.planning/`
+   filename to the owner's screen.
+3. The `source_revision` mismatch: traced and fixed locally with a test that
+   fails without the fix.
+4. One authorised walk, after 1–3 land, measured and honestly recorded.
+5. Close the phase per D-06, with row 53 left honestly open if the walk does
+   not clear the survey step.

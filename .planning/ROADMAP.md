@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 12/12 plans executed
+**Plans:** 16 plans (12 executed; 4 planned in the third gap-closure round)
 
 **Result:** the third owner-approved real walk, run after the program was taught to repair the
 stale map of the code itself, shows real progress — it silently fixed the map without asking
@@ -1183,6 +1183,22 @@ Plans:
 **Wave 10** *(blocked on Wave 9 completion)*
 
 - [x] 208-12-PLAN.md — The one authorised walk after the runtime fix, measured and honestly recorded; WINDOWS row 53 resolved or left open (UED-10; D-04)
+
+**Wave 11** *(third gap-closure round — blocked on Wave 10 completion)*
+
+- [ ] 208-13-PLAN.md — The two safety checks that could not fail made able to fail, proved by the verification's own mutations; and the screen stops claiming a command it has not run and printing internal bookkeeping (UED-10)
+
+**Wave 12** *(blocked on Wave 11 completion)*
+
+- [ ] 208-14-PLAN.md — Why the saved map of the code kept an out-of-date record: diagnosed, fixed, and proved here by a check that fails without the fix (UED-10; D-05)
+
+**Wave 13** *(blocked on Wave 12 completion)*
+
+- [ ] 208-15-PLAN.md — The one authorised walk, spent after the fix and measured; the fourth dated record (UED-10; D-02, D-04, D-05)
+
+**Wave 14** *(blocked on Wave 13 completion)*
+
+- [ ] 208-16-PLAN.md — Close the phase with whatever is still unproven named in the open, for the next phases to pick up (UED-10; D-06)
 
 ### Phase 209: A Light Default Path
 
