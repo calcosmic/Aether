@@ -265,7 +265,27 @@ func readColonizeSnapshotRefreshMetadata(t *testing.T, root string) territorySna
 // independent call site anywhere in the module sets the lane-selecting field
 // (codexColonizeManifest.PublicationMode) directly instead of going through
 // the shared builder -- exactly the kind of drift 208-14-PLAN.md exists to
-// close.
+// close. The walk catches both ordinary ways Go can set that field: an
+// assignment statement (x.PublicationMode = ...) and a composite struct
+// literal (codexColonizeManifest{PublicationMode: ...}, or the same field
+// set inside a literal whose type is inferred from context) -- the second
+// of which is the more idiomatic of the two, and was the exact shape
+// 208-REVIEW-GAP3.md's CR-01 used to defeat the original, narrower walk.
+//
+// What this still cannot catch, stated honestly rather than claimed away,
+// to the same standard TestSelfRecoveryHasOneDecision's doc comment sets
+// (cmd/refusal_self_recovery_test.go): a write performed through Go's
+// reflection package, where the field name never appears as a source
+// identifier at all; the already-set field travelling into a second
+// manifest by copying a whole struct value -- propagation of an existing
+// decision rather than a new one, but just as invisible to a walk that only
+// looks for the field name being assigned; the field arriving from decoded
+// JSON, where the name appears only as a struct tag on a field declaration,
+// never as an identifier being assigned; and a second builder written
+// inside cmd/codex_colonize.go itself, which this guard allows by
+// construction because that whole file sits on the permitted side of the
+// walk. Nothing in this repository writes PublicationMode any of these four
+// ways today.
 func TestSavedMapPublicationHasOneBuilder(t *testing.T) {
 	repoRoot, err := repoRootForCommandSourceTest()
 	if err != nil {
@@ -318,14 +338,30 @@ func TestSavedMapPublicationHasOneBuilder(t *testing.T) {
 
 		var setsPublicationMode bool
 		ast.Inspect(file, func(n ast.Node) bool {
-			assign, ok := n.(*ast.AssignStmt)
-			if !ok {
-				return true
-			}
-			for _, lhs := range assign.Lhs {
-				sel, ok := lhs.(*ast.SelectorExpr)
-				if ok && sel.Sel.Name == "PublicationMode" {
-					setsPublicationMode = true
+			switch node := n.(type) {
+			case *ast.AssignStmt:
+				for _, lhs := range node.Lhs {
+					sel, ok := lhs.(*ast.SelectorExpr)
+					if ok && sel.Sel.Name == "PublicationMode" {
+						setsPublicationMode = true
+					}
+				}
+			case *ast.CompositeLit:
+				// Not narrowed to a particular struct type name: a
+				// composite literal can be written with its type inferred
+				// from context (inside a slice, a map, or a nested field),
+				// so requiring the type name to appear here would
+				// reintroduce a hole of exactly the shape this case exists
+				// to close (208-REVIEW-GAP3.md CR-01).
+				for _, elt := range node.Elts {
+					kv, ok := elt.(*ast.KeyValueExpr)
+					if !ok {
+						continue
+					}
+					key, ok := kv.Key.(*ast.Ident)
+					if ok && key.Name == "PublicationMode" {
+						setsPublicationMode = true
+					}
 				}
 			}
 			return true
