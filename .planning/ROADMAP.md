@@ -1241,7 +1241,24 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 0 plans
+**Plans:** 5 plans
+
+**Wave 1**
+
+- [ ] 209-01-PLAN.md — One new command, `/ant-go`, doing the small job end to end with a real measured size decision behind it (UED-16; D-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 209-02-PLAN.md — The bigger route, and the program moving a job up by itself in one plain line when small turns out wrong (UED-16; D-01, D-03)
+- [ ] 209-03-PLAN.md — About six everyday commands, everything else one machine-wide setting away and nothing disabled, ruled on by the owner from the real screen (UED-18; D-02, A-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 209-04-PLAN.md — One sentence reaches built work with no owner steps in between; clarifying, specifying and deeper rounds become opt-in (UED-17)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 209-05-PLAN.md — The four timing numbers written up honestly for the owner, the documentation, and the whole suite run to completion (UED-16, UED-17, UED-18; A-02)
 
 ### Phase 210: Two-Week Freeze
 
