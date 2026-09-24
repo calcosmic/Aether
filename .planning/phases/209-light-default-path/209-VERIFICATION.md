@@ -160,6 +160,28 @@ Defect register entry 60 therefore stays **open**, with the wrapper fix landed a
 named test, and one live confirmation outstanding. UED-17's tick in REQUIREMENTS.md carries
 that same caveat in its own words rather than claiming more than was shown.
 
+### The live re-check was run (2026-09-24, owner authorised) — run 5
+
+One more real, unattended session was run against a fresh practice project, same job and
+wording as the run that found the bug. Full figures in `209-TIMING.md`, "Run 5".
+
+**The stall did not recur.** No question was put back to the owner, the job completed, and the
+delivered code was checked by hand: both files exist, `Greet("Ada")` returns `"Hello, Ada!"`,
+and the test passes. It took 76.6s and $0.45, against 833.4s and $6.44 for the same job before
+the fix.
+
+**But the fixed hand-off was still never reached.** The small route completed the job first;
+the escalation then fired on a `not_checked` result (the practice project has no resolvable
+check command) rather than on genuine size, and the assistant — holding finished, passing work
+— judged planning unnecessary and skipped it. So entry 60 remains open: run 5 shows the
+failure did not recur, not that the rewritten hand-off works.
+
+**Run 5 found something new**, filed as defect register entry **61**: D-03's escalation treats
+"the checks could not be run" as "the checks failed". A project with no check command — the
+ordinary state of a new project, and what the owner meets in Phase 210 — would escalate every
+quick job this way and then show a "this turned out bigger than it looked" screen about work
+that is already complete.
+
 ## Also filed this phase
 
 - Defect register entry **59** (open): the practice-project fixture's own setup steps sync

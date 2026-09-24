@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 38
+open_count: 39
 waived_count: 0
 fixed_count: 22
-total_count: 60
-last_updated: 2026-09-24T18:46:18.263Z
+total_count: 61
+last_updated: 2026-09-24T19:56:27.980Z
 ---
 
 # Broken Windows Ledger
@@ -77,6 +77,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 58 | 208 | unmet-truth | cmd/refusal_self_recovery_test.go |  | REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-02, found by independent mutation): the widened check meant to forbid a second, competing 'fix it myself when nobody is here' decision (TestSelfRecoveryHasOneDecision) was made to pass by exempting three whole files rather than the specific lines in them that were actually reviewed. A rival decision planted inside one of those three exempted files is invisible to the check -- proved by planting it. The previous round's version of this defect let a rival decision through in a file nobody had reviewed; this round's version lets one through in a file that WAS reviewed, at a line that was not. The blind spot moved rather than closing, and it is the same class this round existed to remove. Carried forward, not fixed, by the owner's decision on 2026-09-24 (close the phase per D-06 and record both new gaps as named open items rather than spending a fourth round). Close by narrowing the exemption from whole files to the reviewed call sites, proved by re-planting that exact mutation and watching it turn red. | fixed |  | 2026-09-24T09:42:44.494Z | 2026-09-24T10:56:51.542Z |
 | 59 | 209 | unmet-truth | scripts/build-messy-practice-project.sh |  | The practice-project fixture's own aether install/update --force steps sync Aether's shared slash commands to this machine's real, global ~/.claude/ and ~/.codex/ folders by default (platform-home sync runs unless the dev channel plus an explicit opt-out is used), contradicting the script's own comment that nothing here touches the real HOME. Found 2026-09-24 while measuring 209-05's timing report; worked around at the call site (an isolated HOME for the one setup step only, never for the timed chat sessions) rather than fixed in the script, which is out of this plan's own scope. Confirmed no real ~/.claude or ~/.codex content was actually written during this measurement. | open |  | 2026-09-24T17:30:53.481Z |  |
 | 60 | 209 | unmet-truth | .claude/commands/ant/go.md |  | PHASE 209'S OWN HEADLINE PROMISE IS NOT MET IN A REAL SESSION. Plan 209-04 shipped UED-17 as 'one sentence in, and the program reaches a running planning pass and then built work without the owner typing anything in between'. The first time that hand-off was exercised for real -- 209-05's timing measurement, an unattended claude session in a fresh practice project, 2026-09-24 -- the medium job STOPPED AND ASKED THE OWNER a question partway through: /ant-go printed the planning-route screen, said real dispatch needs a live helper-sender, and asked whether to 'just build it' or 'use Aether'. It only completed after one plain-English reply telling it to dispatch the planning helpers itself. The automated test standing behind the claim, TestGoalReachesBuiltWorkWithNoExtraSteps (cmd/go_default_path_test.go), drives the Go runtime directly with the planning stage faked already-accepted, so it never exercises the real wrapper text that asks a live assistant to dispatch real planning helpers the way /ant-plan's own much longer wrapper does. The gap is therefore in the four /ant-go wrapper sources, not in the Go runtime, and the existing test cannot see it. Evidence and the four measured runs: .planning/phases/209-light-default-path/209-TIMING.md. Close by giving the /ant-go wrapper's planning hand-off the dispatch instructions /ant-plan's wrapper already carries, proved by a check that fails when the wrapper text cannot reach real planning dispatch -- not by a runtime test with the planning stage pre-faked. | open |  | 2026-09-24T18:46:18.263Z |  |
+| 61 | 209 | unmet-truth | cmd/go_route.go |  | THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT LOOKED'. Observed live 2026-09-24 in 209-TIMING.md run 5 (session 92b11308-8302-4062-8d4d-59b7f1382d5e), a real unattended session in a fresh practice project. The small route ran and completed the job correctly; the quick attempt's own checks came back status 'not_checked' because the practice project has no resolvable check command; D-03's escalation then treated that as a failed check and moved the job up to the planning route, printing 'This turned out bigger than it looked -- the project's own checks did not pass on the quick attempt (status: not_checked)' about work that was already finished and passing. 'The checks could not be run' and 'the checks failed' are different facts and only the second is evidence a job was bigger than it looked. A project with no check command configured is the ordinary state of a new project -- precisely what the owner meets in the Phase 210 two-week trial -- so every quick job there would escalate spuriously and then show a confusing 'bigger than it looked' screen about completed work. Close by making the escalation trigger on a genuine check FAILURE only, leaving 'could not be checked' as the honest not-checked verdict the quick path already reports, proved by a test that escalates on a failed check and does not escalate on an unresolvable one. | open |  | 2026-09-24T19:56:27.980Z |  |
 
 ````json
 [
@@ -798,6 +799,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-24T18:46:18.263Z",
+    "resolved_at": null
+  },
+  {
+    "id": 61,
+    "kind": "unmet-truth",
+    "phase": "209",
+    "file": "cmd/go_route.go",
+    "line": null,
+    "description": "THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT LOOKED'. Observed live 2026-09-24 in 209-TIMING.md run 5 (session 92b11308-8302-4062-8d4d-59b7f1382d5e), a real unattended session in a fresh practice project. The small route ran and completed the job correctly; the quick attempt's own checks came back status 'not_checked' because the practice project has no resolvable check command; D-03's escalation then treated that as a failed check and moved the job up to the planning route, printing 'This turned out bigger than it looked -- the project's own checks did not pass on the quick attempt (status: not_checked)' about work that was already finished and passing. 'The checks could not be run' and 'the checks failed' are different facts and only the second is evidence a job was bigger than it looked. A project with no check command configured is the ordinary state of a new project -- precisely what the owner meets in the Phase 210 two-week trial -- so every quick job there would escalate spuriously and then show a confusing 'bigger than it looked' screen about completed work. Close by making the escalation trigger on a genuine check FAILURE only, leaving 'could not be checked' as the honest not-checked verdict the quick path already reports, proved by a test that escalates on a failed check and does not escalate on an unresolvable one.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-24T19:56:27.980Z",
     "resolved_at": null
   }
 ]
