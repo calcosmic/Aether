@@ -1,13 +1,18 @@
 package cmd
 
-// 209-03 (D-02): the default front-door help screen is now a short,
-// six-command everyday menu instead of the full twenty-two-command
-// catalogue -- gated behind the machine-wide advanced-commands setting
-// (cmd/advanced_commands.go). Nothing is deleted, disabled, or deprecated
-// to get there: every demoted command stays registered and runnable when
-// typed directly. These tests prove that guarantee against the real
-// rendered screen (frontDoorHelpOutput199, reused from cmd/front_door_199_test.go)
-// rather than against a description of it.
+// 209-03 (D-02, owner ruling 2026-09-24): the default front-door help
+// screen is now a short, ten-command everyday menu laid out as two named
+// groups ("Everyday commands" and "When you need them") instead of the full
+// twenty-two-command catalogue -- gated behind the machine-wide
+// advanced-commands setting (cmd/advanced_commands.go). The owner reviewed
+// the real rendered screen at this plan's checkpoint task and amended
+// 209-CONTEXT.md D-02's flat six-command proposal to this ten-command,
+// two-group set; see 209-03-SUMMARY.md for the exact screen he approved.
+// Nothing is deleted, disabled, or deprecated to get there: every demoted
+// command stays registered and runnable when typed directly. These tests
+// prove that guarantee against the real rendered screen
+// (frontDoorHelpOutput199, reused from cmd/front_door_199_test.go) rather
+// than against a description of it.
 
 import (
 	"bytes"
@@ -20,34 +25,85 @@ import (
 	"testing"
 )
 
+// approvedDefaultMenu209Entry names one command the owner ruled onto the
+// default menu, plus the group it renders under.
+type approvedDefaultMenu209Entry struct {
+	group       string
+	command     string
+	description string
+}
+
+// approvedDefaultMenu209 is the owner's literal ruling on the default
+// front-door menu, recorded 2026-09-24 after he reviewed the actual
+// rendered screen at this plan's checkpoint task. It amends and supersedes
+// 209-CONTEXT.md D-02's flat six-command proposal: he widened six to ten,
+// laid them out as two named groups instead of one flat list, and approved
+// this exact set of command names, order, grouping, and wording.
+//
+// This slice is hand-written -- deliberately NOT derived from
+// frontDoorDefaultMenuGroups (cmd/root.go) -- so that a later change to
+// that variable (adding, dropping, reordering, rewording, or silently
+// regrouping an entry) fails THIS test by name instead of passing quietly.
+var approvedDefaultMenu209 = []approvedDefaultMenu209Entry{
+	{"Everyday commands", `/ant-go "<what you want>"`, "Do one piece of ordinary work, from a typo fix to a whole feature."},
+	{"Everyday commands", `/ant-init "goal"`, "Start a new project with one goal."},
+	{"Everyday commands", "/ant-status", "Show where the project actually stands right now."},
+	{"Everyday commands", "/ant-continue", "Check what was built, then move on."},
+	{"Everyday commands", "/ant-flags", "Show what is waiting on your decision."},
+	{"Everyday commands", "/ant-resume", "Pick back up after a break."},
+	{"Everyday commands", "/ant-seal", "Mark the work finished."},
+	{"When you need them", "/ant-oracle", "Research a question properly, going over it until the answer is solid."},
+	{"When you need them", `/ant-swarm "<bug>"`, "Chase down a confusing bug from four angles at once."},
+	{"When you need them", "/ant-dream", "Let it look around the project and brainstorm what it notices."},
+}
+
 // TestDefaultMenuShowsOnlyTheApprovedSet proves the default (advanced
-// setting off) screen shows exactly the approved everyday commands and no
-// other registered wrapper command -- checked against the full set of
-// registered wrapper names (wrapperCommandNames), not a hand-written
-// exclusion list, so a wrapper added later is covered automatically.
+// setting off) screen shows exactly the owner's ruled ten commands, in the
+// owner's ruled two groups and order, and no other registered wrapper
+// command -- checked against the full set of registered wrapper names
+// (wrapperCommandNames), not a hand-written exclusion list, so a wrapper
+// added later is covered automatically.
 func TestDefaultMenuShowsOnlyTheApprovedSet(t *testing.T) {
 	root := t.TempDir()
 	// Deliberately do NOT call frontDoorTurnOnAdvancedCommandsForTest: the
 	// advanced setting must be genuinely off (the default) for this test.
 	got := frontDoorHelpOutput199(t, root, 100)
+	compact := strings.Join(strings.Fields(got), " ")
+
+	// Group order: both approved group headings must appear, in order.
+	groupOrder := []string{"Everyday commands", "When you need them"}
+	last := -1
+	for _, group := range groupOrder {
+		index := strings.Index(got, group)
+		if index < 0 {
+			t.Fatalf("default help is missing approved group heading %q:\n%s", group, got)
+		}
+		if index <= last {
+			t.Fatalf("approved group heading %q is out of order:\n%s", group, got)
+		}
+		last = index
+	}
 
 	approved := map[string]bool{}
-	for _, entry := range frontDoorDefaultMenu {
+	for _, entry := range approvedDefaultMenu209 {
 		name, _, _ := strings.Cut(entry.command, " ")
 		approved[name] = true
-		if !strings.Contains(got, entry.command) {
-			t.Errorf("default help is missing approved entry %q:\n%s", entry.command, got)
+		want := strings.Join(strings.Fields(entry.command+"  "+entry.description), " ")
+		if !strings.Contains(compact, want) {
+			t.Errorf("default help is missing approved entry copy %q under group %q:\n%s", want, entry.group, got)
 		}
 	}
 
-	// Scope the exclusion scan to the menu itself, not the whole screen: the
-	// standing line above it legitimately names /ant-init ("No colony is
-	// active... /ant-init \"goal\"") regardless of which menu renders below
-	// it -- that onboarding nudge is unconditional prose, not a catalog
-	// exposure, and is unrelated to D-02's six-command menu.
-	menuStart := strings.Index(got, frontDoorDefaultGroupTitle)
+	// Scope the exclusion scan to the menu itself (from the first approved
+	// group heading onward), not the whole screen: the opening lines above
+	// it legitimately name /ant-init and /ant-go ("No project is set up
+	// here yet... Start one with /ant-init \"what you want built\", or
+	// just describe a job with /ant-go...") regardless of which entries
+	// render below -- that onboarding prose is unconditional, not a
+	// catalog exposure, and is unrelated to the owner's ten-entry ruling.
+	menuStart := strings.Index(got, groupOrder[0])
 	if menuStart < 0 {
-		t.Fatalf("default help is missing its own group title %q:\n%s", frontDoorDefaultGroupTitle, got)
+		t.Fatalf("default help is missing its own first group heading %q:\n%s", groupOrder[0], got)
 	}
 	menuSection := got[menuStart:]
 
@@ -62,16 +118,17 @@ func TestDefaultMenuShowsOnlyTheApprovedSet(t *testing.T) {
 		name := "/ant-" + verb
 		if verb == "help" || approved[name] {
 			// /ant-help is always reachable; it is the screen being shown,
-			// not a seventh entry on it (209-CONTEXT.md D-02).
+			// not an eleventh entry on it.
 			continue
 		}
 		if tokens[name] {
-			t.Errorf("default help exposes non-approved command %q, but the default menu must show only the approved six:\n%s", name, got)
+			t.Errorf("default help exposes non-approved command %q, but the default menu must show only the owner's ten approved commands:\n%s", name, got)
 		}
 	}
 
-	if !strings.Contains(got, "aether advanced-commands set on") {
-		t.Errorf("default help does not name the way to see the full list back on:\n%s", got)
+	wantClosing := "Everything else still works exactly as before when you type it directly -- turn the full list back on for this machine with: aether advanced-commands set on"
+	if !strings.Contains(compact, wantClosing) {
+		t.Errorf("default help does not carry the owner-approved closing line naming the way to see the full list:\n%s", got)
 	}
 }
 
@@ -173,9 +230,10 @@ func runFrontDoor209DemotedCommand(t *testing.T, verb string, args ...string) {
 }
 
 // TestAskingForTheMenuWritesNothing proves both rendered screens -- the
-// default (off) six-command menu and the full (on) catalogue -- are purely
-// read-only: neither creates a data directory, a lock directory, or a
-// preferences file as a side effect of merely being asked for.
+// default (off) ten-command, two-group everyday menu and the full (on)
+// catalogue -- are purely read-only: neither creates a data directory, a
+// lock directory, or a preferences file as a side effect of merely being
+// asked for.
 func TestAskingForTheMenuWritesNothing(t *testing.T) {
 	workDir := t.TempDir()
 

@@ -72,15 +72,20 @@ func TestFrontDoorHelpGroups(t *testing.T) {
 	}
 }
 
+// TestFrontDoorHelpEmptyStanding asserts the empty-project opening. 209-03
+// (owner ruling 2026-09-24) replaced the old "No colony is active" /
+// "Start a guided colony for one goal with..." pair with this reworded
+// opening -- the owner reviewed and approved it on the real rendered
+// screen at the 209-03 checkpoint task; see 209-03-SUMMARY.md. The
+// assertion joins on whitespace (rather than comparing raw lines) because
+// the sentence's line-wrap point is the renderer's responsive-width
+// concern, not part of the approved wording.
 func TestFrontDoorHelpEmptyStanding(t *testing.T) {
 	got := frontDoorHelpOutput199(t, t.TempDir(), 100)
-	lines := strings.Split(strings.TrimSpace(got), "\n")
-	want := []string{
-		"No colony is active",
-		`Start a guided colony for one goal with /ant-init "goal".`,
-	}
-	if len(lines) < len(want) || lines[0] != want[0] || lines[1] != want[1] {
-		t.Fatalf("empty help opening = %q, want %q", lines[:min(len(lines), len(want))], want)
+	compact := strings.Join(strings.Fields(got), " ")
+	want := `No project is set up here yet. Start one with /ant-init "what you want built", or just describe a job with /ant-go and it will work out the rest.`
+	if !strings.HasPrefix(compact, want) {
+		t.Fatalf("empty help opening = %q, want prefix %q", compact, want)
 	}
 }
 

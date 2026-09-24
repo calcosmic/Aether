@@ -380,11 +380,22 @@ const (
 	frontDoorExpertGroupID  = "expert-maintenance"
 )
 
-// frontDoorDefaultGroupTitle is the single heading the short, everyday menu
-// (D-02) renders under when the advanced-commands setting is off -- the
-// default. It replaces the three full-catalogue groups entirely; it is
-// never rendered alongside them.
-const frontDoorDefaultGroupTitle = "Everyday commands"
+// frontDoorDefaultEverydayGroupTitle and frontDoorDefaultAdvancedGroupTitle
+// are the two headings the short default menu renders under when the
+// advanced-commands setting is off (owner ruling, 2026-09-24 -- see
+// frontDoorDefaultMenuGroups below). They replace the three full-catalogue
+// groups entirely; neither is ever rendered alongside those three.
+const (
+	frontDoorDefaultEverydayGroupTitle = "Everyday commands"
+	frontDoorDefaultAdvancedGroupTitle = "When you need them"
+)
+
+// frontDoorDefaultGroupTitle is kept as an alias to
+// frontDoorDefaultEverydayGroupTitle: the owner's 2026-09-24 ruling amended
+// D-02's flat six-command proposal into two named groups, but the first
+// group's title is unchanged from the proposal this constant originally
+// named.
+const frontDoorDefaultGroupTitle = frontDoorDefaultEverydayGroupTitle
 
 type frontDoorHelpEntry struct {
 	command     string
@@ -441,21 +452,57 @@ var (
 	}
 )
 
-// frontDoorDefaultMenu is the everyday menu D-02 proposed: about six
-// commands instead of the full catalogue above. Its membership is data, not
-// code, so the owner's ruling at this plan's checkpoint is a straight edit
-// to this slice rather than a rewrite of the renderer that reads it.
-// Nothing named here is deleted, disabled, or deprecated by being on this
-// list -- frontDoorHelpGroups above stays the full, untouched catalogue,
-// and every command not on this list still runs exactly as it did before
-// when typed directly.
-var frontDoorDefaultMenu = []frontDoorHelpEntry{
-	{`/ant-go "<what you want>"`, "Do one piece of ordinary work, from a typo fix to a whole feature."},
-	{"/ant-status", "Show where the project actually stands right now."},
-	{"/ant-continue", "Check what was built, then move on."},
-	{"/ant-flags", "Show what is waiting on your decision."},
-	{"/ant-resume", "Pick back up after a break."},
-	{"/ant-seal", "Mark the work finished."},
+// frontDoorDefaultMenuGroups is the everyday default menu, held as data so
+// the owner's ruling on the real rendered screen is a straight data edit
+// rather than a rewrite of the renderer that reads it. This is the OWNER'S
+// RULING recorded 2026-09-24, applied at this plan's Task 4 -- it
+// supersedes 209-CONTEXT.md D-02's flat six-command proposal, which was
+// explicitly a starting point the owner was free to change after judging
+// the real screen. He amended six to ten, laid the ten out as two named
+// groups instead of one flat list, and approved reworded opening and
+// closing lines; see 209-03-SUMMARY.md for the exact screen he signed off
+// on. Nothing named here is deleted, disabled, or deprecated by being on
+// this list -- frontDoorHelpGroups above stays the full, untouched
+// catalogue, and every command not on this list still runs exactly as it
+// did before when typed directly.
+var frontDoorDefaultMenuGroups = []frontDoorHelpGroup{
+	{
+		title: frontDoorDefaultEverydayGroupTitle,
+		entries: []frontDoorHelpEntry{
+			{`/ant-go "<what you want>"`, "Do one piece of ordinary work, from a typo fix to a whole feature."},
+			{`/ant-init "goal"`, "Start a new project with one goal."},
+			{"/ant-status", "Show where the project actually stands right now."},
+			{"/ant-continue", "Check what was built, then move on."},
+			{"/ant-flags", "Show what is waiting on your decision."},
+			{"/ant-resume", "Pick back up after a break."},
+			{"/ant-seal", "Mark the work finished."},
+		},
+	},
+	{
+		// The owner named these three unprompted as tools he actually
+		// values and reaches for -- not a hand-picked "advanced" leftover.
+		title: frontDoorDefaultAdvancedGroupTitle,
+		entries: []frontDoorHelpEntry{
+			{"/ant-oracle", "Research a question properly, going over it until the answer is solid."},
+			{`/ant-swarm "<bug>"`, "Chase down a confusing bug from four angles at once."},
+			{"/ant-dream", "Let it look around the project and brainstorm what it notices."},
+		},
+	},
+}
+
+// frontDoorDefaultMenu flattens frontDoorDefaultMenuGroups into the single
+// ordered list of entries the original D-02 proposal held as a flat slice.
+// Callers that only care whether a command is on the default screen at all
+// (not which of the two groups it renders under) read this instead of
+// walking the two groups.
+var frontDoorDefaultMenu = frontDoorFlattenDefaultMenuGroups()
+
+func frontDoorFlattenDefaultMenuGroups() []frontDoorHelpEntry {
+	var flat []frontDoorHelpEntry
+	for _, group := range frontDoorDefaultMenuGroups {
+		flat = append(flat, group.entries...)
+	}
+	return flat
 }
 
 // configureFrontDoorHelp runs lazily from Cobra's help hook. By then every
@@ -569,13 +616,22 @@ func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 	platform := detectPlatform()
 	width := lifecycleStatusOutputWidth()
 	projection := frontDoorLifecycleProjection(resolveAetherRootPath(), platform)
-	initCommand := frontDoorCommandForPlatform(`/ant-init "goal"`, platform)
 	helpCommand := frontDoorCommandForPlatform("/ant-help", platform)
 	var lines []string
 	if projection.Identity.Source.Provenance == LifecycleFactMissing || strings.TrimSpace(projection.Goal.Value) == "" {
+		// Owner ruling, 2026-09-24: this opening replaces the old
+		// "No colony is active" / "Start a guided colony for one goal
+		// with..." pair. That text pointed at /ant-init as the only way
+		// in and used "colony" untranslated; the owner approved this
+		// reworded pair, naming both /ant-init and the new /ant-go single
+		// door, on the exact screen he reviewed (209-03-SUMMARY.md).
 		lines = append(lines,
-			"No colony is active",
-			fmt.Sprintf("Start a guided colony for one goal with %s.", initCommand),
+			"No project is set up here yet.",
+			fmt.Sprintf(
+				"Start one with %s \"what you want built\", or just describe a job with %s and it will work out the rest.",
+				frontDoorCommandForPlatform("/ant-init", platform),
+				frontDoorCommandForPlatform("/ant-go", platform),
+			),
 		)
 	} else {
 		lines = append(lines, renderFrontDoorStanding(projection))
@@ -595,14 +651,19 @@ func renderFrontDoorHelp(cmd *cobra.Command, args []string) {
 		}
 		lines = append(lines, "", fmt.Sprintf("Use %s <command> for expert detail outside this journey map.", helpCommand))
 	} else {
-		lines = append(lines, "", frontDoorDefaultGroupTitle)
-		for _, entry := range frontDoorDefaultMenu {
-			translated := entry
-			translated.command = frontDoorCommandForPlatform(entry.command, platform)
-			lines = append(lines, frontDoorRenderEntryLines(translated, width)...)
+		for _, group := range frontDoorDefaultMenuGroups {
+			lines = append(lines, "", group.title)
+			for _, entry := range group.entries {
+				translated := entry
+				translated.command = frontDoorCommandForPlatform(entry.command, platform)
+				lines = append(lines, frontDoorRenderEntryLines(translated, width)...)
+			}
 		}
+		// Owner ruling, 2026-09-24: the approved closing line drops the
+		// earlier "These are the everyday commands." lead-in -- the two
+		// group headings above already say that.
 		lines = append(lines, "",
-			"These are the everyday commands. Everything else still works exactly as before when you type it directly -- turn the full list back on for this machine with: aether advanced-commands set on")
+			"Everything else still works exactly as before when you type it directly -- turn the full list back on for this machine with: aether advanced-commands set on")
 	}
 	var rendered []string
 	for _, line := range lines {
