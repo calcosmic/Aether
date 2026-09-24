@@ -2,19 +2,36 @@ package cmd
 
 import "strings"
 
+// refusalSelfRecoveryRow is one opt-in entry in refusalSelfRecoveryTable.
+// Both fields are printed VERBATIM to the owner
+// (renderRefusalSelfRecoveryNotice below) and must each stay a short,
+// plain-English clause an owner can read with no file open -- nothing else.
+// A developer's rationale or a planning-decision citation belongs in a Go
+// comment beside the row, never inside either string: 208-13-PLAN.md
+// (WR-03, 208-REVIEW-GAP2.md) found a planning-decision id and a
+// `.planning/` filename embedded in this string and printed straight to the
+// owner's screen. A future row must not reintroduce that by accident.
+//
+//   - Reason answers "why is Aether going ahead instead of stopping to
+//     ask" -- the clause the "question" line prints.
+//   - Action answers "what is Aether going ahead and doing" -- the clause
+//     the closing "next" line prints. Before 208-18-PLAN.md (WR-03 /
+//     208-REVIEW-GAP3.md) this clause was a fixed phrase baked into
+//     renderRefusalSelfRecoveryNotice ("rebuilding the map of your code"),
+//     so a future second row would have silently kept that same wording no
+//     matter what its own recovery actually did. No clause on this screen
+//     is written into the screen any more -- a future row must supply its
+//     own accurate Action, and refusalSelfRecoveryContractProblems (this
+//     package's test file) refuses to accept one that does not.
+type refusalSelfRecoveryRow struct {
+	Reason string
+	Action string
+}
+
 // refusalSelfRecoveryTable is the checked-in, opt-in list of refusals Aether
 // is allowed to recover from itself when nobody is present to answer
 // (sessionHasNoOneToAsk, cmd/unattended_session.go). It holds exactly one
 // entry this round -- the colonize existing-survey stop.
-//
-// The value stored here is printed VERBATIM to the owner
-// (renderRefusalSelfRecoveryNotice below). It must stay a short,
-// plain-English sentence an owner can read with no file open -- nothing
-// else. A developer's rationale or a planning-decision citation belongs in a
-// Go comment beside the row, never inside the string itself: 208-13-PLAN.md
-// (WR-03, 208-REVIEW-GAP2.md) found a planning-decision id and a
-// `.planning/` filename embedded in this string and printed straight to the
-// owner's screen. A future row must not reintroduce that by accident.
 //
 // Developer rationale for the one row below (not printed to the owner):
 // nobody is present to ask, the refusal's own next command is safe for
@@ -32,9 +49,12 @@ import "strings"
 // above; a future reader who wants to recover it needs a mechanism that can
 // actually dispatch workers from inside colonize-finalize, which does not
 // exist yet.
-var refusalSelfRecoveryTable = map[string]string{
-	"colonize-existing-survey-found": "nobody is here to answer, and rebuilding the map of your code is something " +
-		"Aether can safely do on its own rather than leaving the project stuck waiting for a reply.",
+var refusalSelfRecoveryTable = map[string]refusalSelfRecoveryRow{
+	"colonize-existing-survey-found": {
+		Reason: "nobody is here to answer, and rebuilding the map of your code is something " +
+			"Aether can safely do on its own rather than leaving the project stuck waiting for a reply.",
+		Action: "rebuilding the map of your code",
+	},
 }
 
 // attemptRefusalSelfRecovery is the ONE place this repository decides
@@ -90,7 +110,7 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 	if !sessionHasNoOneToAsk() {
 		return false
 	}
-	reason, listed := refusalSelfRecoveryTable[r.ID]
+	entry, listed := refusalSelfRecoveryTable[r.ID]
 	if !listed {
 		return false
 	}
@@ -104,7 +124,7 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 	if !ok || !row.ProtectsWork || strings.TrimSpace(row.NextCommand) == "" {
 		return false
 	}
-	emitVisualProgress(renderRefusalSelfRecoveryNotice(r, reason, row.NextCommand))
+	emitVisualProgress(renderRefusalSelfRecoveryNotice(r, entry.Reason, entry.Action, row.NextCommand))
 	appendRecoveredRefusalToLog(r)
 	return true
 }
@@ -124,8 +144,18 @@ func attemptRefusalSelfRecovery(r refusal) bool {
 // evidence, not as the claim itself, and is read from the registered refusal
 // row (attemptRefusalSelfRecovery's own authoritative lookup) rather than a
 // caller-supplied copy.
-func renderRefusalSelfRecoveryNotice(r refusal, reason string, next string) string {
+//
+// action (208-18-PLAN.md Task 2, WR-03 / 208-REVIEW-GAP3.md) is the row's
+// own description of what Aether is going ahead and doing, composed into
+// the closing "next" line exactly as before -- this clause used to be a
+// fixed phrase baked into this function, so a second table row would have
+// silently kept the first row's wording regardless of what it actually did.
+// It is now supplied by the caller (attemptRefusalSelfRecovery, reading it
+// off the table row that fired), and every clause on this screen traces
+// back to that row.
+func renderRefusalSelfRecoveryNotice(r refusal, reason string, action string, next string) string {
 	next = strings.TrimSpace(next)
+	action = strings.TrimSpace(action)
 	var b strings.Builder
 	b.WriteString(renderBanner("🙅", "Carrying On Without You"))
 	b.WriteString(visualDividerStr())
@@ -133,7 +163,7 @@ func renderRefusalSelfRecoveryNotice(r refusal, reason string, next string) stri
 	b.WriteString("\n")
 	b.WriteString(voiceLine("question", "No one is here to answer, so Aether is going ahead on its own: "+reason))
 	b.WriteString("\n")
-	b.WriteString(voiceLine("next", "Aether is going ahead and rebuilding the map of your code instead of stopping to ask (`"+next+"`)."))
+	b.WriteString(voiceLine("next", "Aether is going ahead and "+action+" instead of stopping to ask (`"+next+"`)."))
 	b.WriteString("\n")
 	return b.String()
 }

@@ -566,8 +566,11 @@ func TestOnlyASafeRefusalCanRecoverItself(t *testing.T) {
 	// Prove the guard bites: a locally built table naming a row that does
 	// not protect work should be reported by name, without ever touching
 	// the real registry.
-	downgraded := map[string]string{
-		"colonize-finalize-timestamp-in-future": "a row that does not protect work must never be offered self-recovery",
+	downgraded := map[string]refusalSelfRecoveryRow{
+		"colonize-finalize-timestamp-in-future": {
+			Reason: "a row that does not protect work must never be offered self-recovery",
+			Action: "doing something it should never be offered",
+		},
 	}
 	problems := refusalSelfRecoveryContractProblems(downgraded)
 	if len(problems) == 0 {
@@ -582,14 +585,49 @@ func TestOnlyASafeRefusalCanRecoverItself(t *testing.T) {
 	if !found {
 		t.Fatalf("expected the offending row to be named by id, got: %v", problems)
 	}
+
+	// WR-03 (208-REVIEW-GAP3.md): a row with a Reason but a blank Action
+	// must be refused by name too -- a future row cannot be added without
+	// supplying its own action wording. Never touches the real registry;
+	// the id is taken from the real table's own key rather than typed, so
+	// this keeps covering the real opted-in row even if its id ever
+	// changes.
+	var declaredID string
+	for id := range refusalSelfRecoveryTable {
+		declaredID = id
+		break
+	}
+	if declaredID == "" {
+		t.Fatal("refusalSelfRecoveryTable is empty -- there is no declared id to build this case from")
+	}
+	blankAction := map[string]refusalSelfRecoveryRow{
+		declaredID: {Reason: "a reason is present", Action: "   "},
+	}
+	blankActionProblems := refusalSelfRecoveryContractProblems(blankAction)
+	if len(blankActionProblems) == 0 {
+		t.Fatal("expected the contract check to report a problem for a row with a blank action, got none")
+	}
+	foundBlankAction := false
+	for _, p := range blankActionProblems {
+		if strings.Contains(p, declaredID) {
+			foundBlankAction = true
+		}
+	}
+	if !foundBlankAction {
+		t.Fatalf("expected the row with a blank action to be named by id (%s), got: %v", declaredID, blankActionProblems)
+	}
 }
 
 // refusalSelfRecoveryContractProblems checks every id in table against the
 // one refusal registry: it must exist, stay a "stop" disposition, protect
 // work, and carry a next command with no unsubstituted `<...>` placeholder.
-func refusalSelfRecoveryContractProblems(table map[string]string) []string {
+// It also reports, by id, a row whose own Reason or Action is blank after
+// trimming (208-18-PLAN.md Task 2, WR-03 / 208-REVIEW-GAP3.md): a row with
+// no wording of its own cannot supply the closing "next" line's clause, so
+// it is refused here rather than silently rendering an empty sentence.
+func refusalSelfRecoveryContractProblems(table map[string]refusalSelfRecoveryRow) []string {
 	var problems []string
-	for id := range table {
+	for id, entry := range table {
 		row, ok := refusalForID(id)
 		if !ok {
 			problems = append(problems, id+": not a registered refusal row")
@@ -606,6 +644,12 @@ func refusalSelfRecoveryContractProblems(table map[string]string) []string {
 			problems = append(problems, id+": has no next command")
 		} else if strings.ContainsAny(next, "<>") {
 			problems = append(problems, id+": next command still carries an unsubstituted placeholder: "+next)
+		}
+		if strings.TrimSpace(entry.Reason) == "" {
+			problems = append(problems, id+": has no reason")
+		}
+		if strings.TrimSpace(entry.Action) == "" {
+			problems = append(problems, id+": has no action")
 		}
 	}
 	return problems
@@ -718,11 +762,11 @@ func TestSelfRecoveryNoticeSaysOnlyWhatActuallyHappened(t *testing.T) {
 	if !ok {
 		t.Fatal("refusalRegistry needs a colonize-existing-survey-found row for this test")
 	}
-	reason, ok := refusalSelfRecoveryTable[row.ID]
+	entry, ok := refusalSelfRecoveryTable[row.ID]
 	if !ok {
 		t.Fatalf("refusalSelfRecoveryTable needs an entry for %q", row.ID)
 	}
-	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), reason, row.NextCommand)
+	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), entry.Reason, entry.Action, row.NextCommand)
 
 	if strings.Contains(rendered, "ran `") || strings.Contains(rendered, "on your behalf") || strings.Contains(rendered, "carried out") {
 		t.Fatalf("the notice claims the command has already run, which is false on the plan-only lane at the moment it prints:\n%s", rendered)
@@ -745,11 +789,11 @@ func TestSelfRecoveryNoticeSpeaksPlainEnglish(t *testing.T) {
 	if !ok {
 		t.Fatal("refusalRegistry needs a colonize-existing-survey-found row for this test")
 	}
-	reason, ok := refusalSelfRecoveryTable[row.ID]
+	entry, ok := refusalSelfRecoveryTable[row.ID]
 	if !ok {
 		t.Fatalf("refusalSelfRecoveryTable needs an entry for %q", row.ID)
 	}
-	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), reason, row.NextCommand)
+	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), entry.Reason, entry.Action, row.NextCommand)
 
 	if m := planningDecisionIDPattern.FindString(rendered); m != "" {
 		t.Fatalf("the notice carries a planning-decision identifier (%q):\n%s", m, rendered)
@@ -759,5 +803,70 @@ func TestSelfRecoveryNoticeSpeaksPlainEnglish(t *testing.T) {
 	}
 	if violations := untranslatedRepoWords(rendered); len(violations) > 0 {
 		t.Fatalf("the notice uses words this repository invented without explaining them:\n  %s\n\nfull notice:\n%s", strings.Join(violations, "\n  "), rendered)
+	}
+}
+
+// TestEveryRecoveryRowSuppliesItsOwnActionWording (208-18-PLAN.md Task 2,
+// WR-03 / 208-REVIEW-GAP3.md): the notice's closing sentence is built from
+// the row that fired, never from a fixed phrase baked into the renderer.
+// Two parts, both reading through the real renderer and never comparing
+// against a full copy of a sentence typed into the test.
+func TestEveryRecoveryRowSuppliesItsOwnActionWording(t *testing.T) {
+	// Part 1: every row in the real table supplies its own non-blank
+	// Reason and Action, the two answer different questions (so they must
+	// not be the same string), and the notice rendered for that row
+	// contains both.
+	for id, entry := range refusalSelfRecoveryTable {
+		reason := strings.TrimSpace(entry.Reason)
+		action := strings.TrimSpace(entry.Action)
+		if reason == "" {
+			t.Fatalf("%s: Reason is blank", id)
+		}
+		if action == "" {
+			t.Fatalf("%s: Action is blank", id)
+		}
+		if reason == action {
+			t.Fatalf("%s: Reason and Action are the same string -- Reason answers why Aether is going ahead, Action answers what it is doing, and collapsing them into one hides that", id)
+		}
+		rendered := renderRefusalSelfRecoveryNotice(refuse(id), entry.Reason, entry.Action, "aether report")
+		if !strings.Contains(rendered, reason) {
+			t.Fatalf("%s: rendered notice does not contain its own Reason:\n%s", id, rendered)
+		}
+		if !strings.Contains(rendered, action) {
+			t.Fatalf("%s: rendered notice does not contain its own Action:\n%s", id, rendered)
+		}
+	}
+
+	// Part 2: the future-second-row property. A locally built row whose
+	// Action describes something that is not about rebuilding a map of
+	// code at all -- arranging a saved copy of work before carrying on --
+	// must show up on screen verbatim when rendered with its own values,
+	// and the real colonize row's own Action (read out of the real table
+	// at assertion time, never typed as a literal) must NOT leak into a
+	// notice rendered for this different row. If the closing clause were
+	// still written into the screen as a fixed phrase rather than read
+	// from the row that fired, this second assertion would fail.
+	row, ok := refusalForID("colonize-existing-survey-found")
+	if !ok {
+		t.Fatal("refusalRegistry needs a colonize-existing-survey-found row for this test")
+	}
+	realEntry, ok := refusalSelfRecoveryTable[row.ID]
+	if !ok {
+		t.Fatalf("refusalSelfRecoveryTable needs an entry for %q", row.ID)
+	}
+	realAction := strings.TrimSpace(realEntry.Action)
+	if realAction == "" {
+		t.Fatalf("refusalSelfRecoveryTable's %q entry has a blank Action -- this test cannot prove leakage against an empty string", row.ID)
+	}
+
+	secondRowReason := "nobody is here to answer, and this recovery is safe for Aether to carry out on its own"
+	secondRowAction := "arranging a saved copy of your work before carrying on"
+	rendered := renderRefusalSelfRecoveryNotice(refuse(row.ID), secondRowReason, secondRowAction, row.NextCommand)
+
+	if !strings.Contains(rendered, secondRowAction) {
+		t.Fatalf("a notice rendered with a locally built row's own Action does not contain it:\n%s", rendered)
+	}
+	if strings.Contains(rendered, realAction) {
+		t.Fatalf("a notice rendered for a different row's Action still contains the real colonize row's Action (%q) -- the closing clause is still a fixed phrase, not read from the row that fired:\n%s", realAction, rendered)
 	}
 }
