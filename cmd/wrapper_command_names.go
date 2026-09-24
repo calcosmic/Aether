@@ -31,6 +31,7 @@ var wrapperCommandNames = map[string]bool{
 	"flag":            true,
 	"flags":           true,
 	"focus":           true,
+	"go":              true,
 	"help":            true,
 	"history":         true,
 	"import-signals":  true,

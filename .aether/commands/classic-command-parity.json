@@ -10,6 +10,12 @@
     },
     {
       "category": "normal",
+      "public_name": "go",
+      "cobra_name": "go",
+      "description": "Do what you asked for — the program picks a quick job or a planned one and says which"
+    },
+    {
+      "category": "normal",
       "public_name": "discuss",
       "cobra_name": "discuss",
       "description": "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"

@@ -1140,6 +1140,21 @@ func renderQuickVisual(result map[string]interface{}) string {
 		b.WriteString(renderBanner("⚡", "Quick Question"))
 	}
 	b.WriteString(visualDividerStr())
+	b.WriteString(renderQuickJobBody(result))
+	b.WriteString("\n")
+	b.WriteString(renderLifecycleClosing(result, "quick"))
+	return b.String()
+}
+
+// renderQuickJobBody renders the job/question line, the helper name, the
+// changed-file list, the checks outcome, the verdict, the elapsed time and
+// the helper's own summary -- everything renderQuickVisual shows between
+// its divider and its closing card. It is factored out so `/ant-go`'s
+// screen (cmd/go_cmd.go, renderGoVisual) can show the exact same quick-job
+// lines on its own small route without a second copy of this rendering.
+func renderQuickJobBody(result map[string]interface{}) string {
+	isJob := stringValue(result["mode"]) == "quick-job"
+	var b strings.Builder
 
 	if isJob {
 		b.WriteString(voiceLine("task", "Job: "+emptyFallback(stringValue(result["job"]), "(none)")))
@@ -1213,8 +1228,6 @@ func renderQuickVisual(result map[string]interface{}) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
-	b.WriteString(renderLifecycleClosing(result, "quick"))
 	return b.String()
 }
 

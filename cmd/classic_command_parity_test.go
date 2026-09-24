@@ -122,6 +122,7 @@ func TestDiscussAndSpecRegisteredAcrossPublicSurfaces(t *testing.T) {
 func classicPublicCommandInventory() []classicPublicCommandParityRow {
 	return []classicPublicCommandParityRow{
 		{Category: "normal", PublicName: "init", CobraName: "init", Description: "Start a guided colony for one goal."},
+		{Category: "normal", PublicName: "go", CobraName: "go", Description: "Do what you asked for — the program picks a quick job or a planned one and says which"},
 		{Category: "normal", PublicName: "discuss", CobraName: "discuss", Description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"},
 		{Category: "normal", PublicName: "spec", CobraName: "spec", Description: "📜 Review, revise, approve, or repair the owner-readable specification"},
 		{Category: "normal", PublicName: "plan", CobraName: "plan", Description: "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"},
