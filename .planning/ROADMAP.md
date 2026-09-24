@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 14/16 plans executed
+**Plans:** 15/16 plans executed
 
 **Result:** the third owner-approved real walk, run after the program was taught to repair the
 stale map of the code itself, shows real progress — it silently fixed the map without asking
@@ -1194,7 +1194,7 @@ Plans:
 
 **Wave 13** *(blocked on Wave 12 completion)*
 
-- [ ] 208-15-PLAN.md — The one authorised walk, spent after the fix and measured; the fourth dated record (UED-10; D-02, D-04, D-05)
+- [x] 208-15-PLAN.md — The one authorised walk, spent after the fix and measured; the fourth dated record (UED-10; D-02, D-04, D-05)
 
 **Wave 14** *(blocked on Wave 13 completion)*
 
