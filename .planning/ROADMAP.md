@@ -72,7 +72,7 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   tells the owner nothing; a refusal log and a one-command report bundle, with "report it, do not
   patch Aether" written into every refusal so chats in other projects stop editing Aether's source.
 
-- [ ] **Phase 209 — A Light Default Path.** One entry command; the program picks small or big from
+- [x] **Phase 209 — A Light Default Path.** One entry command; the program picks small or big from
   the size of the change, says why, and moves a job back up to planning if "small" turns out wrong.
   One planning pass by default. Discuss, specification approval and deeper planning rounds become
   things the owner asks for. About six menu commands visible, the rest behind an advanced setting.
