@@ -9,7 +9,7 @@ Not yet planned. Keep it small; the proof is a real run in a real chat; one revi
 Recorded after 208-VERIFICATION.md reported `gaps_found` on ROADMAP Success
 Criterion 2 (second clause) and asked for a ruling on WINDOWS.md row 55.
 
-**D-01 — Ask-vs-act on a stop-and-confirm refusal (WINDOWS row 55): "Act when alone, ask when you're there."**
+- **D-01 — Ask-vs-act on a stop-and-confirm refusal (WINDOWS row 55): "Act when alone, ask when you're there."**
 When a `ProtectsWork: true` stop refusal fires and names its `NextCommand`
 (e.g. `colonize-existing-survey-found` → `aether colonize --force-resurvey`):
 - In an interactive chat with the owner present, the assistant asks first —
@@ -25,7 +25,7 @@ When a `ProtectsWork: true` stop refusal fires and names its `NextCommand`
   new stop needs a scripted answer) and "always act" (could replace saved
   work in a real project without checking — contrary to the phase goal).
 
-**D-02 — Paid proof: "One walk first, then decide."**
+- **D-02 — Paid proof: "One walk first, then decide."**
 The plan may run exactly ONE real journey walk (`AETHER_JOURNEY_TRIALS=1
 make eval-gate-journey`; the last one cost $0.93 and 90 s, a walk that gets
 further may cost up to ~$25). If that walk clears the survey step, stop and
@@ -44,7 +44,7 @@ walk, with D-01's guidance sentence rendering verbatim and correctly in the
 real transcript — a driving chat that read "do not ask first" and asked the
 owner anyway.
 
-**D-03 — Close it in the runtime, not in the instruction: "The program does it
+- **D-03 — Close it in the runtime, not in the instruction: "The program does it
 itself when nobody is there."**
 
 The owner's ruling, put to them with four options and chosen deliberately:
@@ -78,7 +78,7 @@ Why the alternatives were rejected, in the owner's framing:
 - *Leave it open and move on*: rejected; the release check still could not run
   end to end.
 
-**D-04 — The paid-walk rule is unchanged and still binding.**
+- **D-04 — The paid-walk rule is unchanged and still binding.**
 D-02 continues to govern: this round may run exactly ONE real walk, and the
 three-walk release gate remains unauthorised. A single-trial run stays a
 measurement, never a passed gate. If the walk gets past `survey` and stops
@@ -93,7 +93,7 @@ on its own initiative — two of 208-11's own declared must_haves are enforced b
 tests that cannot fail, independently reproduced by mutation in a disposable
 worktree.
 
-**D-05 — Fix the cause first, then spend exactly one more walk.**
+- **D-05 — Fix the cause first, then spend exactly one more walk.**
 The owner's ruling, chosen from three options: diagnose and fix the
 `source_revision` mismatch locally, prove the fix on this machine, and only
 then spend ONE real walk. The three prior walks cost $0.93, ~$1 and $1.84 and
@@ -107,7 +107,7 @@ D-02 and D-04 remain binding and are extended, not replaced: one walk, a
 single-trial run is a measurement and never a passed gate, and
 `journeyGateVerdict` must keep refusing it.
 
-**D-06 — If it still does not run through, the phase closes with the gap named.**
+- **D-06 — If it still does not run through, the phase closes with the gap named.**
 The owner's ruling: once the two unfalsifiable guards are genuinely fixed,
 Phase 208 is signed off even if no real walk has ever carried the practice
 project past step 2 of 14. "Never proven end to end" is carried forward as a
