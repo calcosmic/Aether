@@ -207,24 +207,12 @@ func territoryPlanPreflight(root string, opts codexPlanOptions) (SurveyFreshness
 			snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))),
 			resolveCodexWorkerContext(),
 		)
-		manifest.TransactionID = fmt.Sprintf("territory-%d-%s", time.Now().UTC().UnixNano(), randomHex(4))
-		manifest.BaselineDigest = territorySurveyBaselineDigest(root)
-		manifest.PublicationMode = territoryPublicationTransactional
+		// bindTransactionalTerritoryPublication (cmd/codex_colonize.go) is the
+		// one shared builder for this binding -- colonize's own forced
+		// resurvey (runCodexColonizePlanOnly) calls the same function rather
+		// than this block being copied a second time (208-14-PLAN.md).
+		bindTransactionalTerritoryPublication(&manifest, root)
 		manifest.RefreshReasons = append([]SurveyFreshnessReasonCode{}, freshness.ReasonCodes...)
-		manifest.CandidateSurveyDir = filepath.ToSlash(filepath.Join(".aether", "data", "territory-candidates", manifest.TransactionID, "survey"))
-		for i := range manifest.Dispatches {
-			paths := make([]string, 0, len(manifest.Dispatches[i].Outputs))
-			for _, output := range manifest.Dispatches[i].Outputs {
-				paths = append(paths, filepath.ToSlash(filepath.Join(manifest.CandidateSurveyDir, output)))
-			}
-			manifest.Dispatches[i].OutputPaths = paths
-			manifest.Dispatches[i].Brief = fmt.Sprintf(
-				"Survey task: %s\n\nWrite these candidate survey outputs in the repo: %s\n\nSurvey the territory at %s. Do not write the live .aether/data/survey directory; the Go finalizer publishes the verified candidate atomically.",
-				manifest.Dispatches[i].Task,
-				strings.Join(paths, ", "),
-				root,
-			)
-		}
 		return freshness, &manifest, nil
 	default:
 		return freshness, nil, fmt.Errorf("territory freshness returned invalid value %q; run `aether resume`", freshness.Freshness)

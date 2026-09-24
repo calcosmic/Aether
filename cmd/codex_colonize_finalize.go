@@ -482,8 +482,17 @@ func runTransactionalColonizeFinalize(root string, manifest codexColonizeManifes
 	if err != nil {
 		return nil, err
 	}
-	if preservedWorkerArtifacts != len(requiredSurveyMarkdownFiles) {
-		return nil, fmt.Errorf("transactional territory refresh accepted %d of %d required worker-authored survey artifacts", preservedWorkerArtifacts, len(requiredSurveyMarkdownFiles))
+	// A caste roster lighter than the full seven-document set (a "light"
+	// colonize depth, or a resurvey where one worker's claim did not land)
+	// is not a reason to fail a transactional refresh outright -- the same
+	// tolerance the non-transactional lane already gives every survey via
+	// writeSurveyArtifacts' own runtime-synthesized fallback. Turning a
+	// survey that succeeds today into a hard failure here would be exactly
+	// the new dead end this phase exists to remove; the fallback content
+	// still passes validateTerritoryPublicationMarkdown's placeholder check
+	// below, and this is recorded rather than silently accepted.
+	if preservedWorkerArtifacts < len(requiredSurveyMarkdownFiles) {
+		logActivity("colonize-finalize", fmt.Sprintf("transactional territory refresh published %d of %d required survey documents from worker claims; the rest were synthesized from workspace facts", preservedWorkerArtifacts, len(requiredSurveyMarkdownFiles)))
 	}
 	if err := writeSurveyCompatibilityJSON(candidateDir, facts); err != nil {
 		return nil, err

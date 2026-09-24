@@ -394,6 +394,20 @@ func runCodexColonizePlanOnly(root string, opts codexColonizeOptions) (map[strin
 	// per-dispatch loop.
 	contextCapsule := resolveCodexWorkerContext()
 	manifest := buildCodexColonizeManifest(root, facts, opts, dispatchMode, existingSurvey, snapshotRelativeFiles(root, filepath.ToSlash(filepath.Join(".aether", "data", "survey"))), contextCapsule)
+	// A forced resurvey of a project that already has a saved map (either an
+	// explicit `--force-resurvey`, or the unattended self-recovery above
+	// falling through with ForceResurvey now set) is exactly the situation
+	// that can leave the saved map's own record file behind: this project's
+	// snapshot may be stale, and only publishTerritorySnapshot -- reached
+	// through the transactional finalize lane -- ever rewrites it
+	// (208-14-PLAN.md, WINDOWS.md row 53's fourth proximate cause). Binding
+	// the same publication scheme the plan front door already gives its own
+	// automatic-refresh manifests (territoryPlanPreflight) closes that gap
+	// without touching the first-survey-ever path, which has no prior
+	// snapshot to keep in sync and keeps behaving exactly as before.
+	if existingSurvey && opts.ForceResurvey {
+		bindTransactionalTerritoryPublication(&manifest, root)
+	}
 	// Write a small receipt of this manifest's own generated_at, so
 	// `aether colonize-finalize` can recover a completion packet's missing
 	// generated_at from Aether's own record instead of refusing outright
@@ -487,6 +501,43 @@ func buildCodexColonizeManifest(root string, facts codexWorkspaceFacts, opts cod
 			"directories": facts.DirectoryCount,
 		},
 		ContextCapsule: contextCapsule,
+	}
+}
+
+// bindTransactionalTerritoryPublication is the ONE place that arranges for a
+// colonize manifest's survey results to be published through
+// publishTerritorySnapshot -- the sole writer of the saved map's own record
+// file, .aether/data/survey/territory-snapshot.json. It sets the
+// transaction id, the baseline digest, the lane-selecting field
+// (PublicationMode), the candidate survey directory, and rewrites each
+// dispatch's output paths and brief to write into that candidate directory
+// instead of the live survey directory, so the finalizer can verify and
+// publish the result atomically.
+//
+// Both callers that can refresh an EXISTING project's saved map -- the plan
+// front door's automatic refresh (territoryPlanPreflight, cmd/codex_workflow_cmds.go)
+// and colonize's own forced resurvey (runCodexColonizePlanOnly, above) -- call
+// this one function rather than each holding a copy of the binding block.
+// TestSavedMapPublicationHasOneBuilder (cmd/colonize_snapshot_refresh_test.go)
+// fails by name if a third, independent call site ever sets PublicationMode
+// directly instead of going through here.
+func bindTransactionalTerritoryPublication(manifest *codexColonizeManifest, root string) {
+	manifest.TransactionID = fmt.Sprintf("territory-%d-%s", time.Now().UTC().UnixNano(), randomHex(4))
+	manifest.BaselineDigest = territorySurveyBaselineDigest(root)
+	manifest.PublicationMode = territoryPublicationTransactional
+	manifest.CandidateSurveyDir = filepath.ToSlash(filepath.Join(".aether", "data", "territory-candidates", manifest.TransactionID, "survey"))
+	for i := range manifest.Dispatches {
+		paths := make([]string, 0, len(manifest.Dispatches[i].Outputs))
+		for _, output := range manifest.Dispatches[i].Outputs {
+			paths = append(paths, filepath.ToSlash(filepath.Join(manifest.CandidateSurveyDir, output)))
+		}
+		manifest.Dispatches[i].OutputPaths = paths
+		manifest.Dispatches[i].Brief = fmt.Sprintf(
+			"Survey task: %s\n\nWrite these candidate survey outputs in the repo: %s\n\nSurvey the territory at %s. Do not write the live .aether/data/survey directory; the Go finalizer publishes the verified candidate atomically.",
+			manifest.Dispatches[i].Task,
+			strings.Join(paths, ", "),
+			root,
+		)
 	}
 }
 
