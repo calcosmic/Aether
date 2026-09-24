@@ -1241,7 +1241,7 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 
 **Wave 1**
 
@@ -1249,7 +1249,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 209-02-PLAN.md — The bigger route, and the program moving a job up by itself in one plain line when small turns out wrong (UED-16; D-01, D-03)
+- [x] 209-02-PLAN.md — The bigger route, and the program moving a job up by itself in one plain line when small turns out wrong (UED-16; D-01, D-03)
 - [ ] 209-03-PLAN.md — About six everyday commands, everything else one machine-wide setting away and nothing disabled, ruled on by the owner from the real screen (UED-18; D-02, A-01)
 
 **Wave 3** *(blocked on Wave 2 completion)*

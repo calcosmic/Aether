@@ -2,16 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
+current_phase: 209
+current_phase_name: A Light Default Path
 status: executing
-stopped_at: Phase 208 complete, ready to plan Phase 209
-last_updated: "2026-09-24T14:53:58.800Z"
+stopped_at: Completed 209-02-PLAN.md
+last_updated: "2026-09-24T15:21:00.629Z"
 last_activity: 2026-09-24
+state_head: fdfbc56282ec758a5e018351774a8614d05db7ce
 progress:
-  total_phases: 18
-  completed_phases: 11
-  total_plans: 247
-  completed_plans: 234
-  percent: 61
+  total_phases: 5
+  completed_phases: 3
+  total_plans: 32
+  completed_plans: 29
+  percent: 60
 ---
 
 # Project State
@@ -33,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 209 (A Light Default Path) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
 Status: Ready to execute
-Plan: 2 of 5
+Plan: 3 of 5
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -231,6 +234,7 @@ Last activity: 2026-09-24
 | Phase 208 P18 | 35min | 2 tasks | 2 files |
 | Phase 208 P19 | 30min | 2 tasks | 3 files |
 | Phase 209 P01 | 45min | 3 tasks | 14 files |
+| Phase 209 P02 | 75min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -716,6 +720,8 @@ Last activity: 2026-09-24
 - [Phase 208]: 208-18 (fourth gap-closure round, D-07): mayHoldASelfRecoveryDecision now keys the self-recovery excuse list by "file::enclosing declaration" instead of by whole file, so a rival decision planted anywhere else inside an already-reviewed file is caught by name (CR-02) — the third consecutive round this exact blind-spot-moves-not-closes defect had survived. Added the missing "worktrees" skip to the same walk (WR-01). refusalSelfRecoveryTable rows now carry two fields, Reason and Action, so the notice's closing clause is read from the row that fired instead of a fixed phrase baked into the renderer (WR-03) — what the owner reads today is unchanged, character for character. All four proved by planting the named mutation in a disposable worktree and watching the guard go red. WR-02 (208-13 finding: the decision announces/records before confirming) and WR-05 (a future quiet-classified command recovering invisibly) both stay honestly open, out of scope for this plan.
 - [Phase 208]: 208-19 (fourth gap-closure round, D-07, closing plan): re-ran every check family this round could have disturbed in fresh scoped commands — nothing new broke; the only failures seen were the two already-catalogued TestCodexNativeCancellation tests (WINDOWS row 56). Marked WINDOWS rows 57 and 58 fixed via the register tool's own subcommand, only after confirming each row's own named mutation was genuinely planted and turned its check red in 208-17/18-SUMMARY.md; each row's description now names that mutation, and row 57's backwards "Related:" clause (which had the two checks' worktree-skip status swapped) is corrected. Row 53 left byte-for-byte unchanged, still open. ROADMAP.md's Phase 208 account rewritten: the owner's 2026-09-24 close-the-phase decision was superseded the same day by reopening it for a fourth round covering all six review findings, and that round closed them — the paragraph now says so instead of describing the phase as closed with two gaps left open. Phase 208 now reads nineteen of nineteen plans executed.
 - [Phase ?]: 209-01: resolveJobSizeRoute reads project state via a plain file read (readLifecycleState), never storage.NewStore, keeping the size decision genuinely read-only.
+- [Phase 209]: Task 1+2 production code (go_route.go, go_cmd.go) landed in one commit per CLAUDE.md's Coherent Jobs grouping rule (shared implementation files, genuine in-place dependency).
+- [Phase 209]: The 'no project set up yet' route reason lives inside resolveJobSizeRouteBase's existing zero-matched-paths branch rather than a second decision layer, keeping resolveJobSizeRoute the one route authority.
 
 ### Pending Todos
 
@@ -838,8 +844,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T11:00:46.000Z
-Stopped at: Phase 208 complete, ready to plan Phase 209
+Last session: 2026-09-24T15:21:00.333Z
+Stopped at: Completed 209-02-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
