@@ -130,3 +130,70 @@ runs through, however many rounds and however much money that takes.
 4. One authorised walk, after 1–3 land, measured and honestly recorded.
 5. Close the phase per D-06, with row 53 left honestly open if the walk does
    not clear the survey step.
+
+## Fourth gap-closure round (owner, 2026-09-24, after 208-REVIEW-GAP3)
+
+Recorded after the third gap-closure round's own review
+(`208-REVIEW-GAP3.md`) found that fixing the second round's two unfalsifiable
+guards introduced two NEW unfalsifiable guards — the same failure class,
+moved rather than closed, each proved by planting the exact mutation it is
+named for in a disposable worktree and watching the guard stay green. Both
+were written up as open register rows 57 and 58, and the phase was closed on
+the same day per D-06.
+
+- **D-07 — Reopen for one more short round; close the two moved blind spots
+and the four smaller findings with them.**
+
+The owner's ruling, put to them with three options (fix everything the
+review found, fix only the two guards, or leave the phase closed as already
+decided) and chosen deliberately: reopen Phase 208 for a fourth gap-closure
+round covering **all six** findings in `208-REVIEW-GAP3.md`, not just the two
+CRITICALs. This supersedes the 2026-09-24 close-with-both-gaps-open decision
+recorded in commit `aefeac4c` for these six items only; it does not reopen
+any other D-01..D-06 ruling.
+
+In scope, exactly:
+1. **CR-01** — the saved-map one-builder guard
+   (`TestSavedMapPublicationHasOneBuilder`) only inspects assignment
+   statements, so the same field set inside a composite struct literal is
+   invisible. Widen the walk to composite literals / key-value expressions.
+2. **CR-02** — the widened one-decision guard
+   (`TestSelfRecoveryHasOneDecision`) was made to pass by exempting three
+   whole files. Narrow the exemption from whole files to the specific,
+   already-reviewed call sites.
+3. **WR-01** — that same one-decision walk does not skip a linked worktree
+   directory, unlike its sibling added in the same round. Add the skip.
+4. **WR-02** — the transactional colonize-finalize relaxation (a
+   lighter-than-full surveyor team still succeeds) has zero executable
+   coverage on the changed path. Add a test that drives
+   `runTransactionalColonizeFinalize` with genuinely fewer dispatches than
+   required documents.
+5. **WR-03** — the self-recovery notice's "next" line hardcodes
+   "rebuilding the map of your code" instead of being templated from the
+   table row, so a future second row would silently misdescribe itself.
+   Parameterise it per row.
+6. **WR-04** — `TestSavedMapPublicationHasOneBuilder` carries no honest
+   "what this still cannot catch" note, unlike its sibling. Add one.
+
+Binding constraints on this round:
+- **Full rigour, per the repo's own Definition of Done.** Every guard fix is
+  proved by re-planting the exact mutation the review used, confirming the
+  guard now fails for the right reason, then restoring. A guard that cannot
+  fail is not fixed. This is the third consecutive round to land on this
+  class of defect; a green test is not evidence here.
+- **No paid walk. Nothing in this round is authorised to spend money.**
+  D-02, D-04 and D-05's one-walk-per-round allowance is explicitly NOT being
+  spent: no `make eval-gate-journey`, no `AETHER_JOURNEY_TRIALS` run, no real
+  `claude -p` chain. Every fix here is provable locally with `go test`.
+- **WINDOWS rows 57 and 58 may be marked fixed only** when the exact planted
+  mutation named in each row turns its guard red. Row 53 (the practice
+  project has never run past step 2 of 14) stays open regardless — this round
+  does not touch it and must not re-describe it as satisfied.
+- **No runtime behaviour change beyond WR-03's notice wording.** The
+  attended refusal path stays byte-for-byte identical
+  (`TestAttendedRefusalTextIsUnchanged` must keep passing), no refusal is
+  deleted, downgraded, or stripped of its `NextCommand`, and the self-recovery
+  decision itself is not redesigned. GAP2's still-open WR-01 (the decision
+  records success before confirming it — a design change) and WR-05 (a future
+  quiet-classified command) stay honestly carried forward, not re-litigated
+  here.
