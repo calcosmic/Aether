@@ -1132,7 +1132,7 @@ Plans:
 4. No screen advises a command without a menu version or uses an unexplained invented word; the failure log has a menu command; a failure the safety filter rejects is still recorded in readable words.
 5. One command writes a report bundle, and every refusal tells a chat to report it rather than patch Aether.
 
-**Plans:** 16/16 plans executed
+**Plans:** 19 plans (16 executed; a fourth gap-closure round of 3 plans planned 2026-09-24)
 
 **Result:** the fourth owner-approved real walk — run after fixing the two safety checks that
 previously could not fail, and after finding and fixing the reason the program's saved picture of
@@ -1212,6 +1212,15 @@ Plans:
 **Wave 14** *(blocked on Wave 13 completion)*
 
 - [x] 208-16-PLAN.md — Close the phase with whatever is still unproven named in the open, for the next phases to pick up (UED-10; D-06)
+
+**Wave 15** *(fourth gap-closure round — blocked on Wave 14 completion)*
+
+- [ ] 208-17-PLAN.md — The check on rebuilding the saved picture of your code sees both ways a second decision can be written, says what it still cannot see, and a smaller survey team is proved to still finish (UED-10; D-07)
+- [ ] 208-18-PLAN.md — The check forbidding a second "carry on without asking" decision excuses five reviewed places rather than three whole files, stops reading a leftover copy of this repository, and the screen's closing sentence comes from the row that fired (UED-10; D-07)
+
+**Wave 16** *(blocked on Wave 15 completion)*
+
+- [ ] 208-19-PLAN.md — Prove nothing else moved, close the two defect-register entries on the evidence each demanded, leave the oldest one open, and correct the phase's own account of itself (UED-10; D-07)
 
 ### Phase 209: A Light Default Path
 
