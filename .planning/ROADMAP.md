@@ -1280,7 +1280,15 @@ Plans:
 2. Every blocker hit during the fortnight is counted and reported.
 3. The stopping rule in the decision record is applied honestly.
 
-**Plans:** 0 plans
+**Plans:** 2 plans
+
+**Wave 1**
+
+- [ ] 210-01-PLAN.md — Open the fortnight: the owner names his real projects and the dates, what counts as a blocker is fixed in writing before any exists, and every chat in this repository writes a blocker down before it fixes one (UED-19, UED-20; D-01, D-02, D-03)
+
+**Wave 2** *(runs at the end of the fortnight, blocked on Wave 1)*
+
+- [ ] 210-02-PLAN.md — Close it honestly: the real count read out of the ledger, the owner's own per-project answer and his verdict against the stopping rule, recorded either way (UED-19, UED-20; D-03)
 
 ## Milestone Traceability
 
