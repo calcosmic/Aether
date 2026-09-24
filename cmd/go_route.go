@@ -16,6 +16,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/calcosmic/Aether/pkg/codegraph"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -39,13 +40,11 @@ const smallJobFileBudget = 3
 // pathological working tree, never a size signal itself.
 const jobSizeWalkBudget = 20000
 
-// jobSizeSkipDirNames are directory names gatherJobSizeFacts never descends
-// into -- large, machine-generated trees that would swamp the walk without
-// ever being what a sentence names.
-var jobSizeSkipDirNames = map[string]bool{
-	".git":         true,
-	"node_modules": true,
-}
+// gatherJobSizeFacts never maintains its own skip list -- it reuses
+// codegraph.ShouldSkipDir, the one canonical set of noise directories every
+// tree-walk in this repository must use (pkg/codegraph/scan_filter.go),
+// so a divergent local list can never quietly re-appear here
+// (TestSkipListDivergence).
 
 // smallAttemptFacts are facts about a small-route attempt that already
 // ran -- all of them independently measured (the disk-measured
@@ -269,8 +268,9 @@ func jobSizeSentenceTokens(sentence string) []string {
 }
 
 // jobSizeMatchedReferents walks root once (bounded by jobSizeWalkBudget,
-// skipping jobSizeSkipDirNames and .aether/data) and returns every real
-// path whose base name, base name without extension, or containing
+// skipping codegraph.ShouldSkipDir's canonical noise directories) and
+// returns every real path whose base name, base name without extension, or
+// containing
 // directory's name equals one of tokens, case-insensitively. Matching a
 // directory expands to every file underneath it, so a sentence naming a
 // directory is sized by how many files that directory actually holds, not
@@ -302,10 +302,7 @@ func jobSizeMatchedReferents(root string, tokens []string) []string {
 		relSlash := filepath.ToSlash(rel)
 		if d.IsDir() {
 			name := strings.ToLower(d.Name())
-			if jobSizeSkipDirNames[name] {
-				return filepath.SkipDir
-			}
-			if relSlash == ".aether/data" || strings.HasPrefix(relSlash, ".aether/data/") {
+			if codegraph.ShouldSkipDir(name) {
 				return filepath.SkipDir
 			}
 			if tokenSet[name] {

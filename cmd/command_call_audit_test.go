@@ -1327,6 +1327,21 @@ var knownEnrichmentSubcommands = map[string]bool{
 	"worktree-allocate":        true,
 	"worktree-list":            true,
 	"worktree-merge-back":      true,
+	// go (Phase 209, the single-door /ant-go command): a failed or refused
+	// job never halts a run -- D-01/D-03 for that phase are explicit that
+	// the command always does something honest (runs the quick attempt,
+	// or hands off to planning) and never refuses the owner. No
+	// verification result, security scan, or gate outcome depends on a
+	// single "aether go" call succeeding, so this is enrichment, not a
+	// gate, judged deliberately here per this test's own review
+	// requirement.
+	"go": true,
+	// advanced-commands (Phase 209, plan 03): the machine-wide preference
+	// toggle for showing the full command catalogue instead of the short
+	// default menu. Its failure degrades a convenience setting only -- no
+	// verification result, security scan, or gate outcome depends on it --
+	// so it is enrichment, not a gate.
+	"advanced-commands": true,
 }
 
 // T-160-23: no documented subcommand may sit unclassified. The enrichment

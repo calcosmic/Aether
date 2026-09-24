@@ -77,6 +77,14 @@
     "stability_score": 91
   },
   {
+    "name": "advanced-commands",
+    "short_description": "Get or set whether the full command menu shows by default",
+    "flags": [],
+    "parent_command": "",
+    "has_subcommands": true,
+    "output_mode": "unknown"
+  },
+  {
     "name": "assumption-list",
     "short_description": "List persisted plan assumptions",
     "flags": [
@@ -2779,6 +2787,16 @@
       "v5.4.0": true
     },
     "stability_score": 100
+  },
+  {
+    "name": "go",
+    "short_description": "Do what you asked for — the program picks a quick job or a planned one and says which",
+    "flags": [
+      "timeout"
+    ],
+    "parent_command": "",
+    "has_subcommands": false,
+    "output_mode": "unknown"
   },
   {
     "name": "graph-cluster",
@@ -9231,6 +9249,54 @@
     "parent_command": "",
     "has_subcommands": false,
     "output_mode": "json+visual"
+  },
+  {
+    "name": "get",
+    "short_description": "Show whether the full command menu shows by default on this machine",
+    "flags": [],
+    "parent_command": "advanced-commands",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.10",
+    "historical_presence": {
+      "v1.10": true,
+      "v1.11": true,
+      "v1.12": true,
+      "v1.13": true,
+      "v1.14": true,
+      "v1.17": true,
+      "v1.18": true,
+      "v1.19": true,
+      "v1.20": true,
+      "v1.21": true,
+      "v5.4.0": false
+    },
+    "stability_score": 91
+  },
+  {
+    "name": "set",
+    "short_description": "Turn the full command menu on or off by default on this machine",
+    "flags": [],
+    "parent_command": "advanced-commands",
+    "has_subcommands": false,
+    "output_mode": "unknown",
+    "classification": "public_utility",
+    "since_version": "v1.10",
+    "historical_presence": {
+      "v1.10": true,
+      "v1.11": true,
+      "v1.12": true,
+      "v1.13": true,
+      "v1.14": true,
+      "v1.17": true,
+      "v1.18": true,
+      "v1.19": true,
+      "v1.20": true,
+      "v1.21": true,
+      "v5.4.0": false
+    },
+    "stability_score": 91
   },
   {
     "name": "closeout",

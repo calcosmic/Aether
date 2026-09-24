@@ -481,6 +481,77 @@ fix were deliberately broken again, one at a time, in a disposable copy — and 
 this new check caught it. The sixth bug still has no fix; its check is built and stays failing
 on purpose until the next phase fixes it. Five proven, not six.*
 
+### A Light Default Path (v1.29, Phase 209)
+
+`/ant-go "<what you want>"` is one entry command for ordinary work — from a one-line typo fix
+to a whole feature. It never asks the owner to choose which command to type first: the program
+itself measures how much of the real project the sentence actually names (existing files and
+folders it points at, an already-accepted plan with work still outstanding) and picks the quick
+route or the planning route from that measurement alone, never from adjectives like "quick" or
+"big" in the sentence — proven genuinely two-valued (the same sentence resolves to a different
+route in two genuinely different repositories) and proven indifferent to how the sentence is
+worded, by `TestGoRouteIsComputedNotConstant` and `TestGoRouteIgnoresHowTheSentenceIsWorded`
+(`resolveJobSizeRoute`, `cmd/go_route.go`, guarded as the one and only place a route is ever
+decided by `TestGoRouteHasOneAuthority`).
+
+A quick attempt that turns out bigger than it looked — it touched more files than the small
+route's own budget, or the project's own checks did not pass on it — is moved up to the
+planning route by the program itself, on its own authority, with exactly one added
+plain-English line naming the measured fact that made the call, and never a question put to
+the owner. This is a one-way move only; a job already sized big before the attempt never comes
+back down. Proven by `TestGoEscalatesWhenTheSmallAttemptProvesBigger`,
+`TestGoNeverMovesAJobBackDown`, and `TestGoEscalationNeverAsksAndNeverBlocks` (the last one is a
+standing guard: pasting any new refusal into the command's own source makes it fail, naming the
+exact line).
+
+The default `aether --help` screen the owner actually sees is now his own reviewed and approved
+short set — ten commands in two named groups ("Everyday commands": `/ant-go`, `/ant-init`,
+`/ant-status`, `/ant-continue`, `/ant-flags`, `/ant-resume`, `/ant-seal`; "When you need them":
+`/ant-oracle`, `/ant-swarm`, `/ant-dream`, the three he named unprompted as tools he actually
+reaches for) — not the planner's own six-command starting proposal, which he amended after
+reviewing the real rendered screen. Everything else that used to show on that screen still
+works exactly as before when typed directly; hiding a command from the default screen never
+disables it, and the full list is one machine-wide setting away
+(`aether advanced-commands set on`). Proven by `TestDefaultMenuShowsOnlyTheApprovedSet` (locked
+against his exact ruling, independently of the variable it guards, so a later silent change to
+the menu fails this test by name) and `TestHiddenCommandsStillRun` (every demoted command still
+runs when typed directly).
+
+For a project with a recorded goal, the planning route the single door hands off to derives and
+approves a specification from the owner's own sentence whenever one is missing or unapproved —
+so the runtime's own missing-specification refusal never fires on this path — and runs planning
+with a fixed "fast" preset, so it never puts a depth question to the owner. Given an already
+-accepted plan candidate, the run then reaches built work through exactly one owner-typed
+command with no further owner-typed steps in between, proven by
+`TestGoalReachesBuiltWorkWithNoExtraSteps`; clarifying intent, hand-drafting a specification, and
+a deeper planning preset all still work exactly as before, any time the owner asks for one of
+them by name, proven by `TestDiscussAndSpecStillBehaveExactlyAsBefore`.
+
+**One honest limit, measured rather than assumed.** That "no further owner-typed steps" claim
+is about the runtime's own state machine — given an accepted plan candidate, build genuinely
+needs nothing more from the owner. It is not a claim about what happens on the way to that
+accepted candidate. A real, live, unattended chat session measured for this phase's own timing
+report (`.planning/phases/209-light-default-path/209-TIMING.md`) found that `/ant-go`'s own
+planning hand-off, run for real with nobody watching, printed Aether's planning screen and then
+stopped to ask how to proceed, rather than dispatching the planning helpers itself — it needed
+one further reply before it actually built anything. Recorded there, not hidden here, and not
+fixed in this phase: closing that specific gap is a change to the `/ant-go` wrapper's own
+instructions, not to this section's claims.
+
+*For dummies: type `/ant-go "fix the typo in the README"` or `/ant-go "add dark mode to the
+settings page"` and the program itself works out whether that is a five-second fix or a real
+piece of planned work, tells you which and why, and gets on with it — you never have to guess
+which command to type first. If a "quick" job turns out to be bigger once it is actually tried,
+the program moves it up to proper planning by itself and tells you in one line why, rather than
+quietly doing a half job or stopping to ask you what it should have already worked out. The
+everyday `--help` screen now shows only the ten commands the owner actually reviewed and picked,
+in two groups — nothing was deleted, the rest is one setting away. And when a project already
+has a goal, `/ant-go` writes down and approves a plain description of what you asked for on your
+behalf if one doesn't already exist, so it never gets stuck asking you to describe the work a
+second time in a different form — though a real, unattended test run found that the handoff into
+planning itself can still stall and ask for a nudge before work actually starts, which is written
+up honestly in the phase's own timing report rather than glossed over here.*
+
 ### Queen-Owned Orchestration
 
 The Queen chooses execution and review depth autonomously by default. Users

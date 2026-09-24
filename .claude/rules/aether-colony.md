@@ -18,11 +18,17 @@ stops without changing runnable state when evidence conflicts.
 
 ## Available Commands
 
+The default `--help` screen only shows a short, owner-approved set of everyday commands.
+Everything below still works exactly as it does today when typed directly — hiding a command
+from the default screen never disables it. Turn the full list back on for this machine with
+`aether advanced-commands set on`.
+
 ### Setup & Getting Started
 | Command | Purpose |
 |---------|---------|
 | `/ant-lay-eggs` | Set up Aether in this repo (one-time, creates .aether/) |
 | `/ant-init "<goal>"` | Start a colony with a goal |
+| `/ant-go "<what you want>"` | Do one piece of ordinary work, from a typo fix to a whole feature — the program picks the quick route or the planning route from the size of the change, says which and why, and moves a job up to planning by itself if a quick attempt turns out bigger |
 | `/ant-colonize` | Analyze existing codebase |
 | `/ant-plan` | Generate project phases |
 | `/ant-build <phase>` | Execute a phase with parallel workers |

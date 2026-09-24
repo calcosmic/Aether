@@ -643,6 +643,7 @@ func commandGuideLiteralCommands() []string {
 		"flag",
 		"flags",
 		"focus",
+		"go",
 		"help",
 		"history",
 		"import-signals",
