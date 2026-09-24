@@ -61,7 +61,7 @@ Each phase is small; its proof is a real run in a real chat; one review round.
   caps; hooks and menu commands must be loaded. Proof: the journey catches each of 2026-09-21's six
   blockers when its fix is removed.
 
-- [ ] **Phase 208 — Never a Dead End.** Every place the program refuses is listed and sorted: a
+- [x] **Phase 208 — Never a Dead End.** Every place the program refuses is listed and sorted: a (completed 2026-09-24)
   refusal that does not protect against losing work becomes a warning that carries on. Every
   refusal that stays names the one command that gets past it, as a required field a test enforces,
   and the journey runs each printed command. A failed check adds tasks and carries on. Status is

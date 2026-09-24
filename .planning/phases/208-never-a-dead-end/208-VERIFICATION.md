@@ -1,23 +1,31 @@
 ---
 phase: 208-never-a-dead-end
-verified: 2026-09-23T18:10:00Z
-status: gaps_found
+verified: 2026-09-24T11:20:00Z
+status: passed
 score: 4/5 roadmap success criteria verified
 behavior_unverified: 0
-overrides_applied: 0
+overrides_applied: 1
 re_verification:
+  pass: third (2026-09-24, fourth gap-closure round 208-17/18/19, owner ruling D-07)
   previous_status: gaps_found
   previous_score: 4/5
   gaps_closed:
     - "Third owner-authorised real walk run (208-12, session ac607cb5, 2026-09-23, after 208-11's runtime self-recovery landed). The colonize-existing-survey stop no longer prints or asks anything in an unattended session: attemptRefusalSelfRecovery carries out the forced re-survey inside the Go runtime before a refusal is ever constructed, and colonize-finalize succeeded live for the first time in any real run of this rehearsal (fin=0, 7 documents, honest closeout text)."
     - "Two of WINDOWS row 53's three previously-recorded proximate causes (missing generated_at; ask-vs-act ambiguity) independently reconfirmed fixed live, in the same run, with no regression."
+    - "CLOSED 2026-09-24 by this pass, by replanting the exact mutation the first recorded gap named (a rival self-recovery decision planted in the shared refusal-output path, cmd/helpers.go outputRefusal, in a disposable git worktree at 64570375 -- the working checkout was never modified). TestSelfRecoveryHasOneDecision now FAILS on it, naming both file and function: 'a self-recovery decision or the is-anyone-here fact may only be read at the five reviewed places named in mayHoldASelfRecoveryDecision; found a read outside that list: [cmd/helpers.go::secondSelfRecoveryDecision (reads the is-anyone-here fact)]'. Mutation reverted; the guard family passes clean on the real checkout. Landed by 208-18 (WINDOWS row 58)."
+    - "CLOSED 2026-09-24 by this pass, by replanting the exact mutation the second recorded gap named (the opt-in table lookup, the ProtectsWork check and the NextCommand check all deleted from attemptRefusalSelfRecovery, same disposable worktree). TestOnlyADeclaredRefusalIsEverRecoveredFrom -- which did not exist when the gap was recorded -- now FAILS on it: 'build-dispatch-manifest-wrong-source is not a key of the opt-in table and must never be recovered from'. Mutation reverted; the guard family passes clean on the real checkout."
   gaps_remaining:
     - "ROADMAP Success Criterion 2's second clause (\"the journey runs each printed command\") is still not proven by a live run — and, for the one refusal that has mattered so far, may now be structurally unprovable through this route, because self-recovery means that refusal never prints in an unattended session at all. journeyRunPrintedNextCommands has still never fired outside a synthetic fixture; the journey has still never progressed past step 2 of 14 in any real walk."
-    - "NEW this round, found independently in this pass, not carried over from the prior report: two of 208-11's own declared must_haves for the self-recovery mechanism it just built are not actually enforced by any test that can fail. This directly concerns the phase's own goal (\"the program warns and carries on unless work could be lost\") because the mechanism under-test is precisely the one now allowed to silently replace an owner's survey without asking."
+  owner_override:
+    applied_to: "ROADMAP Success Criterion 2, second clause (the journey runs each printed command) -- the one criterion of five still unproven by a live run."
+    decision: "D-06 (208-CONTEXT.md), reaffirmed by the owner in the 208-17/18/19 execution session on 2026-09-24: once the two unfalsifiable guards are genuinely fixed, Phase 208 is signed off even though no real walk has carried the practice project past step 2 of 14. That fact is carried forward as WINDOWS row 53, honestly open with its current evidence, for Phase 209/210 -- never quietly dropped and never re-described as satisfied."
+    sanctioned_by_this_report: "This report's own third gap already named this exact route as one of its two acceptable resolutions: 'an explicit owner decision to accept the phase without this specific live proof, carrying WINDOWS row 53 forward as a standing, named, honestly-open item.'"
+    score_is_still: "4/5 -- the override records an owner decision to ship at 4/5, not a claim of 5/5."
   regressions: []
+  full_suite_this_pass: "go test ./... -count=1 -timeout 90m on 64570375: discovered=6031 executed=6031 (equal, not truncated). 19 of 20 packages pass; cmd fails with exactly 30 top-level tests, every one already catalogued on WINDOWS rows 12 and 56 plus the 2026-09-14 known-red baseline. The single name not on the pre-round memory list, TestSeededBankIsReproducible, is on WINDOWS row 56 and was independently confirmed already red at the pre-round commit 55639ff9. Zero regressions; the known-red list was not extended."
 gaps:
   - truth: "The decision to recover instead of stopping is made in exactly one place; a second copy anywhere in the module fails a named test (208-11-PLAN.md must_have)."
-    status: failed
+    status: closed
     reason: >
       Independently reproduced in a disposable git worktree (not merely re-trusted from
       208-REVIEW-GAP2.md's own claim): planting a second, competing self-recovery decision in
@@ -52,7 +60,7 @@ gaps:
       - "Widen the one-decision guard so any non-test file other than cmd/refusal_self_recovery.go that calls sessionHasNoOneToAsk fails by name, not just files that also call refuse(...) -- 208-REVIEW-GAP2.md's WR-02 [CR-02] fix sketch (a closed allow-list of files permitted to read the fact) is a workable shape."
       - "Re-run the planted-mutation reproduction above against the widened guard and confirm it now fails, then restore."
   - truth: "Only a refusal that explicitly declares Aether can carry out its own recovery is ever recovered from, and such a refusal must still be a stop that protects work and names a command (208-11-PLAN.md must_have, D-03's refusal-contract constraint)."
-    status: failed
+    status: closed
     reason: >
       Independently reproduced in the same disposable worktree: deleting the opt-in table lookup,
       the ProtectsWork check and the NextCommand check from attemptRefusalSelfRecovery --
@@ -132,12 +140,12 @@ gaps:
 human_verification: []
 ---
 
-# Phase 208: Never a Dead End — Verification Report (Second Re-verification)
+# Phase 208: Never a Dead End — Verification Report (Third Re-verification)
 
 **Phase Goal:** The program warns and carries on unless work could be lost, and every refusal that remains says how to get past it.
-**Verified:** 2026-09-23T18:10:00Z
-**Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 208-11 (runtime self-recovery) and 208-12 (the third authorised journey walk)
+**Verified:** 2026-09-24T11:20:00Z
+**Status:** passed (4/5, with one owner-accepted override — see "Third re-verification" below)
+**Re-verification:** Yes — third pass, after the fourth gap-closure round (208-17/18/19, owner ruling D-07)
 
 ## What changed since the prior verification
 
@@ -345,5 +353,54 @@ walk, or an explicit owner decision to accept the phase without that specific li
 
 ---
 
-_Verified: 2026-09-23T18:10:00Z_
-_Verifier: Claude (gsd-verifier)_
+## Third re-verification — 2026-09-24, after the fourth gap-closure round
+
+The two items this report recorded as **failed** on 2026-09-23 are now **closed**, and each was
+closed the only way this project's Definition of Done accepts: by replanting the exact mutation the
+gap itself named and watching the guard go red. Both replants were done inside a disposable git
+worktree forked from `64570375` and reverted immediately; no file in the working checkout was
+modified to produce this evidence.
+
+| Recorded gap | Mutation replanted | Observed result |
+|---|---|---|
+| The recover-instead-of-stopping decision is made in exactly one place | A rival decision planted in the shared refusal-output path (`outputRefusal`, `cmd/helpers.go`) — the report's own reproduction, verbatim | `TestSelfRecoveryHasOneDecision` **FAILS**, naming file *and* function: `found a read outside that list: [cmd/helpers.go::secondSelfRecoveryDecision (reads the is-anyone-here fact)]` |
+| Only a refusal that declares it can self-recover is ever recovered from | The opt-in table lookup, the `ProtectsWork` check and the `NextCommand` check all deleted from `attemptRefusalSelfRecovery` | `TestOnlyADeclaredRefusalIsEverRecoveredFrom` **FAILS**: `build-dispatch-manifest-wrong-source is not a key of the opt-in table and must never be recovered from` |
+
+`TestOnlyADeclaredRefusalIsEverRecoveredFrom` did not exist when the second gap was recorded — the
+report asked for exactly this test by name and it is now present and provably able to fail. With
+both mutations reverted, `TestSelfRecoveryHasOneDecision`, `TestOnlyADeclaredRefusalIsEverRecoveredFrom`,
+`TestOnlyASafeRefusalCanRecoverItself`, `TestAttendedRefusalTextIsUnchanged` and
+`TestSavedMapPublicationHasOneBuilder` all pass on the real checkout.
+
+### Whole-suite check
+
+`go test ./... -count=1 -timeout 90m` on `64570375`: **discovered=6031, executed=6031** — equal, so
+the run finished complete rather than stopping partway and printing a clean-looking summary of a
+fraction. 19 of 20 packages pass. `cmd` fails with exactly 30 top-level tests, every one of which is
+already catalogued on this project's own defect register (WINDOWS rows 12 and 56) or the recorded
+2026-09-14 known-red baseline. The one name not on the pre-round list, `TestSeededBankIsReproducible`,
+is named in WINDOWS row 56 and was independently confirmed already red at the pre-round commit
+`55639ff9`. **Zero regressions; the known-red list was not extended.**
+
+### What is still not proven, and why the phase closes anyway
+
+Success Criterion 2's second clause — *the journey runs each printed command* — is still unproven by
+a live run. The practice project has still never progressed past step 2 of 14 in any real walk, and
+`journeyRunPrintedNextCommands` has still never fired outside a synthetic fixture. The score is
+therefore **4/5, not 5/5**, and nothing here claims otherwise.
+
+The phase closes on the owner's own standing ruling **D-06** (`208-CONTEXT.md`), reaffirmed by the
+owner during this execution session on 2026-09-24: once the two unfalsifiable guards are genuinely
+fixed, Phase 208 is signed off, with the never-proven-end-to-end fact carried forward as
+**WINDOWS row 53** — honestly open, with its current evidence, for Phase 209/210 to pick up. Row 53
+was not touched, not waived and not re-described as satisfied by this round.
+
+This is the resolution route this report's own third gap already named as acceptable: *"an explicit
+owner decision to accept the phase without this specific live proof, carrying WINDOWS row 53 forward
+as a standing, named, honestly-open item."* It is recorded as `overrides_applied: 1` rather than as a
+verified criterion.
+
+---
+
+_Verified: 2026-09-24T11:20:00Z_
+_Verifier: Claude (gsd-verifier, second pass 2026-09-23); third pass by the execute-phase orchestrator, 2026-09-24_
