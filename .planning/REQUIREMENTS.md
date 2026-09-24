@@ -51,7 +51,7 @@ requirement is unmet (CLAUDE.md, Definition of Done). "Proof" names that command
 
 - [ ] **UED-16** — One entry command; the program picks small or big from the size of the change, says why, and moves a job back up when "small" was wrong. Proof: real-flow tests for both routes and the escalation. Details need the owner's decisions first.
 - [ ] **UED-17** — One planning pass by default; discuss, specification approval and deeper rounds are opt-in. Proof: a real-flow test from goal to built work with no extra steps.
-- [ ] **UED-18** — About six menu commands visible by default, the rest behind an advanced setting. Proof: a test on the default help screen.
+- [x] **UED-18** — About six menu commands visible by default, the rest behind an advanced setting. Proof: a test on the default help screen.
 
 ### Two-week freeze (Phase 210)
 

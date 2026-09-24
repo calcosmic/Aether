@@ -5,15 +5,15 @@ milestone_name: Use It Every Day
 current_phase: 209
 current_phase_name: A Light Default Path
 status: executing
-stopped_at: Completed 209-02-PLAN.md
-last_updated: "2026-09-24T15:21:00.629Z"
+stopped_at: Completed 209-03-PLAN.md
+last_updated: "2026-09-24T16:07:30.085Z"
 last_activity: 2026-09-24
-state_head: fdfbc56282ec758a5e018351774a8614d05db7ce
+state_head: 3726c4e8af48b50601d1c805930fe79e8971b6c4
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 32
-  completed_plans: 29
+  completed_plans: 30
   percent: 60
 ---
 
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 209 (A Light Default Path) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
 Status: Ready to execute
-Plan: 3 of 5
+Plan: 4 of 5
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -235,6 +235,7 @@ Last activity: 2026-09-24
 | Phase 208 P19 | 30min | 2 tasks | 3 files |
 | Phase 209 P01 | 45min | 3 tasks | 14 files |
 | Phase 209 P02 | 75min | 3 tasks | 7 files |
+| Phase 209 P03 | 55min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -722,6 +723,7 @@ Last activity: 2026-09-24
 - [Phase ?]: 209-01: resolveJobSizeRoute reads project state via a plain file read (readLifecycleState), never storage.NewStore, keeping the size decision genuinely read-only.
 - [Phase 209]: Task 1+2 production code (go_route.go, go_cmd.go) landed in one commit per CLAUDE.md's Coherent Jobs grouping rule (shared implementation files, genuine in-place dependency).
 - [Phase 209]: The 'no project set up yet' route reason lives inside resolveJobSizeRouteBase's existing zero-matched-paths branch rather than a second decision layer, keeping resolveJobSizeRoute the one route authority.
+- [Phase 209]: Locked the default menu to the owner's actual ruling (ten commands, two groups, reworded opening/closing lines) instead of the planner's six-command proposal, with a test that hardcodes the literal approved set so a later silent change fails by name. — The owner reviewed the real rendered screen at the Task 3 checkpoint and amended D-02's proposal; his reply is the authority, applied here as a data edit per the plan's own design.
 
 ### Pending Todos
 
@@ -844,8 +846,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T15:21:00.333Z
-Stopped at: Completed 209-02-PLAN.md
+Last session: 2026-09-24T16:07:29.766Z
+Stopped at: Completed 209-03-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
