@@ -5,17 +5,17 @@ milestone_name: Use It Every Day
 current_phase: 209
 current_phase_name: A Light Default Path
 status: verifying
-stopped_at: Phase 209 complete including the 209-06 gap fix; defect 60's wrapper fix landed and locked, one live run outstanding
-last_updated: "2026-09-24T19:19:02.261Z"
+stopped_at: Completed 209-07-PLAN.md (gap closure)
+last_updated: "2026-09-24T20:22:49.000Z"
 last_activity: 2026-09-24
-state_head: 9d67afca384c78705018dfc66af224f959685f98
+state_head: 2b7bcc754074ba78b2ab931990ae70815724b204
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 33
-  completed_plans: 33
+  total_plans: 34
+  completed_plans: 34
   percent: 60
-last_activity_desc: Phase 209 six plans executed; planning hand-off fixed and proved red-first
+last_activity_desc: Phase 209 plan 07 (gap closure) executed — TestEscalationNeedsAFailedCheckNotAnUnrunnableOne proved red then green; jobSizeAttemptEscalationReason no longer folds an unrunnable check into a failed one; defect register entry 61 closed
 ---
 
 # Project State
@@ -34,10 +34,10 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 209 (A Light Default Path) — GAP CLOSURE PLAN 06 EXECUTED
+Phase: 209 (A Light Default Path) — GAP CLOSURE PLAN 07 EXECUTED
 Next phase: 210 (Two-Week Freeze) — not yet planned
-Status: Plan 06 (gap closure) executed — defect register entry 60 closed; re-verify phase 209 before advancing to Phase 210
-Plan: 6 of 6
+Status: Plan 07 (gap closure) executed — defect register entry 61 closed; re-verify phase 209 before advancing to Phase 210
+Plan: 7 of 7
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -240,6 +240,7 @@ Last activity: 2026-09-24
 | Phase 209 P04 | 2h 30min | 3 tasks | 8 files |
 | Phase 209 P05 | 1h 59min | 2 tasks | 9 files |
 | Phase 209 P06 | 15min | 2 tasks | 5 files |
+| Phase 209 P07 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -732,6 +733,7 @@ Last activity: 2026-09-24
 - [Phase 209]: The medium job's planning handoff via /ant-go stopped and asked instead of finishing unattended, contradicting the phase's own zero-further-owner-steps claim; recorded honestly in 209-TIMING.md rather than hidden, and not fixed in this plan (out of scope).
 - [Phase 209]: The practice-project fixture's own aether install/update --force steps sync Aether's global slash commands to this machine's real ~/.claude and ~/.codex by default; worked around with an isolated HOME for the one setup step, filed as WINDOWS.md entry 59.
 - [Phase 209]: Closed defect register entry 60: /ant-go's planning hand-off delegates by name to /ant-plan's real dispatch flow instead of naming an inert preset command — The falsifiability test (TestGoPlanningHandoffCanActuallyStartPlanning) was proved red on the committed wrapper text, naming all four wrapper sources, before the fix landed — satisfying this project's Definition of Done.
+- [Phase 209]: Closed defect register entry 61: jobSizeAttemptEscalationReason no longer escalates on a quick attempt whose checks could not be run at all (WorkOutcomePartial) — only a genuine check failure (WorkOutcomeBlocker) escalates now, restoring the quick path's own passed/failed/not-checked three-way status (command_truth.go:455) instead of folding two of them together. TestEscalationNeedsAFailedCheckNotAnUnrunnableOne was proved red on case 2 (unrunnable checks) against the committed rule before the fix landed.
 
 ### Pending Todos
 
@@ -854,8 +856,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T19:19:02.010Z
-Stopped at: Completed 209-06-PLAN.md (gap closure)
+Last session: 2026-09-24T20:22:49.000Z
+Stopped at: Completed 209-07-PLAN.md (gap closure)
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.

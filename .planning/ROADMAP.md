@@ -1241,7 +1241,9 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 6/6 plans executed
+**Plans:** 7/7 plans executed
+
+- [x] 209-07-PLAN.md
 
 **Wave 1**
 
