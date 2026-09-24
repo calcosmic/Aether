@@ -1241,7 +1241,7 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed
 
 **Wave 1**
 
@@ -1258,7 +1258,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 209-05-PLAN.md — The four timing numbers written up honestly for the owner, the documentation, and the whole suite run to completion (UED-16, UED-17, UED-18; A-02)
+- [x] 209-05-PLAN.md — The four timing numbers written up honestly for the owner, the documentation, and the whole suite run to completion (UED-16, UED-17, UED-18; A-02)
 
 ### Phase 210: Two-Week Freeze
 
