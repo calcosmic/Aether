@@ -2,20 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 209
-current_phase_name: A Light Default Path
 status: executing
 stopped_at: Phase 208 complete, ready to plan Phase 209
-last_updated: "2026-09-24T14:29:32.762Z"
+last_updated: "2026-09-24T14:53:58.800Z"
 last_activity: 2026-09-24
-last_activity_desc: Phase 208 complete, transitioned to Phase 209
-state_head: faa1a6a7607f13b015838fa716fec948f7dcb294
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 32
-  completed_plans: 27
-  percent: 60
+  total_phases: 18
+  completed_phases: 11
+  total_plans: 247
+  completed_plans: 234
+  percent: 61
 ---
 
 # Project State
@@ -25,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 208 — Never a Dead End
+**Current focus:** Phase 209 — A Light Default Path
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -34,11 +30,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 209 (A Light Default Path) — READY TO EXECUTE
+Phase: 209 (A Light Default Path) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
 Status: Ready to execute
-Plan: Not started
-Last activity: 2026-09-24 — Phase 208 complete, transitioned to Phase 209
+Plan: 2 of 5
+Last activity: 2026-09-24
 
 ## Performance Metrics
 
@@ -234,6 +230,7 @@ Last activity: 2026-09-24 — Phase 208 complete, transitioned to Phase 209
 | Phase 208 P17 | ~25min | 2 tasks | 1 files |
 | Phase 208 P18 | 35min | 2 tasks | 2 files |
 | Phase 208 P19 | 30min | 2 tasks | 3 files |
+| Phase 209 P01 | 45min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -718,6 +715,7 @@ Last activity: 2026-09-24 — Phase 208 complete, transitioned to Phase 209
 - [Phase 208]: 208-17 (fourth gap-closure round, D-07): widened TestSavedMapPublicationHasOneBuilder to catch a composite-literal write to PublicationMode, not only an assignment statement (CR-01), and gave its doc comment an honest "what this still cannot catch" section matching TestSelfRecoveryHasOneDecision's standard (WR-04). Added TestALighterSurveyTeamStillPublishesTheSavedMap, the first executable proof that a light-depth colonize's smaller surveyor team still publishes the saved map through the transactional finalize lane's relaxed branch (WR-02) — confirmed by mutation that the pre-existing test never reached that branch. CR-02, WR-01 and WR-03 remain open for 208-18/19.
 - [Phase 208]: 208-18 (fourth gap-closure round, D-07): mayHoldASelfRecoveryDecision now keys the self-recovery excuse list by "file::enclosing declaration" instead of by whole file, so a rival decision planted anywhere else inside an already-reviewed file is caught by name (CR-02) — the third consecutive round this exact blind-spot-moves-not-closes defect had survived. Added the missing "worktrees" skip to the same walk (WR-01). refusalSelfRecoveryTable rows now carry two fields, Reason and Action, so the notice's closing clause is read from the row that fired instead of a fixed phrase baked into the renderer (WR-03) — what the owner reads today is unchanged, character for character. All four proved by planting the named mutation in a disposable worktree and watching the guard go red. WR-02 (208-13 finding: the decision announces/records before confirming) and WR-05 (a future quiet-classified command recovering invisibly) both stay honestly open, out of scope for this plan.
 - [Phase 208]: 208-19 (fourth gap-closure round, D-07, closing plan): re-ran every check family this round could have disturbed in fresh scoped commands — nothing new broke; the only failures seen were the two already-catalogued TestCodexNativeCancellation tests (WINDOWS row 56). Marked WINDOWS rows 57 and 58 fixed via the register tool's own subcommand, only after confirming each row's own named mutation was genuinely planted and turned its check red in 208-17/18-SUMMARY.md; each row's description now names that mutation, and row 57's backwards "Related:" clause (which had the two checks' worktree-skip status swapped) is corrected. Row 53 left byte-for-byte unchanged, still open. ROADMAP.md's Phase 208 account rewritten: the owner's 2026-09-24 close-the-phase decision was superseded the same day by reopening it for a fourth round covering all six review findings, and that round closed them — the paragraph now says so instead of describing the phase as closed with two gaps left open. Phase 208 now reads nineteen of nineteen plans executed.
+- [Phase ?]: 209-01: resolveJobSizeRoute reads project state via a plain file read (readLifecycleState), never storage.NewStore, keeping the size decision genuinely read-only.
 
 ### Pending Todos
 

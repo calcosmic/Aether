@@ -1241,11 +1241,11 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 **Wave 1**
 
-- [ ] 209-01-PLAN.md — One new command, `/ant-go`, doing the small job end to end with a real measured size decision behind it (UED-16; D-01)
+- [x] 209-01-PLAN.md — One new command, `/ant-go`, doing the small job end to end with a real measured size decision behind it (UED-16; D-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
