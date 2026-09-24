@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -327,49 +328,79 @@ func TestUnattendedDirectColonizeRefreshesTheMapItself(t *testing.T) {
 	}
 }
 
-// mayReadTheIsAnyoneHereFact is the closed, checked-in allow-list of
-// non-test files permitted to read the is-anyone-here fact
-// (sessionHasNoOneToAsk) or name the opt-in self-recovery table
-// (refusalSelfRecoveryTable) today. TestSelfRecoveryHasOneDecision fails by
-// name on any other non-test file that does either.
+// mayHoldASelfRecoveryDecision is the closed, checked-in allow-list of
+// specific reviewed places -- not whole files -- permitted to read the
+// is-anyone-here fact (sessionHasNoOneToAsk) or name the opt-in
+// self-recovery table (refusalSelfRecoveryTable) today. Each key is
+// "<repo-relative file>::<enclosing declaration name>": the file a person
+// actually reviewed, and the exact function or top-level declaration inside
+// it the read sits in. TestSelfRecoveryHasOneDecision fails by name --
+// naming both the file and the enclosing declaration -- on any read of
+// either identifier that does not land inside one of these five places.
 //
-// This widens 208-11's original guard (208-13-PLAN.md Task 1, WR-02 /
-// 208-REVIEW-GAP2.md CR-02): the old predicate only flagged a file that
-// named the map, or that called BOTH sessionHasNoOneToAsk AND refuse(...) in
-// the same file -- so a second decision planted in cmd/helpers.go's
-// outputRefusal (a file that receives an already-built refusal value and
-// never calls refuse(...) itself) sailed straight through. The new predicate
-// drops the "also calls refuse" requirement entirely: any non-test file
-// outside this list that so much as reads the fact is an offender.
+// This replaces 208-13's file-keyed mayReadTheIsAnyoneHereFact
+// (208-18-PLAN.md CR-02 / 208-REVIEW-GAP3.md): excusing a whole file moved
+// the blind spot from an unreviewed file into a reviewed file at an
+// unreviewed line -- a rival "carry on without asking" decision planted
+// anywhere else inside cmd/refusal.go (a file the old, file-keyed guard
+// exempted wholesale) sailed straight through unnoticed. Keying by place
+// instead of file closes that: only the five specific, already-reviewed
+// reads named below are excused, and a rival decision written anywhere else
+// in one of these same three files is caught by name, exactly like a rival
+// decision in a fourth file always was.
 //
 // The list may shrink; it must not grow without its own owner ruling -- a
 // new entry here is exactly the "second decision" failure mode this guard
-// exists to catch, so adding one is a decision for a person, not a reflex to
-// make a test pass.
+// exists to catch, so adding one is a decision for a person, not a reflex
+// to make a test pass. An entry that no longer matches anything in the
+// current source (the place it named was removed, renamed, or stopped
+// reading the fact) fails the test by name rather than sitting there as a
+// stale excuse -- see the "excuse list can only shrink honestly" check
+// inside TestSelfRecoveryHasOneDecision below.
 //
 // What this still cannot catch, stated honestly rather than claimed away: a
 // second decision expressed without ever naming refusalSelfRecoveryTable or
 // calling sessionHasNoOneToAsk -- for example, a helper that always returns
 // a hard-coded true. Nothing in this repository writes a self-recovery
 // decision that way.
-var mayReadTheIsAnyoneHereFact = map[string]bool{
-	// Defines sessionHasNoOneToAsk and the opt-in env var it reads.
-	"cmd/unattended_session.go": true,
-	// Carries the shared guidance sentence on both refusal lanes (Error()
-	// and renderRefusal, 208-09-PLAN.md) -- reads the fact only to decide
-	// whether to append that sentence, never to decide whether to recover.
-	"cmd/refusal.go": true,
-	// The one decision: attemptRefusalSelfRecovery and its opt-in table.
-	"cmd/refusal_self_recovery.go": true,
+var mayHoldASelfRecoveryDecision = map[string]bool{
+	// The definition of the fact itself.
+	"cmd/unattended_session.go::sessionHasNoOneToAsk": true,
+	// Appends the shared guidance sentence on the one-line refusal lane
+	// (208-09-PLAN.md) -- reads the fact only to decide whether to append
+	// that sentence, never to decide whether to recover.
+	"cmd/refusal.go::Error": true,
+	// Appends the same sentence on the drawn-block lane.
+	"cmd/refusal.go::renderRefusal": true,
+	// The opt-in table's own declaration, which sits outside any function.
+	"cmd/refusal_self_recovery.go::refusalSelfRecoveryTable": true,
+	// The one decision.
+	"cmd/refusal_self_recovery.go::attemptRefusalSelfRecovery": true,
 }
 
 // TestSelfRecoveryHasOneDecision (208-11-PLAN.md Task 2, widened by
-// 208-13-PLAN.md Task 1): the one-decision guard. It walks every non-test Go
-// file in the module and fails by name if any file outside
-// mayReadTheIsAnyoneHereFact either names the opt-in map
-// (refusalSelfRecoveryTable) or calls sessionHasNoOneToAsk at all. It cannot
-// pass vacuously: it fails if the walk finds too few files, or if it never
-// actually visits the one decision file it expects to allow.
+// 208-13-PLAN.md Task 1, narrowed from files to places by 208-18-PLAN.md
+// Task 1): the one-decision guard. It walks every non-test Go file in the
+// module and, for each top-level declaration, attributes every read of
+// sessionHasNoOneToAsk or refusalSelfRecoveryTable to the declaration it
+// sits inside -- a function's own name for a *ast.FuncDecl, or a spec's own
+// first declared name for a *ast.GenDecl (a var, const, or type). It fails
+// by name -- the file AND the enclosing declaration -- on any such read
+// whose "<file>::<declaration>" key is not in mayHoldASelfRecoveryDecision.
+// It cannot pass vacuously: it fails if the walk finds too few files, if it
+// never actually visits the one decision file it expects to allow, or if
+// any excused place in mayHoldASelfRecoveryDecision was never observed
+// (a stale excuse).
+//
+// This walk also skips a "worktrees" directory at any depth (208-18-PLAN.md
+// WR-01 / 208-REVIEW-GAP3.md), matching the sibling walk in
+// cmd/colonize_snapshot_refresh_test.go and the pre-existing precedent in
+// cmd/build_attempt_external_test.go: without it, a leftover linked
+// worktree checked out inside this repository (as one genuinely is, right
+// now, under .claude/worktrees/) is parsed as if it were part of the tree
+// under review, which can produce a spurious failure naming a path nobody
+// is actually reviewing, or mask a genuine offender behind noise from a
+// stale, unrelated checkout.
 //
 // What this cannot catch, stated honestly rather than claimed away: a second
 // decision expressed without ever naming refusalSelfRecoveryTable or calling
@@ -390,7 +421,7 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		}
 		if info.IsDir() {
 			switch info.Name() {
-			case ".git", "vendor", "node_modules", "testdata", ".planning", "dist":
+			case ".git", "vendor", "node_modules", "testdata", ".planning", "dist", "worktrees":
 				return filepath.SkipDir
 			}
 			return nil
@@ -410,6 +441,7 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 
 	var sawSoleDecisionFile bool
 	var offenders []string
+	observed := make(map[string]bool, len(mayHoldASelfRecoveryDecision))
 	fset := token.NewFileSet()
 	for _, path := range goFiles {
 		rel, relErr := filepath.Rel(repoRoot, path)
@@ -420,37 +452,38 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		if rel == soleDecisionFile {
 			sawSoleDecisionFile = true
 		}
-		if mayReadTheIsAnyoneHereFact[rel] {
-			continue
-		}
 		file, parseErr := parser.ParseFile(fset, path, nil, 0)
 		if parseErr != nil {
 			t.Fatalf("parse %s: %v", rel, parseErr)
 		}
 
-		var namesTheMap bool
-		var callsSessionHasNoOneToAsk bool
-		ast.Inspect(file, func(n ast.Node) bool {
-			if ident, ok := n.(*ast.Ident); ok {
-				if ident.Name == "refusalSelfRecoveryTable" {
-					namesTheMap = true
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Name == nil {
+					continue
 				}
-				if ident.Name == "sessionHasNoOneToAsk" {
-					callsSessionHasNoOneToAsk = true
+				recordSelfRecoveryReads(d, rel, d.Name.Name, observed, &offenders)
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					var enclosing string
+					switch s := spec.(type) {
+					case *ast.ValueSpec:
+						if len(s.Names) == 0 {
+							continue
+						}
+						enclosing = s.Names[0].Name
+					case *ast.TypeSpec:
+						if s.Name == nil {
+							continue
+						}
+						enclosing = s.Name.Name
+					default:
+						continue
+					}
+					recordSelfRecoveryReads(spec, rel, enclosing, observed, &offenders)
 				}
 			}
-			return true
-		})
-
-		var reasons []string
-		if namesTheMap {
-			reasons = append(reasons, "names refusalSelfRecoveryTable")
-		}
-		if callsSessionHasNoOneToAsk {
-			reasons = append(reasons, "reads the is-anyone-here fact outside the allow-list")
-		}
-		if len(reasons) > 0 {
-			offenders = append(offenders, rel+" ("+strings.Join(reasons, "; ")+")")
 		}
 	}
 
@@ -458,9 +491,61 @@ func TestSelfRecoveryHasOneDecision(t *testing.T) {
 		t.Fatalf("%s was never visited by the walk -- this guard cannot be passing for the right reason", soleDecisionFile)
 	}
 	if len(offenders) > 0 {
-		t.Fatalf("only cmd/unattended_session.go, cmd/refusal.go and %s may hold a self-recovery decision or read the is-anyone-here fact; found a second reader also in: %v", soleDecisionFile, offenders)
+		sort.Strings(offenders)
+		t.Fatalf("a self-recovery decision or the is-anyone-here fact may only be read at the five reviewed places named in mayHoldASelfRecoveryDecision; found a read outside that list: %v", offenders)
+	}
+
+	var stale []string
+	for key := range mayHoldASelfRecoveryDecision {
+		if !observed[key] {
+			stale = append(stale, key)
+		}
+	}
+	if len(stale) > 0 {
+		sort.Strings(stale)
+		t.Fatalf("mayHoldASelfRecoveryDecision names a place that matches nothing in the current source -- an excused place that matches nothing is a stale excuse, and the list may only shrink by the place genuinely going away: %v", stale)
 	}
 }
+
+// recordSelfRecoveryReads walks node -- a *ast.FuncDecl or a single Spec
+// belonging to a *ast.GenDecl -- for every *ast.Ident named
+// sessionHasNoOneToAsk or refusalSelfRecoveryTable, and attributes each one
+// found to the key "<rel>::<enclosing>". A key present in
+// mayHoldASelfRecoveryDecision is marked observed; any other key is
+// recorded as an offender naming the file, the enclosing declaration, and
+// which identifier it read.
+func recordSelfRecoveryReads(node ast.Node, rel string, enclosing string, observed map[string]bool, offenders *[]string) {
+	var namesTheMap bool
+	var callsSessionHasNoOneToAsk bool
+	ast.Inspect(node, func(n ast.Node) bool {
+		if ident, ok := n.(*ast.Ident); ok {
+			if ident.Name == "refusalSelfRecoveryTable" {
+				namesTheMap = true
+			}
+			if ident.Name == "sessionHasNoOneToAsk" {
+				callsSessionHasNoOneToAsk = true
+			}
+		}
+		return true
+	})
+	if !namesTheMap && !callsSessionHasNoOneToAsk {
+		return
+	}
+	key := rel + "::" + enclosing
+	if mayHoldASelfRecoveryDecision[key] {
+		observed[key] = true
+		return
+	}
+	var reasons []string
+	if namesTheMap {
+		reasons = append(reasons, "names refusalSelfRecoveryTable")
+	}
+	if callsSessionHasNoOneToAsk {
+		reasons = append(reasons, "reads the is-anyone-here fact")
+	}
+	*offenders = append(*offenders, key+" ("+strings.Join(reasons, "; ")+")")
+}
+
 
 // TestOnlyASafeRefusalCanRecoverItself (208-11-PLAN.md Task 2): the opt-in
 // contract guard. For every id in refusalSelfRecoveryTable: it exists in
