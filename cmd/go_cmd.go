@@ -80,14 +80,31 @@ func runGoJob(job string, timeout time.Duration) (map[string]interface{}, error)
 		return result, nil
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"mode":          "go-big",
 		"job":           job,
 		"goal":          job,
 		"route":         string(decision.Route),
 		"route_reason":  decision.Reason,
 		"colony_active": facts.ColonyActive,
-	}, nil
+	}
+
+	// A bare folder has no colony state to derive a specification against --
+	// plan 02's own start-a-project next step already covers that case, and
+	// this branch writes nothing until a project actually exists (Task 1's
+	// own <action>).
+	if facts.ColonyActive {
+		source, err := ensureGoPlanningSpecification(root, job)
+		if err != nil {
+			// Relayed through the existing big-route error path exactly as
+			// any other big-route failure already is -- never a new refusal
+			// with new wording.
+			return nil, err
+		}
+		result["specification_source"] = source
+	}
+
+	return result, nil
 }
 
 // renderGoVisual renders `/ant-go`'s screen: the banner, then the route
@@ -121,6 +138,18 @@ func renderGoVisual(result map[string]interface{}) string {
 		escalationReason := strings.TrimSpace(stringValue(result["escalation_reason"]))
 		b.WriteString(voiceLine("warning", "This turned out bigger than it looked -- "+escalationReason+
 			" -- so it has been moved up to the planning route."))
+		b.WriteString("\n\n")
+	}
+
+	// Task 1 -- the big route's specification line: say plainly whether the
+	// program wrote down what was asked for, or is planning the owner's own
+	// already-approved specification, before planning starts.
+	if source := strings.TrimSpace(stringValue(result["specification_source"])); source != "" {
+		sentence := "The program has written down what was asked for and is planning it."
+		if source == goSpecificationSourceOwnerApproved {
+			sentence = "Your own written-down specification is being planned."
+		}
+		b.WriteString(voiceLine("decision", sentence))
 		b.WriteString("\n\n")
 	}
 
