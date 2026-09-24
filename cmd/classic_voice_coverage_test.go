@@ -33,6 +33,9 @@ import (
 var voiceScreenFamilies = []string{
 	"plan", "discuss", "spec", "status", "build", "continue", "seal", "what-next",
 	"init", "colonize", "ceremony",
+	// Phase 209 plan 01 -- `/ant-go`, the one entry command (D-01)'s own
+	// screen (registered as "go-small" in cmd/classic_voice_go_test.go).
+	"go",
 }
 
 // missingVoiceFamilies reports every family in families with no registered
