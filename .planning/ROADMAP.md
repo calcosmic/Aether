@@ -1241,7 +1241,7 @@ Plans:
 3. About six menu commands visible by default, the rest behind an advanced setting.
 4. Timed against plain Claude on the same small and medium jobs, and the numbers reported to the owner.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 **Wave 1**
 
@@ -1254,7 +1254,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 209-04-PLAN.md — One sentence reaches built work with no owner steps in between; clarifying, specifying and deeper rounds become opt-in (UED-17)
+- [x] 209-04-PLAN.md — One sentence reaches built work with no owner steps in between; clarifying, specifying and deeper rounds become opt-in (UED-17)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

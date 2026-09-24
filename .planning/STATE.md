@@ -5,15 +5,15 @@ milestone_name: Use It Every Day
 current_phase: 209
 current_phase_name: A Light Default Path
 status: executing
-stopped_at: Completed 209-03-PLAN.md
-last_updated: "2026-09-24T16:07:30.085Z"
+stopped_at: Completed 209-04-PLAN.md
+last_updated: "2026-09-24T16:43:33.826Z"
 last_activity: 2026-09-24
-state_head: 3726c4e8af48b50601d1c805930fe79e8971b6c4
+state_head: ffb97beca00eebd426825f7ec0080297bebd5e55
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 32
-  completed_plans: 30
+  completed_plans: 31
   percent: 60
 ---
 
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 209 (A Light Default Path) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
 Status: Ready to execute
-Plan: 4 of 5
+Plan: 5 of 5
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -236,6 +236,7 @@ Last activity: 2026-09-24
 | Phase 209 P01 | 45min | 3 tasks | 14 files |
 | Phase 209 P02 | 75min | 3 tasks | 7 files |
 | Phase 209 P03 | 55min | 1 tasks | 3 files |
+| Phase 209 P04 | 2h 30min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -724,6 +725,7 @@ Last activity: 2026-09-24
 - [Phase 209]: Task 1+2 production code (go_route.go, go_cmd.go) landed in one commit per CLAUDE.md's Coherent Jobs grouping rule (shared implementation files, genuine in-place dependency).
 - [Phase 209]: The 'no project set up yet' route reason lives inside resolveJobSizeRouteBase's existing zero-matched-paths branch rather than a second decision layer, keeping resolveJobSizeRoute the one route authority.
 - [Phase 209]: Locked the default menu to the owner's actual ruling (ten commands, two groups, reworded opening/closing lines) instead of the planner's six-command proposal, with a test that hardcodes the literal approved set so a later silent change fails by name. — The owner reviewed the real rendered screen at the Task 3 checkpoint and amended D-02's proposal; his reply is the authority, applied here as a data edit per the plan's own design.
+- [Phase 209]: ensureGoPlanningSpecification derives and approves a specification from the owner's sentence when a project has none (or none approved), so requireApprovedPlanningSpecification never refuses the single door's big route. — aether init never creates a specification, so a bare init-then-go project has none at all; the plan's literal inspect/add/approve sequence needed a bootstrap branch (createSpecificationDraft) for that case, documented as a deviation.
 
 ### Pending Todos
 
@@ -846,8 +848,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T16:07:29.766Z
-Stopped at: Completed 209-03-PLAN.md
+Last session: 2026-09-24T16:43:33.494Z
+Stopped at: Completed 209-04-PLAN.md
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
