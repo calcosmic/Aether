@@ -38,11 +38,16 @@ import (
 const goDerivedSpecificationLineage = "go-derived-outcome"
 
 // goDefaultPlanningPreset (Task 2) names the shallowest planning preset the
-// single door asks for by default -- UED-17 asks for one planning pass with
-// no depth question put to the owner. A deeper round stays available by
-// asking for it explicitly; this constant only changes what the single
-// door itself asks for without being told otherwise.
-const goDefaultPlanningPreset = "quick"
+// single door asks for by default -- "fast" (target confidence 80%, at most
+// 4 passes; planningPresetPolicies, cmd/codex_plan.go). UED-17 asks for one
+// planning pass with no depth question put to the owner: passing this named
+// preset to `aether plan --preset` makes resolvePlanningPreset return
+// PresetRequired=false immediately, so the planning pass the single door's
+// big route hands off to never puts a depth choice to the owner. A deeper
+// round stays available by asking for it explicitly (a different named
+// preset, or --target/--max-iterations); this constant only changes what
+// the single door itself asks for without being told otherwise.
+const goDefaultPlanningPreset = "fast"
 
 // The two values ensureGoPlanningSpecification's "specification_source"
 // result field (cmd/go_cmd.go) can carry. "Owner-approved" also covers the
