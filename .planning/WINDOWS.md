@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 37
+open_count: 38
 waived_count: 0
 fixed_count: 22
-total_count: 59
-last_updated: 2026-09-24T17:30:53.481Z
+total_count: 60
+last_updated: 2026-09-24T18:46:18.263Z
 ---
 
 # Broken Windows Ledger
@@ -76,6 +76,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 57 | 208 | unmet-truth | cmd/colonize_snapshot_refresh_test.go |  | REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-01, found by independent mutation): the check that is meant to prove only one place in the program decides to rebuild the saved map of your code (TestSavedMapPublicationHasOneBuilder) only notices that decision when it is written as a plain assignment. Written the other, equally ordinary way Go allows -- setting the same field inside a struct value as it is created -- a second, competing decision is completely invisible to the check, which passes unchanged. Proved by planting exactly that in a third file. This is the same class of defect the whole third gap-closure round existed to remove: a check that reads as thorough but cannot fail on the thing it is named for. Carried forward, not fixed, by the owner's decision on 2026-09-24 (close the phase per D-06 and record both new gaps as named open items rather than spending a fourth round). Close by widening the check to inspect composite struct literals as well as assignments, proved by re-planting that exact mutation and watching it turn red. Related: the same check also does not skip a linked worktree directory the way its sibling guard added in the same round does, and it carries no honest statement of what it still cannot catch (208-REVIEW-GAP3.md warnings). | fixed |  | 2026-09-24T09:42:36.233Z | 2026-09-24T10:56:48.368Z |
 | 58 | 208 | unmet-truth | cmd/refusal_self_recovery_test.go |  | REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-02, found by independent mutation): the widened check meant to forbid a second, competing 'fix it myself when nobody is here' decision (TestSelfRecoveryHasOneDecision) was made to pass by exempting three whole files rather than the specific lines in them that were actually reviewed. A rival decision planted inside one of those three exempted files is invisible to the check -- proved by planting it. The previous round's version of this defect let a rival decision through in a file nobody had reviewed; this round's version lets one through in a file that WAS reviewed, at a line that was not. The blind spot moved rather than closing, and it is the same class this round existed to remove. Carried forward, not fixed, by the owner's decision on 2026-09-24 (close the phase per D-06 and record both new gaps as named open items rather than spending a fourth round). Close by narrowing the exemption from whole files to the reviewed call sites, proved by re-planting that exact mutation and watching it turn red. | fixed |  | 2026-09-24T09:42:44.494Z | 2026-09-24T10:56:51.542Z |
 | 59 | 209 | unmet-truth | scripts/build-messy-practice-project.sh |  | The practice-project fixture's own aether install/update --force steps sync Aether's shared slash commands to this machine's real, global ~/.claude/ and ~/.codex/ folders by default (platform-home sync runs unless the dev channel plus an explicit opt-out is used), contradicting the script's own comment that nothing here touches the real HOME. Found 2026-09-24 while measuring 209-05's timing report; worked around at the call site (an isolated HOME for the one setup step only, never for the timed chat sessions) rather than fixed in the script, which is out of this plan's own scope. Confirmed no real ~/.claude or ~/.codex content was actually written during this measurement. | open |  | 2026-09-24T17:30:53.481Z |  |
+| 60 | 209 | unmet-truth | .claude/commands/ant/go.md |  | PHASE 209'S OWN HEADLINE PROMISE IS NOT MET IN A REAL SESSION. Plan 209-04 shipped UED-17 as 'one sentence in, and the program reaches a running planning pass and then built work without the owner typing anything in between'. The first time that hand-off was exercised for real -- 209-05's timing measurement, an unattended claude session in a fresh practice project, 2026-09-24 -- the medium job STOPPED AND ASKED THE OWNER a question partway through: /ant-go printed the planning-route screen, said real dispatch needs a live helper-sender, and asked whether to 'just build it' or 'use Aether'. It only completed after one plain-English reply telling it to dispatch the planning helpers itself. The automated test standing behind the claim, TestGoalReachesBuiltWorkWithNoExtraSteps (cmd/go_default_path_test.go), drives the Go runtime directly with the planning stage faked already-accepted, so it never exercises the real wrapper text that asks a live assistant to dispatch real planning helpers the way /ant-plan's own much longer wrapper does. The gap is therefore in the four /ant-go wrapper sources, not in the Go runtime, and the existing test cannot see it. Evidence and the four measured runs: .planning/phases/209-light-default-path/209-TIMING.md. Close by giving the /ant-go wrapper's planning hand-off the dispatch instructions /ant-plan's wrapper already carries, proved by a check that fails when the wrapper text cannot reach real planning dispatch -- not by a runtime test with the planning stage pre-faked. | open |  | 2026-09-24T18:46:18.263Z |  |
 
 ````json
 [
@@ -785,6 +786,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-24T17:30:53.481Z",
+    "resolved_at": null
+  },
+  {
+    "id": 60,
+    "kind": "unmet-truth",
+    "phase": "209",
+    "file": ".claude/commands/ant/go.md",
+    "line": null,
+    "description": "PHASE 209'S OWN HEADLINE PROMISE IS NOT MET IN A REAL SESSION. Plan 209-04 shipped UED-17 as 'one sentence in, and the program reaches a running planning pass and then built work without the owner typing anything in between'. The first time that hand-off was exercised for real -- 209-05's timing measurement, an unattended claude session in a fresh practice project, 2026-09-24 -- the medium job STOPPED AND ASKED THE OWNER a question partway through: /ant-go printed the planning-route screen, said real dispatch needs a live helper-sender, and asked whether to 'just build it' or 'use Aether'. It only completed after one plain-English reply telling it to dispatch the planning helpers itself. The automated test standing behind the claim, TestGoalReachesBuiltWorkWithNoExtraSteps (cmd/go_default_path_test.go), drives the Go runtime directly with the planning stage faked already-accepted, so it never exercises the real wrapper text that asks a live assistant to dispatch real planning helpers the way /ant-plan's own much longer wrapper does. The gap is therefore in the four /ant-go wrapper sources, not in the Go runtime, and the existing test cannot see it. Evidence and the four measured runs: .planning/phases/209-light-default-path/209-TIMING.md. Close by giving the /ant-go wrapper's planning hand-off the dispatch instructions /ant-plan's wrapper already carries, proved by a check that fails when the wrapper text cannot reach real planning dispatch -- not by a runtime test with the planning stage pre-faked.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-24T18:46:18.263Z",
     "resolved_at": null
   }
 ]
