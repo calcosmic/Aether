@@ -5,15 +5,15 @@ milestone_name: Use It Every Day
 current_phase: 208
 current_phase_name: Never a Dead End
 status: executing
-stopped_at: "Completed 208-15-PLAN.md (phase 208: 15/16 plans executed)"
-last_updated: "2026-09-24T09:07:07.037Z"
+stopped_at: Completed 208-16-PLAN.md (phase 208 closed per D-06)
+last_updated: "2026-09-24T09:20:04.814Z"
 last_activity: 2026-09-24
-state_head: 1eba6c78e44f4c2212b613ba0efd02f9099e7d01
+state_head: 59c208cf588fbc9e0e77b5cae4bde7ab8762569c
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
   percent: 40
 ---
 
@@ -36,7 +36,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 Phase: 208 (Never a Dead End) — EXECUTING
 Next phase: 209 (A Light Default Path) — not yet planned
 Status: Ready to execute
-Plan: 15 of 16
+Plan: 16 of 16
 Last activity: 2026-09-24
 
 ## Performance Metrics
@@ -229,6 +229,7 @@ Last activity: 2026-09-24
 | Phase 208 P13 | 35 min | 2 tasks | 2 files |
 | Phase 208-never-a-dead-end P14 | 95min | 3 tasks | 5 files |
 | Phase 208 P15 | 65min | 2 tasks | 1 files |
+| Phase 208 P16 | ~20min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -709,6 +710,7 @@ Last activity: 2026-09-24
 - [Phase 208]: WINDOWS row 53 stays open: the third authorised journey walk confirmed 208-11's self-recovery works live and colonize-finalize succeeded for the first time, but the published territory snapshot's source_revision still doesn't match current HEAD, for a new, undiagnosed fourth cause.
 - [Phase 208]: 208-13: Widened the one-decision guard to a closed allow-list and added a direct-call test covering each self-recovery gate individually; both mutations 208-VERIFICATION.md reproduced now turn the suite red and are reverted.
 - [Phase 208]: The one authorised walk (D-05) cleared the survey step's own on-disk fact check live for the first time ever, reached discuss and specification, then stopped at plan-first on an ordinary owner decision (choosing a planning preset) the harness cannot answer -- a new, non-refusal stopping point, recorded honestly per D-05 with nothing fixed-and-retried.
+- [Phase 208]: WINDOWS row 53 stays open (not fixed): its narrow close condition is met, but D-06 names this row as the vehicle for the still-open 'never proven end to end' item — the more recent, more specific owner ruling governs over the row's own older close condition
 
 ### Pending Todos
 
@@ -831,8 +833,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-24T09:07:06.862Z
-Stopped at: Completed 208-15-PLAN.md (phase 208: 15/16 plans executed)
+Last session: 2026-09-24T09:20:04.630Z
+Stopped at: Completed 208-16-PLAN.md (phase 208 closed per D-06)
 Resume file: None
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
