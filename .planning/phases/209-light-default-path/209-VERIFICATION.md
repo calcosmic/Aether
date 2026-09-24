@@ -1,12 +1,12 @@
 ---
 phase: 209-light-default-path
 verified: 2026-09-24T19:05:00Z
-status: human_needed
-score: 4/4 roadmap success criteria verified on their literal wording; 1 named gap against a stronger promise the plans themselves made
+status: passed
+score: 4/4 roadmap success criteria verified; owner signed off at UAT 2026-09-24 with one named item carried into Phase 210
 verifier: orchestrator (workflow.verifier is false for this project — no separate verifier agent was spawned; every finding below was checked directly against the built binary, the git history, or the full-suite logs, never taken from a plan's own claim)
 requirements:
   UED-16: complete
-  UED-17: reopened
+  UED-17: complete (with a named live-proof item carried forward as defect 60)
   UED-18: complete
 full_suite_this_phase: >
   go test ./... -count=1 -timeout 90m ran to completion twice on this phase's final tree.
@@ -193,3 +193,42 @@ that is already complete.
 
 None. See `full_suite_this_phase` above — the failing set is identical to the recorded
 pre-phase baseline and the newly-broken set is empty.
+
+
+---
+
+## Owner sign-off (2026-09-24)
+
+All six UAT checks passed (`209-UAT.md`). Five were settled against direct evidence gathered by
+the orchestrator rather than any helper's report — including breaking the menu lock on purpose,
+in a disposable worktree, to prove it bites. The sixth was the owner's own ruling on how to
+close the phase.
+
+**His ruling: fix the false alarm first, then start the trial.** Phase 209's six builds are
+signed off; the false "bigger than it looked" was fixed before the fortnight (plan 209-07,
+defect register entry 61, now closed); and the unproven planning hand-off (entry 60) stays open
+so the two-week trial exercises it in real use.
+
+### Entry 61 closed on verified evidence
+
+`jobSizeAttemptEscalationReason` folded "the checks could not be run" into "the checks failed".
+Verified by the orchestrator, not taken from the executor's report:
+
+- **Red before.** In a disposable worktree at `f9ef68f6` (the test-only commit), the new test
+  failed naming the exact fault: *"did not expect escalation when the checks could not be run at
+  all, facts={FilesChanged:1 ChecksStatus:not_checked Verdict:partial}"*. Worktree removed; the
+  working checkout was never modified.
+- **No over-correction.** The risk with this fix was silencing genuine failures too. Checked at
+  the source: `quickWorkVerdict` maps `not_checked` to partial and a real check failure to
+  blocker, so escalating on blocker only is exactly the intended cut. Both guards — a genuinely
+  failed check, and a job over the file budget — still escalate.
+- **Green after**, together with the escalation, route, quick-verdict, planning-hand-off, parity,
+  menu-lock and hidden-commands tests.
+
+### What carries into Phase 210
+
+- **Entry 60** — the repaired `/ant-go` planning hand-off is still unproven by a live session.
+  Deliberately left for the fortnight; if the owner hits it, it counts as a blocker like any
+  other.
+- **Entry 59** — the practice-project fixture leaks into the real home. Fixture plumbing, not
+  something ordinary use meets.
