@@ -650,3 +650,251 @@ it is the first run where the survey step actually completed its full work — f
 dispatches and a real, successful finalize call — rather than stopping on an early refusal or an
 unanswered question.
 
+---
+
+# Fourth Real Run: One More Walk, After the Saved Map's Revision Fix (2026-09-24)
+
+This is a fourth, separate factual record, made the day after the first three, after a fix had
+landed for the specific reason the third run's survey step still failed its own on-disk check. As
+before, nothing below is projected or estimated — every figure is read from a log, a session
+transcript, or a process timestamp captured during this run itself; nothing is carried over from
+any earlier run.
+
+**In plain words first:** this walk took about four and a half minutes and cost a little over two
+dollars (the chat's own recorded total was $2.22). As with all three earlier runs, this machine's
+sign-in is a paid subscription, not pay-as-you-go, so that figure is the tool's own internal
+estimate of what the work was worth, never an actual bill. This time the walk went further than it
+has ever gone before: the program checked whether its saved map of the code matched the project's
+real, current state, and for the first time ever in a real walk, it matched — the fix from the day
+before worked. The walk then went on through two more steps it had never reached in any earlier
+walk: settling what to build, and reviewing and confirming that plan of record, both without
+anyone needing to step in. It stopped at a new point three steps further on than any earlier walk:
+choosing how thorough the planning process should be. The program correctly asked which of four
+options to pick and waited for a one-word reply, but this automated test sends exactly one
+instruction per step and never sends a follow-up answer, so nobody was there to reply and the walk
+ended there. This run proves the one thing it was built to prove — the saved map now genuinely
+stays in step with the project — but it also shows a new, different point further along where the
+rehearsal still cannot finish entirely on its own, and no printed refusal was ever available for
+the program to act on by itself this time, because a "which option do you want" question is not a
+refusal — it is an ordinary decision the program is designed to always ask a person about.
+
+## Owner's decision this plan executed against
+
+D-05 (`.planning/phases/208-never-a-dead-end/208-CONTEXT.md`, "Third gap-closure round"): fix the
+cause of the saved map's stale revision first, prove the fix locally (208-14), and only then spend
+exactly one more real walk, as a measurement rather than a passed release gate. If the walk stops
+again — the same step or a new one — stop there and report; no second paid walk this round, and no
+fixing-and-retrying a new stopping point without asking the owner again.
+
+## Run identity
+
+- **Date:** 2026-09-24
+- **`claude` CLI version:** `2.1.281 (Claude Code)` — one point release newer than the `2.1.280`
+  used by all three earlier runs; unrelated to anything this plan changed.
+- **`aether` binary version:** `1.0.88` (the version string checked in at the commit this run was
+  made at; the journey harness builds its own temporary binary from the same source tree, under
+  the `journey` build tag).
+- **Repository commit the run was made at:** `52dd3a636cdd66efe287af85ca6b2f4e73c28241`
+  (`docs(208-14): update state and roadmap`) — confirmed via `git rev-parse HEAD` immediately
+  before the walk started. This commit's ancestry was confirmed (`git merge-base --is-ancestor`)
+  to include all three of 208-14's fix commits (`03b08d06`, `5104df68`, `f1ffa454`) before the walk
+  started, satisfying this plan's own precondition that the fix be present and committed.
+- **Working tree before the run:** clean except the same pre-existing, unrelated
+  `.aether/CONTEXT.md` edit from another session, present before this plan started and untouched
+  by it (confirmed via `git status --short` immediately before the walk started).
+- **Working tree after the run:** unchanged by the run itself. `git status --short` immediately
+  after the run showed only the same pre-existing `.aether/CONTEXT.md` line; `git diff --stat`
+  against `cmd/journey*.go`, `scripts/build-messy-practice-project.sh`, and `cmd/refusal_register.go`
+  returned empty, both during and after the run. The journey-tagged test binary was also confirmed
+  to compile cleanly under its build tag before the walk started.
+
+## Command and timing
+
+**Command:** `AETHER_JOURNEY_TRIALS=1 make eval-gate-journey` (which itself runs `go test
+-tags=journey -run=TestJourney -count=1 -timeout=6662s ./...`), started in the background at
+`2026-09-24T08:53:08Z`, polled to completion, finishing at `2026-09-24T08:57:38Z` (read from the
+captured log file's own last-write timestamp) — **270 seconds (4m30s)** of total wall clock for
+the whole `make eval-gate-journey` invocation (building the test binary, running every `./...`
+package under the `journey` tag, and the one live trial itself). Within that, the `go test` run
+for the `cmd` package took `255.248s`, and the `TestJourney` test itself took `254.32s`.
+
+The gate's own coverage check passed before the pass/fail verdict was ever evaluated:
+`eval-gate-journey: discovered=17 executed=17` — the suite ran every test it found, so the failure
+below is a real, complete result, not a truncated run reading clean.
+
+## Caps in force per step
+
+Unchanged from all three earlier runs and from 207-04's own measured, safety-margined figures
+(`cmd/journey_live_test.go`):
+
+| Step | Max turns | Wall-clock cap | Budget cap |
+|---|---|---|---|
+| start | 4 | 120s | $0.50 |
+| survey | 20 | 600s | $4.00 |
+| discuss | 12 | 400s | $2.00 |
+| specification | 15 | 400s | $2.00 |
+| plan-first | 25 | 700s | $4.00 |
+| plan-second | 25 | 700s | $4.00 |
+| build | 40 | 1200s | $6.00 |
+| check | 40 | 1200s | $6.00 |
+| status | 4 | 120s | $0.50 |
+| pause | 4 | 120s | $0.50 |
+| resume | 4 | 120s | $0.50 |
+| finish | 12 | 400s | $2.00 |
+| archive | 12 | 400s | $2.00 |
+| start-again | 4 | 120s | $0.50 |
+
+Every step this trial reached finished well inside its own caps — the survey subtest used 136.84
+of its allowed 600s, discuss used 23.30 of 400s, specification used 34.17 of 400s, and plan-first
+used 24.82 of 700s before stopping for its own reason, not because any cap cut it off. (Go's own
+test-runner summary line prints only the caps of the *first* step driven, "start" — 4 turns/120s/
+$0.50 — alongside the trial's overall pass/fail verdict; that figure describes "start", not the
+step that actually failed, the same distinction every earlier run's own record has had to draw.)
+
+## Result: FAILED, as expected for a below-minimum trial count
+
+Exactly as it should — `journeyGateVerdict` refused the report before it was ever considered a
+pass: *"journey report carries 1 trial(s), want at least 3 -- a reduced trial count can never
+satisfy the release gate."* **This run is a measurement, never a passed gate**, exactly as D-02,
+D-04 and D-05 authorise, and no three-trial release-gate run was started.
+
+### The one trial
+
+| Trial | Session id | Steps reached | Outcome | `TestJourney` subtest wall clock | Cost (from the session's own `cost-state` total) |
+|---|---|---|---|---|---|
+| 0 | `b31c24c9-580f-4e9a-8493-a206dfe75071` | start (pass, 11.16s), survey (pass, 136.84s), discuss (pass, 23.30s), specification (pass, 34.17s), plan-first (fail, 24.82s) | stopped at plan-first — real failure, new ground | 254.32s (`TestJourney`) | $2.2159007 (~$2.22) |
+
+Cost is read from the session's own final `cost-state` record in the real, persisted transcript
+(`~/.claude/projects/-private-var-folders-pj-fn0nrs6s1zj-pm7s486lnnz40000gn-T-TestJourney1417872255-001-repo/b31c24c9-580f-4e9a-8493-a206dfe75071.jsonl`,
+line 237 of 237) — not the chat's own prose. The transcript records six successive `cost-state`
+snapshots, one per driven step: $0.3554228 after the session-establishing "ready" call, $0.7861384
+after `/ant-init` (the "start" step), $1.7810435 after `/ant-colonize` (the "survey" step),
+$1.9101965 after `/ant-discuss` (the "discuss" step), $2.0780319 after `/ant-spec` (the
+"specification" step), and $2.2159007 after `/ant-plan` (the "plan-first" step, where the trial
+stopped).
+
+## Answering the four questions this run exists to settle
+
+1. **Did the survey step's own on-disk fact check pass, and with which two compared values?**
+   **It passed — for the first time ever in a real walk of this rehearsal.** The real transcript
+   shows `aether host colonize` returning `"existing_survey":true,"force_resurvey":true"` directly
+   in its JSON envelope with no refusal text printed at all (208-11's self-recovery working exactly
+   as it did in the third run), four real surveyor subagents dispatching and completing
+   (`Plot-62`, `Scope-52`, `Survey-10`, `Survey-25`), and `aether colonize-finalize` returning
+   `"ok":true` with an honest closeout ("Territory surveyed: 7 documents"). **The literal two
+   compared values (the saved map's recorded revision and the practice project's real HEAD at the
+   moment of the check) cannot be quoted here, and this is itself worth recording plainly rather
+   than papered over:** `journeyAssertStepFact`'s own code (`cmd/journey_live_test.go`) only prints
+   those two literal strings on the *failing* branch (`if snap.SourceRevision != head { fail(...) }`)
+   — a passing step logs nothing further, by design. No `git rev-parse HEAD` or `git log` command
+   appears anywhere in this run's own retained transcript (checked by searching the full transcript
+   text for both), and the practice project's own temporary directory — the one place the saved
+   map's file and the real repository both still existed — was already removed by Go's own
+   `t.TempDir()` test-cleanup before this record could be written, minutes after the test finished.
+   What can be stated with certainty, from the code path itself rather than a guess: the check
+   compares the two values and only reports "pass" when they are equal, so they were equal at the
+   moment the check ran — but neither literal value survives anywhere in this run's own evidence
+   for this record to quote. This is a real gap in what this particular successful run can prove
+   down to the byte, not an estimate standing in for one.
+2. **How far did the walk get, step by step, and did it reach ground no real run has reached
+   before?** Yes — three genuinely new steps. **start** passed for the same designed reason as
+   every earlier run (the practice project's colony was already active from the builder script's
+   own seeding `aether init`, so `/ant-init` correctly declined and named `/ant-plan` next). **survey**
+   passed for the first time ever, as described above. **discuss** passed — the real transcript
+   shows the assistant reading Aether's own evidence-backed decision batch, finding the specification
+   already settled with no material questions outstanding, and correctly reporting that rather than
+   inventing a question. **specification** passed — the assistant inspected the already-approved
+   specification (`specification-0d016ada8e42`, revision 2, content hash `f2e65bfa5f51...`), correctly
+   reported it as already approved and matching the readable copy on disk, and made no change. All
+   three are ground no real walk of this rehearsal has ever reached before this run.
+3. **Did any step find a printed refusal and run the command that refusal names, as a number read
+   from the harness's own report — and if that number is zero, is it zero because nothing printed,
+   or because the walk never reached the point where the search happens?** The harness's own report
+   line reads *"trial 0: 0 printed refusal(s) found, 0 next command(s) run."* This time the honest
+   reading is genuinely mixed, not a single cause: for three steps — survey, discuss, and
+   specification — the on-disk fact check passed, so `journeyRunPrintedNextCommands` (the code that
+   searches for and runs a printed refusal's own next command) *did* run its search for each of
+   them, and found zero refusals printed in any of the three, because none was ever printed (the
+   self-recovery mechanism silently handled the one refusal this rehearsal has ever met, exactly as
+   it did in the third run). For the fourth and final attempted step — plan-first — the on-disk fact
+   check failed first, so the search was never reached for that one step specifically, the same
+   ordering every earlier run's record has described. Either way, **no refusal was ever printed
+   anywhere in this run's transcript**, so the number of a printed refusal's own next command
+   actually being run by the rehearsal is still zero, and the specific clause this whole exercise
+   turns on — proving `journeyRunPrintedNextCommands` runs a printed refusal's own next command for
+   real, against a genuine printed refusal, outside a synthetic fixture — **remains unproven by this
+   run.** The search code itself was genuinely exercised for the first time against three real,
+   passing steps (a new fact this run does establish), but it had nothing to find and nothing to run.
+4. **If the walk stopped, at exactly which step, with what observed values?** At **plan-first**
+   (step 5 of 14) — three steps further than any of the first three walks, all of which stopped at
+   survey (step 2). This is a genuinely new stopping point, for a genuinely different kind of reason
+   than any before it: not a refusal at all. The real transcript shows the assistant correctly
+   inspecting the approved specification, correctly reporting that planning cannot start until a
+   thoroughness preset is chosen, correctly rendering all four choices (`Fast`, `Balanced`, `Deep`,
+   `Exhaustive`) with a stated pick of its own ("Fast... This is a scratch practice project that's
+   never meant to ship") exactly as its own instructions require, and then asking: *"Reply with one
+   word: Fast, Balanced, Deep, or Exhaustive."* The journey harness sends exactly one driven prompt
+   per step (the bare `/ant-plan` command) and never a follow-up turn answering a mid-step question
+   — there is no owner present in this automated `-p` chain to reply "Fast". The session ended
+   there, and the step's own on-disk fact check then failed: *"no plan artifact at
+   .../.aether/data/planning/phase-plan.json: stat .../phase-plan.json: no such file or directory"*
+   — planning never started, because the one decision every planning run requires was never
+   answered.
+
+## Why it stopped: not a refusal — a different kind of one-turn ceiling
+
+Every one of the four questions above is answered from this run's own evidence. What is worth
+naming plainly, because it changes what future work here should look like: **plan-first's stopping
+point is not the same category of dead end as anything found before it.** The three earlier runs
+all stopped on a typed refusal object (`colonize-existing-survey-found`) — a specific, registered,
+`ProtectsWork: true` stop that D-01/D-03's self-recovery mechanism was built to handle, and did
+handle, silently and correctly, in this very run. Choosing a planning preset is not a refusal at
+all: it has no `Disposition: "stop"`, no `NextCommand`, and nothing in `cmd/refusal_register.go`
+describes it. It is an ordinary, by-design owner decision — `.aether/commands/plan.yaml`'s own
+"Choose Planning Preset" section explicitly states "No option is preselected, recommended, or
+silently chosen" — because the whole point of that boundary is that only a person should ever
+pick it. This is therefore not a candidate for the same act-when-alone self-recovery treatment
+that closed the earlier dead end: recovering it silently would mean the program silently picking a
+planning budget on the owner's behalf, exactly the kind of choice D-03's own scope was deliberately
+never extended to cover. What this run actually demonstrates is a narrower, structural fact about
+the rehearsal itself: **any step whose own correct behaviour requires more than one turn of live
+owner interaction will stop the walk there, regardless of whether a refusal is involved**, because
+the harness's own single-driven-prompt-per-step design (`journeyStepPrompt`, unchanged since
+207-04) never sends a second turn. That is a genuine, honestly-named limit of this rehearsal's own
+design, not a bug this plan is positioned to fix, and per D-05 this record stops here rather than
+attempting one.
+
+## Not proven by this run
+
+- **The plan-first step did not pass.** The rehearsal has still never completed a live walk end to
+  end; it now stops three steps later than it ever has before, for a new and different kind of
+  reason (an ordinary owner decision the harness cannot answer, not a refusal).
+- **`journeyRunPrintedNextCommands` has still never run a printed refusal's own next command for
+  real, against a genuine printed refusal, in any live run.** This run is the first to exercise the
+  search code itself for real, three separate times, but every search came back empty because
+  nothing was ever printed to find.
+- **The literal two values the survey step's own fact check compared cannot be quoted from this
+  run's own evidence**, for the reasons given in the answer to question 1 above — a genuine
+  observability gap in the harness's own success-path logging, not a number withheld or estimated.
+- **The three-trial minimum was not met, by design** — one walk, per D-02/D-04/D-05, measured and
+  reported as a measurement rather than a passed gate.
+- **No steps past plan-first were exercised** — plan-second, build, check, status (including the
+  sixth-blocker `midden-review` check), pause, resume, finish, archive, start-again remain
+  unmeasured by any real run so far.
+- **The phase is not reported as proven end to end.** Per D-06, if a future round does not close
+  this gap with a further live walk, the phase may still close with the remaining stopping point
+  named honestly on `.planning/WINDOWS.md` — that decision belongs to the plan that closes this
+  phase, not to this record.
+
+## Combined totals for this run
+
+- **Wall clock:** 270s / 4m30s (the whole `make eval-gate-journey` invocation,
+  `AETHER_JOURNEY_TRIALS=1`).
+- **Cost:** $2.2159007 (~$2.22), read from the one session's final `cost-state` total — an
+  API-equivalent usage estimate against this machine's subscription, not a charge.
+
+This run cost more and took longer than any of the three earlier runs (all under $2 and under
+three minutes) because it is the first run to complete four real steps — including a full,
+successful survey-and-finalize sequence and two further genuinely new steps — rather than stopping
+after the first or second step every time before now.
+
