@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -51,6 +52,11 @@ func migratePlanningState(root string, state colony.ColonyState) (planningMigrat
 			return planningMigrationResult{}, fmt.Errorf("planning migration: current planning authority is partially populated without acceptance_policy")
 		}
 		result.State.Plan.AcceptancePolicy = colony.PlanAcceptanceLegacyUnbound
+		result.Changed = true
+	}
+
+	if healed, changed := healActiveRevisionStatusDrift(result.State); changed {
+		result.State = healed
 		result.Changed = true
 	}
 
@@ -214,4 +220,33 @@ func classifyLegacyPlanningArtifact(rel string) legacyPlanningArtifactMaterial {
 		return legacyPlanningTimelineMaterial
 	}
 	return legacyPlanningEvidenceMaterial
+}
+
+// healActiveRevisionStatusDrift re-copies phase and task status onto the
+// accepted revision's snapshot for a state written before
+// syncActivePlanRevisionExecutionFacts learned to skip recovery tasks. That
+// older sync gave up on any phase a blocked check had appended a recovery
+// task to, so the revision's status froze while the live plan advanced and
+// every later load refused with "active plan phases do not match active
+// revision" -- resume, pause, run and continue all dead-ended at once
+// (French Fluency field report, 2026-09-25). Only execution status is ever
+// copied, never a definition field, so a live plan whose accepted content
+// genuinely differs from its revision is still refused by the strict check
+// that follows. It works on copies and never writes to disk itself.
+func healActiveRevisionStatusDrift(state colony.ColonyState) (colony.ColonyState, bool) {
+	if state.Plan.AcceptancePolicy != colony.PlanAcceptanceExplicitOwner || len(state.Plan.Revisions) == 0 {
+		return state, false
+	}
+	revisions := make([]colony.PlanRevision, len(state.Plan.Revisions))
+	copy(revisions, state.Plan.Revisions)
+	for i := range revisions {
+		revisions[i].Phases = clonePhases(revisions[i].Phases)
+	}
+	healed := state
+	healed.Plan.Revisions = revisions
+	syncActivePlanRevisionExecutionFacts(&healed.Plan)
+	if reflect.DeepEqual(healed.Plan.Revisions, state.Plan.Revisions) {
+		return state, false
+	}
+	return healed, true
 }

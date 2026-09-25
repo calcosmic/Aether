@@ -1381,14 +1381,21 @@ func syncActivePlanRevisionExecutionFacts(plan *colony.Plan) {
 		if revision.ID != plan.ActiveRevisionID || len(revision.Phases) != len(plan.Phases) {
 			continue
 		}
+		// Recovery tasks never enter the accepted revision (see
+		// tasksExcludingRecovery), so compare and copy against the live
+		// tasks without them. Counting them made this give up on any phase
+		// a blocked check had written a recovery task onto, and the
+		// revision's status then silently stopped following the live plan
+		// until validateCurrentPlanningState refused every later load.
 		for phaseIndex := range plan.Phases {
-			if len(revision.Phases[phaseIndex].Tasks) != len(plan.Phases[phaseIndex].Tasks) {
+			liveTasks := tasksExcludingRecovery(plan.Phases[phaseIndex].Tasks)
+			if len(revision.Phases[phaseIndex].Tasks) != len(liveTasks) {
 				return
 			}
 			revision.Phases[phaseIndex].Status = plan.Phases[phaseIndex].Status
 			revision.Phases[phaseIndex].WatcherFailureCount = plan.Phases[phaseIndex].WatcherFailureCount
-			for taskIndex := range plan.Phases[phaseIndex].Tasks {
-				revision.Phases[phaseIndex].Tasks[taskIndex].Status = plan.Phases[phaseIndex].Tasks[taskIndex].Status
+			for taskIndex := range liveTasks {
+				revision.Phases[phaseIndex].Tasks[taskIndex].Status = liveTasks[taskIndex].Status
 			}
 		}
 		return

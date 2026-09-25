@@ -208,7 +208,10 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 		return refusePlanAuthority(decision, planAuthorityRefusalStaleSpecification, "aether plan", "candidate, active revision, and specification bindings are not exact")
 	}
 	activeView := active
-	activeView.Phases = state.Plan.Phases
+	// Recovery tasks were never part of the accepted proposal (see
+	// tasksExcludingRecovery); hashing them in made a blocked check's own
+	// recovery work cost the owner the plan's accepted authority.
+	activeView.Phases = planPhasesExcludingRecoveryTasks(state.Plan.Phases)
 	activeViewHash, hashErr := canonicalPlanCandidateProposalHash(activeView)
 	if err := validateStandalonePlanRevision(active); err != nil || hashErr != nil || activeViewHash != active.PlanHash {
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", "the active plan does not match the accepted immutable proposal")
@@ -287,7 +290,7 @@ func validateCurrentPlanAuthority(state colony.ColonyState, planning LifecyclePl
 	if _, err := validatePlanRevisionChain(state.Plan.Revisions, true); err != nil {
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("plan revision chain: %v", err))
 	}
-	if err := validateCurrentPlanNodes(state.Plan.Phases, active, currentSpec); err != nil {
+	if err := validateCurrentPlanNodes(planPhasesExcludingRecoveryTasks(state.Plan.Phases), active, currentSpec); err != nil {
 		return refusePlanAuthority(decision, planAuthorityRefusalCandidateInvalid, "aether plan", fmt.Sprintf("active plan bindings: %v", err))
 	}
 
