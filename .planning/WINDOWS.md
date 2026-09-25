@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 38
+open_count: 43
 waived_count: 0
-fixed_count: 23
-total_count: 61
-last_updated: 2026-09-24T20:28:01.192Z
+fixed_count: 27
+total_count: 70
+last_updated: 2026-09-25T13:30:35.946Z
 ---
 
 # Broken Windows Ledger
@@ -78,6 +78,15 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 59 | 209 | unmet-truth | scripts/build-messy-practice-project.sh |  | The practice-project fixture's own aether install/update --force steps sync Aether's shared slash commands to this machine's real, global ~/.claude/ and ~/.codex/ folders by default (platform-home sync runs unless the dev channel plus an explicit opt-out is used), contradicting the script's own comment that nothing here touches the real HOME. Found 2026-09-24 while measuring 209-05's timing report; worked around at the call site (an isolated HOME for the one setup step only, never for the timed chat sessions) rather than fixed in the script, which is out of this plan's own scope. Confirmed no real ~/.claude or ~/.codex content was actually written during this measurement. | open |  | 2026-09-24T17:30:53.481Z |  |
 | 60 | 209 | unmet-truth | .claude/commands/ant/go.md |  | PHASE 209'S OWN HEADLINE PROMISE IS NOT MET IN A REAL SESSION. Plan 209-04 shipped UED-17 as 'one sentence in, and the program reaches a running planning pass and then built work without the owner typing anything in between'. The first time that hand-off was exercised for real -- 209-05's timing measurement, an unattended claude session in a fresh practice project, 2026-09-24 -- the medium job STOPPED AND ASKED THE OWNER a question partway through: /ant-go printed the planning-route screen, said real dispatch needs a live helper-sender, and asked whether to 'just build it' or 'use Aether'. It only completed after one plain-English reply telling it to dispatch the planning helpers itself. The automated test standing behind the claim, TestGoalReachesBuiltWorkWithNoExtraSteps (cmd/go_default_path_test.go), drives the Go runtime directly with the planning stage faked already-accepted, so it never exercises the real wrapper text that asks a live assistant to dispatch real planning helpers the way /ant-plan's own much longer wrapper does. The gap is therefore in the four /ant-go wrapper sources, not in the Go runtime, and the existing test cannot see it. Evidence and the four measured runs: .planning/phases/209-light-default-path/209-TIMING.md. Close by giving the /ant-go wrapper's planning hand-off the dispatch instructions /ant-plan's wrapper already carries, proved by a check that fails when the wrapper text cannot reach real planning dispatch -- not by a runtime test with the planning stage pre-faked. | open |  | 2026-09-24T18:46:18.263Z |  |
 | 61 | 209 | unmet-truth | cmd/go_route.go |  | THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT LOOKED'. Observed live 2026-09-24 in 209-TIMING.md run 5 (session 92b11308-8302-4062-8d4d-59b7f1382d5e), a real unattended session in a fresh practice project. The small route ran and completed the job correctly; the quick attempt's own checks came back status 'not_checked' because the practice project has no resolvable check command; D-03's escalation then treated that as a failed check and moved the job up to the planning route, printing 'This turned out bigger than it looked -- the project's own checks did not pass on the quick attempt (status: not_checked)' about work that was already finished and passing. 'The checks could not be run' and 'the checks failed' are different facts and only the second is evidence a job was bigger than it looked. A project with no check command configured is the ordinary state of a new project -- precisely what the owner meets in the Phase 210 two-week trial -- so every quick job there would escalate spuriously and then show a confusing 'bigger than it looked' screen about completed work. Close by making the escalation trigger on a genuine check FAILURE only, leaving 'could not be checked' as the honest not-checked verdict the quick path already reports, proved by a test that escalates on a failed check and does not escalate on an unresolvable one. | fixed |  | 2026-09-24T19:56:27.980Z | 2026-09-24T20:28:01.192Z |
+| 62 | 210 | unmet-truth | cmd/planning_state.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): a blocked check's recovery tasks froze the accepted revision's copy of phase/task status (syncActivePlanRevisionExecutionFacts gave up on any phase whose live task count differed), and plan_authority.go hashed and validated the live phases WITH recovery tasks. After the phase advanced, every load refused 'active plan phases do not match active revision' and autopilot refused 'Missing: accepted plan authority' -- resume looped, pause refused, run and continue refused. Fixed this session; stale on-disk states heal on load via healActiveRevisionStatusDrift (status only, never definition). | fixed |  | 2026-09-25T13:30:34.606Z | 2026-09-25T13:30:35.612Z |
+| 63 | 210 | unmet-truth | cmd/build_worker_run.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the direct (autopilot) build lane rejected an honest completed_no_change worker as an invalid terminal status and failed the wave; every other surface accepts it. Fixed this session. | fixed |  | 2026-09-25T13:30:34.716Z | 2026-09-25T13:30:35.725Z |
+| 64 | 210 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): with no '## Verification Commands' section the whole AGENTS.md is scanned, and the Aether-generated skills-table row for $ant-build ('Build a phase') was read as an unreadable build command, failing the build gate. Also '- build: python3 scripts/validate.py' was refused as unreadable. Both fixed this session. Side effect NOT fixed: the gate error text was auto-written into a REDIRECT note that future workers will be shown. | fixed |  | 2026-09-25T13:30:34.834Z | 2026-09-25T13:30:35.838Z |
+| 65 | 210 | unmet-truth | cmd/codex_build_finalize.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the no-change evidence rule refused handoff verification_status 'passed', a spelling the handoff contract itself accepts. Fixed this session. | fixed |  | 2026-09-25T13:30:34.946Z | 2026-09-25T13:30:35.946Z |
+| 66 | 210 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. A project with no resolvable test command gets 'Tests -- skipped: blocked: no verification command resolved'; autopilot treated it as deterministic_verification_failed and spent its one repair attempt. Same class as row 61 ('could not check' is not 'failed'), but changing it decides whether a phase can pass with no tests run, so it needs the owner's ruling. Suggested pytest auto-detection is a new feature, out of scope in v1.29. | open |  | 2026-09-25T13:30:35.058Z |  |
+| 67 | 210 | unmet-truth | cmd/codex_continue.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. After a no-change build, continue's implementation_evidence gate would not clear with --reconcile-task 1.1,1.2,1.3 (the real task IDs); only the recovery tasks' generated labels task-4,task-5,task-6 cleared it, and 'check_fix_attempt: failed' stayed visible after build and tests passed. | open |  | 2026-09-25T13:30:35.170Z |  |
+| 68 | 210 | unmet-truth | .claude/commands/ant/plan.md |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. The planning result contract is not in the helpers' briefs: the Scout brief lists field names but not shapes (finding objects, content-addressed gap IDs, the closed evidence-kind list), and the Route-Setter manifest has no brief at all (status is Go-owned, the five proof-link lists, evidence_requirements coverage, pass-2 fresh-evidence rules, the fresh 'host plan' packet shape). About 14 plan-finalize refusals in one run; a failed intermediate finalize also left a permanent blocker flag that later counted against autopilot. | open |  | 2026-09-25T13:30:35.280Z |  |
+| 69 | 210 | unmet-truth | cmd/codex_plan_finalize.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. A pass-1 Scout claimed data/teaching/cards.json already held 41 matching lessons (false: 0); the claim was admitted and lifted the plan's Knowledge score to 80, and the first builder found the truth and blocked. Count-style claims are not checked. | open |  | 2026-09-25T13:30:35.389Z |  |
+| 70 | 210 | unmet-truth |  |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN, probably not Aether: inside the autopilot worker sandbox 'ps' is blocked, so tests/test_install_anki_teaching.py::test_failed_post_replace_check_restores_original_collection fails there only (all 207 pass outside) and the worker reported a blocker. Needs confirming whose sandbox this is before any change. | open |  | 2026-09-25T13:30:35.502Z |  |
 
 ````json
 [
@@ -812,6 +821,114 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "reason": "",
     "recorded_at": "2026-09-24T19:56:27.980Z",
     "resolved_at": "2026-09-24T20:28:01.192Z"
+  },
+  {
+    "id": 62,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/planning_state.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): a blocked check's recovery tasks froze the accepted revision's copy of phase/task status (syncActivePlanRevisionExecutionFacts gave up on any phase whose live task count differed), and plan_authority.go hashed and validated the live phases WITH recovery tasks. After the phase advanced, every load refused 'active plan phases do not match active revision' and autopilot refused 'Missing: accepted plan authority' -- resume looped, pause refused, run and continue refused. Fixed this session; stale on-disk states heal on load via healActiveRevisionStatusDrift (status only, never definition).",
+    "status": "fixed",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:34.606Z",
+    "resolved_at": "2026-09-25T13:30:35.612Z"
+  },
+  {
+    "id": 63,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/build_worker_run.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the direct (autopilot) build lane rejected an honest completed_no_change worker as an invalid terminal status and failed the wave; every other surface accepts it. Fixed this session.",
+    "status": "fixed",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:34.716Z",
+    "resolved_at": "2026-09-25T13:30:35.725Z"
+  },
+  {
+    "id": 64,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): with no '## Verification Commands' section the whole AGENTS.md is scanned, and the Aether-generated skills-table row for $ant-build ('Build a phase') was read as an unreadable build command, failing the build gate. Also '- build: python3 scripts/validate.py' was refused as unreadable. Both fixed this session. Side effect NOT fixed: the gate error text was auto-written into a REDIRECT note that future workers will be shown.",
+    "status": "fixed",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:34.834Z",
+    "resolved_at": "2026-09-25T13:30:35.838Z"
+  },
+  {
+    "id": 65,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/codex_build_finalize.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the no-change evidence rule refused handoff verification_status 'passed', a spelling the handoff contract itself accepts. Fixed this session.",
+    "status": "fixed",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:34.946Z",
+    "resolved_at": "2026-09-25T13:30:35.946Z"
+  },
+  {
+    "id": 66,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. A project with no resolvable test command gets 'Tests -- skipped: blocked: no verification command resolved'; autopilot treated it as deterministic_verification_failed and spent its one repair attempt. Same class as row 61 ('could not check' is not 'failed'), but changing it decides whether a phase can pass with no tests run, so it needs the owner's ruling. Suggested pytest auto-detection is a new feature, out of scope in v1.29.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:35.058Z",
+    "resolved_at": null
+  },
+  {
+    "id": 67,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/codex_continue.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. After a no-change build, continue's implementation_evidence gate would not clear with --reconcile-task 1.1,1.2,1.3 (the real task IDs); only the recovery tasks' generated labels task-4,task-5,task-6 cleared it, and 'check_fix_attempt: failed' stayed visible after build and tests passed.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:35.170Z",
+    "resolved_at": null
+  },
+  {
+    "id": 68,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": ".claude/commands/ant/plan.md",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. The planning result contract is not in the helpers' briefs: the Scout brief lists field names but not shapes (finding objects, content-addressed gap IDs, the closed evidence-kind list), and the Route-Setter manifest has no brief at all (status is Go-owned, the five proof-link lists, evidence_requirements coverage, pass-2 fresh-evidence rules, the fresh 'host plan' packet shape). About 14 plan-finalize refusals in one run; a failed intermediate finalize also left a permanent blocker flag that later counted against autopilot.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:35.280Z",
+    "resolved_at": null
+  },
+  {
+    "id": 69,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/codex_plan_finalize.go",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. A pass-1 Scout claimed data/teaching/cards.json already held 41 matching lessons (false: 0); the claim was admitted and lifted the plan's Knowledge score to 80, and the first builder found the truth and blocked. Count-style claims are not checked.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:35.389Z",
+    "resolved_at": null
+  },
+  {
+    "id": 70,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "",
+    "line": null,
+    "description": "FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN, probably not Aether: inside the autopilot worker sandbox 'ps' is blocked, so tests/test_install_anki_teaching.py::test_failed_post_replace_check_restores_original_collection fails there only (all 207 pass outside) and the worker reported a blocker. Needs confirming whose sandbox this is before any change.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T13:30:35.502Z",
+    "resolved_at": null
   }
 ]
 ````
