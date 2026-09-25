@@ -2634,7 +2634,9 @@ func noChangeEvidenceMissingFrom(summary, verificationStatus string, commandsRun
 	if strings.TrimSpace(summary) == "" {
 		missing = append(missing, "summary stating why no change was needed")
 	}
-	if !strings.EqualFold(strings.TrimSpace(verificationStatus), "pass") {
+	// "passed" is the handoff contract's own accepted spelling of "pass"
+	// (codex.ValidateWorkerHandoff / NormalizeWorkerHandoff).
+	if status := strings.ToLower(strings.TrimSpace(verificationStatus)); status != "pass" && status != "passed" {
 		missing = append(missing, "handoff verification_status: pass")
 	}
 	if len(commandsRun) == 0 {

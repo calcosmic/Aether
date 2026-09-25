@@ -4003,7 +4003,7 @@ func looksLikeVerificationCommand(text string) bool {
 		return false
 	}
 	switch fields[0] {
-	case "printf", "echo", "true", "false", "make", "sh", "bash":
+	case "printf", "echo", "true", "false", "make", "sh", "bash", "python", "python3":
 		return true
 	default:
 		return false
@@ -4061,6 +4061,12 @@ func detectVerificationCommandKind(command string) string {
 
 func normalizeVerificationCommandKind(label string) string {
 	lower := strings.ToLower(strings.TrimSpace(strings.Trim(label, "*`")))
+	// A menu command name ("$ant-build", "/ant-build") is never a check
+	// label: the skills table Aether itself writes into AGENTS.md was read
+	// as an unreadable build command and failed the build gate.
+	if strings.HasPrefix(lower, "$") || strings.HasPrefix(lower, "/") {
+		return ""
+	}
 	switch {
 	case strings.Contains(lower, "build"):
 		return "build"
