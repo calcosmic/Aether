@@ -18,10 +18,14 @@ var buildWorkerRunMutationMu sync.Mutex
 const (
 	buildWorkerDispatching = "dispatching"
 	buildWorkerCompleted   = "completed"
-	buildWorkerFailed      = "failed"
-	buildWorkerBlocked     = "blocked"
-	buildWorkerTimeout     = "timeout"
-	buildWorkerCancelled   = "cancelled"
+	// buildWorkerCompletedNoChange is an honest success with no edits
+	// (ruling D6); every other lane already treats it as terminal, and
+	// finalize applies its own no-change evidence rule.
+	buildWorkerCompletedNoChange = "completed_no_change"
+	buildWorkerFailed            = "failed"
+	buildWorkerBlocked           = "blocked"
+	buildWorkerTimeout           = "timeout"
+	buildWorkerCancelled         = "cancelled"
 )
 
 type buildAttemptWorkerRun struct {
@@ -176,7 +180,7 @@ func recordBuildAttemptWorkerTerminal(phase int, binding codex.ExecutionBinding,
 	}
 	status := strings.ToLower(strings.TrimSpace(result.Status))
 	switch status {
-	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	case buildWorkerCompleted, buildWorkerCompletedNoChange, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
 	default:
 		return fmt.Errorf("terminal worker status %q is invalid", result.Status)
 	}
@@ -217,7 +221,7 @@ func applyBuildWorkerTerminal(record *buildAttemptRecord, workerRun *buildAttemp
 		return err
 	}
 	switch result.Status {
-	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	case buildWorkerCompleted, buildWorkerCompletedNoChange, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
 	case buildWorkerCancelled:
 		if workerRun.Native == nil {
 			return fmt.Errorf("only confirmed native cancellation is terminal here")
@@ -413,7 +417,7 @@ func recordDirectBuildWorkerTerminal(dispatch codex.WorkerDispatch, result codex
 		}
 	}
 	switch terminal.Status {
-	case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+	case buildWorkerCompleted, buildWorkerCompletedNoChange, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
 	default:
 		return fmt.Errorf("worker %s returned invalid terminal status %q", dispatch.WorkerName, terminal.Status)
 	}
@@ -487,7 +491,7 @@ func latestTerminalBuildWorkerRun(runs []buildAttemptWorkerRun, workerName, task
 			continue
 		}
 		switch run.Status {
-		case buildWorkerCompleted, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
+		case buildWorkerCompleted, buildWorkerCompletedNoChange, buildWorkerFailed, buildWorkerBlocked, buildWorkerTimeout:
 			return run, true
 		case buildWorkerCancelled:
 			if run.Native != nil {

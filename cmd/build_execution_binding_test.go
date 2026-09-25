@@ -204,3 +204,48 @@ func boundBuildWorkerRequest(manifest codexBuildManifest, dispatch codexBuildDis
 		"timeout_ms":         5000,
 	}
 }
+
+// TestDirectBuildLaneAcceptsAnHonestNoChangeWorker reproduces the French
+// Fluency autopilot stop: a builder found its work already done and
+// honestly returned completed_no_change, which every other surface accepts,
+// but the direct (autopilot) lane's journal rejected it as an invalid
+// terminal status and failed the whole wave.
+func TestDirectBuildLaneAcceptsAnHonestNoChangeWorker(t *testing.T) {
+	root := setupExternalBuildAttemptTest(t)
+	manifest := prepareBoundBuildManifestOnly(t, root)
+	t.Chdir(root)
+	dispatch := manifest.Dispatches[0]
+	worker := codex.WorkerDispatch{
+		WorkerName:       dispatch.Name,
+		Caste:            dispatch.Caste,
+		TaskID:           normalizedDispatchTaskID(dispatch),
+		Phase:            manifest.Phase,
+		ExecutionBinding: manifest.ExecutionBinding,
+		ProviderRunID:    "provider-no-change",
+	}
+	if err := beginDirectBuildWorkerRun(worker, &codex.FakeInvoker{}); err != nil {
+		t.Fatalf("begin direct worker run: %v", err)
+	}
+	result := codex.DispatchResult{
+		WorkerName: dispatch.Name,
+		Status:     "completed_no_change",
+		WorkerResult: &codex.WorkerResult{
+			WorkerName: dispatch.Name,
+			Caste:      dispatch.Caste,
+			TaskID:     normalizedDispatchTaskID(dispatch),
+			Status:     "completed_no_change",
+			Summary:    "The lessons were already generated and merged; nothing to change.",
+		},
+	}
+	if err := recordDirectBuildWorkerTerminal(worker, result); err != nil {
+		t.Fatalf("honest no-change worker was refused by the direct lane: %v", err)
+	}
+	_, record, ok := loadLatestBuildAttempt(1)
+	if !ok {
+		t.Fatal("durable attempt is missing")
+	}
+	run, found := latestTerminalBuildWorkerRun(record.WorkerRuns, dispatch.Name, normalizedDispatchTaskID(dispatch))
+	if !found || run.Status != "completed_no_change" {
+		t.Fatalf("no-change terminal was not journaled as itself: found=%v run=%+v", found, run)
+	}
+}
