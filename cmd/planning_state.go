@@ -58,6 +58,9 @@ func loadSpecificationColonyStateInSession(session *planningMutationSession) (co
 		}
 		state.Plan.AcceptancePolicy = colony.PlanAcceptanceLegacyUnbound
 	}
+	// Same status-only heal migratePlanningState applies, so a state the old
+	// sync left stale saves back corrected from this path too.
+	state, _ = healActiveRevisionStatusDrift(state)
 	if err := validatePlanningState(state); err != nil {
 		return colony.ColonyState{}, fmt.Errorf("load specification planning state: %w", err)
 	}
@@ -187,6 +190,11 @@ func validateSpecificationRevisionHashes(index int, revision colony.SpecRevision
 }
 
 func validateCurrentPlanningState(state colony.ColonyState) error {
+	// Revision status is a mirror of the live plan, never accepted content;
+	// check the definition against a status-healed copy so no caller can
+	// refuse a plan only because an older sync left that mirror stale
+	// (Phase 210 blockers 1 and 2). Definition fields are still compared.
+	state, _ = healActiveRevisionStatusDrift(state)
 	if state.Specification == nil {
 		return fmt.Errorf("explicit_owner plan requires a specification")
 	}

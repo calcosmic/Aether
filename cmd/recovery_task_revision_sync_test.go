@@ -1,6 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -109,8 +113,8 @@ func TestStatusDriftLeftByTheOldSyncHealsOnLoad(t *testing.T) {
 	stale.Plan.Phases[0].Status = colony.PhaseCompleted
 	stale.Plan.Phases[0].Tasks[1].Status = colony.TaskCompleted
 	stale.Plan.Phases[1].Status = colony.PhaseReady
-	if err := validateCurrentPlanningState(stale); err == nil {
-		t.Fatal("fixture must reproduce the refused on-disk shape")
+	if reflect.DeepEqual(planPhasesExcludingRecoveryTasks(stale.Plan.Phases), activeRevisionPhasesForTest(stale)) {
+		t.Fatal("fixture must reproduce the stale on-disk shape (revision status behind the live plan)")
 	}
 
 	healed, changed := healActiveRevisionStatusDrift(stale)
@@ -131,4 +135,67 @@ func TestStatusDriftLeftByTheOldSyncHealsOnLoad(t *testing.T) {
 	if err := validateCurrentPlanningState(edited); err == nil {
 		t.Fatal("healing status let an unaccepted change to a task through")
 	}
+}
+
+// TestStaleRevisionStatusOnDiskLoadsOnEveryPath is blocker 2 of the Phase
+// 210 fortnight: the first fix healed stale revision status in one loader,
+// but '/ant-build 2' reads the project through the in-session loader, which
+// validated the raw state and refused again with "active plan phases do not
+// match active revision". The stale file here is written to disk exactly as
+// the old sync left it, and every loader and the plan-authority check must
+// accept it.
+func TestStaleRevisionStatusOnDiskLoadsOnEveryPath(t *testing.T) {
+	goal := "Prove every loader heals stale revision status"
+	first, second := "1.1", "2.1"
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version: "3.0", Goal: &goal, ColonyDepth: "standard",
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "First", Status: colony.PhaseInProgress, Tasks: []colony.Task{
+				{ID: &first, Goal: "Do the first thing", Status: colony.TaskCompleted},
+			}},
+			{ID: 2, Name: "Second", Status: colony.PhasePending, Tasks: []colony.Task{
+				{ID: &second, Goal: "Do the second thing", Status: colony.TaskPending},
+			}},
+		}},
+	})
+	stale := accepted.State
+	appendRecoveryTasks(&stale.Plan.Phases[0], recoveryTasksForBlockedContinue(stale.Plan.Phases[0], codexContinueAssessment{
+		Recovery: codexContinueRecoveryPlan{ReconcileTasks: []string{first}},
+	}))
+	stale.Plan.Phases[0].Status = colony.PhaseCompleted
+	stale.Plan.Phases[0].Tasks[1].Status = colony.TaskCompleted
+	stale.Plan.Phases[1].Status = colony.PhaseReady
+	stale.CurrentPhase = 2
+	raw, err := json.MarshalIndent(stale, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(accepted.Root, ".aether", "data", "COLONY_STATE.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadSpecificationColonyState(accepted.Root); err != nil {
+		t.Fatalf("specification loader refused stale revision status: %v", err)
+	}
+	if err := withPlanningMutationSession(accepted.Root, "test-stale-revision-status", func(session *planningMutationSession) error {
+		loaded, err := loadSpecificationColonyStateInSession(session)
+		if err != nil {
+			return err
+		}
+		return validatePlanningState(loaded)
+	}); err != nil {
+		t.Fatalf("in-session loader (the /ant-build path) refused stale revision status: %v", err)
+	}
+	if !lifecycleAcceptedPlanValid(stale) {
+		t.Fatal("lifecycle facts called the stale-status plan unaccepted")
+	}
+}
+
+func activeRevisionPhasesForTest(state colony.ColonyState) []colony.Phase {
+	for _, revision := range state.Plan.Revisions {
+		if revision.ID == state.Plan.ActiveRevisionID {
+			return revision.Phases
+		}
+	}
+	return nil
 }
