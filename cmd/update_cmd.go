@@ -422,13 +422,16 @@ func appendMaintenanceProjectDocTargets(plan *maintenanceMutationPlan, hubSystem
 			return nil, err
 		}
 		destination := filepath.Join(repositoryRoot, spec.destRel)
+		rendered := renderProjectDocTemplate(string(data))
 		if existing, readErr := os.ReadFile(destination); readErr == nil && !spec.managedFn(string(existing)) {
 			preserved = append(preserved, filepath.ToSlash(spec.destRel))
 			continue
-		} else if readErr != nil && !os.IsNotExist(readErr) {
+		} else if readErr == nil {
+			rendered = carryOwnerVerificationSection(string(existing), rendered)
+		} else if !os.IsNotExist(readErr) {
 			return nil, readErr
 		}
-		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Label: filepath.ToSlash(spec.destRel), Source: source, Action: lifecycleTransactionWrite, Content: []byte(renderProjectDocTemplate(string(data))), Managed: true})
+		plan.Targets = append(plan.Targets, maintenanceMutationTarget{Root: lifecycleTransactionRootRepository, RelativeTarget: spec.destRel, Label: filepath.ToSlash(spec.destRel), Source: source, Action: lifecycleTransactionWrite, Content: []byte(rendered), Managed: true})
 	}
 	return preserved, nil
 }

@@ -75,6 +75,7 @@ func syncManagedProjectDoc(hubSystem, repoDir string, spec projectDocSpec) (map[
 	existingBytes, err := os.ReadFile(destPath)
 	if err == nil {
 		existing := string(existingBytes)
+		rendered = carryOwnerVerificationSection(existing, rendered)
 		if existing == rendered {
 			entry["skipped"] = 1
 			entry["reason"] = "unchanged"
@@ -102,6 +103,23 @@ func syncManagedProjectDoc(hubSystem, repoDir string, spec projectDocSpec) (map[
 
 	entry["copied"] = 1
 	return entry, 1, 0, nil
+}
+
+// ownerVerificationHeading is where Aether's own "no verification command"
+// guidance tells the owner to put check commands in AGENTS.md.
+const ownerVerificationHeading = "## Verification Commands"
+
+// carryOwnerVerificationSection keeps an owner's "## Verification Commands"
+// section when a managed project doc is refreshed from the template. The
+// refresh replaced the whole file, so every update deleted the check
+// commands Aether had asked the owner to add, and the next check found
+// none (Phase 210 blocker 4). Everything else is still refreshed.
+func carryOwnerVerificationSection(existing, rendered string) string {
+	section := strings.TrimSpace(extractMarkdownSection(existing, ownerVerificationHeading))
+	if section == "" || strings.TrimSpace(extractMarkdownSection(rendered, ownerVerificationHeading)) != "" {
+		return rendered
+	}
+	return strings.TrimRight(rendered, "\n") + "\n\n" + ownerVerificationHeading + "\n\n" + section + "\n"
 }
 
 func renderProjectDocTemplate(template string) string {

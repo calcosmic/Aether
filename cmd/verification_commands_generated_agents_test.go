@@ -25,14 +25,16 @@ func TestShippedAgentsTemplateNeverReadsAsACheckCommand(t *testing.T) {
 	if err := os.WriteFile(path, template, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Invariant, not a named row: Aether's own template declares no check
+	// commands, so reading it must yield none and nothing unreadable. The
+	// first fix named only the $ant-build row and the "aether build <N>" row
+	// still failed the build gate the same day (Phase 210 blocker 4).
 	commands := loadVerificationCommandsFromMarkdown(path, "## Verification Commands")
-	for _, line := range commands.Unreadable {
-		if strings.Contains(line, "$ant-") || strings.Contains(line, "/ant-") {
-			t.Fatalf("a menu-command row was read as a check command: %q", line)
-		}
+	if len(commands.Unreadable) != 0 {
+		t.Fatalf("rows of Aether's own template were read as check commands: %q", commands.Unreadable)
 	}
-	if strings.Contains(commands.Build, "ant-") {
-		t.Fatalf("a menu-command row became the build command: %q", commands.Build)
+	if commands.Build != "" || commands.Test != "" || commands.Lint != "" || commands.Type != "" {
+		t.Fatalf("Aether's own template produced check commands: %+v", commands)
 	}
 
 	// A real labelled row in the same table shape still works.

@@ -3901,6 +3901,12 @@ func parseVerificationCommandTableLine(line string) (string, string, bool) {
 		return "", "", false
 	}
 	label := strings.TrimSpace(parts[1])
+	// A check label is plain text ("Build", "Unit tests"). A label cell
+	// written as code is a command name -- the command tables Aether writes
+	// into AGENTS.md ("`aether build <N>`", "`$ant-build`") -- never a check.
+	if strings.HasPrefix(label, "`") {
+		return "", "", false
+	}
 	kind := normalizeVerificationCommandKind(label)
 	if kind == "" {
 		return "", "", false
