@@ -157,6 +157,11 @@ func renderLifecycleProjectionNextUp(projection LifecycleProjection, platform st
 		b.WriteString("\n")
 	}
 
+	// Identical wording is shown once with a count: one line per artifact
+	// printed "recorded verification artifact" ten times on the owner's
+	// seal card (Phase 210, 2026-09-25).
+	var labels []string
+	counts := map[string]int{}
 	for _, evidence := range action.Evidence {
 		label := strings.TrimSpace(evidence.Summary)
 		if label == "" {
@@ -168,8 +173,17 @@ func renderLifecycleProjectionNextUp(projection LifecycleProjection, platform st
 		if label == "" {
 			continue
 		}
+		if counts[label] == 0 {
+			labels = append(labels, label)
+		}
+		counts[label]++
+	}
+	for _, label := range labels {
 		b.WriteString("Evidence: ")
 		b.WriteString(label)
+		if counts[label] > 1 {
+			b.WriteString(fmt.Sprintf(" (%d of them)", counts[label]))
+		}
 		b.WriteString("\n")
 	}
 

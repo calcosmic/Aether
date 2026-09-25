@@ -10,6 +10,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"regexp"
@@ -689,5 +690,33 @@ func TestCloseoutEmitsTheStructuredAnswerBesideTheOldNextKey(t *testing.T) {
 	}
 	if _, ok := result[nextActionResultKey].(map[string]interface{}); !ok {
 		t.Errorf("closeout emits no structured answer under %s: %s", nextActionResultKey, buf.String())
+	}
+}
+
+// TestNextUpEvidenceNeverRepeatsTheSameLine: the French Fluency seal card
+// (Phase 210, 2026-09-25) ended with "Evidence: recorded verification
+// artifact" printed ten times, one per artifact, which the owner called
+// jumbly. Identical wording is shown once with a count; different wording
+// still gets its own line.
+func TestNextUpEvidenceNeverRepeatsTheSameLine(t *testing.T) {
+	projection := LifecycleProjection{}
+	projection.NextAction.RuntimeCommand = "aether status"
+	projection.NextAction.Reason = "Look at the finished project."
+	for i := 0; i < 10; i++ {
+		projection.NextAction.Evidence = append(projection.NextAction.Evidence, colony.LifecycleEvidence{
+			ID: fmt.Sprintf("artifact:%d", i), Kind: "verification_artifact", Source: fmt.Sprintf("a%d.json", i), Summary: "recorded verification artifact",
+		})
+	}
+	projection.NextAction.Evidence = append(projection.NextAction.Evidence, colony.LifecycleEvidence{ID: "other", Summary: "owner checkpoint answered"})
+
+	rendered := renderLifecycleProjectionNextUp(projection, "claude")
+	if got := strings.Count(rendered, "recorded verification artifact"); got != 1 {
+		t.Fatalf("identical evidence printed %d times, want once:\n%s", got, rendered)
+	}
+	if !strings.Contains(rendered, "recorded verification artifact (10 of them)") {
+		t.Fatalf("the collapsed line does not say how many there were:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "owner checkpoint answered") {
+		t.Fatalf("different evidence was lost:\n%s", rendered)
 	}
 }

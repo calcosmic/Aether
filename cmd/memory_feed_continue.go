@@ -71,8 +71,14 @@ func feedContinueWorkerMemory(phase colony.Phase, workerFlow []codexContinueWork
 		if isSyntheticContinueCeremonyStep(step) {
 			continue
 		}
-		if step.Status == "completed" {
+		if isSuccessfulExternalBuildStatus(step.Status) {
 			feedCompletedCheckWorkerLessons(step)
+			continue
+		}
+		// A step the runtime deliberately did not run (the review wave or
+		// watcher skipped by design) is not a failure; logging it as one
+		// turned every ordinary check into auto-written REDIRECT notes.
+		if strings.EqualFold(strings.TrimSpace(step.Status), "skipped") {
 			continue
 		}
 		feedFailedCheckWorker(phase, step)

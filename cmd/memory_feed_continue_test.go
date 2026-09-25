@@ -651,3 +651,34 @@ func TestCheckAndQuickFailureTextIsSanitisedBeforeMemory(t *testing.T) {
 		}
 	})
 }
+
+// TestDeliberateSkipsAreNotFailures: in the owner's French Fluency project
+// (Phase 210, 2026-09-25) every check logged "review wave skipped" and
+// "watcher auto-skipped" as worker failures -- steps the runtime chose not to
+// run, by design. Three of each became auto-written REDIRECT notes shown to
+// every later helper and on every closing card, and the phase summaries
+// reported 20-59 "failures". A deliberate skip, and an honest no-change
+// finish, are not failures; a genuinely failed step still is.
+func TestDeliberateSkipsAreNotFailures(t *testing.T) {
+	saveGlobals(t)
+	s, _ := newTestStore(t)
+	store = s
+
+	phase := colony.Phase{ID: 3, Name: "Skips are not failures"}
+	workerFlow := []codexContinueWorkerFlowStep{
+		continueReviewSkippedFlowStep(continueReviewSkippedSummary(colony.VerificationDepthStandard)),
+		{Stage: "verification", Caste: "watcher", Name: "Watcher", Status: "skipped",
+			Summary: continueWatcherFlowSummary("auto-skip", "skipped", "watcher auto-skipped; external-task build was wrapper-mediated")},
+		{Stage: "review", Caste: "auditor", Name: "Auditor-2", Status: "completed_no_change", Summary: "verified; nothing to change"},
+	}
+	feedContinueWorkerMemory(phase, workerFlow)
+	if mf, err := loadMiddenFile(store); err == nil && len(mf.Entries) != 0 {
+		t.Fatalf("deliberate skips and a no-change finish were logged as failures: %+v", mf.Entries)
+	}
+
+	feedContinueWorkerMemory(phase, []codexContinueWorkerFlowStep{{Caste: "auditor", Name: "Auditor-3", Status: "failed", Blockers: []string{"real finding"}}})
+	mf, err := loadMiddenFile(store)
+	if err != nil || len(mf.Entries) != 1 {
+		t.Fatalf("a genuinely failed step must still be logged once, got err=%v entries=%+v", err, mf.Entries)
+	}
+}
