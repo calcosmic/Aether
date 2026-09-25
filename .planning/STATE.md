@@ -2,20 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 209
-current_phase_name: A Light Default Path
-status: verifying
+current_phase: 210
+current_phase_name: Two-Week Freeze
+status: executing
 stopped_at: Phase 209 complete and signed off; phase 210 planned (2 plans), fixed build installed, ready to start the fortnight
-last_updated: "2026-09-24T20:22:49.000Z"
-last_activity: 2026-09-24
-state_head: 2e9557bab0d9ee9945d620d052eb71f734944e51
+last_updated: "2026-09-25T06:13:54.924Z"
+last_activity: 2026-09-25
+last_activity_desc: Phase 210 execution started
+state_head: 68701c147126b5c53649cf9bb3bd1b15a1a060f7
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 34
+  completed_phases: 4
+  total_plans: 36
   completed_plans: 34
-  percent: 60
-last_activity_desc: Phase 209 signed off; 210 planned and checked; owner approved the install and the global catch-all
+  percent: 80
 ---
 
 # Project State
@@ -25,7 +25,7 @@ last_activity_desc: Phase 209 signed off; 210 planned and checked; owner approve
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 209 — A Light Default Path
+**Current focus:** Phase 210 — Two-Week Freeze
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -34,11 +34,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 209 (A Light Default Path) — GAP CLOSURE PLAN 07 EXECUTED
+Phase: 210 (Two-Week Freeze) — EXECUTING
 Next phase: 210 (Two-Week Freeze) — not yet planned
-Status: Plan 07 (gap closure) executed — defect register entry 61 closed; re-verify phase 209 before advancing to Phase 210
-Plan: 7 of 7
-Last activity: 2026-09-24
+Status: Executing Phase 210
+Plan: 1 of 2
+Last activity: 2026-09-25 — Phase 210 execution started
 
 ## Performance Metrics
 

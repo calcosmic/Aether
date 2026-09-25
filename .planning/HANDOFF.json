@@ -1,55 +1,81 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-20T16:21:07.449515+00:00",
-  "phase": "204.2",
-  "phase_name": "codex-native-worker-lifecycle",
-  "phase_dir": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle",
-  "plan": 25,
-  "task": 2,
+  "timestamp": "2026-09-25T07:06:56.263Z",
+  "phase": "210",
+  "phase_name": "Two-Week Freeze",
+  "phase_dir": ".planning/phases/210-two-week-freeze",
+  "plan": 1,
+  "task": 1,
   "total_tasks": 3,
   "status": "paused",
-  "reason": "Owner budget/time concern and requested Claude transfer; do not auto-resume paid qualification.",
-  "source_commit": "96ff6f4535d90c9438cbc62d70f0b5b3784f39f3",
   "completed_tasks": [
     {
-      "name": "Reviewer bookkeeping attribution fix",
-      "status": "done",
-      "commit": "96ff6f45"
-    },
-    {
-      "name": "F19 focused24families normal/race",
-      "status": "done",
-      "pass_events_each": 1854
+      "id": 1,
+      "name": "Fix the dates, the projects and the definition before the clock starts",
+      "status": "in_progress",
+      "progress": "All four machine facts gathered and reported to the owner. Two problems found and both fixed with his approval: the installed program predated the 209-07 escalation fix (rebuilt and installed 2026-09-24 23:29, backup at ~/.local/bin/aether.backup-1.0.88-pre-209-07), and the machine's menu commands had been silently reverted to a four-day-old set with /ant-go missing entirely (hub re-published, all 67 now match, hub backup at ~/.aether-backup-2026-09-25-pre-210, aether integrity 5/5). ONLY the owner's own answer is outstanding: which projects count, and confirmation of the dates."
     }
   ],
   "remaining_tasks": [
-    "Reassess scope/cost with owner before trials",
-    "Review/question and downstream Codex qualification remain incomplete"
+    {
+      "id": 1,
+      "name": "Owner names the projects and confirms the dates",
+      "status": "awaiting_owner",
+      "note": "This is the ONLY thing left in Task 1. Do not redo the setup."
+    },
+    {
+      "id": 2,
+      "name": "Write the start record, the empty ledger, and the recorder",
+      "status": "not_started",
+      "note": "Creates 210-FREEZE-START.md (six headings) and 210-BLOCKERS.md, adds a temporary section to this repo's CLAUDE.md, and appends the owner-approved catch-all to $HOME/.claude/CLAUDE.md."
+    },
+    {
+      "id": 3,
+      "name": "Prove the recorder works on the first real day",
+      "status": "not_started"
+    }
   ],
   "blockers": [
     {
+      "description": "The fortnight cannot start until the owner names which of his projects count and confirms the start and end dates.",
       "type": "human_action",
-      "description": "Owner wants cheaper scope/daily-driver path reassessed before further paid trials."
+      "workaround": "None. D-02 explicitly forbids inventing a project list."
     }
   ],
-  "background_processes": [],
-  "stopped_runner": {
-    "session": 61470,
-    "pid": 34959,
-    "status": "closed",
-    "runs": {},
-    "error": "KeyboardInterrupt",
-    "summary_sha256": "216807150f93a0693e0d4c60451f00f5ffa96b81efb43250681de637362666d2"
-  },
-  "human_actions_pending": [],
-  "uncommitted_files": [
-    ".planning/phases/204.2-codex-native-worker-lifecycle/.continue-here.md",
-    ".planning/HANDOFF.json"
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Name the real projects the fortnight covers, and confirm the start and end dates (starting 2026-09-25 makes the end 2026-10-09).",
+      "context": "Owner decision D-02 deliberately deferred the project list to the start. UED-19 is judged against the list he names, not one invented at planning time. He may also choose to leave the list open to additions, which then gets stated in the final report.",
+      "blocking": true
+    }
   ],
-  "next_action": "Read handoff; propose cheapest practical Aether/Claude daily-use validation, not automatic Codex qualification resumption.",
-  "context_notes": "/Users/callumcowie/repos/Aether/.planning/phases/204.2-codex-native-worker-lifecycle/.continue-here.md",
-  "machine_inventory": "/Users/callumcowie/.aether-backups/phase204-2-collector/claude-handoff-current-20260920.json",
-  "temporary_protected_backup_metadata_files": 4,
-  "metadata_restoration_pending": true,
-  "commit_deferred_reason": "Avoid moving frozen source HEAD solely for handoff metadata and triggering more qualification work."
+  "decisions": [
+    {
+      "decision": "Phase 209 signed off at 6/6 UAT checks, with two items left openly on the defect register rather than closed on paper.",
+      "rationale": "Owner ruling at UAT 2026-09-24: fix the false escalation before the trial, leave the unproven planning hand-off for the trial itself to exercise.",
+      "phase": "209"
+    },
+    {
+      "decision": "The default menu is ten commands in two groups, not the proposed six.",
+      "rationale": "Owner ruling 2026-09-24 on the real rendered screen. /ant-init kept because it promises 'start a project' where /ant-go promises 'do this thing'; oracle, swarm and dream added because he actually reaches for them.",
+      "phase": "209"
+    },
+    {
+      "decision": "The installed program was rebuilt and replaced before the fortnight, and the machine's shared command copy was re-published from this repo.",
+      "rationale": "Owner approved both 2026-09-25 after being shown that the installed build predated the escalation fix and that /ant-go was missing from every project outside this repo. A local install and a local hub sync are not the npm/GitHub publish that D-01 and the milestone rules put out of scope.",
+      "phase": "210"
+    },
+    {
+      "decision": "A one-line temporary catch-all goes into the owner's machine-wide instructions when the fortnight starts.",
+      "rationale": "Owner approved 2026-09-25 after being shown the undercount risk: the recorder in this repo only fires when he comes here, so a blocker dealt with entirely inside another project would go uncounted and flatter the final verdict.",
+      "phase": "210"
+    }
+  ],
+  "uncommitted_files": [
+    ".aether/CONTEXT.md (modified before this session started; not this session's work, left alone)",
+    ".planning/STATE.md (state.begin-phase for 210; committed with this handoff)"
+  ],
+  "next_action": "Ask the owner which of his real projects the fortnight covers and confirm the start and end dates. Do NOT re-run the install, the publish, or the machine-fact gathering — all of that is done and verified.",
+  "context_notes": "Phase 209 is complete and signed off; phase 210 is planned, checked and set up. The only thing between here and a running fortnight is the owner's own answer. The whole design of 210 rests on the final blocker count being honest including when it is bad, so nothing that would flatter that count should be allowed to creep in."
 }
