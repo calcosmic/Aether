@@ -1,52 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-25T07:06:56.263Z",
+  "timestamp": "2026-09-25T17:40:00Z",
   "phase": "210",
   "phase_name": "Two-Week Freeze",
   "phase_dir": ".planning/phases/210-two-week-freeze",
   "plan": 1,
-  "task": 1,
+  "task": 3,
   "total_tasks": 3,
-  "status": "paused",
+  "status": "in_progress",
   "completed_tasks": [
     {
       "id": 1,
       "name": "Fix the dates, the projects and the definition before the clock starts",
-      "status": "in_progress",
-      "progress": "All four machine facts gathered and reported to the owner. Two problems found and both fixed with his approval: the installed program predated the 209-07 escalation fix (rebuilt and installed 2026-09-24 23:29, backup at ~/.local/bin/aether.backup-1.0.88-pre-209-07), and the machine's menu commands had been silently reverted to a four-day-old set with /ant-go missing entirely (hub re-published, all 67 now match, hub backup at ~/.aether-backup-2026-09-25-pre-210, aether integrity 5/5). ONLY the owner's own answer is outstanding: which projects count, and confirmation of the dates."
-    }
-  ],
-  "remaining_tasks": [
-    {
-      "id": 1,
-      "name": "Owner names the projects and confirms the dates",
-      "status": "awaiting_owner",
-      "note": "This is the ONLY thing left in Task 1. Do not redo the setup."
+      "status": "done",
+      "progress": "Owner confirmed 2026-09-25: start today (25 Sep to 9 Oct), French Fluency on the list, list open to additions, today's lock-up counted as blocker 1."
     },
     {
       "id": 2,
       "name": "Write the start record, the empty ledger, and the recorder",
-      "status": "not_started",
-      "note": "Creates 210-FREEZE-START.md (six headings) and 210-BLOCKERS.md, adds a temporary section to this repo's CLAUDE.md, and appends the owner-approved catch-all to $HOME/.claude/CLAUDE.md."
-    },
+      "status": "done",
+      "progress": "210-FREEZE-START.md, 210-BLOCKERS.md (1 row), CLAUDE.md freeze section, machine-wide catch-all appended (backup ~/.claude/CLAUDE.md.backup-2026-09-25-pre-freeze). Plan verify printed VERIFY_OK; tally 1."
+    }
+  ],
+  "remaining_tasks": [
     {
       "id": 3,
       "name": "Prove the recorder works on the first real day",
-      "status": "not_started"
+      "status": "awaiting_owner",
+      "note": "Blocker 1 was written into the ledger by the chat, but AFTER it was fixed, not before (the freeze section did not exist yet when the report arrived). The owner still needs to do one ordinary real piece of work in French Fluency and confirm the ledger matches."
     }
   ],
-  "blockers": [
-    {
-      "description": "The fortnight cannot start until the owner names which of his projects count and confirms the start and end dates.",
-      "type": "human_action",
-      "workaround": "None. D-02 explicitly forbids inventing a project list."
-    }
-  ],
+  "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [
     {
-      "action": "Name the real projects the fortnight covers, and confirm the start and end dates (starting 2026-09-25 makes the end 2026-10-09).",
-      "context": "Owner decision D-02 deliberately deferred the project list to the start. UED-19 is judged against the list he names, not one invented at planning time. He may also choose to leave the list open to additions, which then gets stated in the final report.",
+      "action": "Do one ordinary real piece of work in French Fluency through Aether (phase 2 is next), then say whether anything stopped him and confirm the ledger matches.",
       "blocking": true
     }
   ],
@@ -70,12 +58,21 @@
       "decision": "A one-line temporary catch-all goes into the owner's machine-wide instructions when the fortnight starts.",
       "rationale": "Owner approved 2026-09-25 after being shown the undercount risk: the recorder in this repo only fires when he comes here, so a blocker dealt with entirely inside another project would go uncounted and flatter the final verdict.",
       "phase": "210"
+    },
+    {
+      "decision": "Blocker 1 (French Fluency lock-up) fixed and installed; fixed binary built from bcf60ed4, backup at ~/.local/bin/aether.backup-1.0.88-pre-french-fix.",
+      "rationale": "Owner approved install and unstick 2026-09-25. Real project: status loads, resume no longer loops, autopilot preview plans phases 2-4.",
+      "phase": "210"
+    },
+    {
+      "decision": "'No test command' as warning-not-failure: owner chose 'warn and carry on', NOT implemented yet, pushed back.",
+      "rationale": "The failure comes from the accepted plan's per-goal 'must be proven by tests' requirement, not the test step itself; honouring the choice means marking goals test-proven when no test ran, and a helper could reach that by removing the test command. Awaiting owner's answer to the pushback. WINDOWS 66.",
+      "phase": "210"
     }
   ],
   "uncommitted_files": [
-    ".aether/CONTEXT.md (modified before this session started; not this session's work, left alone)",
-    ".planning/STATE.md (state.begin-phase for 210; committed with this handoff)"
+    ".aether/CONTEXT.md (modified before this session; not this session's work, left alone)"
   ],
-  "next_action": "Ask the owner which of his real projects the fortnight covers and confirm the start and end dates. Do NOT re-run the install, the publish, or the machine-fact gathering — all of that is done and verified.",
+  "next_action": "Wait for the owner's first real session in French Fluency (Task 3), and his answer on the 'no test command' pushback.",
   "context_notes": "Phase 209 is complete and signed off; phase 210 is planned, checked and set up. The only thing between here and a running fortnight is the owner's own answer. The whole design of 210 rests on the final blocker count being honest including when it is bad, so nothing that would flatter that count should be allowed to creep in."
 }

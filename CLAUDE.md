@@ -61,6 +61,25 @@ Use what already exists — never create a new tracker:
 | Handover between sessions | `.planning/HANDOFF.json` |
 | Blockers, issues and "later" notes the owner sees | `/ant-flag`, `/ant-flags` |
 
+## During the two-week freeze (Phase 210 — temporary, delete when the fortnight ends)
+
+The owner is using Aether for real work in his own projects for two weeks. The dates, the
+projects and what counts are in `.planning/phases/210-two-week-freeze/210-FREEZE-START.md`.
+Until that end date, in every chat in this repository:
+
+1. **Write it down before fixing anything.** If the owner comes here because Aether stopped his
+   real work somewhere else, first add one row to
+   `.planning/phases/210-two-week-freeze/210-BLOCKERS.md` with his own words, the date and the
+   project, and only then start fixing. He types nothing extra; the chat does this. A blocker
+   nobody wrote down is a blocker nobody counted, and an undercount makes the end-of-fortnight
+   verdict on the whole framework look better than it should.
+2. **Fix only what he actually hit.** No looking for other bugs, no audits, no starting
+   adjacent work. For these two weeks, real use chooses the work and nothing else does.
+3. **Nothing new.** No new features, and no new way for the program to refuse or stop him.
+
+When a fix lands, mark that row fixed, and leave the row where it is: the count includes
+blockers that were fixed.
+
 ## Codex Public Entrypoints
 
 Pick an ant skill in Codex to start the matching workflow. The skill reads Aether's
