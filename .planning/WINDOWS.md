@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 44
+open_count: 45
 waived_count: 0
 fixed_count: 27
-total_count: 71
-last_updated: 2026-09-25T15:18:27.666Z
+total_count: 72
+last_updated: 2026-09-25T21:01:18.590Z
 ---
 
 # Broken Windows Ledger
@@ -88,6 +88,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 69 | 210 | unmet-truth | cmd/codex_plan_finalize.go |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN. A pass-1 Scout claimed data/teaching/cards.json already held 41 matching lessons (false: 0); the claim was admitted and lifted the plan's Knowledge score to 80, and the first builder found the truth and blocked. Count-style claims are not checked. | open |  | 2026-09-25T13:30:35.389Z |  |
 | 70 | 210 | unmet-truth |  |  | FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): OPEN, probably not Aether: inside the autopilot worker sandbox 'ps' is blocked, so tests/test_install_anki_teaching.py::test_failed_post_replace_check_restores_original_collection fails there only (all 207 pass outside) and the worker reported a blocker. Needs confirming whose sandbox this is before any change. | open |  | 2026-09-25T13:30:35.502Z |  |
 | 71 | 210 | unmet-truth | cmd/pheromone_cmds.go |  | Found while cleaning up blocker 1 (2026-09-25): 'aether pheromone-expire' on two auto-written REDIRECT notes that only carried bug text reported promoted:true and copied both into the machine-wide fallback memory (~/.aether/eternal/memory.json), which other projects can be shown. Retiring a junk note should not spread it. Cleaned up by hand this session (backup memory.json.backup-2026-09-25-pre-cleanup). Not fixed: not something the owner hit, so out of the fortnight's scope. | open |  | 2026-09-25T15:18:27.666Z |  |
+| 72 | 210 | unmet-truth | cmd/memory_feed.go |  | Found 2026-09-25 while fixing the owner's screen-noise report: several failure-log entries written in the same second get the same ID (seen: three check-worker entries all midden_1790369854_17344). 'aether midden-acknowledge --id' can then hit the wrong entry or several at once. Not fixed: nothing the owner hit. | open |  | 2026-09-25T21:01:18.590Z |  |
 
 ````json
 [
@@ -941,6 +942,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-25T15:18:27.666Z",
+    "resolved_at": null
+  },
+  {
+    "id": 72,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/memory_feed.go",
+    "line": null,
+    "description": "Found 2026-09-25 while fixing the owner's screen-noise report: several failure-log entries written in the same second get the same ID (seen: three check-worker entries all midden_1790369854_17344). 'aether midden-acknowledge --id' can then hit the wrong entry or several at once. Not fixed: nothing the owner hit.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T21:01:18.590Z",
     "resolved_at": null
   }
 ]
