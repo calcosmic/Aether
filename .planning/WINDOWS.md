@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 48
+open_count: 49
 waived_count: 0
 fixed_count: 27
-total_count: 75
-last_updated: 2026-09-26T13:27:16.876Z
+total_count: 76
+last_updated: 2026-09-26T16:28:56.288Z
 ---
 
 # Broken Windows Ledger
@@ -92,6 +92,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 73 | 210 | unmet-truth | .aether/.gitignore |  | Noticed 2026-09-25 by a GSD session in the owner's JUCE Plugin Licensing project (not counted as a freeze blocker: the owner was not using Aether): Aether's .aether/.gitignore is not tracked in git there, so .aether/locks/*.lock and .aether/data/spend/session.json appear as untracked files inside every git worktree, and GSD's worktree merge gate refused to merge finished branches (cleanup_blocked / worktree_dirty). | open |  | 2026-09-26T10:17:32.455Z |  |
 | 74 | 210 | unmet-truth | cmd/compatibility_cmds_test.go |  | TestSwarmCompatibilityWatchReportsActiveWorkers failed once in a full suite run on 2026-09-26 (active_count = 0, want 1) and passed 5/5 alone; nothing changed that day touches it. Likely order- or timing-dependent. Not fixed: not something the owner hit. | open |  | 2026-09-26T12:36:42.682Z |  |
 | 75 | 210 | unmet-truth | cmd/next_action.go |  | Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone. | open |  | 2026-09-26T13:27:16.876Z |  |
+| 76 | 210 | unmet-truth | cmd/compatibility_cmds.go |  | Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision. | open |  | 2026-09-26T16:28:56.288Z |  |
 
 ````json
 [
@@ -993,6 +994,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-26T13:27:16.876Z",
+    "resolved_at": null
+  },
+  {
+    "id": 76,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/compatibility_cmds.go",
+    "line": null,
+    "description": "Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-26T16:28:56.288Z",
     "resolved_at": null
   }
 ]
