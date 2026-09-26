@@ -1317,6 +1317,16 @@ func appendHostedTextCandidate(candidates *[]string, value string) {
 }
 
 func isWorkerClaimsMap(value map[string]interface{}) bool {
+	// A platform transport event is never a worker's report, however
+	// claim-shaped it looks. Claude Code's background-task notice
+	// ({"type":"system","subtype":"task_notification","task_id",
+	// "status":"stopped","summary":"<command>"}) matched three claim keys,
+	// arrived after the worker's real claims, and won as the newest
+	// candidate -- failing a finished build (Phase 210 blocker 5). Worker
+	// claims carry no "subtype".
+	if _, transport := value["subtype"]; transport {
+		return false
+	}
 	matches := 0
 	for _, key := range []string{
 		"ant_name",

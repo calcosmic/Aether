@@ -202,3 +202,41 @@ func TestResponseContractForbidsTrailingProseAndNextStepAdvice(t *testing.T) {
 		}
 	}
 }
+
+// TestBackgroundTaskNoticeIsNeverTheWorkersReport reproduces Phase 210
+// blocker 5 (French Basics, 2026-09-26): builder Anvil-7 finished with valid
+// claims (status "code_written"), but it had started a test run in the
+// background, and when its session ended Claude Code emitted a
+// task_notification for that run. The notice carries task_id, status and
+// summary, so it passed isWorkerClaimsMap, and as the last candidate it won:
+// the build saw status "stopped" with the shell command as its summary, and
+// the wave failed. The notice shape is Claude Code 2.1.283's own
+// (type "system", subtype "task_notification", task_id, tool_use_id, status,
+// output_file, summary).
+func TestBackgroundTaskNoticeIsNeverTheWorkersReport(t *testing.T) {
+	realClaims := `{"ant_name":"Anvil-7","caste":"builder","task_id":"1.1,1.2,1.3","status":"code_written","summary":"Wrote docs/FRENCH_BASICS_RULES.md and docs/FRENCH_BASICS_BLOCKS.md.","files_created":["docs/FRENCH_BASICS_RULES.md","docs/FRENCH_BASICS_BLOCKS.md"],"files_modified":[],"tests_written":[],"blockers":[],"spawns":[]}`
+	lines := []string{
+		streamJSONLine(t, map[string]interface{}{"type": "system", "subtype": "init", "session_id": "9d0e8fbe"}),
+		assistantTextEvent(t, realClaims),
+		streamJSONLine(t, map[string]interface{}{
+			"type": "result", "subtype": "success", "is_error": false, "session_id": "9d0e8fbe", "result": realClaims,
+		}),
+		streamJSONLine(t, map[string]interface{}{
+			"type":        "system",
+			"subtype":     "task_notification",
+			"task_id":     "bmrqr58fm",
+			"tool_use_id": "toolu_01B2Dmfbjsaca3uBTEzV4K5c",
+			"status":      "stopped",
+			"output_file": "/private/tmp/claude-501/tasks/bmrqr58fm.output",
+			"summary":     `cd "/Users/callumcowie/WORKSPACE/French Fluency"; python3 -m pytest -q 2>&1 | tail -2`,
+			"session_id":  "9d0e8fbe",
+		}),
+	}
+	claims, err := parseHostedWorkerOutput("claude", combinedWorkerOutput(strings.Join(lines, "\n"), ""))
+	if err != nil {
+		t.Fatalf("the worker's real claims were not recovered: %v", err)
+	}
+	if claims.Status != "completed" || claims.AntName != "Anvil-7" {
+		t.Fatalf("a background-task notice replaced the worker's report: status=%q ant=%q blockers=%v", claims.Status, claims.AntName, claims.Blockers)
+	}
+}
