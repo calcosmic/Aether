@@ -146,6 +146,36 @@ AETHER_OUTPUT_MODE=json aether discuss --resolve <exact-id> --answer "<answer>"
    review and exact-revision approval remain a separate owner action before
    planning can begin.
 
+
+### Owner Interview
+
+The owner's ruling (2026-09-26): before a draft description goes to `/ant-spec`,
+interview the owner. After Go's own `material_batch.cards` are answered, or when
+there are none, compose about 20 multiple-choice questions specific to this goal
+and this project: what the result looks like, what is in and out of scope, how it
+should behave, the quality and style it must meet, what must never happen, and how
+the owner will check it. Ground every question in the goal, the charter, the
+codebase map and files you can read. Never ask what the goal, Go's resolved
+answers, or an earlier interview already settled.
+
+Ask them up to 4 at a time with the platform's own multiple-choice question tool
+(AskUserQuestion in Claude Code; a numbered list where there is none), 2-4 options
+each, the recommended option first and marked "(Recommended)", every option
+saying its real-world consequence in plain words. The owner may always give his
+own answer, or say "enough" to stop early. Fewer than 20 is fine only when the
+goal genuinely has fewer real decisions; say so when that happens.
+
+Record each question before asking it:
+`aether discuss --add-question "<question>" --options "<option 1>|<option 2>" --grounding "<what it is based on>" --category <surface|integration|scope|verification|analysis> --source <short-stable-slug>`
+(add `--hard` when the answer is a must-never rule), and each pick after he answers:
+`aether discuss --resolve <id> --answer "<the option he chose, or his own words>"`.
+Nothing is recorded without the owner's explicit pick. Never answer for him.
+
+When the interview is done, rerun `AETHER_OUTPUT_MODE=json aether discuss`. Go
+writes every answer into the draft description; show the returned page, including
+its "What you decided" section, then route to `/ant-spec`. If this project already
+had an interview, ask once whether he wants more questions instead of starting over.
+
 ## Guardrails
 
 - Do not write `.aether/data`, Oracle output, pending decisions, or pheromone

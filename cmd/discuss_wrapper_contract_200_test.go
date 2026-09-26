@@ -42,8 +42,8 @@ func TestDiscussWrapperContract200(t *testing.T) {
 		"base plan", "meaning", "behavior", "authority", "scope", "risk",
 		"acceptance", "affected semantic", "draft spec", "/ant spec", "owner reviews and approves",
 		"do not write", "structured runtime result", "never route settled discuss directly to /ant plan",
-		"legacy compatibility", "they are not executable guidance", "must not invoke them",
 	})
+	assertDiscussSemantics200(t, source, canonical, discussOwnerInterviewAnchors200)
 	assertNoDiscussHostAuthority200(t, source, canonical)
 
 	wrapperPaths := []string{
@@ -71,10 +71,8 @@ func TestDiscussWrapperContract200(t *testing.T) {
 			"base plan", "meaning", "behavior", "authority", "scope", "risk",
 			"acceptance", "affected semantic", "draft spec", "/ant spec", "owner reviews and approves",
 			"structured result", "do not write", "never route settled discuss directly to /ant plan",
-			"compose the questions — retired compatibility marker",
-			"canned fallback (typed condition — retired compatibility only)",
-			"they are not executable guidance", "wrapper never runs a canned generator",
 		})
+		assertDiscussSemantics200(t, path, lower, discussOwnerInterviewAnchors200)
 		assertNoDiscussHostAuthority200(t, path, lower)
 	}
 
@@ -88,6 +86,14 @@ func TestDiscussWrapperContract200(t *testing.T) {
 		"authority", "scope", "risk", "acceptance meaning", "draft spec", "nine contract categories",
 		"aether spec", "/ant spec", "separate", "wrappers never write",
 	})
+	assertDiscussSemantics200(t, contractPath, contract, discussOwnerInterviewAnchors200)
+
+	discussGuide := commandGuideCatalog()["discuss"]
+	guide := strings.ToLower(strings.Join(append(append([]string{}, discussGuide.PreSteps...), discussGuide.PostSteps...), "\n"))
+	assertDiscussSemantics200(t, "command guide discuss (codex)", guide, discussOwnerInterviewAnchors200)
+	if strings.Contains(guide, "$ant-plan") {
+		t.Error("codex command guide still routes settled discuss to planning; the next boundary is the specification")
+	}
 
 	skillPath := filepath.Join(repoRoot, ".aether", "skills", "colony", "aether-colony-research", "SKILL.md")
 	skill := strings.ToLower(readDiscussContractFile200(t, skillPath))
@@ -100,6 +106,7 @@ func TestDiscussWrapperContract200(t *testing.T) {
 		"authority", "scope", "risk", "acceptance meaning", "affected semantic ids",
 		"draft spec", "aether spec", "separate owner action",
 	})
+	assertDiscussSemantics200(t, skillPath, skill, discussOwnerInterviewAnchors200)
 	for _, oracleAnchor := range []string{
 		"aether command guide oracle --platform codex", "compact batch of 3 6 questions",
 		"tech eval", "architecture review", "bug investigation", "research brief",
@@ -169,4 +176,22 @@ func assertNoDiscussHostAuthority200(t *testing.T, path, content string) {
 			t.Errorf("%s contains forbidden wrapper-side authority or settled-to-plan shortcut %q", path, forbidden)
 		}
 	}
+}
+
+// discussOwnerInterviewAnchors200 is the owner's ruling of 2026-09-26 (Phase
+// 210, after blocker 4): /ant-discuss interviews him with about 20
+// multiple-choice questions composed for this goal, asked a few at a time,
+// every pick recorded through the runtime so it reaches the draft
+// specification, and the resulting page shown before /ant-spec. It
+// reverses the earlier "wrapper must not compose questions" contract; every
+// discuss surface must carry the same rule.
+var discussOwnerInterviewAnchors200 = []string{
+	"owner interview",
+	"about 20 multiple-choice questions",
+	"up to 4 at a time",
+	"aether discuss --add-question",
+	"--options",
+	"aether discuss --resolve",
+	"nothing is recorded without the owner's explicit pick",
+	"what you decided",
 }

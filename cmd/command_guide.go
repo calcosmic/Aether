@@ -612,13 +612,14 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		Literal:        false,
 		PreSteps: []string{
 			codexGuideSupportStep("discuss", commandGuideSkillResearch),
-			"Run `AETHER_OUTPUT_MODE=json aether discuss-analyze --target .` for suggested codebase-aware questions.",
-			"Present a compact set of questions covering architecture, dependencies, testing, deployment, performance, and user intent where relevant.",
+			"Run `AETHER_OUTPUT_MODE=json aether discuss` and render every card in `material_batch.cards` first.",
+			"Owner interview: compose about 20 multiple-choice questions specific to this goal and project, and ask them up to 4 at a time (a numbered list in Codex), 2-4 options each with the recommended option first and each option's consequence in plain words; the owner may give his own answer or say enough.",
+			"Record each question with `aether discuss --add-question \"<question>\" --options \"<option 1>|<option 2>\" --grounding \"<what it is based on>\" --category <surface|integration|scope|verification|analysis> --source <slug>` before asking it; nothing is recorded without the owner's explicit pick.",
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS",
 		PostSteps: []string{
-			"Persist answers with `aether discuss --resolve <id> --answer \"<answer>\"` when runtime supplies IDs.",
-			"If discussion_status is settled, route back to `$ant-plan`.",
+			"Persist every pick with `aether discuss --resolve <id> --answer \"<answer>\"`, then rerun `AETHER_OUTPUT_MODE=json aether discuss` so Go writes the answers into the draft description.",
+			"Show the returned description page, including its What you decided section, and route to `$ant-spec` for review and approval; never route settled discuss straight to planning.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("discuss", commandGuideSkillResearch),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration discuss, run their literal `aether discuss ...` command.",
