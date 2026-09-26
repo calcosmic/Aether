@@ -2619,7 +2619,31 @@ func rawStatusCarriesVerifiedExisting(rawStatus string) bool {
 // noChangeEvidenceMissing lists which of the three required evidence pieces
 // a completed_no_change result lacks; empty means the evidence rule is met.
 func noChangeEvidenceMissing(result codexExternalBuildWorkerResult) []string {
-	return noChangeEvidenceMissingFrom(result.Summary, result.Handoff.VerificationStatus, result.Handoff.CommandsRun)
+	return noChangeEvidenceMissingWithReceipts(result.Summary, result.Handoff.VerificationStatus, result.Handoff.CommandsRun, result.TaskReceipts)
+}
+
+// noChangeEvidenceMissingWithReceipts applies the no-change rule, accepting
+// task-by-task proof in place of an overall "pass": when every task receipt
+// finished successfully, says what it found, passed, and names the command it
+// ran, a worker that honestly marks its overall handoff "partial" (a slow
+// extra check it could not finish) has still proven each task (Phase 210
+// blocker 7). An overall "fail", or any receipt short of that, is refused as
+// before; continue's deterministic floor still runs the project's own checks.
+func noChangeEvidenceMissingWithReceipts(summary, verificationStatus string, commandsRun []string, receipts []codex.TaskReceipt) []string {
+	missing := noChangeEvidenceMissingFrom(summary, verificationStatus, commandsRun)
+	if len(missing) != 1 || !strings.HasPrefix(missing[0], "handoff verification_status") {
+		return missing
+	}
+	if overall := strings.ToLower(strings.TrimSpace(verificationStatus)); overall == "fail" || overall == "failed" || len(receipts) == 0 {
+		return missing
+	}
+	for _, receipt := range receipts {
+		if !isSuccessfulExternalBuildStatus(receipt.Status) ||
+			len(noChangeEvidenceMissingFrom(receipt.Summary, receipt.Handoff.VerificationStatus, receipt.Handoff.CommandsRun)) != 0 {
+			return missing
+		}
+	}
+	return nil
 }
 
 // noChangeEvidenceMissingFrom is the single definition of the no-change

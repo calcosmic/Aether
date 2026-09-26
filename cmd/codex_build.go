@@ -2857,10 +2857,11 @@ func validateRuntimeNoChangeEvidence(results []codex.DispatchResult) error {
 		if result.WorkerResult == nil {
 			return fmt.Errorf("worker %s claims completed_no_change with no result payload -- an honest no-change needs the verification it ran", result.WorkerName)
 		}
-		missing := noChangeEvidenceMissingFrom(
+		missing := noChangeEvidenceMissingWithReceipts(
 			result.WorkerResult.Summary,
 			result.WorkerResult.Handoff.VerificationStatus,
 			result.WorkerResult.Handoff.CommandsRun,
+			result.WorkerResult.TaskReceipts,
 		)
 		if len(missing) > 0 {
 			return fmt.Errorf("worker %s claims completed_no_change without evidence -- missing: %s", result.WorkerName, strings.Join(missing, "; "))
