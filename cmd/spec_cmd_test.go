@@ -292,6 +292,10 @@ func runSpecCommandFailure(t *testing.T, root string, args ...string) string {
 func runSpecCommandRaw(t *testing.T, root string, args ...string) (string, error) {
 	t.Helper()
 	saveGlobals(t)
+	// resolveAetherRootPath prefers the package store over AETHER_ROOT, and
+	// an earlier test can leave store pointing at its own deleted temp dir;
+	// clear it so this command resolves the root the test asked for.
+	store = nil
 	t.Setenv("AETHER_ROOT", root)
 	t.Setenv("COLONY_DATA_DIR", "")
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
