@@ -188,17 +188,7 @@ func buildSpecificationDraft(request specificationDraftRequest) (colony.Specific
 		return colony.Specification{}, colony.SpecRevision{}, fmt.Errorf("specification draft created_at is required")
 	}
 
-	inputs := map[specificationBodySection][]specificationItemInput{
-		specificationSectionOutcomes:             request.Outcomes,
-		specificationSectionIncludedBehaviors:    request.IncludedBehaviors,
-		specificationSectionExclusions:           request.Exclusions,
-		specificationSectionBindingDecisions:     request.BindingDecisions,
-		specificationSectionRequirements:         request.Requirements,
-		specificationSectionAcceptanceChecks:     request.AcceptanceChecks,
-		specificationSectionNegativeExpectations: request.NegativeExpectations,
-		specificationSectionRecoveryExpectations: request.RecoveryExpectations,
-		specificationSectionAffectedPublicPaths:  request.AffectedPublicPaths,
-	}
+	inputs := specificationDraftRequestInputs(request)
 	body := make(specificationBodySnapshot, len(specificationBodyOrder))
 	for _, section := range specificationBodyOrder {
 		items, buildErr := canonicalSpecificationInputItems(section, inputs[section])
@@ -241,6 +231,22 @@ func buildSpecificationDraft(request specificationDraftRequest) (colony.Specific
 		return colony.Specification{}, colony.SpecRevision{}, fmt.Errorf("validate specification draft: %w", err)
 	}
 	return specification, revision, nil
+}
+
+// specificationDraftRequestInputs indexes a draft request by body section so
+// the draft builder and the discuss successor path read one section mapping.
+func specificationDraftRequestInputs(request specificationDraftRequest) map[specificationBodySection][]specificationItemInput {
+	return map[specificationBodySection][]specificationItemInput{
+		specificationSectionOutcomes:             request.Outcomes,
+		specificationSectionIncludedBehaviors:    request.IncludedBehaviors,
+		specificationSectionExclusions:           request.Exclusions,
+		specificationSectionBindingDecisions:     request.BindingDecisions,
+		specificationSectionRequirements:         request.Requirements,
+		specificationSectionAcceptanceChecks:     request.AcceptanceChecks,
+		specificationSectionNegativeExpectations: request.NegativeExpectations,
+		specificationSectionRecoveryExpectations: request.RecoveryExpectations,
+		specificationSectionAffectedPublicPaths:  request.AffectedPublicPaths,
+	}
 }
 
 // createSpecificationDraft commits the canonical state snapshot through the

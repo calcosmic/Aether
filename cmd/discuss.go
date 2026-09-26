@@ -525,6 +525,46 @@ func settleDiscussSpecification(
 		if !ok {
 			return discussSpecificationCloseout{}, fmt.Errorf("settle discuss specification: existing specification has no current revision")
 		}
+		if current.Status == colony.SpecStatusDraft && current.Scope.Kind == colony.SpecScopeWholeGoal && !dryRun {
+			// Answers settled after the first draft (the owner's interview
+			// questions added and resolved later) must reach the description
+			// he approves. Only a still-unapproved whole-goal draft is revised;
+			// an approved contract changes only through explicit `aether spec`,
+			// and a feature-scoped draft keeps its own narrower boundary.
+			request, buildErr := buildSettledDiscussDraftRequest(state, survey, analyze, pending, frontier, activeSignals, time.Now().UTC())
+			if buildErr != nil {
+				return discussSpecificationCloseout{}, buildErr
+			}
+			if changes, changeErr := discussDraftAdditions(current, request); changeErr != nil {
+				return discussSpecificationCloseout{}, changeErr
+			} else if len(changes) > 0 {
+				mutation, reviseErr := reviseSpecification(repositoryRoot, specificationRevisionRequest{
+					PredecessorRevisionID:  current.ID,
+					PredecessorContentHash: current.ContentHash,
+					Scope:                  current.Scope,
+					Changes:                changes,
+					CreatedAt:              request.CreatedAt,
+				}, specificationMutationOptions{})
+				if reviseErr != nil {
+					return discussSpecificationCloseout{}, fmt.Errorf("revise settled specification draft: %w", reviseErr)
+				}
+				inspection, inspectErr := inspectSpecificationProjection(repositoryRoot)
+				if inspectErr != nil {
+					return discussSpecificationCloseout{}, fmt.Errorf("inspect revised specification projection: %w", inspectErr)
+				}
+				receipt := mutation.Receipt
+				return newDiscussSpecificationCloseout(
+					mutation.Specification,
+					mutation.Revision,
+					&receipt,
+					mutation.Replayed,
+					false,
+					false,
+					inspection,
+					false,
+				), nil
+			}
+		}
 		inspection, inspectErr := inspectSpecificationProjection(repositoryRoot)
 		if inspectErr != nil {
 			return discussSpecificationCloseout{}, fmt.Errorf("inspect settled specification projection: %w", inspectErr)
@@ -772,6 +812,44 @@ func buildSettledDiscussDraftRequest(
 	return request, nil
 }
 
+// discussDraftAdditions returns one add operation for every owner-decision
+// item whose stable ID the current draft does not yet carry. It is
+// deliberately additive and limited to the owner's own answers: existing items
+// (including anything the owner added or edited through `aether spec`) are
+// never modified or removed, generated goal/charter items are never layered
+// onto a hand-drafted description, and evidence-reference drift on existing
+// items alone never mints a new revision.
+func discussDraftAdditions(current colony.SpecRevision, request specificationDraftRequest) ([]specificationRevisionChange, error) {
+	existing := specificationBodyFromRevision(current)
+	inputs := specificationDraftRequestInputs(request)
+	changes := []specificationRevisionChange{}
+	for _, section := range specificationBodyOrder {
+		for _, input := range inputs[section] {
+			if !strings.HasPrefix(input.Lineage, discussOwnerDecisionLineagePrefix) {
+				continue
+			}
+			id, err := specificationStableID(section, input.Lineage)
+			if err != nil {
+				return nil, fmt.Errorf("settled discussion item in %s: %w", section, err)
+			}
+			if specificationBodyContainsID(existing, id) {
+				continue
+			}
+			changes = append(changes, specificationRevisionChange{
+				Operation: specificationChangeAdd,
+				Section:   section,
+				Item:      input,
+			})
+		}
+	}
+	return changes, nil
+}
+
+// discussOwnerDecisionLineagePrefix marks specification items derived from a
+// resolved owner clarification, so a later settle can find answers the
+// current draft does not carry yet.
+const discussOwnerDecisionLineagePrefix = "owner-decision-"
+
 // discussSpecificationDecisionLineage preserves established short decision
 // identities while bounding generated IDs for both the base specification item
 // and its optional "-hard" negative-expectation companion. The hash input is
@@ -779,7 +857,7 @@ func buildSettledDiscussDraftRequest(
 // digest use elsewhere in the planning lifecycle.
 func discussSpecificationDecisionLineage(decision PendingDecision) string {
 	identity := emptyFallback(strings.TrimSpace(decision.ID), logicalDiscussSource(decision.Source))
-	lineage := "owner-decision-" + identity
+	lineage := discussOwnerDecisionLineagePrefix + identity
 	if _, err := colony.CanonicalSpecItemID(colony.SpecSectionBindingDecisions, lineage); err == nil {
 		if _, hardErr := colony.CanonicalSpecItemID(colony.SpecSectionNegativeExpectations, lineage+"-hard"); hardErr == nil {
 			return lineage
@@ -787,7 +865,7 @@ func discussSpecificationDecisionLineage(decision PendingDecision) string {
 	}
 
 	digest := sha256.Sum256([]byte("aether/discuss/specification-decision-lineage/v1\x00" + identity))
-	return "owner-decision-" + hex.EncodeToString(digest[:8])
+	return discussOwnerDecisionLineagePrefix + hex.EncodeToString(digest[:8])
 }
 
 func discussSpecificationEvidenceIDs(frontier discussEvidenceFrontier, kind, originPrefix string) []string {
