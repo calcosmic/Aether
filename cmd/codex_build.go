@@ -2555,6 +2555,30 @@ func buildDispatchContractForDispatches(dispatches []codexBuildDispatch, paralle
 	return contract
 }
 
+// groupedWorkerTimeoutCap bounds a grouped worker's limit so a runaway
+// worker is still stopped; it stays under internalWorkerTimeoutMax.
+const groupedWorkerTimeoutCap = 40 * time.Minute
+
+// groupedWorkerTimeout gives a worker that covers several tasks (the
+// coherent-job rule folds related tasks into one worker) the base limit per
+// task, capped. A single-task worker keeps the base limit unchanged. Before
+// this a four-task builder kept the one-task ten minutes and was cut off
+// mid-phase (Phase 210 blocker 8).
+func groupedWorkerTimeout(workerTimeout time.Duration, coveredTasks int) time.Duration {
+	base := effectiveBuildDispatchTimeout(workerTimeout)
+	if coveredTasks <= 1 {
+		return workerTimeout
+	}
+	grouped := base * time.Duration(coveredTasks)
+	if grouped > groupedWorkerTimeoutCap {
+		grouped = groupedWorkerTimeoutCap
+	}
+	if grouped < base {
+		grouped = base
+	}
+	return grouped
+}
+
 func effectiveBuildDispatchTimeout(workerTimeout time.Duration) time.Duration {
 	if workerTimeout > 0 {
 		return workerTimeout
@@ -2626,7 +2650,7 @@ func buildCodexWorkerDispatches(
 			SkillSection:      resolveSkillSectionForWorkflow("build", dispatch.Caste, dispatch.Task),
 			Root:              root,
 			TrackingRoot:      root,
-			Timeout:           workerTimeout,
+			Timeout:           groupedWorkerTimeout(workerTimeout, len(dispatchCoveredTaskIDs(dispatch))),
 			Wave:              normalizedDispatchWave(dispatch),
 			PermissionProfile: dispatch.PermissionProfile,
 			ExecutionBinding:  executionBinding,
