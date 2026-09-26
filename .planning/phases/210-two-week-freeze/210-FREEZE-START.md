@@ -92,3 +92,12 @@ This fortnight deliberately does no bug hunting, no audits and no fixes he did n
 Nothing gets fixed unless he actually hit it. Defect register entry 60 is left alone on purpose:
 the hand-off from `/ant-go` into planning has never been proved by a real unattended session,
 and real use is what should find out whether it works. If he hits it, it counts as a blocker.
+
+## Rule changes during the fortnight
+
+- **2026-09-26, the "nothing new" rule was broken on purpose, by the owner's choice.** After
+  blocker 4 he asked for Aether's clarifying step (`/ant-discuss`) to interview him with about
+  20 multiple-choice questions, the way GSD's discussion step does, before writing the project
+  description, and for that description to be shown as a readable plain-English page. Offered
+  "wait until after the fortnight", he chose "now, break the rule". The final report must say
+  that from this date the trial measured a changed program, and which change.
