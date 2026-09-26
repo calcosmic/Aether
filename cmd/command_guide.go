@@ -619,7 +619,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 		RunCommand: "AETHER_OUTPUT_MODE=visual aether discuss $ARGUMENTS",
 		PostSteps: []string{
 			"Persist every pick with `aether discuss --resolve <id> --answer \"<answer>\"`, then rerun `AETHER_OUTPUT_MODE=json aether discuss` so Go writes the answers into the draft description.",
-			"Show the returned description page, including its What you decided section, and route to `$ant-spec` for review and approval; never route settled discuss straight to planning.",
+			"Show the returned description page, including its What you decided section, and route to `aether spec` for review and approval; never route settled discuss straight to planning.",
 		},
 		DriftGuards: intelligentCommandDriftGuards("discuss", commandGuideSkillResearch),
 		RawBypass:   "If the user explicitly asks for raw/exact/no-orchestration discuss, run their literal `aether discuss ...` command.",

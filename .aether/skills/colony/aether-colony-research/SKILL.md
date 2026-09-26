@@ -156,7 +156,8 @@ and this project: what the result looks like, what is in and out of scope, how i
 should behave, the quality and style it must meet, what must never happen, and how
 the owner will check it. Ground every question in the goal, the charter, the
 codebase map and files you can read. Never ask what the goal, Go's resolved
-answers, or an earlier interview already settled.
+answers, or an earlier interview already settled, and never fall back to a
+generic canned question list.
 
 Ask them up to 4 at a time with the platform's own multiple-choice question tool
 (AskUserQuestion in Claude Code; a numbered list where there is none), 2-4 options

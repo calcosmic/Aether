@@ -258,13 +258,16 @@ func TestDiscussWrapperComposesGroundedQuestions(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		text := string(raw)
+		// Anchors follow the owner interview (ruling 2026-09-26), which
+		// replaced the "Compose the Questions" section: still composed,
+		// grounded and specific, and still recorded only on the owner's pick.
 		for _, anchor := range []string{
-			"Compose the Questions",
-			"SPECIFIC to this goal and this",
+			"## Owner Interview",
+			"specific to this goal\nand this project",
 			"--grounding",
 			"--add-question",
 			"AskUserQuestion",
-			"Nothing is recorded without the\n   user's explicit pick",
+			"Nothing is recorded without the owner's explicit pick.",
 		} {
 			if !strings.Contains(text, anchor) {
 				t.Fatalf("%s lost the composition contract anchor %q", path, anchor)
@@ -273,6 +276,9 @@ func TestDiscussWrapperComposesGroundedQuestions(t *testing.T) {
 	}
 }
 
+// TestDiscussGeneratorIsFallbackOnly now pins the stronger rule the owner
+// interview carries: there is no canned generator at all, so discuss can
+// never regress to the same generic questions for every goal.
 func TestDiscussGeneratorIsFallbackOnly(t *testing.T) {
 	for _, path := range []string{"../.claude/commands/ant/discuss.md", "../.claude/commands/ant-discuss.md", "../.opencode/commands/ant/discuss.md"} {
 		raw, err := os.ReadFile(path)
@@ -280,16 +286,13 @@ func TestDiscussGeneratorIsFallbackOnly(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		text := string(raw)
-		composeIdx := strings.Index(text, "Compose the Questions")
-		fallbackIdx := strings.Index(text, "Canned fallback (typed condition")
-		if composeIdx == -1 || fallbackIdx == -1 {
-			t.Fatalf("%s missing compose or fallback sections", path)
+		if !strings.Contains(text, "never fall back to a\ngeneric canned question list") {
+			t.Fatalf("%s does not forbid a canned question list", path)
 		}
-		if fallbackIdx < composeIdx {
-			t.Fatalf("%s orders the canned generator before composition", path)
-		}
-		if !strings.Contains(text, "no scan context or the goal is empty") {
-			t.Fatalf("%s fallback condition is not typed", path)
+		for _, forbidden := range []string{"Canned fallback", "run the canned", "canned generator"} {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("%s still describes a canned generator: %q", path, forbidden)
+			}
 		}
 	}
 }
