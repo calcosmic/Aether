@@ -356,7 +356,7 @@ func assertPhase200StartupBoundary(t *testing.T, surface lifecycleSurfaceCase, v
 	t.Helper()
 	switch surface.command {
 	case "discuss":
-		for _, want := range []string{"Draft Specification", "[DRAFT]", "Run `aether spec`", "planning remains unauthorized until the exact contract is approved"} {
+		for _, want := range []string{"Draft Specification", "waiting for your approval", "Run `aether spec`", "planning remains unauthorized until the exact contract is approved"} {
 			if !strings.Contains(visual, want) {
 				t.Errorf("%s lost Phase 200 discuss boundary %q\n%s", surface.name, want, visual)
 			}

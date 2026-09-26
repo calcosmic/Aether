@@ -1673,49 +1673,31 @@ func discussSpecificationCloseoutFromResult(result map[string]interface{}) (disc
 
 func renderDiscussSpecificationCloseout(closeout discussSpecificationCloseout) string {
 	var builder strings.Builder
-	builder.WriteString("✓ Intent resolved\n")
+	builder.WriteString(voiceLine("done", "Intent resolved — here is the description of what will be built.") + "\n")
 	if closeout.Status == colony.SpecStatusDraft {
 		builder.WriteString(renderStageMarker("Draft Specification"))
 	} else {
 		builder.WriteString(renderStageMarker("Existing Specification"))
 	}
-	fmt.Fprintf(&builder, "Draft SPEC: %s revision %d [%s]\n", closeout.SpecificationID, closeout.RevisionNumber, strings.ToUpper(string(closeout.Status)))
-	fmt.Fprintf(&builder, "Revision ID: %s\n", closeout.RevisionID)
-	fmt.Fprintf(&builder, "Content hash: %s\n", closeout.ContentHash)
-	fmt.Fprintf(&builder, "Scope: %s\n", strings.ReplaceAll(string(closeout.Scope.Kind), "_", " "))
-	if closeout.Scope.Kind == colony.SpecScopeFeature {
-		fmt.Fprintf(&builder, "Feature: %s\n", closeout.Scope.FeatureID)
-		fmt.Fprintf(&builder, "Requirement IDs: %s\n", specCommandIDSummary(closeout.Scope.RequirementIDs))
-		fmt.Fprintf(&builder, "Acceptance IDs: %s\n", specCommandIDSummary(closeout.Scope.AcceptanceCheckIDs))
-	}
 	if closeout.Replayed && closeout.Status == colony.SpecStatusDraft {
-		builder.WriteString("Draft already exists; the same revision was retained.\n")
+		builder.WriteString(voiceLine("history", "This draft already existed; the same version was kept.") + "\n")
 	}
 	if closeout.ProjectionRepaired {
-		builder.WriteString("The readable projection was restored from canonical state.\n")
+		builder.WriteString(voiceLine("checkpoint", "The readable copy in your project folder was restored.") + "\n")
 	}
 
-	renderSpecCommandVisualSection(&builder, "goal", "Outcome", specCommandOutcomeVisualItems(closeout.Body.Outcomes))
-	renderSpecCommandVisualSection(&builder, "done", "Included behavior", specCommandIncludedVisualItems(closeout.Body.IncludedBehaviors))
-	renderSpecCommandVisualSection(&builder, "avoid", "Explicit exclusions", specCommandExclusionVisualItems(closeout.Body.Exclusions))
-	renderSpecCommandVisualSection(&builder, "decision", "Binding decisions", specCommandDecisionVisualItems(closeout.Body.BindingDecisions))
-	renderSpecCommandVisualSection(&builder, "requirement", "Requirements", specCommandRequirementVisualItems(closeout.Body.Requirements))
-	renderSpecCommandVisualSection(&builder, "evidence", "Owner-checkable acceptance", specCommandAcceptanceVisualItems(closeout.Body.AcceptanceChecks))
-	renderSpecCommandVisualSection(&builder, "avoid", "Negative expectations", specCommandNegativeVisualItems(closeout.Body.NegativeExpectations))
-	renderSpecCommandVisualSection(&builder, "checkpoint", "Recovery expectations", specCommandRecoveryVisualItems(closeout.Body.RecoveryExpectations))
-	renderSpecCommandVisualSection(&builder, "files", "Affected public paths", specCommandPublicPathVisualItems(closeout.Body.AffectedPublicPaths))
+	// The owner page: plain English, no codes, each sentence once. The full
+	// listing with every stable ID stays in the JSON result and behind
+	// `aether spec --detail`.
+	builder.WriteString(renderSpecOwnerPage(closeout.Body, closeout.Status))
 
 	if closeout.WouldCreate {
-		builder.WriteString("Dry run only: this exact draft has not been committed.\n")
+		builder.WriteString(voiceLine("warning", "Dry run only: this draft has not been saved yet.") + "\n")
 	} else if closeout.ApprovedSpecPreserved {
-		builder.WriteString("The approved specification was left unchanged.\n")
-		builder.WriteString(closeout.RevisionGuidance + "\n")
+		builder.WriteString(voiceLine("status", "The approved description was left unchanged.") + "\n")
+		builder.WriteString(voiceLine("next", "See it again with `aether spec`. Changing it means making a new version there; talking it through again will not replace it.") + "\n")
 	} else {
-		builder.WriteString("This draft does not authorize planning until the owner approves this exact revision.\n")
-		fmt.Fprintf(&builder, "Review: `%s`\n", closeout.ExactNextCommand)
-		if closeout.ApprovalCommand != "" {
-			fmt.Fprintf(&builder, "Approve this exact revision after review: `%s`\n", closeout.ApprovalCommand)
-		}
+		builder.WriteString(voiceLine("next", fmt.Sprintf("Review it and approve it with `%s`.", closeout.ExactNextCommand)) + "\n")
 	}
 	builder.WriteByte('\n')
 	return builder.String()

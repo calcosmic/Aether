@@ -88,6 +88,7 @@ type specCommandOptions struct {
 	Remove           bool
 	Approve          bool
 	RepairProjection bool
+	Detail           bool
 
 	Section      string
 	ItemID       string
@@ -145,7 +146,7 @@ func newSpecCommand() *cobra.Command {
 				outputError(1, err.Error(), nil)
 				return nil
 			}
-			outputWorkflow(result, renderSpecCommandVisual(result))
+			outputWorkflow(result, renderSpecCommandVisualFor(result, options.Detail))
 			return nil
 		},
 	}
@@ -157,6 +158,7 @@ func newSpecCommand() *cobra.Command {
 	flags.BoolVar(&options.Remove, "remove", false, "Remove one stable typed item from the current body while retaining its history")
 	flags.BoolVar(&options.Approve, "approve", false, "Approve exactly the revision named by --revision-id and --revision-hash using --approval-token")
 	flags.BoolVar(&options.RepairProjection, "repair-projection", false, "Regenerate .aether/SPEC.md from canonical state without changing specification authority")
+	flags.BoolVar(&options.Detail, "detail", false, "Show the full technical listing (stable IDs, content hash, revision impact) instead of the plain-English owner page; changes only the visual screen")
 
 	flags.StringVar(&options.Section, "section", "", "Typed body section for --add, --modify, or --remove")
 	flags.StringVar(&options.ItemID, "item-id", "", "Stable item ID required by --modify or --remove")
