@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 47
+open_count: 48
 waived_count: 0
 fixed_count: 27
-total_count: 74
-last_updated: 2026-09-26T12:36:42.682Z
+total_count: 75
+last_updated: 2026-09-26T13:27:16.876Z
 ---
 
 # Broken Windows Ledger
@@ -91,6 +91,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 72 | 210 | unmet-truth | cmd/memory_feed.go |  | Found 2026-09-25 while fixing the owner's screen-noise report: several failure-log entries written in the same second get the same ID (seen: three check-worker entries all midden_1790369854_17344). 'aether midden-acknowledge --id' can then hit the wrong entry or several at once. Not fixed: nothing the owner hit. | open |  | 2026-09-25T21:01:18.590Z |  |
 | 73 | 210 | unmet-truth | .aether/.gitignore |  | Noticed 2026-09-25 by a GSD session in the owner's JUCE Plugin Licensing project (not counted as a freeze blocker: the owner was not using Aether): Aether's .aether/.gitignore is not tracked in git there, so .aether/locks/*.lock and .aether/data/spend/session.json appear as untracked files inside every git worktree, and GSD's worktree merge gate refused to merge finished branches (cleanup_blocked / worktree_dirty). | open |  | 2026-09-26T10:17:32.455Z |  |
 | 74 | 210 | unmet-truth | cmd/compatibility_cmds_test.go |  | TestSwarmCompatibilityWatchReportsActiveWorkers failed once in a full suite run on 2026-09-26 (active_count = 0, want 1) and passed 5/5 alone; nothing changed that day touches it. Likely order- or timing-dependent. Not fixed: not something the owner hit. | open |  | 2026-09-26T12:36:42.682Z |  |
+| 75 | 210 | unmet-truth | cmd/next_action.go |  | Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone. | open |  | 2026-09-26T13:27:16.876Z |  |
 
 ````json
 [
@@ -980,6 +981,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-26T12:36:42.682Z",
+    "resolved_at": null
+  },
+  {
+    "id": 75,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/next_action.go",
+    "line": null,
+    "description": "Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-26T13:27:16.876Z",
     "resolved_at": null
   }
 ]
