@@ -44,10 +44,13 @@ func TestInitProposalsRankColonizeForExistingCode(t *testing.T) {
 		t.Fatalf("broad goal in an empty folder did not rank discuss first: %+v", proposals[0])
 	}
 
-	// An empty folder with a specific goal: straight to planning.
+	// An empty folder with a specific goal: still discuss first. Planning
+	// refuses straight after init ("an approved specification is missing"),
+	// and discuss is the step that writes that description -- recommending
+	// plan here sent the owner into a refusal (Phase 210 blocker 4).
 	proposals = computeInitProposals(empty, "Add CSV export to the reports page with tests", false)
-	if proposals[0].Command != "aether plan" {
-		t.Fatalf("clear goal in a fresh folder did not rank plan first: %+v", proposals[0])
+	if proposals[0].Command != "aether discuss" {
+		t.Fatalf("clear goal in a fresh folder did not rank discuss first: %+v", proposals[0])
 	}
 
 	// Prior colony adds a reason line, never a new option.
@@ -167,6 +170,32 @@ func TestInitWrapperClosesAtDiscussThenDraftSpec(t *testing.T) {
 		for _, forbidden := range []string{"Next Up: /ant-plan", "`next_action` — exact `/ant-plan`", "successful closeout ends with exact `Next Up: /ant-plan`"} {
 			if strings.Contains(text, forbidden) {
 				t.Fatalf("%s still contains premature planning guidance %q", path, forbidden)
+			}
+		}
+	}
+}
+
+// TestInitNeverRecommendsAStepThatWillRefuse is the invariant behind Phase
+// 210 blocker 4: whatever the folder and goal, init never ranks planning
+// first or calls it recommended, because planning cannot run until discuss
+// has produced a description the owner approved.
+func TestInitNeverRecommendsAStepThatWillRefuse(t *testing.T) {
+	code := t.TempDir()
+	if err := os.WriteFile(filepath.Join(code, "go.mod"), []byte("module x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, folder := range []string{t.TempDir(), code} {
+		for _, goal := range []string{"Make an app", "Add CSV export to the reports page with tests"} {
+			for _, prior := range []bool{false, true} {
+				proposals := computeInitProposals(folder, goal, prior)
+				if proposals[0].Command == "aether plan" {
+					t.Fatalf("init ranked planning first for %q (prior=%v), but planning refuses until a description is approved", goal, prior)
+				}
+				for _, p := range proposals {
+					if p.Command == "aether plan" && strings.Contains(p.Reason, "recommended") {
+						t.Fatalf("init called planning recommended: %q", p.Reason)
+					}
+				}
 			}
 		}
 	}

@@ -89,7 +89,7 @@ func computeInitProposals(repoRoot, goal string, priorColony bool) []initProposa
 	plan := initProposal{
 		Command: "aether plan",
 		Label:   "Straight to planning",
-		Reason:  "The goal is clear and the folder is fresh — generate the phase map now.",
+		Reason:  "Needs an approved written description of the work first — clarifying the goal writes it.",
 	}
 
 	hasExistingCode := sourceCount >= initProposalSourceFileThreshold || detected != ""
@@ -112,8 +112,12 @@ func computeInitProposals(repoRoot, goal string, priorColony bool) []initProposa
 		discuss.Reason = "The goal is broad — a few clarifying choices now will make the plan much sharper. (recommended)"
 		ranked = []initProposal{discuss, plan, colonize}
 	default:
-		plan.Reason = "The goal is clear and the folder is fresh — go straight to the phase map. (recommended)"
-		ranked = []initProposal{plan, discuss, colonize}
+		// Planning refuses straight after init until discuss has produced a
+		// description the owner approved, so it is never the first step
+		// (Phase 210 blocker 4: the old "straight to planning" advice led
+		// the owner into that refusal).
+		discuss.Reason = "The goal is clear — a few quick choices turn it into the written description planning needs. (recommended)"
+		ranked = []initProposal{discuss, plan, colonize}
 	}
 
 	if priorColony {
