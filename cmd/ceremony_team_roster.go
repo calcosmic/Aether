@@ -31,7 +31,18 @@ func renderTeamApprovalCard(manifest map[string]interface{}, dispatches []ceremo
 		if required[dispatch.Caste] {
 			mark = "required"
 		}
-		lines = append(lines, fmt.Sprintf("%s %s — %s", role, name, mark))
+		identity := fmt.Sprintf("%s %s — %s", role, name, mark)
+		model, modelReason := resolveCasteModel(dispatch.Caste), casteModelReason(dispatch.Caste)
+		if model != "" {
+			identity += " · " + model
+			if modelReason == "" {
+				identity += " (cheaper model)"
+			}
+		}
+		lines = append(lines, identity)
+		if modelReason != "" {
+			lines = append(lines, "  More expensive model because it "+modelReason)
+		}
 		if dispatch.ExecutionWave > 0 {
 			lines = append(lines, fmt.Sprintf("  When: build wave %d", dispatch.ExecutionWave))
 		}

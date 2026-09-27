@@ -24,8 +24,10 @@ var visualWriterExemptions = map[string]string{
 	// hand `/ant-continue` to exec, which is not a binary.
 	"helpers.go:outputOK":                        "JSON success envelope",
 	"helpers.go:outputError":                     "JSON error envelope; the visual branch uses writeVisualOutput",
+	"helpers.go:outputRefusal":                   "JSON refusal envelope; the visual branch uses writeVisualOutput",
 	"hook_cmds.go:runHookContext":                "JSON hook payload consumed by the platform",
 	"hook_cmds.go:emitHookBlock":                 "JSON hook block consumed by the platform",
+	"hook_direct_screen.go:emitDirectScreen":     "JSON hook envelope carrying an already-rendered screen unchanged",
 	"unblock_cmd.go:init":                        "JSON branch; the visual branch uses writeVisualOutput",
 	"spawn_reap.go:writeSpawnOrphansEnvelope":    "JSON branch; the visual branch uses writeVisualOutput",
 	"spend_cmd.go:writeSpendEnvelope":            "JSON branch; the visual branch uses writeVisualOutput",

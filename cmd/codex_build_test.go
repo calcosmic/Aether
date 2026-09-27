@@ -1342,18 +1342,10 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 	dataDir := setupBuildFlowTest(t)
 	root := filepath.Dir(filepath.Dir(dataDir))
 	goal := "Separate caste budget from worker dispatch count"
-	// Plan 194-02 (D-07) shrank the build floor to the builder alone, so
-	// probe no longer rides along on every phase to pad the worker count.
-	// Plan 194-05 (D-11) removed the no-proposal keyword-scoring fallback
-	// entirely -- chaos and measurer only ride along here because
-	// applyBuildDispatchPolicyCastes adds them unconditionally at heavy
-	// depth with a "full" colony depth (a separate, unaffected policy
-	// hook), not because they scored above a threshold. With optional
-	// specialists otherwise off the table, builder's own independent-task
-	// fan-out is the only lever left to push worker_count above the heavy
-	// caste ceiling (8) -- eight independent (non-chained) tasks, plus
-	// chaos and measurer, clears it.
-	taskIDs := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"}
+	// Nine independent builder tasks exceed the heavy caste ceiling (eight),
+	// while still using one caste. A previous attempt's review decision must
+	// not add reviewers to this new attempt.
+	taskIDs := []string{"1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8", "1.9"}
 	createTestColonyState(t, dataDir, colony.ColonyState{
 		Version:      "3.0",
 		Goal:         &goal,
@@ -1376,20 +1368,14 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 					{ID: &taskIDs[5], Goal: "Implement the rollback script", Status: colony.TaskPending},
 					{ID: &taskIDs[6], Goal: "Implement the notification hook", Status: colony.TaskPending},
 					{ID: &taskIDs[7], Goal: "Implement the release changelog entry", Status: colony.TaskPending},
+					{ID: &taskIDs[8], Goal: "Implement the release health endpoint", Status: colony.TaskPending},
 				},
 			}},
 		},
 	})
 
-	// Phase 201-05 (D-05): chaos and measurer only ride along at build end
-	// when a verification-boundary decision naming build-end was actually
-	// recorded for this attempt (queenBuildPostWaveDispatches) -- record one
-	// here so this fixture still proves worker_count can exceed
-	// max_selected_castes via the policy-added specialists it names above.
-	// Marked terminal (built) immediately after so runCodexBuildPlanOnlyWithOptions'
-	// own "already has an active build attempt" guard (buildAttemptStatusActive)
-	// does not see it as in-flight work this fresh plan-only request would
-	// clobber -- loadLatestBuildAttempt still resolves it either way.
+	// Leave a terminal prior attempt with an explicit build-end review
+	// decision. A fresh plan must keep that decision scoped to its owner.
 	spawnBudgetAttemptRel := attemptWithVerificationBoundaryRecorded(t, 1, "attempt-spawn-budget", "build_end", "heavy full-depth budget fixture")
 	var spawnBudgetAttempt buildAttemptRecord
 	if err := store.UpdateJSONAtomically(spawnBudgetAttemptRel, &spawnBudgetAttempt, func() error {
@@ -1426,8 +1412,8 @@ func TestCodexBuildPlanOnlySpawnBudgetSeparatesCasteBudgetFromWorkerCount(t *tes
 	if budget.SelectedCastes != len(budget.Castes) {
 		t.Fatalf("selected_castes = %d, want castes length %d", budget.SelectedCastes, len(budget.Castes))
 	}
-	if len(budget.PolicyAddedCastes) == 0 {
-		t.Fatalf("policy_added_castes should expose build-policy castes added after Queen selection: %+v", budget)
+	if len(budget.PolicyAddedCastes) != 0 {
+		t.Fatalf("a fresh attempt inherited review castes from the prior attempt: %+v", budget)
 	}
 	if budget.PrunedCastes == nil || budget.PrunedWorkers == nil {
 		t.Fatalf("pruned budget counts should be present even when zero: %+v", budget)

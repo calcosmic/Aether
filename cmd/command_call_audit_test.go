@@ -311,6 +311,12 @@ func processDocumentedCallLine(path string, lineNum int, line string, inFence bo
 // parseFencedInvocation parses one line inside a fenced code block.
 func parseFencedInvocation(path string, line int, text string) (documentedCall, bool) {
 	fields := tokenizeShellLike(text)
+	// Installed native-worker support binds the exact executable chosen by
+	// its parent, rather than looking up a possibly different binary on PATH.
+	// Recognize that explicit executable placeholder only at command start.
+	if command, ok := strings.CutPrefix(strings.TrimSpace(text), "<absolute aether executable> "); ok {
+		fields = tokenizeShellLike("aether " + command)
+	}
 	// normalizeShellToken lets this see through command-substitution syntax
 	// glued to the same token — `result=$(aether spawn-can-spawn {your_depth}
 	// --enforce)`, the exact shape at `.aether/workers.md:292`, tokenizes to
@@ -1219,41 +1225,41 @@ var knownEnrichmentSubcommands = map[string]bool{
 	// grouped by category. It is a read-only inspection command — no
 	// verification result, gate outcome, or state mutation depends on it.
 	// Enrichment, not a gate.
-	"midden-review": true,
-	"midden-write":  true,
-	"migrate-state": true,
-	"oracle":                      true,
-	"parallel-mode":               true,
-	"patrol-check":                true,
-	"pause":                       true,
-	"pause-colony":                true,
-	"pending-decision-list":       true,
-	"phase":                       true,
-	"pheromone-display":           true,
-	"pheromone-expire":            true,
-	"pheromone-merge-back":        true,
-	"pheromone-read":              true,
-	"pheromone-write":             true,
-	"pheromones":                  true,
-	"plan-finalize":               true,
-	"plan":                        true,
-	"spec":                        true, // owner-invoked; approved-Spec preflight blocks planning after errors
-	"porter":                      true,
-	"preferences":                 true,
-	"print-next-up":               true,
-	"profile-read":                true,
-	"profile-update":              true,
-	"publish":                     true,
-	"queen-compose":               true,
-	"queen-promote-instinct":      true,
-	"queen-write-learnings":       true,
-	"quick":                       true,
-	"recipes":                     true,
-	"recover":                     true,
-	"redirect":                    true,
-	"reference-index":             true,
-	"reference-list":              true,
-	"reference-match":             true,
+	"midden-review":          true,
+	"midden-write":           true,
+	"migrate-state":          true,
+	"oracle":                 true,
+	"parallel-mode":          true,
+	"patrol-check":           true,
+	"pause":                  true,
+	"pause-colony":           true,
+	"pending-decision-list":  true,
+	"phase":                  true,
+	"pheromone-display":      true,
+	"pheromone-expire":       true,
+	"pheromone-merge-back":   true,
+	"pheromone-read":         true,
+	"pheromone-write":        true,
+	"pheromones":             true,
+	"plan-finalize":          true,
+	"plan":                   true,
+	"spec":                   true, // owner-invoked; approved-Spec preflight blocks planning after errors
+	"porter":                 true,
+	"preferences":            true,
+	"print-next-up":          true,
+	"profile-read":           true,
+	"profile-update":         true,
+	"publish":                true,
+	"queen-compose":          true,
+	"queen-promote-instinct": true,
+	"queen-write-learnings":  true,
+	"quick":                  true,
+	"recipes":                true,
+	"recover":                true,
+	"redirect":               true,
+	"reference-index":        true,
+	"reference-list":         true,
+	"reference-match":        true,
 	// report writes a sendable diagnostic bundle to disk for the operator to
 	// attach elsewhere. It is a read-only inspection/export command — no
 	// verification result, gate outcome, or state mutation depends on it.

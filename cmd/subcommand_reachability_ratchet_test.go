@@ -1821,13 +1821,23 @@ func TestNativeReachabilityUsesInstalledSupport(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := collectCallerEvidence(t, fixture, nil)
-	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "question"} {
+	for _, operation := range []string{"reserve", "bind", "record", "stage", "inspect", "observe", "context", "context-ack", "question"} {
 		if !before["aether codex-native-worker "+operation] {
 			t.Errorf("installed support did not credit native %s", operation)
 		}
 	}
 	if collectCallerEvidence(t, fixture, map[string]bool{filepath.ToSlash(source): true})["aether codex-native-worker observe"] {
 		t.Fatal("removing the actual support caller retained native observe credit")
+	}
+	ackRemoved := strings.ReplaceAll(string(body), "<absolute aether executable> codex-native-worker context-ack", "<absolute aether executable> codex-native-worker no-ack-call")
+	if ackRemoved == string(body) {
+		t.Fatal("context ACK mutation changed nothing")
+	}
+	if err := os.WriteFile(path, []byte(ackRemoved), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if collectCallerEvidence(t, fixture, nil)["aether codex-native-worker context-ack"] {
+		t.Fatal("removing the installed ACK invocation retained caller credit")
 	}
 	removed := strings.ReplaceAll(string(body), "aether codex-native-worker observe", "aether codex-native-worker no-observation-call")
 	if removed == string(body) {

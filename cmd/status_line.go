@@ -145,7 +145,7 @@ var statusLineCmd = &cobra.Command{
 
 		text := statusLineText(resolveNextAction(in), detectPlatform())
 		if text != "" {
-			fmt.Fprintln(stdout, text)
+			visualFprintln(stdout, text)
 		}
 		return nil
 	},

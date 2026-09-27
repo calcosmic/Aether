@@ -633,7 +633,9 @@ func nativeGapCheckpointSemanticControls(t *testing.T) {
 			if !ok {
 				t.Fatal("missing runtime attempt")
 			}
-			absAttempt := filepath.Join(store.BasePath(), attemptPath)
+			// Match the resolved workspace used as the snapshot inventory root
+			// (macOS temp paths may otherwise use /var and /private/var aliases).
+			absAttempt := filepath.Join(fixture, ".aether", "data", attemptPath)
 			state := nativeFinalizeStateBytes(t)
 			attemptBytes := mustNativeGapJSON(t, attempt)
 			savedSource := source

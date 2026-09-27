@@ -86,26 +86,36 @@ func mapKeysEqual(a, b map[string]bool) bool {
 	return true
 }
 
-// seedOneHelpfulApplicationCreditBuildAttempt writes two minimal, real-shaped
-// durable build attempts for phaseID directly through the store, via the
-// SAME production setters cmd/recruitment_credit_test.go's own
-// newApplicationCreditFixture uses (attachBuildFreeCheckReport,
-// attachBuildKnowledgeDeltas) -- an earlier attempt whose free checks
-// failed, and the phase's LATEST attempt, carrying a decision-kind
-// knowledge delta and a clean free-check report. This drives
-// recordPhaseApplicationCredit's own real derivation
-// (cmd/application_evidence.go) to a genuine "helpful" outcome the next
-// time it runs for phaseID (LEARN-03, 204-06-PLAN.md Task 3), rather than
-// the "pending" outcome every round in this test would otherwise record.
+// applicationCreditColonyStore prepares the accepted phases before any
+// learning records are written, so successive attempts share one real store.
+func applicationCreditColonyStore(t *testing.T) *storage.Store {
+	t.Helper()
+	goal := "Learn from helpful phase checks"
+	var phases []colony.Phase
+	for phase := 1; phase <= 7; phase++ {
+		id := fmt.Sprintf("%d.1", phase)
+		phases = append(phases, colony.Phase{ID: phase, Name: fmt.Sprintf("Practice %d", phase), Status: colony.PhaseReady, Tasks: []colony.Task{{ID: &id, Goal: "Apply the learned check", Status: colony.TaskPending}}})
+	}
+	createApprovedAcceptedBuildTestColony(t, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateREADY, CurrentPhase: 1, Plan: colony.Plan{Phases: phases}})
+	return store
+}
+
+// seedOneHelpfulApplicationCreditBuildAttempt creates two canonical attempts:
+// an earlier failed check and a later passing check with a knowledge delta.
+// The learning reader derives helpfulness from those recorded check results.
 func seedOneHelpfulApplicationCreditBuildAttempt(t *testing.T, phaseID int) {
 	t.Helper()
 	if store == nil {
 		t.Fatal("seedOneHelpfulApplicationCreditBuildAttempt: store is nil")
 	}
 
-	earlierID := "attempt-a"
-	seedMinimalBuildAttempt(t, phaseID, earlierID, []codexBuildDispatch{{Name: "Mason-1", Caste: "builder"}})
-	earlierRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "attempts", earlierID+".json"))
+	root := filepath.Dir(filepath.Dir(store.BasePath()))
+	state := mustReadSpecificationTestState(t, root)
+	state.CurrentPhase, state.State = phaseID, colony.StateEXECUTING
+	applyAcceptedBuildTestExecutionFacts(t, root, state)
+	dispatches := []codexBuildDispatch{{Name: "Mason-1", Caste: "builder", TaskID: fmt.Sprintf("%d.1", phaseID)}}
+	earlier := commitTestBuildStartAt(t, root, phaseID, time.Now().UTC(), testBuildStartOptions{AttemptID: "attempt-a", Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
+	earlierRel := earlier.AttemptPath
 	if err := attachBuildFreeCheckReport(earlierRel, buildFreeCheckReport{
 		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,
 		ChecksRun: []string{"tests"}, Failed: []string{"tests"}, Passed: false,
@@ -114,9 +124,8 @@ func seedOneHelpfulApplicationCreditBuildAttempt(t *testing.T, phaseID int) {
 		t.Fatalf("attach earlier free-check report: %v", err)
 	}
 
-	latestID := "attempt-b"
-	seedMinimalBuildAttempt(t, phaseID, latestID, []codexBuildDispatch{{Name: "Mason-1", Caste: "builder"}})
-	latestRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phaseID), "attempts", latestID+".json"))
+	latest := commitTestBuildStartAt(t, root, phaseID, time.Now().UTC(), testBuildStartOptions{AttemptID: "attempt-b", Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
+	latestRel := latest.AttemptPath
 	if err := attachBuildFreeCheckReport(latestRel, buildFreeCheckReport{
 		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,
 		ChecksRun: []string{"tests"}, Failed: nil, Passed: true,
@@ -410,9 +419,7 @@ func TestApplicationHistoryShapeMatchesInstinctApply(t *testing.T) {
 func TestPhaseEndConsolidationReportsWhatReachedTheQueenFile(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	s := applicationCreditColonyStore(t)
 	if err := s.SaveJSON("learning-observations.json", colony.LearningFile{Observations: []colony.Observation{}}); err != nil {
 		t.Fatalf("seed empty learning-observations.json: %v", err)
 	}
@@ -465,9 +472,7 @@ const workerLessonSentence = "always run go vet ./cmd/ before go test ./cmd/ her
 func TestWorkerLessonBecomesQueenFileWisdom(t *testing.T) {
 	saveGlobals(t)
 	resetRootCmd(t)
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	s := applicationCreditColonyStore(t)
 
 	// Stage 1: the worker's own sentence, captured through the real capture
 	// path (Plan 01's captureWorkerObservation), becomes an observation.

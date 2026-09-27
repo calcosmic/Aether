@@ -725,7 +725,7 @@ func nativeGapCancellationRefusalFixture(t *testing.T) (codexNativeLiveReceipt, 
 	}
 	root := t.TempDir()
 	candidate := nativeGapCancellationWrite(t, filepath.Join(root, "synthetic-candidate.txt"), []byte("synthetic validator input; never executed\n"))
-	r := codexNativeLiveReceipt{Scenario: "cancellation", ProofContract: nativeCapabilityProofContract, ProofAmendmentSHA256: nativeCapabilityProofAmendmentSHA256, FixtureRoot: request.Workspace, CandidatePath: candidate.Path, CandidateSHA256: candidate.SHA256, SessionID: request.HostSessionID, ChildID: request.ChildID, ChildSpawnCallID: "spawn", AttemptID: attempt.ID, AttemptPath: filepath.Join(store.BasePath(), attemptPath), RunID: attempt.RunID, LaunchID: request.LaunchID, WorkerName: request.WorkerName, TaskID: request.TaskID}
+	r := codexNativeLiveReceipt{Scenario: "cancellation", ProofContract: nativeCapabilityProofContract, ProofAmendmentSHA256: nativeCapabilityProofAmendmentSHA256, FixtureRoot: request.Workspace, CandidatePath: candidate.Path, CandidateSHA256: candidate.SHA256, SessionID: request.HostSessionID, ChildID: request.ChildID, ChildSpawnCallID: "spawn", AttemptID: attempt.ID, AttemptPath: filepath.Join(request.Workspace, ".aether", "data", attemptPath), RunID: attempt.RunID, LaunchID: request.LaunchID, WorkerName: request.WorkerName, TaskID: request.TaskID}
 	at := time.Now().UTC()
 	event := func(typ string, payload any) []byte {
 		return append(mustNativeGapJSONCompact(t, map[string]any{"timestamp": at.Format(time.RFC3339Nano), "type": typ, "payload": payload}), '\n')

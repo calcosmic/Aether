@@ -14,6 +14,9 @@ import (
 // output mode. An explicit force (AETHER_FORCE_COLOR=1 / CLICOLOR_FORCE)
 // still wins regardless of the writer.
 func TestPipedVisualOutputCarriesNoEscapeCodes(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("AETHER_FORCE_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "")
 	t.Run("visual mode into a non-terminal writer carries no escape codes", func(t *testing.T) {
 		saveGlobals(t)
 		t.Setenv("AETHER_OUTPUT_MODE", "visual")

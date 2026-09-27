@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -38,6 +39,78 @@ func workRepairFixtureInput(root string, phase int, check string) repairRoundInp
 }
 
 func noopPersist(autopilotRepairLedger) error { return nil }
+
+func TestRepairCheckpointPreservesRuntimeHistory(t *testing.T) {
+	for _, scope := range [][]string{nil, {"."}, {"cmd", ".aether", ".git"}} {
+		t.Run(fmt.Sprint(scope), func(t *testing.T) {
+			root := workRepairFixtureRoot(t)
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".aether/data/attempts.json"), "original attempt\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".aether/commands/local.yaml"), "original command\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".git"), "gitdir: original\n")
+			checkpoint, err := saveRepairCheckpoint(root, "history", scope)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(checkpoint.BackupDir)
+			mustWriteRepairFixtureFile(t, filepath.Join(root, "cmd/foo.go"), "failed repair\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, "cmd/new.go"), "new repair file\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".aether/commands/local.yaml"), "failed command edit\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".aether/data/attempts.json"), "original and failed repair\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".aether/data/repair-budget.json"), "spent\n")
+			mustWriteRepairFixtureFile(t, filepath.Join(root, ".git"), "gitdir: current\n")
+			if err := restoreRepairCheckpoint(checkpoint); err != nil {
+				t.Fatal(err)
+			}
+			for rel, want := range map[string]string{
+				"cmd/foo.go":                      "package cmd\n\nfunc Foo() int { return 1 }\n",
+				".aether/commands/local.yaml":     "original command\n",
+				".aether/data/attempts.json":      "original and failed repair\n",
+				".aether/data/repair-budget.json": "spent\n",
+				".git":                            "gitdir: current\n",
+			} {
+				got, err := os.ReadFile(filepath.Join(root, rel))
+				if err != nil || string(got) != want {
+					t.Errorf("%s after restore = %q, %v; want %q", rel, got, err, want)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(root, "cmd/new.go")); !os.IsNotExist(err) {
+				t.Fatalf("new repair file survived restore: %v", err)
+			}
+		})
+	}
+}
+
+func TestRepairCheckpointKeepsSymlinksInsideScope(t *testing.T) {
+	root := workRepairFixtureRoot(t)
+	external := t.TempDir()
+	mustWriteRepairFixtureFile(t, filepath.Join(external, "outside.txt"), "untouched\n")
+	if err := os.Symlink(external, filepath.Join(root, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, scope := range [][]string{{"../outside.txt"}, {"linked/outside.txt"}} {
+		if checkpoint, err := saveRepairCheckpoint(root, "outside", scope); err == nil {
+			os.RemoveAll(checkpoint.BackupDir)
+			t.Fatalf("accepted scope outside project: %v", scope)
+		}
+	}
+	checkpoint, err := saveRepairCheckpoint(root, "link", []string{".", "linked", "cmd/foo.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(checkpoint.BackupDir)
+	if err := os.Remove(filepath.Join(root, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreRepairCheckpoint(checkpoint); err != nil {
+		t.Fatal(err)
+	}
+	if target, err := os.Readlink(filepath.Join(root, "linked")); err != nil || target != external {
+		t.Fatalf("link was not restored as a link: %q, %v", target, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(external, "outside.txt")); err != nil || string(got) != "untouched\n" {
+		t.Fatalf("external file changed: %q, %v", got, err)
+	}
+}
 
 // TestRepairRunsAtMostOnceAutomatically proves a failing fixture with an
 // eligible repair produces exactly one checkpoint, one repair wave and one
@@ -265,9 +338,15 @@ func TestCheckpointSaveAndRestoreAreAnnouncedOnBothLanes(t *testing.T) {
 			var order []string
 			outcome, err := runBoundedRepairRound(&ledger, input, nil, noopPersist,
 				func() error { order = append(order, "repair"); return nil },
-				func() (bool, []string, error) { order = append(order, "verify"); return false, []string{"still failing"}, nil },
+				func() (bool, []string, error) {
+					order = append(order, "verify")
+					return false, []string{"still failing"}, nil
+				},
 				func(id string) { order = append(order, "save:"+id); emitRepairCheckpointSaved(lane.phase, lane.check) },
-				func(id string) { order = append(order, "restore:"+id); emitRepairCheckpointRestored(lane.phase, lane.check) },
+				func(id string) {
+					order = append(order, "restore:"+id)
+					emitRepairCheckpointRestored(lane.phase, lane.check)
+				},
 			)
 			if err != nil {
 				t.Fatalf("round: %v", err)

@@ -78,6 +78,34 @@
       }
     },
     {
+      "id": "fixture-0ba7ea104c67",
+      "title": "[broad-invariant] unmet-truth: cmd/refusal_register.go. JOURNEY FINDING 2026-09-23 (208-08 real single-trial run, ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/refusal_register.go. JOURNEY FINDING 2026-09-23 (208-08 real single-trial run, practice project, step 2 of 14 'survey'): the colonize-existing-survey-found refusal (Disposition: stop, ProtectsWork: true) fired correctly and named the exact way past ('A territory survey already exists for this project. -- next: aether colonize --force-resurvey'), but the driving chat chose to ask the owner for confirmation ('My pick: redo the survey... To go ahead, reply resurvey') instead of run",
+        "reference": "55"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/refusal_register.go. JOURNEY FINDING 2026-09-23 (208-08 real single-trial run, practice project, step 2 of 14 'survey'): the colonize-existing-survey-found refusal (Disposition: stop, ProtectsWork: true) fired correctly and named the exact way past ('A territory survey already exists for this project. -- next: aether colonize --force-resurvey'), but the driving chat chose to ask the owner for confirmation ('My pick: redo the survey... To go ahead, reply resurvey') instead of run",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "55"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "0ba7ea104c6710c5cb8fa207c208e2385e378f722ef8466f6e3f07cf1c32ed79",
+      "guard": {
+        "test": "TestColonizeWrapperCarriesTheActWhenAloneRule",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-0feb4e6b8824",
       "title": "[broad-invariant] TestCLIFlagAudit. Cobra registers help lazily, so whether the audit saw the whole command tree d",
       "failing_baseline": {
@@ -102,6 +130,34 @@
       "content_digest": "0feb4e6b8824b7b38e26780e37be080bd316c97a5cde56da68faee1488fa8d83",
       "guard": {
         "test": "TestCLIFlagAudit",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-129630d6422b",
+      "title": "[broad-invariant] unmet-truth: cmd/go_route.go. THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/go_route.go. THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT LOOKED'. Observed live 2026-09-24 in 209-TIMING.md run 5 (session 92b11308-8302-4062-8d4d-59b7f1382d5e), a real unattended session in a fresh practice project. The small route ran and completed the job correctly; the quick attempt's own checks came back status 'not_checked' because the practice project has no resolvable check command; D-03's escalation then treated that as a failed check and moved the",
+        "reference": "61"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/go_route.go. THE ESCALATION FIRES ON 'COULD NOT CHECK', NOT ON 'BIGGER THAN IT LOOKED'. Observed live 2026-09-24 in 209-TIMING.md run 5 (session 92b11308-8302-4062-8d4d-59b7f1382d5e), a real unattended session in a fresh practice project. The small route ran and completed the job correctly; the quick attempt's own checks came back status 'not_checked' because the practice project has no resolvable check command; D-03's escalation then treated that as a failed check and moved the",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "61"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "129630d6422bb9dbb33bf01037dea0189c80b61011af63b1d14441e480cbb5eb",
+      "guard": {
+        "test": "TestEscalationNeedsAFailedCheckNotAnUnrunnableOne",
         "package": "cmd"
       }
     },
@@ -260,6 +316,34 @@
       "privacy": "repo_local",
       "severity": "low",
       "content_digest": "2ec5e3c171527655c5b5d77d6b09cb56a444f4fb00deaf113149897a6093287d"
+    },
+    {
+      "id": "fixture-30b0aa21942f",
+      "title": "[broad-invariant] unmet-truth: cmd/planning_state.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real projec",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/planning_state.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): a blocked check's recovery tasks froze the accepted revision's copy of phase/task status (syncActivePlanRevisionExecutionFacts gave up on any phase whose live task count differed), and plan_authority.go hashed and validated the live phases WITH recovery tasks. After the phase advanced, every load refused 'active plan phases do not match active revision' and autopilot refus",
+        "reference": "62"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/planning_state.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): a blocked check's recovery tasks froze the accepted revision's copy of phase/task status (syncActivePlanRevisionExecutionFacts gave up on any phase whose live task count differed), and plan_authority.go hashed and validated the live phases WITH recovery tasks. After the phase advanced, every load refused 'active plan phases do not match active revision' and autopilot refus",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "62"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "30b0aa21942f06760a893015d4ffa978fe7a718d02098ab9bd96a04bcf6e657d",
+      "guard": {
+        "test": "TestRecoveryTaskDoesNotFreezeTheAcceptedPlanRecord",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-361e6b54a1c0",
@@ -586,6 +670,34 @@
       "content_digest": "5aced737d86d1f885b6fe1933a8a93989b60ca9d831209dff5441ef8fac93752"
     },
     {
+      "id": "fixture-5be386cc7cba",
+      "title": "[broad-invariant] unmet-truth: cmd/codex_build_finalize.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/codex_build_finalize.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the no-change evidence rule refused handoff verification_status 'passed', a spelling the handoff contract itself accepts. Fixed this session.",
+        "reference": "65"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/codex_build_finalize.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the no-change evidence rule refused handoff verification_status 'passed', a spelling the handoff contract itself accepts. Fixed this session.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "65"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "5be386cc7cba15839784063cc81efd6928d9b4daad49995084b2ce96d3545832",
+      "guard": {
+        "test": "TestNoChangeEvidenceAcceptsTheHandoffContractsOwnPassSpelling",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-5d1a3245223e",
       "title": "[broad-invariant] unmet-truth: cmd/shadow_cmds.go. FIXED by 204-12: aether shadow-declare and aether shadow-compar",
       "failing_baseline": {
@@ -662,6 +774,34 @@
       "content_digest": "6897296bd765722c583f620197afa5a0470c13b6cf9808ea39c76bd7c7b8e2e9",
       "guard": {
         "test": "TestFailedBuildWorkerReachesTheNextBriefOnTheDelegateLane",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-70c42d12762e",
+      "title": "[broad-invariant] unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real projec",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): with no '## Verification Commands' section the whole AGENTS.md is scanned, and the Aether-generated skills-table row for $ant-build ('Build a phase') was read as an unreadable build command, failing the build gate. Also '- build: python3 scripts/validate.py' was refused as unreadable. Both fixed this session. Side effect NOT fixed: the gate error text was auto-written into",
+        "reference": "64"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/codex_continue.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): with no '## Verification Commands' section the whole AGENTS.md is scanned, and the Aether-generated skills-table row for $ant-build ('Build a phase') was read as an unreadable build command, failing the build gate. Also '- build: python3 scripts/validate.py' was refused as unreadable. Both fixed this session. Side effect NOT fixed: the gate error text was auto-written into",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "64"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "70c42d12762ef51defa7a46eb52fdc1dd1d082a54c17331b70590f4cf05bdcff",
+      "guard": {
+        "test": "TestShippedAgentsTemplateNeverReadsAsACheckCommand",
         "package": "cmd"
       }
     },
@@ -922,6 +1062,34 @@
       "content_digest": "919a43ce2999e3af7a5a006f88cbbc7b82eb81fd8b822da45a4cfdc8a90c24d1",
       "guard": {
         "test": "TestEveryMemoryStoreFieldHasALiveWriter",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-9f73d33df4f3",
+      "title": "[broad-invariant] unmet-truth: cmd/build_worker_run.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real proj",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/build_worker_run.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the direct (autopilot) build lane rejected an honest completed_no_change worker as an invalid terminal status and failed the wave; every other surface accepts it. Fixed this session.",
+        "reference": "63"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/build_worker_run.go. FIELD REPORT 2026-09-25 (French Fluency, owner's real project, runtime 1.0.88 + 209-07): the direct (autopilot) build lane rejected an honest completed_no_change worker as an invalid terminal status and failed the wave; every other surface accepts it. Fixed this session.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "63"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "9f73d33df4f331074d8479b5ab178d1991ef5c2c93cd7fc805485ec25ba0d092",
+      "guard": {
+        "test": "TestDirectBuildLaneAcceptsAnHonestNoChangeWorker",
         "package": "cmd"
       }
     },
@@ -1438,6 +1606,62 @@
       "content_digest": "f5298cc6d9536be9c252686f27c4c97bec9be2bb57b3ac54640ee9f1868f10ca",
       "guard": {
         "test": "TestThreeFailuresOfOneKindProduceOneRedirect",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-f7aedf32e08e",
+      "title": "[broad-invariant] unmet-truth: cmd/colonize_snapshot_refresh_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.m",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/colonize_snapshot_refresh_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-01, found by independent mutation): the check that is meant to prove only one place in the program decides to rebuild the saved map of your code (TestSavedMapPublicationHasOneBuilder) only notices that decision when it is written as a plain assignment. Written the other, equally ordinary way Go allows -- setting the same field inside a struct value as it is created -- a second, competing decisio",
+        "reference": "57"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/colonize_snapshot_refresh_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-01, found by independent mutation): the check that is meant to prove only one place in the program decides to rebuild the saved map of your code (TestSavedMapPublicationHasOneBuilder) only notices that decision when it is written as a plain assignment. Written the other, equally ordinary way Go allows -- setting the same field inside a struct value as it is created -- a second, competing decisio",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "57"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "f7aedf32e08ec493b28b9ce5a43f3036861fe483ebe34d146a839086de5ac2e7",
+      "guard": {
+        "test": "TestSavedMapPublicationHasOneBuilder",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-fc06f1f0cc18",
+      "title": "[broad-invariant] unmet-truth: cmd/refusal_self_recovery_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, C",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/refusal_self_recovery_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-02, found by independent mutation): the widened check meant to forbid a second, competing 'fix it myself when nobody is here' decision (TestSelfRecoveryHasOneDecision) was made to pass by exempting three whole files rather than the specific lines in them that were actually reviewed. A rival decision planted inside one of those three exempted files is invisible to the check -- proved by planting it.",
+        "reference": "58"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/refusal_self_recovery_test.go. REVIEW FINDING 2026-09-24 (208-REVIEW-GAP3.md, CR-02, found by independent mutation): the widened check meant to forbid a second, competing 'fix it myself when nobody is here' decision (TestSelfRecoveryHasOneDecision) was made to pass by exempting three whole files rather than the specific lines in them that were actually reviewed. A rival decision planted inside one of those three exempted files is invisible to the check -- proved by planting it.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "58"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "medium",
+      "content_digest": "fc06f1f0cc18e7dc4e32750e644ca184479af6873700e055e39f91288feb3ed6",
+      "guard": {
+        "test": "TestSelfRecoveryHasOneDecision",
         "package": "cmd"
       }
     }

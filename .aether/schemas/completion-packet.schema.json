@@ -326,6 +326,12 @@
           },
           "type": "array"
         },
+        "rejected_artifacts": {
+          "items": {
+            "$ref": "#/$defs/codexRejectedArtifactEvidence"
+          },
+          "type": "array"
+        },
         "build_phase": {
           "type": "integer"
         },
@@ -1114,6 +1120,22 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "codexRejectedArtifactEvidence": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "reason"
+      ]
     },
     "codexWaveExecutionPlan": {
       "properties": {

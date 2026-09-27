@@ -21,40 +21,26 @@ import (
 // Shared fixtures (201-10)
 // ---------------------------------------------------------------------------
 
-// seedMinimalBuildAttempt persists just enough of a durable build attempt
-// record (plus its latest-attempt pointer) for loadLatestBuildAttempt(phase)
-// to resolve it -- the real mechanism recordDispatchWorkerOutcome now reads
-// attempt/job identity from (cmd/memory_feed.go), without running the full
-// commitBuildStart pipeline.
-func seedMinimalBuildAttempt(t *testing.T, phase int, attemptID string, dispatches []codexBuildDispatch) {
+// commitFailureEvidenceAttempt admits the fixture through the same accepted
+// plan and build-start transaction used by production.
+func commitFailureEvidenceAttempt(t *testing.T, phase int, attemptID string, dispatches []codexBuildDispatch) *storage.Store {
 	t.Helper()
-	if store == nil {
-		t.Fatal("seedMinimalBuildAttempt: store is nil")
+	saveGlobals(t)
+	goal := "Record worker failure evidence"
+	tasks := make([]colony.Task, len(dispatches))
+	for i := range dispatches {
+		id := fmt.Sprintf("%d.%d", phase, i+1)
+		dispatches[i].TaskID = id
+		tasks[i] = colony.Task{ID: &id, Goal: "Record " + dispatches[i].Name + " outcome", Status: colony.TaskInProgress}
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	attemptRel := filepath.ToSlash(filepath.Join("build", fmt.Sprintf("phase-%d", phase), "attempts", attemptID+".json"))
-	record := buildAttemptRecord{
-		SchemaVersion: buildAttemptSchemaVersion,
-		ID:            attemptID,
-		Phase:         phase,
-		Status:        buildAttemptTerminal,
-		StartedAt:     now,
-		UpdatedAt:     now,
-		Dispatches:    dispatches,
-		History:       []buildAttemptTransition{},
-	}
-	if err := store.SaveJSON(attemptRel, record); err != nil {
-		t.Fatalf("seed build attempt: %v", err)
-	}
-	pointer := latestBuildAttemptPointer{
-		SchemaVersion: 1,
-		AttemptID:     attemptID,
-		Path:          attemptRel,
-		UpdatedAt:     now,
-	}
-	if err := store.SaveJSON(latestBuildAttemptPointerPath(phase), pointer); err != nil {
-		t.Fatalf("seed latest attempt pointer: %v", err)
-	}
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version: "3.0", Goal: &goal, State: colony.StateEXECUTING, CurrentPhase: phase,
+		Plan: colony.Plan{Phases: []colony.Phase{{ID: phase, Name: goal, Status: colony.PhaseInProgress, Tasks: tasks}}},
+	})
+	commitTestBuildStartAt(t, accepted.Root, phase, time.Now().UTC(), testBuildStartOptions{
+		AttemptID: attemptID, Dispatches: dispatches, MakeLatest: testBuildStartBool(true),
+	})
+	return store
 }
 
 // ---------------------------------------------------------------------------
@@ -62,13 +48,11 @@ func seedMinimalBuildAttempt(t *testing.T, phase int, attemptID string, dispatch
 // ---------------------------------------------------------------------------
 
 func TestFailureEvidenceCarriesTheAttemptIdentity(t *testing.T) {
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	saveGlobals(t)
 
 	const phase = 7
 	const attemptID = "attempt-evidence-1"
-	seedMinimalBuildAttempt(t, phase, attemptID, []codexBuildDispatch{
+	s := commitFailureEvidenceAttempt(t, phase, attemptID, []codexBuildDispatch{
 		{Name: "Mason-1", Caste: "builder", JobName: "job-alpha"},
 	})
 
@@ -113,13 +97,11 @@ func TestFailureEvidenceCarriesTheAttemptIdentity(t *testing.T) {
 // same workerOutcomeFacts inside this one function.
 
 func TestBlockerTruthIsOneStore(t *testing.T) {
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	saveGlobals(t)
 
 	const phase = 9
 	const attemptID = "attempt-blocker-1"
-	seedMinimalBuildAttempt(t, phase, attemptID, []codexBuildDispatch{
+	s := commitFailureEvidenceAttempt(t, phase, attemptID, []codexBuildDispatch{
 		{Name: "Hammer-3", Caste: "builder"},
 	})
 
@@ -177,12 +159,10 @@ func TestBlockerTruthIsOneStore(t *testing.T) {
 }
 
 func TestEscalatedCountHasOneCountingPath(t *testing.T) {
-	s, tmpDir := newTestStore(t)
-	defer os.RemoveAll(tmpDir)
-	store = s
+	saveGlobals(t)
 
 	const phase = 11
-	seedMinimalBuildAttempt(t, phase, "attempt-count-1", []codexBuildDispatch{
+	s := commitFailureEvidenceAttempt(t, phase, "attempt-count-1", []codexBuildDispatch{
 		{Name: "Worker-A", Caste: "builder"},
 		{Name: "Worker-B", Caste: "builder"},
 		{Name: "Worker-C", Caste: "builder"},

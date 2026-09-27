@@ -435,8 +435,8 @@ const (
 // rather than by threading a second, potentially-divergent writer through
 // the envelope path.
 func runColonyLiveRefreshLoop(ctx context.Context, drill colonyLiveDrillSelector, interval time.Duration) error {
-	fmt.Fprint(stdout, colonyLiveHideCursorSequence)
-	defer fmt.Fprint(stdout, colonyLiveShowCursorSequence)
+	visualFprint(stdout, colonyLiveHideCursorSequence)
+	defer visualFprint(stdout, colonyLiveShowCursorSequence)
 
 	writeColonyWatchFrame(ctx, drill, time.Now().UTC(), true)
 
@@ -450,7 +450,7 @@ func runColonyLiveRefreshLoop(ctx context.Context, drill colonyLiveDrillSelector
 			if !ok {
 				return nil
 			}
-			fmt.Fprint(stdout, colonyLiveRefreshClearSequence)
+			visualFprint(stdout, colonyLiveRefreshClearSequence)
 			writeColonyWatchFrame(ctx, drill, tick.UTC(), false)
 		}
 	}

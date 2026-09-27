@@ -289,33 +289,32 @@ func resolveTestCommand() string {
 	return ""
 }
 
-// extractTestCommand scans markdown content for a test command reference.
+// extractTestCommand reads command declarations, not prose mentioning an
+// earlier run. Reuse the verification parser for tables, labels, shell
+// comments and fenced continuations, with an explicit section taking priority.
 func extractTestCommand(content string) string {
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		// Look for common patterns
-		if strings.Contains(line, "go test") && !strings.HasPrefix(strings.TrimSpace(line), "#") {
-			// Extract just the command
-			if idx := strings.Index(line, "go test"); idx >= 0 {
-				cmd := line[idx:]
-				// Trim at comment or end of useful content
-				if ci := strings.Index(cmd, "#"); ci > 0 {
-					cmd = cmd[:ci]
-				}
-				if ci := strings.Index(cmd, "//"); ci > 0 {
-					cmd = cmd[:ci]
-				}
-				return strings.TrimSpace(cmd)
+	parse := func(markdown string) string {
+		var declarations []string
+		for _, raw := range joinFencedLineContinuations(markdown) {
+			line := strings.TrimSpace(raw)
+			if strings.HasPrefix(line, "```") {
+				continue
+			}
+			_, _, table := parseVerificationCommandTableLine(line)
+			_, _, labeled := parseLabeledVerificationCommand(line)
+			bare := strings.Trim(strings.TrimSpace(strings.TrimLeft(line, "-* ")), "`")
+			if table || labeled || parseVerificationCommandComment(line) != "" || looksLikeVerificationCommand(bare) {
+				declarations = append(declarations, line)
 			}
 		}
-		if strings.Contains(line, "npm test") {
-			return "npm test"
-		}
-		if strings.Contains(line, "cargo test") {
-			return "cargo test"
+		return extractVerificationCommands(strings.Join(declarations, "\n")).Test
+	}
+	if section := extractMarkdownSection(content, "## Verification Commands"); section != "" {
+		if command := parse(section); command != "" {
+			return command
 		}
 	}
-	return ""
+	return parse(content)
 }
 
 // checkNoCriticalFlags checks for CRITICAL severity error records in the

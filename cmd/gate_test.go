@@ -194,23 +194,32 @@ func TestEnforceGuard_InvalidFormat(t *testing.T) {
 }
 
 func TestResolveTestCommand_GoProject(t *testing.T) {
-	// Save and clear AETHER_ROOT so ResolveAetherRoot uses git to find repo root
-	origRoot := os.Getenv("AETHER_ROOT")
-	os.Unsetenv("AETHER_ROOT")
-	defer os.Setenv("AETHER_ROOT", origRoot)
-
-	// resolveTestCommand now prefers the store's own root over the process
-	// cwd, so pin store to nil for a deterministic fallback path regardless
-	// of what earlier tests left behind.
-	origStore := store
-	store = nil
-	defer func() { store = origStore }()
-
-	// Since this test runs inside the Aether repo (which has go.mod),
-	// it should detect Go and return the test command.
+	saveGlobals(t)
+	s, root := newTestStore(t)
+	store = s
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.test/fixture\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	cmd := resolveTestCommand()
 	if cmd != "go test ./..." {
 		t.Errorf("expected 'go test ./...', got %q", cmd)
+	}
+}
+
+func TestExtractTestCommandUsesDeclarations(t *testing.T) {
+	for _, tc := range []struct{ name, markdown, want string }{
+		{"ignore historical prose", "Earlier, `go test ./...` stopped before finishing.\n\n```sh\ngo test -race -count=1 -timeout 90m ./...\n```", "go test -race -count=1 -timeout 90m ./..."},
+		{"prose alone supplies no command", "We ran npm test yesterday; cargo test was unavailable.", ""},
+		{"explicit section wins", "```sh\ngo test ./example\n```\n## Verification Commands\n- Tests: `go test ./...`\n", "go test ./..."},
+		{"labeled npm flags", "- Tests: `npm test -- --runInBand`", "npm test -- --runInBand"},
+		{"table", "| Tests | `cargo test --workspace` |", "cargo test --workspace"},
+		{"fenced continuation", "```sh\n# Tests\ngo test -race \\\n  ./...\n```", "go test -race ./..."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractTestCommand(tc.markdown); got != tc.want {
+				t.Fatalf("command = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -533,20 +534,16 @@ func TestBuildAndSealScreensLeaveTheResultUntouched(t *testing.T) {
 
 func TestBuildScreenFailedChecksOverrideCompletedTasks(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	store = s
-	state := buildScreenStateFixture(t, buildScreenOneHelper)
-	path := "build/phase-2/attempt-screen.json"
-	attempt := buildAttemptRecord{ID: "screen-attempt", Phase: 2, Status: buildAttemptBuilt,
-		FreeChecks: &buildFreeCheckReport{ChecksRun: []string{"build", "tests"}, Failed: []string{"tests"}, Passed: false}}
-	if err := s.SaveJSON(path, attempt); err != nil {
+	fixture := commitTestBuildStart(t, testBuildStartOptions{MakeLatest: testBuildStartBool(true)})
+	state, phase := fixture.State, fixture.Phase
+	state.State = colony.StateBUILT
+	for i := range phase.Tasks {
+		phase.Tasks[i].Status = colony.TaskCompleted
+	}
+	if err := attachBuildFreeCheckReport(fixture.AttemptPath, buildFreeCheckReport{ChecksRun: []string{"build", "tests"}, Failed: []string{"tests"}, Passed: false}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveJSON(latestBuildAttemptPointerPath(2), latestBuildAttemptPointer{AttemptID: attempt.ID, Path: path}); err != nil {
-		t.Fatal(err)
-	}
-	body := renderBuildScreen(state, state.Plan.Phases[1], []map[string]interface{}{{"name": "Builder", "status": "completed"}}, nil)
+	body := renderBuildScreen(state, phase, []map[string]interface{}{{"name": "Builder", "status": "completed"}}, nil)
 	if !strings.Contains(body, "BUILD STOPPED — checks failed") || strings.Contains(body, "READY TO CHECK") {
 		t.Fatalf("failed check hidden by completed tasks:\n%s", body)
 	}
@@ -561,25 +558,18 @@ func TestSealScreenWithoutOutcomeCannotClaimFinished(t *testing.T) {
 
 func TestBuildScreenUsesCommittedBuildCreditBeforeContinue(t *testing.T) {
 	saveGlobals(t)
-	s, root := newTestStore(t)
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
-	store = s
 	id := "1.1"
-	phase := colony.Phase{ID: 1, Name: "Write the deck", Tasks: []colony.Task{{ID: &id, Goal: "Create the deck", Status: colony.TaskInProgress}}}
-	state := colony.ColonyState{State: colony.StateBUILT, CurrentPhase: 1, Plan: colony.Plan{Phases: []colony.Phase{phase}}}
-	attempt := buildAttemptRecord{ID: "screen-credit", Phase: 1, Status: buildAttemptBuilt, Dispatches: []codexBuildDispatch{{Name: "Builder", TaskID: id, Status: "completed"}}}
-	path := "build/phase-1/screen-credit.json"
-	if err := s.SaveJSON(path, attempt); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SaveJSON(latestBuildAttemptPointerPath(1), latestBuildAttemptPointer{AttemptID: attempt.ID, Path: path}); err != nil {
-		t.Fatal(err)
-	}
-	body := renderBuildScreen(state, phase, buildScreenWorkerMaps(attempt.Dispatches), nil)
+	goal := "Write the deck"
+	phase := colony.Phase{ID: 1, Name: goal, Status: colony.PhaseInProgress, Tasks: []colony.Task{{ID: &id, Goal: "Create the deck", Status: colony.TaskInProgress}}}
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateBUILT, CurrentPhase: 1, Plan: colony.Plan{Phases: []colony.Phase{phase}}})
+	dispatches := []codexBuildDispatch{{Name: "Builder", Caste: "builder", TaskID: id, Status: "completed"}}
+	fixture := commitTestBuildStartAt(t, accepted.Root, 1, time.Now().UTC(), testBuildStartOptions{Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
+	completeCanonicalContinueAttempt200(t, fixture, fixture.State, dispatches)
+	body := renderBuildScreen(fixture.State, fixture.Phase, buildScreenWorkerMaps(dispatches), nil)
 	if !strings.Contains(body, "BUILT — READY TO CHECK") || strings.Contains(body, spacedTitle("Still To Do")) {
 		t.Fatalf("recorded build credit was lost:\n%s", body)
 	}
-	if phase.Tasks[0].Status != colony.TaskInProgress {
+	if fixture.Phase.Tasks[0].Status != colony.TaskInProgress {
 		t.Fatal("rendering advanced verification state")
 	}
 }

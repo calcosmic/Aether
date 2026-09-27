@@ -66,45 +66,15 @@ func assertLifecycleSentence(t *testing.T, sourceValue, sentence string) {
 	}
 }
 
-// writeBoundaryTestAttempt writes a minimal, real build-attempt record and
-// its latest-attempt pointer to the current store, so
-// loadRelevantBuildAttemptReadOnly (cmd/session_flow_cmds.go) -- the exact
-// read path pauseSafeBoundary uses -- resolves it for phaseID. alive
-// controls whether buildAttemptProcessAlive reports the attempt as still
-// running: an inactive status (buildAttemptFailed) makes that false
-// regardless of the process ID, which is all pauseSafeBoundary's
-// interrupted_attempt_boundary branch needs.
-func writeBoundaryTestAttempt(t *testing.T, phaseID int, alive bool) {
+// prepareBoundaryTestAttempt uses the canonical accepted build transaction.
+// Process liveness chooses the pause boundary without manufacturing journals.
+func prepareBoundaryTestAttempt(t *testing.T, alive bool) {
 	t.Helper()
-	status := buildAttemptFailed
-	pid := 0
+	process := testBuildProcessDead
 	if alive {
-		status = buildAttemptDispatching
-		pid = os.Getpid()
+		process = testBuildProcessLive
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	attemptID := fmt.Sprintf("attempt-boundary-%d", phaseID)
-	record := buildAttemptRecord{
-		SchemaVersion: buildAttemptSchemaVersion,
-		ID:            attemptID,
-		Phase:         phaseID,
-		Status:        status,
-		StartedAt:     now,
-		UpdatedAt:     now,
-		ProcessID:     pid,
-	}
-	attemptRel := fmt.Sprintf("build/phase-%d/attempt-boundary.json", phaseID)
-	if err := store.SaveJSON(attemptRel, record); err != nil {
-		t.Fatalf("save boundary attempt record: %v", err)
-	}
-	if err := store.SaveJSON(latestBuildAttemptPointerPath(phaseID), latestBuildAttemptPointer{
-		SchemaVersion: buildAttemptSchemaVersion,
-		AttemptID:     attemptID,
-		Path:          attemptRel,
-		UpdatedAt:     now,
-	}); err != nil {
-		t.Fatalf("save boundary attempt pointer: %v", err)
-	}
+	commitTestBuildStart(t, testBuildStartOptions{ProcessState: process, MakeLatest: testBuildStartBool(true)})
 }
 
 // TestEveryPauseBoundaryAndProvenanceHasASentence drives pauseSafeBoundary
@@ -122,17 +92,17 @@ func TestEveryPauseBoundaryAndProvenanceHasASentence(t *testing.T) {
 	cases := []struct {
 		want  string
 		state colony.ColonyState
-		setup func()
+		setup func(*testing.T)
 	}{
 		{
 			want:  "worker_completion_boundary",
 			state: colony.ColonyState{State: colony.StateEXECUTING, CurrentPhase: 1},
-			setup: func() { writeBoundaryTestAttempt(t, 1, true) },
+			setup: func(t *testing.T) { prepareBoundaryTestAttempt(t, true) },
 		},
 		{
 			want:  "interrupted_attempt_boundary",
-			state: colony.ColonyState{State: colony.StateEXECUTING, CurrentPhase: 2},
-			setup: func() { writeBoundaryTestAttempt(t, 2, false) },
+			state: colony.ColonyState{State: colony.StateEXECUTING, CurrentPhase: 1},
+			setup: func(t *testing.T) { prepareBoundaryTestAttempt(t, false) },
 		},
 		{
 			want:  "interrupted_execution_boundary",
@@ -158,16 +128,22 @@ func TestEveryPauseBoundaryAndProvenanceHasASentence(t *testing.T) {
 
 	seen := map[string]bool{}
 	for _, tc := range cases {
-		if tc.setup != nil {
-			tc.setup()
-		}
-		boundary, _, pending := pauseSafeBoundary(tc.state)
-		if boundary != tc.want {
-			t.Fatalf("fixture for %q actually produced boundary %q (pending=%v) -- the fixture construction is wrong, not the sentence mapping", tc.want, boundary, pending)
-		}
-		seen[boundary] = true
-		assertLifecycleSentence(t, boundary, string(pauseBoundarySentence(boundary)))
+		t.Run(tc.want, func(t *testing.T) {
+			saveGlobals(t)
+			s, _ := newTestStore(t)
+			store = s
+			if tc.setup != nil {
+				tc.setup(t)
+			}
+			boundary, _, pending := pauseSafeBoundary(tc.state)
+			if boundary != tc.want {
+				t.Fatalf("fixture for %q actually produced boundary %q (pending=%v)", tc.want, boundary, pending)
+			}
+			seen[boundary] = true
+			assertLifecycleSentence(t, boundary, string(pauseBoundarySentence(boundary)))
+		})
 	}
+
 	if len(seen) != 7 {
 		t.Fatalf("drove %d distinct boundary values, want all 7 pauseSafeBoundary declares", len(seen))
 	}

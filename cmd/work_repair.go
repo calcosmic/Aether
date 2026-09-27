@@ -31,10 +31,9 @@ import (
 // silently re-run.
 //
 // This file has no lifecycle-transaction dependency: the checkpoint itself
-// is a plain directory snapshot of the caller's declared permitted scope
-// (input.PermittedScope), copied via the same backupCopyFile/backupCopyDir
-// helpers medic's own repair backup already uses (cmd/medic_repair.go) --
-// reused, not re-implemented.
+// is a directory snapshot of the caller's declared permitted scope
+// (input.PermittedScope). Git metadata and Aether's runtime records are
+// excluded: undoing code must not undo the evidence or budget of the repair.
 type repairRoundInput struct {
 	Phase          int
 	Attempt        string
@@ -268,97 +267,175 @@ type repairCheckpoint struct {
 
 // saveRepairCheckpoint copies exactly the given paths (files or directories,
 // relative to root) into an isolated temp directory. An empty paths list
-// checkpoints the entire root. A path that does not exist yet at checkpoint
+// checkpoints the project, excluding Git metadata and runtime records.
+// A path that does not exist yet at checkpoint
 // time is simply skipped -- restoring it later means removing whatever the
 // repair wave created there, not restoring content that never existed.
 func saveRepairCheckpoint(root, checkpointID string, paths []string) (repairCheckpoint, error) {
+	for _, rel := range paths {
+		if err := validateRepairCheckpointPath(root, rel); err != nil {
+			return repairCheckpoint{}, err
+		}
+	}
 	backupDir, err := os.MkdirTemp("", "aether-repair-checkpoint-*")
 	if err != nil {
 		return repairCheckpoint{}, fmt.Errorf("create checkpoint dir: %w", err)
 	}
 
-	unique := uniqueSortedStrings(paths)
-	if len(unique) == 0 {
-		if err := backupCopyDir(root, backupDir); err != nil {
-			return repairCheckpoint{}, fmt.Errorf("checkpoint root: %w", err)
-		}
-		return repairCheckpoint{ID: checkpointID, Root: root, BackupDir: backupDir, FullRoot: true, CreatedAt: time.Now().UTC()}, nil
-	}
-
-	for _, rel := range unique {
-		src := filepath.Join(root, rel)
-		dst := filepath.Join(backupDir, rel)
-		info, statErr := os.Stat(src)
-		if statErr != nil {
-			if os.IsNotExist(statErr) {
-				continue
-			}
-			return repairCheckpoint{}, fmt.Errorf("stat checkpoint source %s: %w", rel, statErr)
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return repairCheckpoint{}, fmt.Errorf("prepare checkpoint dir for %s: %w", rel, err)
-		}
-		if info.IsDir() {
-			if err := backupCopyDir(src, dst); err != nil {
-				return repairCheckpoint{}, fmt.Errorf("checkpoint dir %s: %w", rel, err)
-			}
-			continue
-		}
-		if err := backupCopyFile(src, dst); err != nil {
-			return repairCheckpoint{}, fmt.Errorf("checkpoint file %s: %w", rel, err)
+	checkpoint := repairCheckpoint{ID: checkpointID, Root: root, BackupDir: backupDir, Paths: repairCheckpointScopePaths(paths), FullRoot: len(paths) == 0, CreatedAt: time.Now().UTC()}
+	for _, rel := range checkpoint.scope() {
+		if err := copyRepairCheckpointPath(root, backupDir, rel); err != nil {
+			os.RemoveAll(backupDir)
+			return repairCheckpoint{}, fmt.Errorf("checkpoint %s: %w", rel, err)
 		}
 	}
-	return repairCheckpoint{ID: checkpointID, Root: root, BackupDir: backupDir, Paths: unique, CreatedAt: time.Now().UTC()}, nil
+	return checkpoint, nil
 }
 
-// restoreRepairCheckpoint puts the working tree back exactly as
-// saveRepairCheckpoint found it -- never touching anything outside the
-// checkpointed paths (or the whole root, for a FullRoot checkpoint).
+// restoreRepairCheckpoint restores project files without rewinding the
+// attempt journals, spent repair budget, or Git metadata.
 func restoreRepairCheckpoint(checkpoint repairCheckpoint) error {
-	if checkpoint.FullRoot {
-		entries, err := os.ReadDir(checkpoint.Root)
-		if err != nil {
-			return fmt.Errorf("restore root: read current: %w", err)
+	for _, rel := range checkpoint.scope() {
+		if err := clearRepairCheckpointPath(checkpoint.Root, rel); err != nil {
+			return fmt.Errorf("restore %s: clear current: %w", rel, err)
 		}
-		for _, entry := range entries {
-			if err := os.RemoveAll(filepath.Join(checkpoint.Root, entry.Name())); err != nil {
-				return fmt.Errorf("restore root: clear %s: %w", entry.Name(), err)
+		if err := copyRepairCheckpointPath(checkpoint.BackupDir, checkpoint.Root, rel); err != nil {
+			return fmt.Errorf("restore %s: %w", rel, err)
+		}
+	}
+	return nil
+}
+
+func (checkpoint repairCheckpoint) scope() []string {
+	if checkpoint.FullRoot {
+		return []string{"."}
+	}
+	return checkpoint.Paths
+}
+
+func repairCheckpointScopePaths(paths []string) []string {
+	var cleaned []string
+	for _, path := range paths {
+		cleaned = append(cleaned, filepath.Clean(path))
+	}
+	var scope []string
+	for _, path := range uniqueSortedStrings(cleaned) {
+		covered := false
+		for _, parent := range scope {
+			if parent == "." || strings.HasPrefix(path, parent+string(filepath.Separator)) {
+				covered = true
+				break
 			}
 		}
-		if err := backupCopyDir(checkpoint.BackupDir, checkpoint.Root); err != nil {
-			return fmt.Errorf("restore root: %w", err)
+		if !covered {
+			scope = append(scope, path)
+		}
+	}
+	return scope
+}
+
+func repairCheckpointProtectedPath(rel string) bool {
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	return rel == ".git" || strings.HasPrefix(rel, ".git/") ||
+		rel == ".aether/data" || strings.HasPrefix(rel, ".aether/data/")
+}
+
+// Validate ancestors as well as the final path so a scoped checkpoint cannot
+// traverse a symlink outside the project. A final symlink is copied as a link.
+func validateRepairCheckpointPath(root, rel string) error {
+	if !filepath.IsLocal(rel) {
+		return fmt.Errorf("checkpoint path must stay inside the project: %q", rel)
+	}
+	for parent := filepath.Dir(filepath.Clean(rel)); parent != "."; parent = filepath.Dir(parent) {
+		info, err := os.Lstat(filepath.Join(root, parent))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("checkpoint path has a symlink ancestor: %q", parent)
+		}
+	}
+	return nil
+}
+
+func copyRepairCheckpointPath(srcRoot, dstRoot, rel string) error {
+	if err := validateRepairCheckpointPath(srcRoot, rel); err != nil {
+		return err
+	}
+	if err := validateRepairCheckpointPath(dstRoot, rel); err != nil {
+		return err
+	}
+	if repairCheckpointProtectedPath(rel) {
+		return nil
+	}
+	src, dst := filepath.Join(srcRoot, rel), filepath.Join(dstRoot, rel)
+	info, err := os.Lstat(src)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if err := copyRepairCheckpointPath(srcRoot, dstRoot, filepath.Join(rel, entry.Name())); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
+	if filepath.Clean(rel) == ".aether" {
+		return fmt.Errorf("cannot checkpoint a non-directory .aether path")
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dst)
+	}
+	return backupCopyFile(src, dst)
+}
 
-	for _, rel := range checkpoint.Paths {
-		src := filepath.Join(checkpoint.BackupDir, rel)
-		dst := filepath.Join(checkpoint.Root, rel)
-
-		info, statErr := os.Stat(src)
-		if statErr != nil {
-			if os.IsNotExist(statErr) {
-				if removeErr := os.RemoveAll(dst); removeErr != nil {
-					return fmt.Errorf("restore %s: remove: %w", rel, removeErr)
-				}
-				continue
-			}
-			return fmt.Errorf("restore %s: stat backup: %w", rel, statErr)
-		}
-		if err := os.RemoveAll(dst); err != nil {
-			return fmt.Errorf("restore %s: clear current: %w", rel, err)
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return fmt.Errorf("restore %s: prepare dir: %w", rel, err)
-		}
-		if info.IsDir() {
-			if err := backupCopyDir(src, dst); err != nil {
-				return fmt.Errorf("restore dir %s: %w", rel, err)
-			}
-			continue
-		}
-		if err := backupCopyFile(src, dst); err != nil {
-			return fmt.Errorf("restore file %s: %w", rel, err)
+func clearRepairCheckpointPath(root, rel string) error {
+	if err := validateRepairCheckpointPath(root, rel); err != nil {
+		return err
+	}
+	if repairCheckpointProtectedPath(rel) {
+		return nil
+	}
+	// These two ancestors contain protected paths, so clear their children
+	// individually. Every other path can be removed as a unit.
+	if clean := filepath.Clean(rel); clean != "." && clean != ".aether" {
+		return os.RemoveAll(filepath.Join(root, rel))
+	}
+	info, err := os.Lstat(filepath.Join(root, rel))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("cannot restore a non-directory checkpoint ancestor: %q", rel)
+	}
+	entries, err := os.ReadDir(filepath.Join(root, rel))
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := clearRepairCheckpointPath(root, filepath.Join(rel, entry.Name())); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -369,13 +446,16 @@ func restoreRepairCheckpoint(checkpoint repairCheckpoint) error {
 // plus file bytes, sorted -- used to prove a restored working tree is
 // byte-identical to its state at checkpoint time.
 func repairCheckpointDirectoryDigest(root string, paths []string) (string, error) {
-	scan := uniqueSortedStrings(paths)
+	scan := repairCheckpointScopePaths(paths)
 	if len(scan) == 0 {
 		scan = []string{"."}
 	}
 
 	var files []string
 	for _, rel := range scan {
+		if err := validateRepairCheckpointPath(root, rel); err != nil {
+			return "", err
+		}
 		full := filepath.Join(root, rel)
 		walkErr := filepath.WalkDir(full, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -384,12 +464,18 @@ func repairCheckpointDirectoryDigest(root string, paths []string) (string, error
 				}
 				return err
 			}
-			if d.IsDir() {
-				return nil
-			}
 			relPath, relErr := filepath.Rel(root, p)
 			if relErr != nil {
 				return relErr
+			}
+			if repairCheckpointProtectedPath(relPath) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if d.IsDir() {
+				return nil
 			}
 			files = append(files, relPath)
 			return nil
@@ -402,7 +488,18 @@ func repairCheckpointDirectoryDigest(root string, paths []string) (string, error
 
 	h := sha256.New()
 	for _, f := range files {
-		data, err := os.ReadFile(filepath.Join(root, f))
+		path := filepath.Join(root, f)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return "", err
+		}
+		var data []byte
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, linkErr := os.Readlink(path)
+			data, err = []byte(target), linkErr
+		} else {
+			data, err = os.ReadFile(path)
+		}
 		if err != nil {
 			return "", err
 		}

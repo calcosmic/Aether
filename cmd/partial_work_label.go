@@ -348,7 +348,7 @@ func collectUnverifiedPlanResearch(root string) ([]unverifiedWorkEntry, error) {
 func collectUnverifiedReflections(root string) ([]unverifiedWorkEntry, error) {
 	dir := filepath.Join(root, ".aether", "dreams")
 	return collectUnverifiedDirectory(root, dir, unverifiedWorkKindReflection,
-		"being reviewed and acted on (see `aether interpret`)")
+		"being reviewed and acted on")
 }
 
 // collectUnverifiedDirectory is the shared read-only walk both plan research
