@@ -340,15 +340,19 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 		closure.ArchiveReady = true
 		closure.OwnerReason = seal.OwnerReason
 		outcome := colony.OutcomeKindVerifiedCompletion
+		inspectReason := "The finished project's record remains active and available to inspect."
+		archiveReason := "Optionally archive and clear the finished project's retained record."
 		if seal.Disposition == colony.SealDispositionForcedIncomplete {
 			closure.Status = "forced_incomplete"
 			closure.Forced = true
 			outcome = colony.OutcomeKindForcedIncompleteClosure
+			inspectReason = "The project was closed early. Its record remains available to inspect; completion was not verified."
+			archiveReason = "Optionally archive and clear the retained record of this unfinished project."
 		} else {
 			closure.Status = "verified"
 		}
-		return lifecycleActionFromCandidate("inspect_sealed", candidateStatus, "The finished project's record remains active and available to inspect.", evidence), []LifecycleActionChoice{
-			lifecycleChoiceFromCandidate("entomb", candidateEntomb, "Optionally archive and clear the finished project's retained record."),
+		return lifecycleActionFromCandidate("inspect_sealed", candidateStatus, inspectReason, evidence), []LifecycleActionChoice{
+			lifecycleChoiceFromCandidate("entomb", candidateEntomb, archiveReason),
 			lifecycleChoiceFromCandidate("history", candidateHistory, "Review the retained lifecycle history."),
 		}, outcome, closure, provenance
 	}

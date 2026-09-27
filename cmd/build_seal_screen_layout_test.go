@@ -400,6 +400,14 @@ func TestSealScreenLeadsWithTheVerdict(t *testing.T) {
 		if !strings.Contains(rendered, "the deadline moved") {
 			t.Errorf("the forced seal hides the owner's reason:\n%s", rendered)
 		}
+		for _, claim := range []string{"marking the project finished", "finished project's record", "finished project's retained record"} {
+			if strings.Contains(strings.ToLower(rendered), claim) {
+				t.Errorf("the forced seal's closing card contradicts its verdict with %q:\n%s", claim, rendered)
+			}
+		}
+		if !strings.Contains(rendered, "completion was not verified") {
+			t.Errorf("the forced seal's closing card does not preserve its incomplete outcome:\n%s", rendered)
+		}
 	})
 
 	t.Run("finished, aether seal", func(t *testing.T) {
