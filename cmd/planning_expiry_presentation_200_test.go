@@ -126,7 +126,7 @@ func TestPlanningExpiryPresentation200(t *testing.T) {
 			}
 
 			for _, width := range []int{32, 47, 48, 63, 64, 80} {
-				visual := renderPlanningCandidateVisual(tc.review, planningVisualOptions{Width: width})
+				visual := renderPlanningCandidateVisual(tc.review, planningVisualOptions{Width: width, Detail: true})
 				for _, want := range append([]string{
 					"Candidate: " + tc.review.Candidate.ID,
 					"Candidate hash: " + tc.review.Candidate.ContentHash,

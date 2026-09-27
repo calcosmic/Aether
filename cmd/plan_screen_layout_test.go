@@ -206,3 +206,19 @@ func screenPlanCandidateFixture() planCandidateReview {
 	}
 	return review
 }
+
+func TestPlanScreenExplainsUnavailableApprovalWithoutCodes(t *testing.T) {
+	for _, reason := range []string{"candidate_expired", "specification_changed", "base_plan_changed", "proposal_changed", "timeline_changed", "candidate_body_changed", "planning_stage_changed", "clock_before_candidate_creation", "acceptance_receipt_invalid"} {
+		t.Run(reason, func(t *testing.T) {
+			review := screenPlanCandidateFixture()
+			review.Refusal = &planCandidateRefusalDetails{Standing: planCandidateStandingStale, WhyUnavailable: reason, RecoveryCommand: planCandidateRefreshCommand}
+			body := renderPlanningCandidateVisual(review, planningVisualOptions{})
+			if !strings.Contains(body, "PLAN NEEDS ATTENTION") || !strings.Contains(body, planCandidateRefreshCommand) {
+				t.Fatalf("missing refusal or recovery:\n%s", body)
+			}
+			if strings.Contains(body, reason) || strings.Contains(body, "Accept this candidate?") || strings.Contains(body, "aether build") {
+				t.Fatalf("unavailable approval leaked codes or execution authority:\n%s", body)
+			}
+		})
+	}
+}

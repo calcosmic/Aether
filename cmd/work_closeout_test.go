@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -361,7 +362,7 @@ func TestBuildCloseoutCarriesTheRealVerdict(t *testing.T) {
 	if wantPreLabel == "" {
 		t.Fatalf("resolved verdict %q has no label", preDetails.WorkOutcome)
 	}
-	if !strings.Contains(directScreen, wantPreLabel) {
+	if !strings.Contains(directScreen, preDetails.Summary) {
 		t.Fatalf("direct lane screen does not carry the resolved verdict label %q:\n%s", wantPreLabel, directScreen)
 	}
 	if got := strings.Count(stripANSI(directScreen), spendCostLineHeading); got != 1 {
@@ -402,9 +403,9 @@ func TestBuildCloseoutCarriesTheRealVerdict(t *testing.T) {
 		t.Fatalf("resolved verdict %q has no label", postDetails.WorkOutcome)
 	}
 
-	_, wrapperScreen := renderCeremonyCloseout("build", "")
+	wrapperResult, wrapperScreen := renderCeremonyCloseout("build", "")
 
-	if !strings.Contains(wrapperScreen, wantPostLabel) {
+	if !strings.Contains(wrapperScreen, postDetails.Summary) {
 		t.Fatalf("wrapper closeout does not carry the resolved verdict label %q:\n%s", wantPostLabel, wrapperScreen)
 	}
 	successLabel := labels[colony.WorkOutcomeSuccess]
@@ -416,22 +417,15 @@ func TestBuildCloseoutCarriesTheRealVerdict(t *testing.T) {
 		t.Fatalf("wrapper closeout does not plainly say verification has not run yet:\n%s", wrapperScreen)
 	}
 
-	// Recommended action: a runnable command, a one-sentence reason, and the
-	// alternatives beneath it (D-07).
+	// Exact recommendation stays in the machine result. The short screen
+	// uses the shared next-action card, avoiding a second competing command.
 	action, actionErr := recommendedActionForWorkOutcome(postDetails.WorkOutcome, attempt)
 	if actionErr != nil {
-		t.Fatalf("recommendedActionForWorkOutcome: %v", actionErr)
+		t.Fatal(actionErr)
 	}
-	if !strings.Contains(wrapperScreen, action.Command) {
-		t.Fatalf("wrapper closeout does not name the recommended command %q:\n%s", action.Command, wrapperScreen)
-	}
-	if !strings.Contains(wrapperScreen, action.Reason) {
-		t.Fatalf("wrapper closeout does not carry the recommended action's reason %q:\n%s", action.Reason, wrapperScreen)
-	}
-	for _, alt := range action.Alternatives {
-		if !strings.Contains(wrapperScreen, alt) {
-			t.Fatalf("wrapper closeout does not list the alternative %q:\n%s", alt, wrapperScreen)
-		}
+	closeout, ok := lifecycleCloseoutFromResult(wrapperResult)
+	if !ok || closeout.RecommendedAction == nil || !reflect.DeepEqual(*closeout.RecommendedAction, action) {
+		t.Fatalf("structured recommendation changed: %+v", closeout.RecommendedAction)
 	}
 
 	// Credited/uncredited file card, each uncredited file's location, and
@@ -459,7 +453,7 @@ func TestBuildCloseoutCarriesTheRealVerdict(t *testing.T) {
 // named build render paths to reach.
 var workCloseoutVerdictTargets = []string{
 	"buildWorkCloseoutDetails",
-	"renderBuildResultFileSection",
+	"renderBuildScreen",
 }
 
 // workCloseoutFindCobraRunE parses filename and returns the RunE *ast.FuncLit
@@ -525,26 +519,42 @@ func workCloseoutFindCobraRunE(t *testing.T, fset *token.FileSet, filename, useP
 // descends into a nested *ast.FuncLit, so a call made inside an inner
 // "if details, ok := buildWorkCloseoutDetails(...); ok { ... }" block is
 // still found.
-func workCloseoutBodyCallsTarget(body ast.Node, target string) bool {
-	found := false
-	ast.Inspect(body, func(n ast.Node) bool {
-		if found {
-			return false
-		}
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == target {
-			found = true
-		}
-		return true
-	})
-	return found
+func workCloseoutBodyCallsTarget(body ast.Node, target string, funcs map[string]*ast.FuncDecl) bool {
+	seen := map[string]bool{}
+	var visit func(ast.Node) bool
+	visit = func(node ast.Node) bool {
+		found := false
+		ast.Inspect(node, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if name.Name == target {
+				found = true
+				return false
+			}
+			if !seen[name.Name] {
+				seen[name.Name] = true
+				if fn := funcs[name.Name]; fn != nil && fn.Body != nil {
+					found = visit(fn.Body)
+				}
+			}
+			return !found
+		})
+		return found
+	}
+	return visit(body)
 }
 
 // TestBuildCloseoutVerdictHasProductionCallers is the structural guard:
-// buildWorkCloseoutDetails and renderBuildResultFileSection each have at
+// buildWorkCloseoutDetails and renderBuildScreen each have at
 // least one direct caller among the package's non-test functions, and both
 // named build render paths -- the wrapper's renderCeremonyCloseout and the
 // direct lane's buildCmd RunE closure -- reach both of them. A synthetic
@@ -575,7 +585,7 @@ func TestBuildCloseoutVerdictHasProductionCallers(t *testing.T) {
 			t.Fatal("renderCeremonyCloseout is not declared in the cmd package")
 		}
 		for _, target := range workCloseoutVerdictTargets {
-			if !workCloseoutBodyCallsTarget(wrapperFn.Body, target) {
+			if !workCloseoutBodyCallsTarget(wrapperFn.Body, target, funcs) {
 				t.Errorf("renderCeremonyCloseout (the wrapper's build closeout) does not reach %s", target)
 			}
 		}
@@ -585,7 +595,7 @@ func TestBuildCloseoutVerdictHasProductionCallers(t *testing.T) {
 			t.Fatal("buildCmd's RunE closure was not found in codex_workflow_cmds.go")
 		}
 		for _, target := range workCloseoutVerdictTargets {
-			if !workCloseoutBodyCallsTarget(directRunE.Body, target) {
+			if !workCloseoutBodyCallsTarget(directRunE.Body, target, funcs) {
 				t.Errorf("buildCmd's direct-dispatch RunE does not reach %s", target)
 			}
 		}
@@ -612,7 +622,7 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 		disconnected := false
 		var offenderTarget string
 		for _, target := range workCloseoutVerdictTargets {
-			if !workCloseoutBodyCallsTarget(wrapperFn.Body, target) {
+			if !workCloseoutBodyCallsTarget(wrapperFn.Body, target, funcs) {
 				disconnected = true
 				offenderTarget = target
 				break

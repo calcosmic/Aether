@@ -166,19 +166,22 @@ func renderBuildScreen(state colony.ColonyState, phase colony.Phase, workers []m
 	b.WriteString(renderVerdictBox(kind, verdict, sentence))
 	writeScreenSection(&b, commandEmoji("flags"), "What To Fix", capScreenLines(fixes, 5))
 	var changed []string
-	uncredited := map[string]bool{}
+	uncredited := map[string]string{}
 	if hasAttempt {
 		files = append(files, attempt.CreditedFiles...)
 		for _, file := range attempt.UncreditedFiles {
 			files = append(files, file.Path)
-			uncredited[file.Path] = true
+			uncredited[file.Path] = file.Location
 		}
 	}
 	for _, file := range uniqueSortedStrings(files) {
 		if !screenInternalArtifact(file) {
 			label := file
-			if uncredited[file] {
+			if location, present := uncredited[file]; present {
 				label += " — present, not accepted as finished work"
+				if strings.TrimSpace(location) != "" {
+					label += " (" + location + ")"
+				}
 			}
 			changed = append(changed, voiceLine("artifact", label))
 		}
@@ -198,6 +201,15 @@ func renderBuildScreen(state colony.ColonyState, phase colony.Phase, workers []m
 	}
 	if suggestions := filterActiveSuggestions(state.PendingSuggestions); len(suggestions) > 0 {
 		behind = append(behind, voiceLine("focus", fmt.Sprintf("%d steering suggestions are waiting for review; see `aether suggest-approve`.", len(suggestions))))
+	}
+	if hasAttempt {
+		var learned []string
+		for _, delta := range attempt.KnowledgeDeltas {
+			if strings.TrimSpace(delta.Summary) != "" {
+				learned = append(learned, voiceLine("learning", delta.Summary))
+			}
+		}
+		behind = append(behind, capScreenLines(learned, 3)...)
 	}
 	behind = append(behind, voiceLine("evidence", fmt.Sprintf("Full detail: `aether phase %d`", phase.ID)))
 	writeScreenSection(&b, checkScreenSectionEmoji("behind"), "Behind The Scenes", behind)

@@ -94,7 +94,7 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 	case projection.AcceptanceAvailable:
 		b.WriteString(planScreenHeading(phases, "Review it, then approve it."))
 	default:
-		b.WriteString(renderVerdictBox("warning", "PLAN NEEDS ATTENTION", projection.WhyUnavailable))
+		b.WriteString(renderVerdictBox("warning", "PLAN NEEDS ATTENTION", planScreenRefusalReason(projection.WhyUnavailable)))
 	}
 	writePlanScreenPhases(&b, phases)
 	var concerns []string
@@ -114,7 +114,7 @@ func renderPlanningCandidateVisual(review planCandidateReview, options planningV
 		b.WriteString(voiceLine("decision", fmt.Sprintf("Acceptance command: %s", projection.AcceptanceCommand)) + "\n")
 		b.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	} else {
-		b.WriteString(voiceLine("avoid", fmt.Sprintf("Why unavailable: %s", projection.WhyUnavailable)) + "\n")
+		b.WriteString(voiceLine("avoid", fmt.Sprintf("Why unavailable: %s", planScreenRefusalReason(projection.WhyUnavailable))) + "\n")
 		b.WriteString(voiceLine("next", fmt.Sprintf("Next: %s", projection.Next)) + "\n")
 	}
 	return finalizePlanningVisual(b.String(), options)
@@ -136,4 +136,27 @@ func renderPlanningAcceptanceVisual(candidate colony.PlanCandidate, revision col
 	b.WriteString(voiceLine("alternative", "aether build") + "\n")
 	b.WriteString(voiceLine("alternative", "aether run") + "\n")
 	return finalizePlanningVisual(b.String(), options)
+}
+
+func planScreenRefusalReason(reason string) string {
+	switch reason {
+	case "candidate_expired":
+		return "This proposed plan has expired. Refresh it before approving."
+	case "specification_changed":
+		return "The agreed requirements changed after this plan was prepared."
+	case "base_plan_changed":
+		return "The active plan changed after this proposal was prepared."
+	case "proposal_changed", "candidate_body_changed":
+		return "The saved proposal no longer matches the reviewed copy."
+	case "timeline_changed", "planning_stage_changed":
+		return "The planning record changed. Refresh the proposal before approving."
+	case "candidate_lifetime_invalid", "clock_before_candidate_creation", "acceptance_time_invalid":
+		return "The saved planning dates do not agree. Review the project details."
+	case "acceptance_receipt_invalid":
+		return "The saved approval could not be verified."
+	case "candidate_status_changed":
+		return "This proposal is no longer available for approval."
+	default:
+		return "This proposal cannot be approved yet. Review the project details."
+	}
 }
