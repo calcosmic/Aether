@@ -207,6 +207,15 @@ func TestPlanningCardsKeepEveryFigureAndIdentifier(t *testing.T) {
 		name, wants := name, wants
 		t.Run(name, func(t *testing.T) {
 			rendered := classicVoicePlanCardRender(t, name)
+			// Full audit identifiers remain available in the detailed renderers;
+			// the default candidate and approval cards deliberately abbreviate them.
+			if name == "plan-candidate-review" {
+				rendered = renderPlanningCandidateVisual(planningVisualCandidateFixture(), planningVisualOptions{Width: 96, Detail: true})
+			}
+			if name == "plan-acceptance" {
+				candidate, revision, receipt := classicVoicePlanAcceptanceFixture()
+				rendered = renderPlanningAcceptanceVisual(candidate, revision, receipt, false, planningVisualOptions{Width: 96, Detail: true})
+			}
 			for _, want := range wants {
 				if !strings.Contains(rendered, want) {
 					t.Errorf("%s lost fixture value %q:\n%s", name, want, rendered)

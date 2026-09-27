@@ -66,7 +66,7 @@ func TestLifecycleStatusWrapper199(t *testing.T) {
 			if frontmatter.Name != "ant-status" || frontmatter.Description != description {
 				t.Fatalf("frontmatter = %#v, want ant-status and exact description", frontmatter)
 			}
-			for _, want := range []string{spec.SourceOfTruth, runtime, "default full", "--compact", "complete snapshot", "event stream"} {
+			for _, want := range []string{spec.SourceOfTruth, runtime, "verdict and short sections", "--detail", "--compact", "complete snapshot", "event stream"} {
 				if !strings.Contains(strings.ToLower(body), strings.ToLower(want)) {
 					t.Errorf("wrapper missing %q\n%s", want, body)
 				}

@@ -16,6 +16,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 	b.WriteString(renderVerdictBox(kind, verdict, sentence))
 	var progress, needs []string
 	completed := completedPhaseCount(state)
+	if phase := recoveryPhase(&state); phase != nil && phase.Status == colony.PhaseCompleted {
+		if truth := resolvePhaseProgressFromDisk(*phase); truth.Disagreed && truth.Status != "complete" {
+			completed--
+		}
+	}
 	if total := len(state.Plan.Phases); total > 0 {
 		progress = append(progress, voiceLine("phase", fmt.Sprintf("[Phase %d/%d] %s %d%%", completed, total, generateProgressBar(completed, total, 20), completed*100/total)))
 	}
@@ -26,11 +31,11 @@ func renderDashboard(state colony.ColonyState, s *storage.Store, result map[stri
 				done++
 			}
 		}
-		if state.State == colony.StateCOMPLETED && phase.Status == colony.PhaseCompleted {
-			done = total
-		} else if truth := resolvePhaseProgressFromDisk(*phase); truth.Disagreed {
+		if truth := resolvePhaseProgressFromDisk(*phase); truth.Disagreed {
 			done, total = truth.TasksDone, truth.TasksTotal
-			needs = append(needs, voiceLine("warning", fmt.Sprintf("The saved project and the last check disagree about phase %d; showing the less-finished record.", phase.ID)))
+			needs = append(needs, voiceLine("warning", fmt.Sprintf("The saved project and the last check disagree about phase %d; showing it as %s.", phase.ID, truth.Status)))
+		} else if state.State == colony.StateCOMPLETED && phase.Status == colony.PhaseCompleted {
+			done = total
 		}
 		progress = append(progress, voiceLine("task", fmt.Sprintf("[Tasks %d/%d] %s in Phase %d (%s)", done, total, generateProgressBar(done, total, 20), phase.ID, phase.Name)))
 	}
@@ -120,6 +125,11 @@ func statusScreenVerdict(state colony.ColonyState, result map[string]interface{}
 			verb = "needs"
 		}
 		return "blocked", fmt.Sprintf("BLOCKED — %s %s you", screenCount(n, "problem"), verb), phaseLabel + ". Fix it before building on."
+	}
+	if phase != nil {
+		if truth := resolvePhaseProgressFromDisk(*phase); truth.Disagreed {
+			return "warning", fmt.Sprintf("PHASE %d — RECORDS DISAGREE", phase.ID), "Showing the less-finished record: " + truth.Status + ". Review `aether status --detail`."
+		}
 	}
 	if state.State == colony.StateCOMPLETED && total > 0 && completed == total {
 		return "finished", "PROJECT FINISHED", fmt.Sprintf("All %s are done.", screenCount(total, "phase"))

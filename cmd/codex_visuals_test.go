@@ -2750,7 +2750,7 @@ func TestCodexVisualParity(t *testing.T) {
 		}
 
 		output := stdout.(*bytes.Buffer).String()
-		for _, marker := range []string{"── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [", "── Housekeeping ──", "── Colony Complete ──"} {
+		for _, marker := range []string{"── Dispatch ──", "BUILT — READY TO CHECK", "C H E C K S", "B E H I N D   T H E   S C E N E S"} {
 			if !strings.Contains(output, marker) {
 				t.Errorf("build visual missing stage marker %q (Codex parity)", marker)
 			}
