@@ -101,3 +101,8 @@ and real use is what should find out whether it works. If he hits it, it counts 
   description, and for that description to be shown as a readable plain-English page. Offered
   "wait until after the fortnight", he chose "now, break the rule". The final report must say
   that from this date the trial measured a changed program, and which change.
+- **2026-09-27, screen layout.** The owner showed a check screen and said the screens are "always
+  just a block of text that no one's ever gonna read". He chose a new layout for every screen: a
+  plain-English verdict in a heavy-lined box first, then each section under its own heavy line
+  with space between, details kept. Rolled out check screen first, then build, status, plan and
+  finish. From this date the trial measures the new screens.
