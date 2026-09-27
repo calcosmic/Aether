@@ -138,6 +138,15 @@ var refusalRegistry = []refusalRow{
 		Reason:       "Refusing only blocks publishing a survey result whose own freshness claim cannot be trusted; nothing the owner made is deleted or overwritten.",
 	},
 	{
+		ID:           "continue-on-paused-project",
+		What:         "This project is paused, so it cannot be checked or signed off yet.",
+		Why:          "A pause saves a snapshot to resume from. Checking a paused project used to write new results on top of that snapshot, which made the pause impossible to resume.",
+		NextCommand:  "aether resume",
+		ProtectsWork: true,
+		Disposition:  "stop",
+		Reason:       "Refusing before any check runs keeps the saved pause valid; `aether resume` restores the project, then the check can run.",
+	},
+	{
 		ID:           "corrupted-colony-data",
 		Pattern:      "json:",
 		What:         "Aether's own project data file looks corrupted or was edited outside of Aether.",

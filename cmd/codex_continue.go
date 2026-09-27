@@ -681,6 +681,12 @@ func runCodexContinue(root string, options codexContinueOptions) (map[string]int
 	if err != nil {
 		return nil, state, colony.Phase{}, nil, nil, false, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+	// Refuse before anything below writes: results recorded on top of a
+	// pause invalidate it and resume can no longer restore the project
+	// (Phase 210 blocker 12).
+	if state.Paused {
+		return nil, state, colony.Phase{}, nil, nil, false, refuse("continue-on-paused-project")
+	}
 
 	// Preserve-and-report pass over tracked worktrees. Synchronous — the
 	// error is captured and surfaced rather than discarded, since a

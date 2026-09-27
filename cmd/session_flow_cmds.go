@@ -521,7 +521,16 @@ func resumeColonyAt(now time.Time) (pauseResumeLifecycleOutcome, error) {
 			candidateTx := "pause-" + candidateID
 			if lifecycleTransactionHasIntentOrReceipt(candidateTx) {
 				if _, resumeErr := resumeLifecycleTransaction(pauseResumeTransactionConfig(candidateTx, "pause")); resumeErr != nil {
-					return pauseResumeLifecycleOutcome{}, resumeErr
+					// With no handoff on state, this pause either crashed before
+					// landing or the owner retired a stale handoff -- the exit the
+					// conflict stop below names. A pause whose evidence no longer
+					// matches cannot be completed; left untouched on record, it must
+					// not block the reconstruction that exit promises (Phase 210
+					// blocker 12: resume looped on "receipt conflicts with
+					// coordinator stage" forever). Any other failure still stops.
+					if !lifecycleTransactionIsConflicting(resumeErr) {
+						return pauseResumeLifecycleOutcome{}, resumeErr
+					}
 				}
 				facts, err = loadLifecycleFacts(root, store, now.UTC())
 				if err != nil {

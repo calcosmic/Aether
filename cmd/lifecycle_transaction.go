@@ -1338,6 +1338,14 @@ func lifecycleRecoveryProvenance(err error) colony.RecoveryProvenance {
 	return colony.RecoveryProvenanceConflicting
 }
 
+// lifecycleTransactionIsConflicting reports whether err is the recovery stop
+// requireRecovery and the receipt path above produce for conflicting
+// evidence. It matches the exact format those two sites write, kept here
+// beside them so the wording and the check cannot drift apart.
+func lifecycleTransactionIsConflicting(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "recovery required ("+string(colony.RecoveryProvenanceConflicting)+")")
+}
+
 func (tx *lifecycleTransaction) requireRecovery(cause error, provenance colony.RecoveryProvenance) error {
 	if tx.progress != nil {
 		tx.progress.Stage = colony.TransactionStageRecoveryRequired

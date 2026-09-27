@@ -92,6 +92,13 @@ func runCodexContinuePlanOnly(root string, options codexContinueOptions) (map[st
 	if err != nil {
 		return nil, state, colony.Phase{}, nil, fmt.Errorf("%s", colonyStateLoadMessage(err))
 	}
+	// The wrapper lane's first step; refusing here, before any reviewer is
+	// planned or anything is written, keeps a pause resumable (Phase 210
+	// blocker 12). continue-finalize keeps its own superseded-state handling
+	// for a pause that lands mid-check.
+	if state.Paused {
+		return nil, state, colony.Phase{}, nil, refuse("continue-on-paused-project")
+	}
 	if len(state.Plan.Phases) == 0 {
 		return nil, state, colony.Phase{}, nil, fmt.Errorf("No project plan. Run `aether plan` first.")
 	}

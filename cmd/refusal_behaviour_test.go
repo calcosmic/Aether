@@ -130,6 +130,20 @@ var refusalDrivers = map[string]func(t *testing.T) refusalDriveResult{
 		_, phase, _, err := validateExternalContinueState(&codexContinuePlanManifest{})
 		return refusalDriveResult{Err: err, WorkContinued: phase.ID != 0}
 	},
+	"continue-on-paused-project": func(t *testing.T) refusalDriveResult {
+		saveGlobals(t)
+		s, tmpDir := newTestStore(t)
+		defer os.RemoveAll(tmpDir)
+		store = s
+		dataDir := filepath.Join(tmpDir, ".aether", "data")
+		goal := "test goal"
+		createTestColonyState(t, dataDir, colony.ColonyState{
+			Version: "3.0", Goal: &goal, State: colony.StateBUILT, CurrentPhase: 1, Paused: true,
+			Plan: colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Phase one"}}},
+		})
+		_, _, phase, _, err := runCodexContinuePlanOnly(tmpDir, codexContinueOptions{})
+		return refusalDriveResult{Err: err, WorkContinued: phase.ID != 0}
+	},
 	"no-active-phase-to-continue": func(t *testing.T) refusalDriveResult {
 		saveGlobals(t)
 		s, tmpDir := newTestStore(t)
