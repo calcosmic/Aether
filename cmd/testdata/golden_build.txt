@@ -47,6 +47,7 @@ Ceremony complete in 0s
   📍 Golden phase
   📖 The helpers' notes are saved for the next phase.
   🎯 8 steering suggestions are waiting for review; see `aether suggest-approve`.
+  🧠 Synthetic worker completed without repo changes.
   🔎 Full detail: `/ant-phase 1`
 
 ━━ 🚩 R U N   R E V I E W ━━
