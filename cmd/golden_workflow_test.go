@@ -59,6 +59,8 @@ var stepElapsedRe = regexp.MustCompile(`(?m)(Step \d+/\d+: [^\n]+) \(\d+s\)$`)
 
 var closeoutElapsedRe = regexp.MustCompile(`(?m)^Elapsed: [^\n]+$`)
 
+var workerElapsedRe = regexp.MustCompile(`(Worker-XX\s+completed \()\d+(?:\.\d+)?s(, \d+ tool calls\))`)
+
 var ceremonyElapsedRe = regexp.MustCompile(`(?m)(Ceremony complete in )\d+s$`)
 
 // liveCheckLineDurationRe matches SHOW-03's live verification finish lines
@@ -88,6 +90,7 @@ func normalizeForGolden(s string) string {
 	clean = stepElapsedRe.ReplaceAllString(clean, "$1 (0s)")
 	clean = ceremonyElapsedRe.ReplaceAllString(clean, "${1}0s")
 	clean = closeoutElapsedRe.ReplaceAllString(clean, "Elapsed: <measured>")
+	clean = workerElapsedRe.ReplaceAllString(clean, "${1}0.0s${2}")
 	clean = liveCheckLineDurationRe.ReplaceAllString(clean, "$1$2 $3 (0.0s)")
 	clean = goTestSummaryDurationRe.ReplaceAllString(clean, "${1}0.0s")
 
