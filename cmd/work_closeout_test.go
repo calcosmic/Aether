@@ -519,7 +519,11 @@ func workCloseoutFindCobraRunE(t *testing.T, fset *token.FileSet, filename, useP
 // descends into a nested *ast.FuncLit, so a call made inside an inner
 // "if details, ok := buildWorkCloseoutDetails(...); ok { ... }" block is
 // still found.
-func workCloseoutBodyCallsTarget(body ast.Node, target string, funcs map[string]*ast.FuncDecl) bool {
+func workCloseoutBodyCallsTarget(body ast.Node, target string, functionSets ...map[string]*ast.FuncDecl) bool {
+	var funcs map[string]*ast.FuncDecl
+	if len(functionSets) > 0 {
+		funcs = functionSets[0]
+	}
 	seen := map[string]bool{}
 	var visit func(ast.Node) bool
 	visit = func(node ast.Node) bool {
