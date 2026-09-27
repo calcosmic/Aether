@@ -1241,9 +1241,7 @@ func promoteRealInstinctForQueenEligibility(t *testing.T, s *storage.Store, cont
 func runQueenEligibilityColony(t *testing.T, seedHelpful bool) (eligible []string, declined []memory.QueenDeclinedReason, instinctID string) {
 	t.Helper()
 	saveGlobals(t)
-	s, tmpDir := newTestStore(t)
-	t.Cleanup(func() { os.RemoveAll(tmpDir) })
-	store = s
+	s := applicationCreditColonyStore(t)
 
 	inst := promoteRealInstinctForQueenEligibility(t, s, "run go vet ./cmd/ before go test ./cmd/ to catch lint failures early", "pattern")
 
