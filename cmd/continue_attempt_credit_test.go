@@ -48,6 +48,7 @@ func twoAttemptPhaseFixture(t *testing.T) (colony.Phase, codexContinueManifest, 
 		},
 	})
 	root := fixture.Root
+	completeCanonicalContinueAttempt200(t, fixture, fixture.State, fixture.Request.Dispatches)
 
 	// Attempt B on the SAME repository: the second partial redispatch. This
 	// overwrites build/phase-1/manifest.json with only its own dispatches.
@@ -59,10 +60,16 @@ func twoAttemptPhaseFixture(t *testing.T) (colony.Phase, codexContinueManifest, 
 		},
 		ExecutionOwner: "go-runtime", DispatchMode: "direct", MakeLatest: testBuildStartBool(true),
 	})
+	completeCanonicalContinueAttempt200(t, second, second.State, second.Request.Dispatches)
 
 	records := listBuildAttemptsForPhase(second.Phase.ID)
 	if len(records) < 2 {
 		t.Fatalf("fixture must produce two real attempt records, got %d", len(records))
+	}
+	for _, record := range records {
+		if record.Status != buildAttemptBuilt {
+			t.Fatalf("fixture attempt %s is %s, want a finalized build", record.ID, record.Status)
+		}
 	}
 	manifest := loadCodexContinueManifest(second.Phase.ID)
 	if !manifest.Present {

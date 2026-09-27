@@ -1033,15 +1033,19 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 		t.Fatalf("write oracle agent: %v", err)
 	}
 
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
 	originalInvoker := newOracleWorkerInvoker
-	newOracleWorkerInvoker = func() codex.WorkerInvoker { return &oracleSlowCompletingInvoker{delay: 80 * time.Millisecond} }
+	newOracleWorkerInvoker = func() codex.WorkerInvoker {
+		return &oracleSlowCompletingInvoker{started: started, release: release}
+	}
 	defer func() { newOracleWorkerInvoker = originalInvoker }()
 
 	originalPolicy := oracleAttemptPolicyForPhase
 	oracleAttemptPolicyForPhase = func(phase string, attempt, maxIterations int) oracleAttemptPolicy {
 		return oracleAttemptPolicy{
 			ReasoningEffort: "low",
-			Timeout:         250 * time.Millisecond,
+			Timeout:         30 * time.Second,
 			Heartbeat:       10 * time.Millisecond,
 		}
 	}
@@ -1052,9 +1056,22 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 		_, err := runOracleCompatibility(root, []string{"heartbeat test"}, "", "")
 		done <- err
 	}()
+	defer func() {
+		close(release)
+		if err := <-done; err != nil {
+			t.Errorf("runOracleCompatibility returned error: %v", err)
+		}
+	}()
+	// Observe a real running worker before waiting for its heartbeat. Hold
+	// completion until the observation, so a busy host cannot miss the window.
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("oracle worker did not start")
+	}
 
 	statePath := filepath.Join(root, ".aether", "oracle", "state.json")
-	deadline := time.Now().Add(300 * time.Millisecond)
+	deadline := time.Now().Add(10 * time.Second)
 	heartbeatSeen := false
 	for time.Now().Before(deadline) {
 		var state oracleStateFile
@@ -1068,9 +1085,6 @@ func TestOracleCompatibilityWritesHeartbeatWhileRunning(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if err := <-done; err != nil {
-		t.Fatalf("runOracleCompatibility returned error: %v", err)
-	}
 	if !heartbeatSeen {
 		t.Fatal("expected oracle heartbeat update while worker was still running")
 	}
@@ -1476,12 +1490,12 @@ Follow the Oracle reference-library guidance.
 }
 
 type oracleSlowCompletingInvoker struct {
-	delay time.Duration
+	started chan<- struct{}
+	release <-chan struct{}
 }
 
 func (i *oracleSlowCompletingInvoker) Invoke(ctx context.Context, cfg codex.WorkerConfig) (codex.WorkerResult, error) {
-	timer := time.NewTimer(i.delay)
-	defer timer.Stop()
+	i.started <- struct{}{}
 	select {
 	case <-ctx.Done():
 		return codex.WorkerResult{
@@ -1491,7 +1505,7 @@ func (i *oracleSlowCompletingInvoker) Invoke(ctx context.Context, cfg codex.Work
 			Status:     "failed",
 			Error:      ctx.Err(),
 		}, nil
-	case <-timer.C:
+	case <-i.release:
 	}
 
 	if err := writeOracleTestResponse(cfg, oracleWorkerResponse{

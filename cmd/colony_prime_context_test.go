@@ -921,7 +921,7 @@ section_templates:
 // local_queen_wisdom, clarified_intent, blockers, medic_health) so a
 // before/after render comparison actually exercises every template field
 // instead of only the ones a sparse fixture happens to reach.
-func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *storage.Store {
+func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string, now time.Time) *storage.Store {
 	t.Helper()
 
 	hubDir := filepath.Join(tmpDir, "hub")
@@ -970,7 +970,7 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 
 	pf := colony.PheromoneFile{
 		Signals: []colony.PheromoneSignal{
-			{Type: "FOCUS", Content: json.RawMessage(`"pay attention here"`), CreatedAt: time.Now().UTC().Format(time.RFC3339), Active: true},
+			{Type: "FOCUS", Content: json.RawMessage(`"pay attention here"`), CreatedAt: now.Format(time.RFC3339), Active: true},
 		},
 	}
 	if err := s.SaveJSON("pheromones.json", pf); err != nil {
@@ -1006,8 +1006,8 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 
 	pendingFile := colony.FlagsFile{
 		Decisions: []colony.FlagEntry{
-			{ID: "1", Description: "Q: what?", Type: "clarification", Resolved: true, Resolution: "answer", CreatedAt: time.Now().UTC().Format(time.RFC3339)},
-			{ID: "2", Description: "blocker desc", Type: "blocker", Resolved: false, CreatedAt: time.Now().UTC().Format(time.RFC3339)},
+			{ID: "1", Description: "Q: what?", Type: "clarification", Resolved: true, Resolution: "answer", CreatedAt: now.Format(time.RFC3339)},
+			{ID: "2", Description: "blocker desc", Type: "blocker", Resolved: false, CreatedAt: now.Format(time.RFC3339)},
 		},
 	}
 	if err := s.SaveJSON("pending-decisions.json", pendingFile); err != nil {
@@ -1015,7 +1015,7 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 	}
 
 	medicScan := MedicLastScan{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: now.Format(time.RFC3339),
 		Issues: []HealthIssue{
 			{Severity: "critical", Message: "critical issue", File: "cmd/example.go"},
 		},
@@ -1034,7 +1034,7 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 				Status:             "completed",
 				VerificationStatus: "pass",
 				Summary:            "did work",
-				Freshness:          time.Now().UTC().Format(time.RFC3339),
+				Freshness:          now.Format(time.RFC3339),
 			},
 		},
 	}
@@ -1052,7 +1052,7 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 			Text:       "Hive wisdom: prefer composition over inheritance",
 			Confidence: 0.85,
 			Domain:     "go",
-			AccessedAt: time.Now().UTC().Format(time.RFC3339),
+			AccessedAt: now.Format(time.RFC3339),
 		}},
 	}
 	hiveJSON, err := json.MarshalIndent(hiveData, "", "  ")
@@ -1085,6 +1085,8 @@ func buildRichColonyPrimeFixture(t *testing.T, tmpDir string, dataDir string) *s
 // mechanical proof the fold survived the deletion -- not an assumption.
 func TestColonyPrimeMdDeletionProducesByteIdenticalOutput(t *testing.T) {
 	saveGlobals(t)
+	// Both stores describe the same instant; only the template source differs.
+	now := time.Now().UTC()
 
 	// Render 1: the real, original colony-prime.md content (frozen in
 	// testdata so this test does not depend on the live file's continued
@@ -1092,7 +1094,7 @@ func TestColonyPrimeMdDeletionProducesByteIdenticalOutput(t *testing.T) {
 	tmpDir1 := t.TempDir()
 	dataDir1 := filepath.Join(tmpDir1, ".aether", "data")
 	os.MkdirAll(dataDir1, 0755)
-	buildRichColonyPrimeFixture(t, tmpDir1, dataDir1)
+	buildRichColonyPrimeFixture(t, tmpDir1, dataDir1, now)
 
 	originalPath, err := filepath.Abs(filepath.Join("testdata", "191-02-colony-prime-original.md"))
 	if err != nil {
@@ -1113,7 +1115,7 @@ func TestColonyPrimeMdDeletionProducesByteIdenticalOutput(t *testing.T) {
 	tmpDir2 := t.TempDir()
 	dataDir2 := filepath.Join(tmpDir2, ".aether", "data")
 	os.MkdirAll(dataDir2, 0755)
-	buildRichColonyPrimeFixture(t, tmpDir2, dataDir2)
+	buildRichColonyPrimeFixture(t, tmpDir2, dataDir2, now)
 
 	colonyPrimeTemplatesPathOverride = filepath.Join(tmpDir2, "nonexistent-colony-prime.md")
 	resetColonyPrimeTemplatesCache()

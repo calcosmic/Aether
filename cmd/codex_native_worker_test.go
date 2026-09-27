@@ -2505,6 +2505,9 @@ func nativeInventoryReplayFixture(t *testing.T) codexNativeLiveReceipt {
 	parent = append(parent, nativeEvidenceEvent(t, "item_completed", "parent", map[string]any{"type": "CommandExecution", "status": "completed", "command": []string{"/bin/sh", "-c", "python3 " + r.CoordinatorPath + " empty-result"}, "cwd": fixture, "exit_code": 1, "aggregated_output": "nonempty terminal result"})...)
 	write(filepath.Join(sessionRoot, "parent.jsonl"), parent)
 	journal := buildAttemptRecord{ID: "attempt", RunID: "run", CompletionPath: "completion", WorkerRuns: []buildAttemptWorkerRun{{ProviderRunID: "launch", WorkerName: "builder", TaskID: "1.1", Caste: "builder", Result: &result, ResultSHA256: resultHash, Native: &codexNativeWorkerBinding{HostSessionID: "parent", ChildID: "child", SourceEventID: "terminal", SourceEventSHA256: lifecycleDigest(bytes.TrimSuffix(terminal, []byte{'\n'}))}}}}
+	// Legacy receipts still carry the accepted manifest. Its empty context
+	// protocol distinguishes legacy delivery from the later child-fetch path.
+	journal.PlanManifest = &codexBuildManifest{Phase: 1, AttemptID: journal.ID}
 	journalRaw, _ := json.Marshal(journal)
 	write(filepath.Join(fixture, ".aether", "data", "build", "phase-1", "attempts", "attempt.json"), journalRaw)
 	state, _ := json.Marshal(map[string]any{"plan": map[string]any{"phases": []any{map[string]any{"tasks": []any{map[string]any{"status": colony.TaskCompleted}}}}}})

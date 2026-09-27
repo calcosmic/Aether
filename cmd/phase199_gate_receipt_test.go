@@ -288,8 +288,60 @@ func TestPhase199GateReceiptSurvivesLaterLifecycleBookkeeping(t *testing.T) {
 func TestPhase199GateReceipt(t *testing.T) {
 	root := findTestModuleRoot(t)
 	receipt := loadPhase199GateReceipt(t)
-	if err := validatePhase199GateReceiptAtRoot(root, receipt, time.Now().UTC(), phase199GateReceiptFinalMode()); err != nil {
+	validate := validatePhase199ArchivedReceiptAtRoot
+	if phase199GateReceiptFinalMode() {
+		// The explicit owner-workspace audit still checks every protected
+		// local file. Ordinary CI verifies the archived evidence, not whether
+		// another checkout contains the original owner's untracked scratch.
+		validate = func(root string, receipt phase199GateReceipt, now time.Time) error {
+			return validatePhase199GateReceiptAtRoot(root, receipt, now, true)
+		}
+	}
+	if err := validate(root, receipt, time.Now().UTC()); err != nil {
 		t.Fatalf("validate Phase 199 gate receipt: %v", err)
+	}
+}
+
+func validatePhase199ArchivedReceiptAtRoot(root string, receipt phase199GateReceipt, now time.Time) error {
+	if err := validatePhase199GateReceiptForMode(receipt, now, true); err != nil {
+		return fmt.Errorf("schema: %w", err)
+	}
+	if err := validatePhase199ReceiptRepository(root, receipt); err != nil {
+		return fmt.Errorf("repository identity: %w", err)
+	}
+	for _, recorded := range receipt.Protected {
+		actual, err := phase199FingerprintForPath(root, recorded.Path)
+		if err != nil {
+			return err
+		}
+		// Adding unchanged owner evidence to Git does not alter its content,
+		// type or permissions. The archived receipt retains its original status.
+		actual.Status = recorded.After.Status
+		if actual != recorded.After {
+			return fmt.Errorf("archived protected evidence changed: %s", recorded.Path)
+		}
+	}
+	return nil
+}
+
+func TestPhase199ArchivedReceiptSurvivesFreshCheckout(t *testing.T) {
+	fixture := newPhase199ReceiptFixture(t)
+	phase199RunGit(t, fixture.Root, "add", phase199PatternsPath)
+	phase199RunGit(t, fixture.Root, "commit", "--quiet", "-m", "retain unchanged owner evidence")
+	if err := os.RemoveAll(filepath.Join(fixture.Root, phase199GSDPath)); err != nil {
+		t.Fatal(err)
+	}
+	phase199WriteFixtureFile(t, fixture.Root, phase199ConfigPath, []byte("{\"workflow\":{\"auto_advance\":true}}\n"))
+	now := time.Now().UTC()
+	if err := validatePhase199ArchivedReceiptAtRoot(fixture.Root, fixture.Receipt, now); err != nil {
+		t.Fatalf("historical receipt depends on the original owner's local workspace: %v", err)
+	}
+	if err := validatePhase199GateReceiptAtRoot(fixture.Root, fixture.Receipt, now, true); err == nil {
+		t.Fatal("archived evidence was incorrectly accepted as proof of current workspace preservation")
+	}
+	phase199WriteFixtureFile(t, fixture.Root, phase199PatternsPath, []byte("changed evidence\n"))
+	if err := validatePhase199ArchivedReceiptAtRoot(fixture.Root, fixture.Receipt, now); err == nil {
+		t.Fatal("changed protected evidence passed archived receipt validation")
 	}
 }
 
