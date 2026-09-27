@@ -7754,7 +7754,8 @@
     "name": "status",
     "short_description": "Show the complete authoritative colony snapshot.",
     "flags": [
-      "compact"
+      "compact",
+      "detail"
     ],
     "parent_command": "",
     "has_subcommands": false,

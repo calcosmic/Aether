@@ -789,6 +789,12 @@ func appendLifecycleCloseoutVisual(body string, result map[string]interface{}, p
 	if !ok {
 		return body
 	}
+	if (closeout.Command == "build" || closeout.Command == "seal") && strings.HasPrefix(body, visualDividerStr()) {
+		// These screens already present the outcome and its important facts.
+		// Keep the durable closeout in JSON without appending a second full
+		// dashboard, artifact inventory, and duplicate next-step instructions.
+		return appendScreenCloseout(body, closeout, result, platform)
+	}
 	legacy := renderBanner(commandEmoji("status"), "What Next")
 	var out string
 	if index := strings.LastIndex(body, legacy); index >= 0 {

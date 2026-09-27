@@ -56,7 +56,7 @@ func TestStatusNoColony(t *testing.T) {
 	os.Setenv("AETHER_ROOT", tmpDir)
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -90,7 +90,7 @@ func TestStatusNoColonyVisual(t *testing.T) {
 	os.Setenv("AETHER_ROOT", tmpDir)
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -133,7 +133,7 @@ func TestStatusNamesAnArchivedProject(t *testing.T) {
 		stdout = &buf
 		defer func() { stdout = os.Stdout }()
 
-		rootCmd.SetArgs([]string{"status"})
+		rootCmd.SetArgs([]string{"status", "--detail"})
 		defer rootCmd.SetArgs([]string{})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatalf("status returned error: %v", err)
@@ -164,7 +164,7 @@ func TestStatusNamesAnArchivedProject(t *testing.T) {
 		os.Setenv("AETHER_ROOT", tmpDir)
 		defer os.Setenv("AETHER_ROOT", origRoot)
 
-		rootCmd.SetArgs([]string{"status"})
+		rootCmd.SetArgs([]string{"status", "--detail"})
 		defer rootCmd.SetArgs([]string{})
 
 		if err := rootCmd.Execute(); err != nil {
@@ -198,7 +198,7 @@ func TestStatusOutput(t *testing.T) {
 	// Override store since setupTestStore already created it
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -257,7 +257,7 @@ func TestStatusJSONActiveColonyParseableDashboardFacts(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -295,7 +295,7 @@ func TestStatusVisualDashboardAvoidsWorkerTheatre(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -331,7 +331,7 @@ func TestStatusOutput_DefaultScopeDisplay(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -367,7 +367,7 @@ func TestStatusOutput_MetaScopeDisplay(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -403,7 +403,7 @@ func TestStatusOutput_ColonyModeDisplay(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -436,7 +436,7 @@ func TestStatusPheromoneSummary(t *testing.T) {
 
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -489,7 +489,7 @@ func TestStatusShowsInlinePheromoneStrength(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -556,7 +556,7 @@ func TestStatusUsesStandaloneInstincts(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -625,7 +625,7 @@ func TestStatusShowsRecentInstinctsWithConfidence(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -661,7 +661,7 @@ func TestStatusOutput_ParallelModeDefault(t *testing.T) {
 
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -705,7 +705,7 @@ func TestStatusOutput_ParallelModeWorktree(t *testing.T) {
 
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -738,7 +738,7 @@ func TestStatusMemoryHealth(t *testing.T) {
 
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	err := rootCmd.Execute()
@@ -781,7 +781,7 @@ func TestStatusShowsActiveWorkersFromSpawnTree(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -859,7 +859,7 @@ func TestStatusPrefersCurrentRunWorkersOverStaleHistory(t *testing.T) {
 		t.Fatalf("write spawn-runs.json: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -925,7 +925,7 @@ func TestStatusShowsSpawnSummaryFromSpawnTree(t *testing.T) {
 		t.Fatalf("mark blocked: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -990,7 +990,7 @@ func TestStatusShowsStartingRunningAndTimeoutWorkersHonestly(t *testing.T) {
 		t.Fatalf("mark timeout: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1033,7 +1033,7 @@ func TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1077,7 +1077,7 @@ func TestStatusCompletedColonyShowsFullTaskProgress(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("status returned error: %v", err)
 	}
@@ -1116,7 +1116,7 @@ func TestStatusShowsProofSummaryAndRoute(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("status returned error: %v", err)
 	}
@@ -1176,7 +1176,7 @@ func TestStatus_ReviewFindings(t *testing.T) {
 		t.Fatalf("save testing ledger: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1218,7 +1218,7 @@ func TestStatus_ReviewFindings_NoData(t *testing.T) {
 
 	store = s
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1261,7 +1261,7 @@ func TestStatus_ReviewFindings_PartialData(t *testing.T) {
 		t.Fatalf("save quality ledger: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1330,7 +1330,7 @@ func TestStatusVersionLine(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1382,7 +1382,7 @@ func TestStatusVersionLineMismatch(t *testing.T) {
 		t.Fatalf("failed to write test hub version: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1426,7 +1426,7 @@ func TestStatusSignalSummaryLine(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1466,7 +1466,7 @@ func TestStatusSignalSummaryEmpty(t *testing.T) {
 	defer os.Setenv("AETHER_ROOT", origRoot)
 
 	store = s
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1517,7 +1517,7 @@ func TestStatusShowsRecoveryDoorway(t *testing.T) {
 		RedispatchCommand: "aether build 2 --task 2.1",
 	})
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("status returned error: %v", err)
 	}
@@ -1669,7 +1669,7 @@ func TestStatusDashboard_IncludesGateSection(t *testing.T) {
 		t.Fatalf("write gate results: %v", err)
 	}
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1713,7 +1713,7 @@ func TestStatusDashboard_OmitsGateSectionWhenNoResults(t *testing.T) {
 		},
 	})
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1791,7 +1791,7 @@ func TestStatusReconciliationClean(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1873,7 +1873,7 @@ func TestStatusReconciliationUnreconciled(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {
@@ -1957,7 +1957,7 @@ func TestStatusReconciliationJSON(t *testing.T) {
 	var buf bytes.Buffer
 	stdout = &buf
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	defer rootCmd.SetArgs([]string{})
 
 	if err := rootCmd.Execute(); err != nil {

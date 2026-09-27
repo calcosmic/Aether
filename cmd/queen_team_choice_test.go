@@ -160,13 +160,13 @@ func TestBuildVisualCarriesQueenTeamChoice(t *testing.T) {
 		Plan: colony.Plan{Phases: []colony.Phase{{ID: 1, Name: "Build", Tasks: []colony.Task{{Goal: "implement"}}}}},
 	}
 	rendered := renderBuildVisualWithDispatches(state, state.Plan.Phases[0], teamChoiceDispatches(), colony.VerificationDepthStandard, teamChoicePolicy())
-	if !strings.Contains(rendered, "Queen's Team") || !strings.Contains(rendered, "Score 12 >= threshold 6") {
-		t.Errorf("build output does not carry the Queen's team choice:\n%s", truncateString(rendered, 800))
+	if !strings.Contains(rendered, "H E L P E R S") || !strings.Contains(rendered, "Mason-1") || !strings.Contains(rendered, "Sentry-2") {
+		t.Errorf("build output does not name the selected team:\n%s", truncateString(rendered, 800))
 	}
 
 	planOnly := renderBuildPlanOnlyVisual(state, state.Plan.Phases[0], teamChoiceDispatches(), colony.VerificationDepthStandard, teamChoicePolicy())
 	if !strings.Contains(planOnly, "Queen's Team") {
-		t.Errorf("plan-only build output does not carry the Queen's team choice:\n%s", truncateString(planOnly, 800))
+		t.Errorf("plan-only build output does not name the selected team:\n%s", truncateString(planOnly, 800))
 	}
 }
 

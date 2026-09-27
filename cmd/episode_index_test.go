@@ -289,11 +289,11 @@ func TestStatusShowsTheMostRecentEpisode(t *testing.T) {
 	// Warm every path the render pass will touch -- the storage layer's own
 	// first-touch lock bookkeeping is a documented exception
 	// (TestStatusRunningTotalWritesNothing), not a write this task made.
-	_ = renderDashboard(state, s, buildStatusResult(state, s))
+	_ = renderStatusDetail(state, s, buildStatusResult(state, s))
 
 	before := dirDigest(t, s.BasePath())
 	result := buildStatusResult(state, s)
-	visual := renderDashboard(state, s, result)
+	visual := renderStatusDetail(state, s, result)
 	after := dirDigest(t, s.BasePath())
 	if before != after {
 		t.Fatalf("rendering status changed the colony data directory:\nbefore: %s\nafter:  %s", before, after)

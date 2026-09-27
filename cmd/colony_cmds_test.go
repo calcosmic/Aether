@@ -223,7 +223,7 @@ func TestStatusOutput_Granularity(t *testing.T) {
 	}
 	s.SaveJSON("COLONY_STATE.json", state)
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	err := rootCmd.Execute()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -152,9 +152,11 @@ func TestCeremonyCloseoutRealDispatchRendersWorkerTheatre(t *testing.T) {
 		t.Fatalf("save colony state: %v", err)
 	}
 
+	manifest := ceremonyTestManifest()
+	manifest["phase"] = 1
 	completionFile := writeCeremonyTestJSON(t, map[string]interface{}{
 		"ok":                true,
-		"dispatch_manifest": ceremonyTestManifest(),
+		"dispatch_manifest": manifest,
 		"dispatches": []map[string]interface{}{
 			{"name": "Mason-37", "caste": "builder", "status": "completed", "summary": "Added ceremony tests", "tool_count": 9},
 			{"name": "Keen-11", "caste": "watcher", "status": "completed", "summary": "Verified focused tests", "tool_count": 3},
@@ -166,9 +168,9 @@ func TestCeremonyCloseoutRealDispatchRendersWorkerTheatre(t *testing.T) {
 		t.Fatalf("completion_worker_count = %d, want 2", got)
 	}
 	for _, want := range []string{
-		"B U I L D   S U M M A R Y",
-		"Workers: 2 completed  0 blocked  0 failed",
-		"Worker Results",
+		"BUILD NOT CONFIRMED",
+		"H E L P E R S",
+		"finished",
 		"Mason-37",
 		"Keen-11",
 	} {
@@ -341,7 +343,7 @@ func TestCeremonyCloseoutFailedFinalizerRendersFailureNotCompletion(t *testing.T
 
 	_, visual := renderCeremonyCloseout("build", completionFile)
 	for _, want := range []string{
-		"F I N A L I Z E R   F A I L E D",
+		"BUILD STOPPED — results could not be recorded",
 		"build-finalize rejected completion file",
 		"rerun `aether build-finalize 1 --completion-file <file>`",
 	} {
@@ -448,7 +450,7 @@ func TestBuildVisualOutputShowsSpawnPlan(t *testing.T) {
 	// no-proposal keyword-scoring fallback entirely -- Scout used to ride
 	// along here on task 2's "Document" wording, but the fallback no longer
 	// scores anything, so the dispatch count drops to 1 (builder alone).
-	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "$ant-continue", "── Context ──", "── Tasks ──", "── Dispatch ──", "── Verification [standard] ──", "── Housekeeping ──", "── Colony Complete ──", "it is safe to close this chat"} {
+	for _, want := range []string{"🔨", "B U I L D   D I S P A T C H   1", "S P A W N   P L A N", "Builder", "Total planned dispatches: 1", "Execution: serial", "single task in this wave", "$ant-continue", "── Dispatch ──", "it is safe to close this chat"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build visual output missing %q\n%s", want, output)
 		}
@@ -493,12 +495,7 @@ func TestBuildVisualOutputShowsArtifactContract(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"A R T I F A C T S",
-		".aether/data/build/phase-1/manifest.json",
-		".aether/data/last-build-claims.json",
-		".aether/data/spawn-tree.txt",
-		"── Context ──",
-		"── Tasks ──",
+		"S P A W N   P L A N",
 		"── Dispatch ──",
 		"it is safe to close this chat",
 	} {
@@ -1954,7 +1951,7 @@ func TestRenderPlanVisual_SimulatedDispatch(t *testing.T) {
 		},
 	}
 
-	output := renderPlanVisual(result)
+	output := renderPlanDetail(result)
 
 	// Should show worker names and tasks (legacy style, no status icons)
 	if !strings.Contains(output, "Scout-7") {
@@ -2080,7 +2077,7 @@ func TestRenderPlanVisualExistingPlanNoFinalizerDoesNotPromptPlanningWorkers(t *
 	}
 
 	output := renderPlanVisual(result)
-	if !strings.Contains(output, "Existing colony plan loaded") {
+	if !strings.Contains(output, "Existing plan loaded") {
 		t.Fatalf("existing-plan visual missing no-op message\n%s", output)
 	}
 	for _, forbidden := range []string{
@@ -2119,7 +2116,7 @@ func TestRenderPlanVisual_RealDispatch(t *testing.T) {
 		},
 	}
 
-	output := renderPlanVisual(result)
+	output := renderPlanDetail(result)
 
 	// Should show "Dispatch: Real" indicator
 	if !strings.Contains(output, "Dispatch: Real") {
@@ -2172,7 +2169,7 @@ func TestRenderPlanVisual_RealDispatchWithFailure(t *testing.T) {
 		},
 	}
 
-	output := renderPlanVisual(result)
+	output := renderPlanDetail(result)
 
 	// Should show "Dispatch: Real"
 	if !strings.Contains(output, "Dispatch: Real") {
@@ -2221,13 +2218,13 @@ func TestRenderPlanVisual_ShowsPlanningFallbackWarning(t *testing.T) {
 
 	output := renderPlanVisual(result)
 
-	if !strings.Contains(output, "Planning Warning") {
+	if !strings.Contains(output, "W H A T   I T   R E S T S   O N") {
 		t.Errorf("output missing planning warning header\n%s", output)
 	}
 	if !strings.Contains(output, "fell back to local synthesis") {
 		t.Errorf("output missing fallback explanation\n%s", output)
 	}
-	if !strings.Contains(output, "Dispatch: Fallback") {
+	if !strings.Contains(output, "PLAN NEEDS ATTENTION") {
 		t.Errorf("output missing fallback dispatch label\n%s", output)
 	}
 }
@@ -2257,7 +2254,7 @@ func TestRenderPlanVisual_NoDispatches(t *testing.T) {
 	if !strings.Contains(output, "Discovery") {
 		t.Errorf("output missing phase name\n%s", output)
 	}
-	if !strings.Contains(output, "P L A N") {
+	if !strings.Contains(output, "PLAN READY") {
 		t.Errorf("missing banner\n%s", output)
 	}
 }
@@ -2281,8 +2278,8 @@ func TestRenderPlanVisual_ExistingPlan(t *testing.T) {
 
 	output := renderPlanVisual(result)
 
-	if !strings.Contains(output, "Existing colony plan loaded") {
-		t.Errorf("existing plan output missing 'Existing colony plan loaded'\n%s", output)
+	if !strings.Contains(output, "Existing plan loaded") {
+		t.Errorf("existing plan output missing 'Existing plan loaded'\n%s", output)
 	}
 }
 
@@ -2307,10 +2304,10 @@ func TestRenderPlanVisual_ShowsClarificationWarning(t *testing.T) {
 	}
 
 	output := renderPlanVisual(result)
-	if !strings.Contains(output, "Clarifications") {
+	if !strings.Contains(output, "W H A T   I T   R E S T S   O N") {
 		t.Fatalf("expected clarifications section in plan output\n%s", output)
 	}
-	if !strings.Contains(output, "2 unresolved clarification(s)") {
+	if !strings.Contains(output, "2 unresolved questions") {
 		t.Fatalf("expected unresolved clarification count in plan output\n%s", output)
 	}
 	if !strings.Contains(output, "Run `aether discuss`") {
@@ -2346,7 +2343,7 @@ func TestRenderPlanVisual_IncludesTaskMetadata(t *testing.T) {
 		"phases":        phaseMaps,
 	}
 
-	output := renderPlanVisual(result)
+	output := renderPlanDetail(result)
 
 	for _, want := range []string{
 		"Task 1.1",

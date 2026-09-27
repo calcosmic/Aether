@@ -57,22 +57,27 @@ var statusCmd = &cobra.Command{
 			facts = unavailableLifecycleFacts(root, time.Now().UTC(), factsErr.Error())
 		}
 
-		// Keep the mature dashboard as the authoritative status payload and
-		// visual, then add the shared resolver answer through buildStatusResult.
-		// That helper folds one next-action card and its projection into the same
-		// map, so neither JSON nor the terminal loses dashboard facts or decides
-		// the next action twice.
+		// The short screen and optional detail view share the full status
+		// payload and the same resolved next action. Presentation never changes
+		// the saved project or the JSON facts.
 		result := buildStatusResult(state, store)
 		projection := projectLifecycle(facts, LifecycleViewFull, detectPlatform())
 		projection.Command = "status"
 		result["lifecycle"] = projection
-		outputWorkflow(result, renderDashboard(state, store, result))
+		var visual string
+		if detail, _ := cmd.Flags().GetBool("detail"); detail {
+			visual = renderStatusDetail(state, store, result)
+		} else {
+			visual = renderDashboard(state, store, result)
+		}
+		outputWorkflow(result, visual)
 		return nil
 	},
 }
 
 func init() {
 	statusCmd.Flags().Bool("compact", false, "Show the strict compact subset of the colony snapshot")
+	statusCmd.Flags().Bool("detail", false, "Show all project details, records, and diagnostics")
 	rootCmd.AddCommand(statusCmd)
 }
 
@@ -971,7 +976,7 @@ func skillSourceSentence(source string) string {
 	}
 }
 
-func renderDashboard(state colony.ColonyState, s *storage.Store, result map[string]interface{}) string {
+func renderStatusDetail(state colony.ColonyState, s *storage.Store, result map[string]interface{}) string {
 	var b strings.Builder
 
 	// Banner

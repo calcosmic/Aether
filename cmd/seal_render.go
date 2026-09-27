@@ -112,44 +112,21 @@ func RenderSealOutcome(result SealTransactionResult) string {
 
 func renderVerifiedSealOutcome(result SealTransactionResult) string {
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("seal"), "Verified Seal"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(crownedAnthillArt)
-	b.WriteString("\n\n")
-	b.WriteString(spacedTitle("Crowned Anthill"))
-	b.WriteString("\n\n")
-	b.WriteString("Verified completion recorded. Every phase, task, required gate, and evidence source passed the seal preflight.\n")
-	b.WriteString("Receipt: ")
-	b.WriteString(result.Receipt.ReceiptID)
-	b.WriteString("\nRecord: ")
-	b.WriteString(result.SummaryPath)
-	b.WriteString("\n")
+	b.WriteString(sealScreenVerdict(&result.Outcome, ""))
+	if result.Outcome.Disposition == colony.SealDispositionVerified && len(result.Outcome.IncompletePhases) == 0 {
+		writeScreenSection(&b, checkScreenSectionEmoji("safety"), "Final Review", []string{voiceLine("done", "Every phase, task, required check, and evidence source passed the final checks.")})
+	}
 	return b.String()
 }
 
 func renderForcedSealOutcome(result SealTransactionResult) string {
 	var b strings.Builder
-	b.WriteString("⛔ FORCED SEAL — COMPLETION NOT VERIFIED\n")
-	b.WriteString(visualDividerStr())
-	b.WriteString("The colony was force-sealed for recordkeeping. Completion was not verified.\n")
-	b.WriteString("Owner reason: ")
-	b.WriteString(strings.TrimSpace(result.Outcome.OwnerReason))
-	b.WriteString("\n")
-	if len(result.Evidence.UncompletedWork) > 0 {
-		b.WriteString("Unresolved at closure:\n")
-		for _, item := range result.Evidence.UncompletedWork {
-			b.WriteString("  - ")
-			b.WriteString(formatSealUnresolvedItem(item))
-			b.WriteString("\n")
-		}
+	b.WriteString(sealScreenVerdict(&result.Outcome, ""))
+	var unresolved []string
+	for _, item := range result.Evidence.UncompletedWork {
+		unresolved = append(unresolved, voiceLine("warning", formatSealUnresolvedItem(item)))
 	}
-	b.WriteString("Rollback checkpoint: ")
-	if result.Outcome.Rollback != nil {
-		b.WriteString(result.Outcome.Rollback.CheckpointID)
-	} else {
-		b.WriteString("not recorded")
-	}
-	b.WriteString("\n")
+	writeScreenSection(&b, commandEmoji("flags"), "Unresolved At Closure", capScreenLines(unresolved, 5))
 	return b.String()
 }
 

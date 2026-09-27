@@ -148,33 +148,12 @@ func TestInitPreservesWisdomClearsResidue(t *testing.T) {
 	}
 }
 
-// TestSealRendersCrownedAnthill: the classic v5.4.0 crowning ceremony — the
-// anthill drawing, the letter-spaced title with the colony version, and the
-// closing incantation — is back in the runtime seal visual.
-func TestSealRendersCrownedAnthill(t *testing.T) {
-	t.Setenv("NO_COLOR", "1")
-	goal := "Ship the widget"
-	state := colony.ColonyState{
-		Goal:          &goal,
-		ColonyVersion: 3,
-		Plan:          colony.Plan{Phases: []colony.Phase{{ID: 1}, {ID: 2}}},
-	}
-
+// A legacy result with no durable seal outcome must not manufacture a finish.
+func TestSealWithoutClosureEvidenceDoesNotClaimFinished(t *testing.T) {
+	state := colony.ColonyState{State: colony.StateCOMPLETED, Plan: colony.Plan{Phases: []colony.Phase{{ID: 1}, {ID: 2}}}}
 	output := renderSealVisual(map[string]interface{}{}, state, ".aether/data/CROWNED-ANTHILL.md")
-	for _, want := range []string{
-		"|  CROWNED |",
-		"| ANTHILL  |",
-		"C R O W N E D   A N T H I L L   v3",
-		// Widened for Phase "Classic Visual Voice" plan 04: the seal summary
-		// now names "project" beside "colony" and "finished" beside
-		// "sealed"/"Queen" (the widened plain-English scan).
-		"The project (this colony) stands crowned and finished (sealed).",
-		"The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time.",
-		"The anthill has reached its final form.",
-	} {
-		if !strings.Contains(output, want) {
-			t.Errorf("seal ceremony missing %q", want)
-		}
+	if !strings.Contains(output, "PROJECT CLOSURE NOT VERIFIED") || strings.Contains(output, "PROJECT SEALED — FINISHED") {
+		t.Fatalf("missing seal evidence must stay visible: %s", output)
 	}
 }
 

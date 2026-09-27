@@ -5,10 +5,11 @@ runtime:
   command: "AETHER_OUTPUT_MODE=visual aether status $ARGUMENTS"
   default_view: "full"
   compact_flag: "--compact"
+  detail_flag: "--detail"
 ceremony_contract:
   class: "dashboard"
   authority: "Go owns the complete status snapshot, projection, and visual rendering."
-  wrapper_role: "Delegate every invocation to the runtime. With no flag the default is full; --compact selects the strict compact projection subset."
+  wrapper_role: "Delegate every invocation to the runtime. With no flag show the verdict and short sections; --detail shows the complete diagnostic report, and --compact selects the strict compact projection subset."
 guardrails:
   - "Do not inspect host state, cost, files, or activity to supplement the runtime snapshot."
   - "Status is the complete snapshot; watch is the event stream and does not replace status authority."

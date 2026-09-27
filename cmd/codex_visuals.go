@@ -259,6 +259,9 @@ var voiceGlyphMap = map[string]string{
 	"refusal":     "🙅",
 	"proven":      "✓",
 	"unset":       "⚪",
+	"plan":        "🗺️",
+	"paused":      "⏸️",
+	"finished":    "🏺",
 }
 
 // voiceGlyph resolves a semantic line-type to its glyph, following
@@ -1662,7 +1665,7 @@ func dispatchStatusIcon(status string) string {
 	}
 }
 
-func renderPlanVisual(result map[string]interface{}) string {
+func renderPlanDetail(result map[string]interface{}) string {
 	if visual, ok := renderCanonicalPlanningResult(result, planningVisualOptions{Width: lifecycleStatusOutputWidth()}); ok {
 		return visual
 	}
@@ -2151,70 +2154,7 @@ func renderSteeringSignals() string {
 }
 
 func renderBuildVisualWithDispatches(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch, reviewDepth colony.VerificationDepth, policyOpt ...codexQueenExecutionPolicy) string {
-	var policy codexQueenExecutionPolicy
-	if len(policyOpt) > 0 {
-		policy = policyOpt[0]
-	}
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d", phase.ID)))
-	b.WriteString(visualDividerStr())
-	b.WriteString(voiceLine("phase", renderProgressSummary(phase.ID, len(state.Plan.Phases))))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("phase", "Phase: "+phase.Name))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("status", renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases))))
-	b.WriteString("\n")
-	if strings.TrimSpace(phase.Description) != "" {
-		b.WriteString(voiceLine("goal", "Objective: "+strings.TrimSpace(phase.Description)))
-		b.WriteString("\n")
-	}
-	b.WriteString(renderStageMarker("Context"))
-	b.WriteString(renderSteeringSignals())
-	b.WriteString(renderStageMarker("Tasks"))
-	for _, task := range phase.Tasks {
-		kind := "task"
-		if task.Status == colony.TaskCompleted {
-			kind = "done"
-		}
-		b.WriteString("  ")
-		b.WriteString(voiceLine(kind, strings.TrimSpace(task.Goal)))
-		b.WriteString("\n")
-	}
-	if len(phase.Tasks) == 0 {
-		b.WriteString("  ")
-		b.WriteString(voiceLine("task", "No explicit tasks captured for this phase."))
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(renderStageMarker("Dispatch"))
-	if teamChoice := renderQueenTeamChoice(policy, dispatches); teamChoice != "" {
-		b.WriteString(teamChoice)
-		b.WriteString("\n")
-	}
-	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
-	b.WriteString(renderArtifactsSection(
-		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
-		displayDataPath("last-build-claims.json"),
-		displayDataPath("spawn-tree.txt"),
-	))
-	b.WriteString(renderStageMarker(fmt.Sprintf("Verification [%s]", string(reviewDepth))))
-	b.WriteString(voiceLine("evidence", "Verification happens during `aether continue`."))
-	b.WriteString("\n")
-	b.WriteString(renderStageMarker("Housekeeping"))
-	b.WriteString(voiceLine("focus", "Signal housekeeping (tidying up the notes that steer this project) runs during `aether continue`."))
-	b.WriteString("\n")
-	if len(state.Plan.Phases) == phase.ID {
-		b.WriteString(renderStageMarker("Colony Complete"))
-		b.WriteString(voiceLine("milestone", "This is the last phase in the plan. Once its work is checked, the project can be"))
-		b.WriteString("\n")
-		b.WriteString("signed off as finished.\n")
-	} else {
-		b.WriteString(renderStageMarker("Next Phase"))
-		b.WriteString(voiceLine("next", fmt.Sprintf("Phase %d follows after continue.", phase.ID+1)))
-		b.WriteString("\n")
-	}
-	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
-	return b.String()
+	return renderBuildScreen(state, phase, buildScreenWorkerMaps(dispatches), nil)
 }
 
 // renderBuildPartialCreditVisual is the screen a partially credited build
@@ -2256,32 +2196,27 @@ func renderBuildPartialCreditVisual(state colony.ColonyState, phase colony.Phase
 	}
 
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Phase %d — Partly Done", phase.ID)))
-	b.WriteString(visualDividerStr())
-	b.WriteString(voiceLine("phase", renderProgressSummary(phase.ID, len(state.Plan.Phases))))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("phase", "Phase: "+phase.Name))
-	b.WriteString("\n\n")
+	b.WriteString(renderVerdictBox("warning", fmt.Sprintf("PHASE %d PARTLY BUILT", phase.ID), fmt.Sprintf("%d of %d tasks done; %d still to do.", len(done), len(phase.Tasks), len(remaining))))
 	b.WriteString(voiceLine("warning", "Some of this phase is finished and saved. The rest was never started."))
 	b.WriteString("\n")
 	b.WriteString(voiceLine("warning", "Nothing that was finished has been undone, and no finished work will be done twice."))
 	b.WriteString("\n")
 
-	b.WriteString(renderStageMarker("Finished and kept"))
+	b.WriteString(renderScreenSection(commandEmoji("build"), "Finished And Kept"))
 	if len(done) == 0 {
 		b.WriteString("  (nothing)\n")
 	}
-	for _, label := range done {
+	for _, label := range capScreenLines(done, 5) {
 		b.WriteString("  ")
 		b.WriteString(voiceLine("done", label))
 		b.WriteString("\n")
 	}
 
-	b.WriteString(renderStageMarker("Still to do"))
+	b.WriteString(renderScreenSection(commandEmoji("phase"), "Still To Do"))
 	if len(remaining) == 0 {
 		b.WriteString("  (nothing)\n")
 	}
-	for _, label := range remaining {
+	for _, label := range capScreenLines(remaining, 5) {
 		b.WriteString("  ")
 		b.WriteString(voiceLine("task", label))
 		b.WriteString("\n")
@@ -2359,23 +2294,7 @@ func renderBuildPlanOnlyVisual(state colony.ColonyState, phase colony.Phase, dis
 }
 
 func renderBuildFinalizeVisual(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("build"), fmt.Sprintf("Build Finalize %d", phase.ID)))
-	b.WriteString(visualDividerStr())
-	b.WriteString("External Task worker results recorded.\n")
-	b.WriteString(renderProgressSummary(phase.ID, len(state.Plan.Phases)))
-	b.WriteString("\n")
-	b.WriteString("Phase: ")
-	b.WriteString(phase.Name)
-	b.WriteString("\n\n")
-	b.WriteString(renderSpawnPlanForDispatches(dispatches, effectiveParallelMode(state)))
-	b.WriteString(renderArtifactsSection(
-		displayDataPath(fmt.Sprintf("build/phase-%d/manifest.json", phase.ID)),
-		displayDataPath("last-build-claims.json"),
-		displayDataPath("spawn-tree.txt"),
-	))
-	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "build", "", "")))
-	return b.String()
+	return renderBuildScreen(state, phase, buildScreenWorkerMaps(dispatches), nil)
 }
 
 func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, dispatches []codexBuildDispatch) string {
@@ -3628,37 +3547,9 @@ const crownedAnthillArt = `        .     .
 
 func renderSealVisual(result map[string]interface{}, state colony.ColonyState, summaryPath string) string {
 	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("seal"), "Seal"))
-	b.WriteString(visualDividerStr())
-	// The classic crowning ceremony: the anthill drawing, the letter-spaced
-	// title with the colony's version, then the facts.
-	b.WriteString(crownedAnthillArt)
-	b.WriteString("\n\n")
-	rule := strings.Repeat("━", 50)
-	b.WriteString(rule + "\n")
-	b.WriteString(fmt.Sprintf("   %s   v%d\n", spacedTitle("Crowned Anthill"), state.ColonyVersion))
-	b.WriteString(rule + "\n\n")
-	b.WriteString(renderStageMarker("Summary"))
-	b.WriteString(voiceLine("milestone", "This project (the colony) is now finished — sealed at Crowned Anthill."))
-	b.WriteString("\n")
-	if state.Goal != nil {
-		b.WriteString(voiceLine("goal", "Goal: "+*state.Goal))
-		b.WriteString("\n")
-	}
-	b.WriteString(voiceLine("phase", fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("artifact", "Summary: "+summaryPath))
-	b.WriteString("\n\n")
-	b.WriteString(voiceLine("milestone", "The project (this colony) stands crowned and finished (sealed)."))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("learning", "The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time."))
-	b.WriteString("\n")
-	b.WriteString(voiceLine("archive", "The anthill has reached its final form."))
-	b.WriteString("\n")
-	// The card below is the one resolver's answer for a just-sealed project:
-	// it explains, in plain words, what finishing means and what archiving it
-	// would do (S-05) -- state was saved with the final milestone before this
-	// renders, so the resolver's own colonyNeedsEntomb branch applies.
+	b.WriteString(sealScreenVerdict(sealScreenOutcome(result, state), ptrStr(state.Goal)))
+	writeScreenSection(&b, checkScreenSectionEmoji("safety"), "Final Review", sealScreenReviewLines(mapSliceValue(result["completion_workers"])))
+	b.WriteString("\n  Full detail: `aether status --detail`\n")
 	b.WriteString(renderLifecycleClosing(result, "seal"))
 	return b.String()
 }

@@ -61,7 +61,7 @@ func TestPlanningVisualsDecisionSemanticAuthority(t *testing.T) {
 
 func TestPlanningVisualsCandidateAuthority(t *testing.T) {
 	review := planningVisualCandidateFixture()
-	output := renderPlanningCandidateVisual(review, planningVisualOptions{Width: 96})
+	output := renderPlanningCandidateVisual(review, planningVisualOptions{Width: 96, Detail: true})
 
 	assertPlanningVisualOrder(t, output, []string{
 		"Plan Candidate", "CANDIDATE — NOT ACTIVE", "Approved specification", "Base plan",
@@ -184,7 +184,7 @@ func TestPlanningVisualsNoColorAndAppendOnly(t *testing.T) {
 			t.Fatalf("%s output contains ANSI/cursor rewrite controls: %q", name, body)
 		}
 	}
-	for _, want := range []string{"Plan Candidate", "CANDIDATE — NOT ACTIVE", "target sufficiency", "Evidence that would change it"} {
+	for _, want := range []string{"PLAN READY", "Review it, then approve it.", "Dependency ownership is unverified", "Acceptance command:"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("no-color output lost %q:\n%s", want, output)
 		}

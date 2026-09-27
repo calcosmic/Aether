@@ -287,9 +287,8 @@ func TestLifecycleCloseout199Seal(t *testing.T) {
 		t.Fatalf("verified seal closeout lost committed/retained or status-first truth: %#v", closeout)
 	}
 	visual := RenderSealOutcome(result)
-	if !strings.Contains(visual, "Verified completion recorded") || !strings.Contains(visual, "Crowned Anthill") || !strings.Contains(visual, "State effect: committed") || strings.Count(visual, "Next Up") != 2 {
-		// One occurrence is the shared slot marker and one is its compatibility
-		// summary line; a second card would add a third occurrence.
+	if !strings.Contains(visual, "PROJECT SEALED — FINISHED") || !strings.Contains(visual, "F I N A L   R E V I E W") || strings.Count(visual, "N E X T   U P") != 1 {
+		// The compact screen retains exactly one shared next-action card.
 		t.Fatalf("verified seal did not close through the focused grammar:\n%s", visual)
 	}
 	claude := renderLifecycleCloseout(closeout, "claude")
@@ -317,7 +316,7 @@ func TestLifecycleCloseout199ForcedSeal(t *testing.T) {
 			t.Fatalf("forced closeout contains verified-success discriminator %q:\n%s", forbidden, visual)
 		}
 	}
-	if !strings.Contains(visual, result.Outcome.OwnerReason) || !strings.Contains(visual, "State effect: committed") {
+	if !strings.Contains(visual, result.Outcome.OwnerReason) || !strings.Contains(visual, "PROJECT CLOSED EARLY") {
 		t.Fatalf("forced closeout omitted authority/effect truth:\n%s", visual)
 	}
 }

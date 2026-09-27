@@ -177,8 +177,7 @@ func TestBuildScreenHasNoBareCheckboxMarkers(t *testing.T) {
 }
 
 // TestBuildScreenFactsUnchanged asserts the voiced build screen still names
-// the same phase, the same task goals and the same dispatch count as the
-// unvoiced screen did -- presentation changed, nothing else did.
+// the same phase, remaining task goals and dispatched helpers.
 func TestBuildScreenFactsUnchanged(t *testing.T) {
 	rendered := renderVoiceBuildScreen(t)
 	_, phase, dispatches := buildScreenFixture(2, 4)
@@ -187,11 +186,19 @@ func TestBuildScreenFactsUnchanged(t *testing.T) {
 		t.Errorf("build screen no longer names the phase %q:\n%s", phase.Name, rendered)
 	}
 	for _, task := range phase.Tasks {
+		if task.Status == colony.TaskCompleted {
+			continue
+		}
 		if !strings.Contains(rendered, strings.TrimSpace(task.Goal)) {
 			t.Errorf("build screen no longer names task goal %q:\n%s", task.Goal, rendered)
 		}
 	}
-	wantDispatchLine := fmt.Sprintf("Total planned dispatches: %d", len(dispatches))
+	wantDispatchLine := spacedTitle("Helpers")
+	for _, worker := range dispatches {
+		if !strings.Contains(rendered, worker.Name) {
+			t.Errorf("helper %q disappeared", worker.Name)
+		}
+	}
 	if !strings.Contains(rendered, wantDispatchLine) {
 		t.Errorf("build screen no longer reports %q:\n%s", wantDispatchLine, rendered)
 	}
@@ -414,6 +421,14 @@ func sealScreenFixture() (colony.ColonyState, string) {
 			{ID: 3, Name: "Biological Runtime", Status: colony.PhaseCompleted},
 		}},
 	}
+	state.SealOutcome = &colony.SealOutcome{
+		OutcomeKind:     colony.OutcomeKindVerifiedCompletion,
+		Disposition:     colony.SealDispositionVerified,
+		CompletedPhases: []int{1, 2, 3},
+		StateEffect:     colony.LifecycleStateEffectCommitted,
+		Transaction:     colony.LifecycleTransactionReference{Stage: colony.TransactionStageVerified},
+		Provenance:      colony.RecoveryProvenanceConfirmed,
+	}
 	return state, ".aether/data/CROWNED-ANTHILL.md"
 }
 
@@ -466,14 +481,14 @@ func TestSealCeremonyArtIsUnchanged(t *testing.T) {
 // the same completed-phase count and the same summary path as before.
 func TestSealScreenFactsUnchanged(t *testing.T) {
 	rendered := renderVoiceSealScreen(t)
-	state, summaryPath := sealScreenFixture()
+	_, summaryPath := sealScreenFixture()
 
-	wantPhasesLine := fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))
+	wantPhasesLine := "PROJECT SEALED — FINISHED"
 	if !strings.Contains(rendered, wantPhasesLine) {
 		t.Errorf("seal screen no longer reports %q:\n%s", wantPhasesLine, rendered)
 	}
-	if !strings.Contains(rendered, summaryPath) {
-		t.Errorf("seal screen no longer names the summary path %q:\n%s", summaryPath, rendered)
+	if !strings.Contains(rendered, "aether status --detail") || strings.Contains(rendered, summaryPath) {
+		t.Errorf("seal screen should link the full report without an internal artifact path:\n%s", rendered)
 	}
 }
 
@@ -490,7 +505,7 @@ func TestSealScreenOmitsEmptyGoalLine(t *testing.T) {
 			t.Errorf("seal screen rendered a goal line with no recorded goal: %q", line)
 		}
 	}
-	wantPhasesLine := fmt.Sprintf("Completed phases: %d", len(state.Plan.Phases))
+	wantPhasesLine := fmt.Sprintf("All %d phases are finished and checked.", len(state.Plan.Phases))
 	if !strings.Contains(rendered, wantPhasesLine) {
 		t.Errorf("seal screen without a goal lost the rest of the summary:\n%s", rendered)
 	}

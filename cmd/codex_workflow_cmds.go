@@ -432,9 +432,7 @@ var buildCmd = &cobra.Command{
 		// unstarted -- while never showing the recovery command at all.
 		if partial, _ := result["recovery_job"].(bool); partial {
 			partialVisual := renderBuildPartialCreditResultVisual(state, state.Plan.Phases[phaseNum-1], result)
-			if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
-				partialVisual = advisoryVisual + "\n\n" + partialVisual
-			}
+			partialVisual = appendBuildScreenAdvisory(partialVisual, result)
 			outputWorkflow(result, partialVisual)
 			return nil
 		}
@@ -469,9 +467,6 @@ var buildCmd = &cobra.Command{
 			result["current_phase"] = phaseNum
 			if err := applyLifecycleCloseout(result, "build", details); err == nil {
 				body := renderedBuildVisual
-				if fileCard := renderBuildResultFileSection(phaseNum); fileCard != "" {
-					body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
-				}
 				buildVisual = appendLifecycleCloseoutVisual(body, result, detectPlatform())
 				closeoutRendered = true
 			} else {
@@ -484,9 +479,7 @@ var buildCmd = &cobra.Command{
 			// been spent yet when a team is merely being planned.
 			buildVisual = appendSpendCostLine(renderedBuildVisual, phaseNum)
 		}
-		if advisoryVisual := renderBuildAdvisoryResult(result); advisoryVisual != "" {
-			buildVisual = advisoryVisual + "\n\n" + buildVisual
-		}
+		buildVisual = appendBuildScreenAdvisory(buildVisual, result)
 		outputWorkflow(result, buildVisual)
 		return nil
 	},
@@ -1787,7 +1780,7 @@ func completeSealRuntime(state colony.ColonyState, override sealOverride, review
 	case changelog.Written:
 		visual += "\n" + voiceLine("history", "Recorded this project in the changelog (CHANGELOG.md).") + "\n"
 	case changelog.Problem != "" && !changelog.AlreadyPresent:
-		visual += "\n" + voiceLine("history", "The changelog was not updated: "+changelog.Problem+". The project is still marked finished.") + "\n"
+		visual += "\n" + voiceLine("history", "The changelog was not updated: "+changelog.Problem+". The project closure is still recorded.") + "\n"
 	}
 	outputWorkflow(result, visual)
 	return nil

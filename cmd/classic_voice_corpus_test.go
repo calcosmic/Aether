@@ -107,6 +107,8 @@ var rawStateTokenKeyEqualsValuePattern = regexp.MustCompile(`\b[a-zA-Z_][a-zA-Z0
 // "/ant-discuss --answer D1=local"). Like a bare backticked command or a
 // flag, an owner types this whole example; it is not an internal token
 // leaking through.
+var rawStateTokenBacktickRe = regexp.MustCompile("`[^`]*`")
+
 var rawStateTokenCommandInvocationRe = regexp.MustCompile(`(?:/ant-[a-z0-9-]+|\baether [a-z][a-z0-9-]*).*`)
 
 // rawStateTokenLeaks reports every line, outside a backticked span or a
@@ -124,8 +126,8 @@ var rawStateTokenCommandInvocationRe = regexp.MustCompile(`(?:/ant-[a-z0-9-]+|\b
 func rawStateTokenLeaks(text string) []string {
 	var violations []string
 	for _, rawLine := range strings.Split(text, "\n") {
-		stripped := rawStateTokenCommandInvocationRe.ReplaceAllString(rawLine, " ")
-		stripped = codeSpanRe.ReplaceAllString(stripped, " ")
+		stripped := rawStateTokenBacktickRe.ReplaceAllString(rawLine, " ")
+		stripped = rawStateTokenCommandInvocationRe.ReplaceAllString(stripped, " ")
 		if strings.TrimSpace(stripped) == "" {
 			continue
 		}

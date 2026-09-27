@@ -415,7 +415,7 @@ func renderPlanningDecisionVisual(card planningDecisionCard, options planningVis
 	return finalizePlanningVisual(builder.String(), options)
 }
 
-func renderPlanningCandidateVisual(review planCandidateReview, options planningVisualOptions) string {
+func renderPlanningCandidateDetail(review planCandidateReview, options planningVisualOptions) string {
 	projection := projectPlanningCandidate(review)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Candidate"))
@@ -583,7 +583,7 @@ func projectPlanningAcceptance(candidate colony.PlanCandidate, revision colony.P
 	}
 }
 
-func renderPlanningAcceptanceVisual(candidate colony.PlanCandidate, revision colony.PlanRevision, receipt colony.PlanAcceptanceReceipt, replayed bool, options planningVisualOptions) string {
+func renderPlanningAcceptanceDetail(candidate colony.PlanCandidate, revision colony.PlanRevision, receipt colony.PlanAcceptanceReceipt, replayed bool, options planningVisualOptions) string {
 	projection := projectPlanningAcceptance(candidate, revision, receipt, replayed)
 	var builder strings.Builder
 	builder.WriteString(renderBanner(commandEmoji("plan"), "Plan Accepted"))

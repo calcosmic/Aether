@@ -279,9 +279,6 @@ func renderCeremonyCloseout(workflow, completionFile string) (map[string]interfa
 			if details, ok := buildWorkCloseoutDetails(phaseID); ok {
 				if err := applyLifecycleCloseout(result, workflow, details); err == nil {
 					body := renderCeremonyCloseoutVisualBody(result)
-					if fileCard := renderBuildResultFileSection(phaseID); fileCard != "" {
-						body = strings.TrimRight(body, "\n") + "\n\n" + fileCard
-					}
 					return result, appendLifecycleCloseoutVisual(body, result, detectPlatform())
 				}
 			}
@@ -656,6 +653,12 @@ func renderCeremonyWorkerComplete(workflow string, dispatch ceremonyDispatch) st
 // renderer below it, instead of duplicating it or letting either path
 // produce a second cost block on the same screen.
 func renderCeremonyCloseoutVisualBody(result map[string]interface{}) string {
+	switch normalizedCeremonyWorkflow(stringValue(result["workflow"])) {
+	case "build":
+		return renderBuildCeremonyScreen(result)
+	case "seal":
+		return renderSealCeremonyScreen(result)
+	}
 	workflow := normalizedCeremonyWorkflow(stringValue(result["workflow"]))
 	title := fmt.Sprintf("%s Summary", workflow)
 	emoji := commandEmoji(workflow)

@@ -269,11 +269,10 @@ func TestCeremonyCloseoutRendersOldStyleSummary(t *testing.T) {
 
 	_, visual := renderCeremonyCloseout("build", completionFile)
 	for _, want := range []string{
-		"B U I L D   S U M M A R Y",
+		"PHASE 2 BUILD NOT CONFIRMED",
 		"Goal: Restore ceremony",
-		"Phase: 2 - Card Redesign",
-		"Workers: 2 completed",
-		"Worker Results",
+		"Card Redesign",
+		"H E L P E R S",
 		"Brick-79",
 		"dashboard/components/CardNode.tsx",
 	} {
@@ -396,10 +395,10 @@ func TestCeremonyCloseoutRendersPendingSuggestionsBlock(t *testing.T) {
 		"dispatch_manifest": ceremonyTestManifest(),
 	})
 
-	_, visual := renderCeremonyCloseout("build", completionFile)
+	result, _ := renderCeremonyCloseout("build", completionFile)
+	visual := stringValue(result["pending_suggestions_block"])
 
 	for _, want := range []string{
-		"Suggestions From This Build",
 		"[REDIRECT] never commit secrets or .env files to version control",
 		"detected a tracked .env file",
 		"sig_1",
@@ -436,7 +435,8 @@ func TestCeremonyCloseoutNamesApproveAndDismissCommandsWithRealID(t *testing.T) 
 		"dispatch_manifest": ceremonyTestManifest(),
 	})
 
-	_, visual := renderCeremonyCloseout("build", completionFile)
+	result, _ := renderCeremonyCloseout("build", completionFile)
+	visual := stringValue(result["pending_suggestions_block"])
 
 	if !strings.Contains(visual, "aether suggest-approve --approve sig_real_id_42") {
 		t.Fatalf("closeout missing a copyable approve command with the real ID\n%s", visual)
@@ -473,7 +473,8 @@ func TestCeremonyCloseoutOmitsDismissedSuggestions(t *testing.T) {
 		"dispatch_manifest": ceremonyTestManifest(),
 	})
 
-	_, visual := renderCeremonyCloseout("build", completionFile)
+	result, _ := renderCeremonyCloseout("build", completionFile)
+	visual := stringValue(result["pending_suggestions_block"])
 
 	if !strings.Contains(visual, "an active suggestion") {
 		t.Fatalf("closeout should show the active suggestion\n%s", visual)

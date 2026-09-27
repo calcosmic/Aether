@@ -57,6 +57,8 @@ var workerNameRe = regexp.MustCompile(`\b[A-Z][a-z]+-\d{1,3}\b`)
 // load and race instrumentation even when the workflow output is otherwise identical.
 var stepElapsedRe = regexp.MustCompile(`(?m)(Step \d+/\d+: [^\n]+) \(\d+s\)$`)
 
+var closeoutElapsedRe = regexp.MustCompile(`(?m)^Elapsed: [^\n]+$`)
+
 var ceremonyElapsedRe = regexp.MustCompile(`(?m)(Ceremony complete in )\d+s$`)
 
 // liveCheckLineDurationRe matches SHOW-03's live verification finish lines
@@ -85,6 +87,7 @@ func normalizeForGolden(s string) string {
 	clean = normalizeWorkerNames(clean)
 	clean = stepElapsedRe.ReplaceAllString(clean, "$1 (0s)")
 	clean = ceremonyElapsedRe.ReplaceAllString(clean, "${1}0s")
+	clean = closeoutElapsedRe.ReplaceAllString(clean, "Elapsed: <measured>")
 	clean = liveCheckLineDurationRe.ReplaceAllString(clean, "$1$2 $3 (0.0s)")
 	clean = goTestSummaryDurationRe.ReplaceAllString(clean, "${1}0.0s")
 
@@ -281,9 +284,8 @@ func TestGoldenBuildVisualOutput(t *testing.T) {
 	for _, want := range []string{
 		"B U I L D   D I S P A T C H   1", "S P A W N   P L A N",
 		"Builder",
-		"── Context ──", "── Tasks ──", "── Dispatch ──",
-		"── Verification", "── Housekeeping ──",
-		"── Colony Complete ──",
+		"── Dispatch ──", "PHASE 1 BUILT — READY TO CHECK",
+		"C H E C K S", "B E H I N D   T H E   S C E N E S",
 		"it is safe to close this chat",
 	} {
 		if !strings.Contains(clean, want) {

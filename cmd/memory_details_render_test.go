@@ -469,7 +469,7 @@ func TestStatusInstinctHeadingMatchesTheRanking(t *testing.T) {
 	stdout = &buf
 	t.Setenv("AETHER_OUTPUT_MODE", "visual")
 
-	rootCmd.SetArgs([]string{"status"})
+	rootCmd.SetArgs([]string{"status", "--detail"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("status returned error: %v", err)
 	}

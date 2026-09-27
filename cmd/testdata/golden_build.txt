@@ -15,9 +15,9 @@ Wave 1
 Total planned dispatches: 1
 2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
 
-The Queen chose this team for the phase: Builder.
+The Queen (the coordinator that decides which helpers a phase needs) chose this team for the phase: Builder.
 Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
-Safety castes a risky phase needs are kept at every size.
+Safety-critical helpers (the castes a risky phase needs) are kept at every size.
 
   Step 2/5: Context (0s)
   Step 3/5: Dispatch (0s)
@@ -35,68 +35,45 @@ Wave 11 starting (in-repo, serial)
   Step 4/5: Verify (0s)
   Step 5/5: Complete (0s)
 Ceremony complete in 0s
-━━ 🔨 B U I L D   P H A S E   1 ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[Phase 1/1] [████████████████] 100%
-Phase: Golden phase
-Review depth: standard (Phase 1 of 1)
-Objective: Golden phase exercises accepted build authority
-── Context ──
-Steering signals: none — run `/ant-focus "<area>"` or `/ant-redirect "<avoid>"` to steer this build.
-── Tasks ──
-  [ ] First golden task
-  [ ] Second golden task
-
-── Dispatch ──
-Queen's Team
-  🔨🐜 Builder — this phase has tasks that need code written
-  Kept by safety policy: Builder — this phase has tasks that need code written
-  Not called (2): Gatekeeper — not sent -- nobody asked for it and nothing in this phase forces it; Watcher — not sent -- nobody asked for it and nothing in this phase forces it
-
-━━ 🐜 S P A W N   P L A N ━━
+  ✅ PHASE 1 BUILT — READY TO CHECK
+  1 helper finished its work. Next: check it with `/ant-continue`.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Wave 1
-  Execution: serial — single task in this wave
-  🔨🐜 Builder Worker-XX  First golden task (+1 more step)  [covers tasks 1.1, 1.2]  ✓ completed — nothing to flag 0.0s  FakeInvoker completed task 1.1 for worker Worker-XX (caste: builder)
 
-Total planned dispatches: 1
-2 covered tasks were folded into 1 worker — every task still has a claimant, listed above.
+━━ 🔎 C H E C K S ━━
+  🔎 The work still needs checking with `/ant-continue`.
 
-The Queen chose this team for the phase: Builder.
-Want a smaller team? Add `--light`. Want every check? Add `--heavy`.
-Safety castes a risky phase needs are kept at every size.
-━━ 🗂️ A R T I F A C T S ━━
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-.aether/data/build/phase-1/manifest.json
-.aether/data/last-build-claims.json
-.aether/data/spawn-tree.txt
-── Verification [standard] ──
-Verification happens during `/ant-continue`.
-── Housekeeping ──
-Signal housekeeping runs during `/ant-continue`.
-── Colony Complete ──
-This is the last phase in the plan. Once its work is checked, the project can be
-signed off as finished.
+━━ 🧹 B E H I N D   T H E   S C E N E S ━━
+  📍 Golden phase
+  📖 The helpers' notes are saved for the next phase.
+  🎯 8 steering suggestions are waiting for review; see `aether suggest-approve`.
+  🔎 Full detail: `/ant-phase 1`
+
+━━ 🚩 R U N   R E V I E W ━━
+  🔎 The work is built. The program's own checks have not run yet.
+  ⚠️ Some project details could not be read (intent, actors, signals, research, reported cost, blockers, session). Review `/ant-status --detail`.
+
 ━━ 📊 W H A T   N E X T ━━
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ── Where things stand ──
-Goal: Golden workflow test colony
-Phase 1 of 1: Golden phase. 0 phase(s) finished so far.
+👑 Goal: Golden workflow test colony
+📍 Phase 1 of 1: Golden phase. 0 phase(s) finished so far.
 
 ── What changed ──
-  - The last thing you ran was build.
-  - Phase 1: Golden phase
-  - Dispatched 1 workers for phase 1
-  - Phase 1 build packet prepared (simulated dispatch)
+  - 📜 The last thing you ran was build.
+  - 📜 Phase 1: Golden phase
+  - 📜 Dispatched 1 workers for phase 1
+  - 📜 Phase 1 build packet prepared (simulated dispatch)
 
 ━━ 🐜 N E X T   U P ━━
-Run `/ant-continue` — The current phase has work that must be checked and advanced.
-Alternative: Run `/ant-status` — Inspect the current phase before checking it.
-Alternative: Run `/ant-history` — Review the activity behind the current phase.
+➡️ Run `/ant-continue` — The current phase has work that must be checked and advanced.
+🔀 Alternative: Run `/ant-status` — Inspect the current phase before checking it.
+🔀 Alternative: Run `/ant-history` — Review the activity behind the current phase.
 
-This is a natural break, and everything is written down -- it is safe to close this chat, and starting a fresh one from here will work better than carrying this one on.
+💾 This is a natural break, and everything is written down -- it is safe to close this chat, and starting a fresh one from here will work better than carrying this one on.
 
 ── What The Helpers Cost ──
+Elapsed: <measured>
 Cost: not known. The one worker that ran had no figure reported by its tool, so there is no total to show.
   🔨🐜 Builder Worker-XX (job: automatic-1.1)  —  not reported
 (1 worker's tool did not report usage, so its use is not in the total.)
