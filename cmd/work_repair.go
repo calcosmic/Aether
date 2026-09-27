@@ -700,9 +700,13 @@ func buildFailedRepairHandback(outcome repairRoundOutcome, failingCheck, failing
 // thing to do next with its reason and the alternatives beneath it. No
 // check-outcome enum spelling ("still_failing") or code token ever reaches
 // this text -- every part is prose assembled by buildFailedRepairHandback.
+//
+// It opens with the check screen's heavy section header (owner's layout,
+// 2026-09-27) rather than a thin stage marker.
 func renderFailedRepairHandback(handback repairHandback) string {
 	var b strings.Builder
-	b.WriteString(renderStageMarker("What happened with the automatic fix"))
+	b.WriteString(renderScreenSection(commandEmoji("section-repair"), "Automatic Fix"))
+	b.WriteString("What happened with the automatic fix:\n\n")
 	b.WriteString("What is failing\n  ")
 	b.WriteString(handback.Diagnosis)
 	b.WriteString("\n\n")

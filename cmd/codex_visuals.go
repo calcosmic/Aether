@@ -257,6 +257,8 @@ var voiceGlyphMap = map[string]string{
 	"history":     "📜",
 	"family":      "🧬",
 	"refusal":     "🙅",
+	"proven":      "✓",
+	"unset":       "⚪",
 }
 
 // voiceGlyph resolves a semantic line-type to its glyph, following
@@ -328,6 +330,13 @@ var commandEmojiMap = map[string]string{
 	"closeout":               "🏁",
 	"ceremony":               "🐜",
 	"artifacts":              "🗂️",
+	"section-checks":         "🔎",
+	"section-proven":         "📋",
+	"section-safety":         "⚔️",
+	"section-helpers":        "🐜",
+	"section-behind":         "🧹",
+	"section-fix":            "🛠️",
+	"section-repair":         "🩹",
 	"next-up":                "🐜",
 	"print-next-up":          "🐜",
 	"colonize-dispatch":      "🗺️",
@@ -2389,107 +2398,6 @@ func renderBuildDispatchPreview(state colony.ColonyState, phase colony.Phase, di
 	return b.String()
 }
 
-func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekeeping *signalHousekeepingResult, final bool, nextPhase *colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("continue"), "Continue"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(voiceLine("status", renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases))))
-	b.WriteString("\n")
-	b.WriteString(renderStageMarker("Verification"))
-	if partial, _ := result["partial_success"].(bool); partial {
-		b.WriteString(voiceLine("warning", "Verification passed with partial operational success."))
-	} else {
-		b.WriteString(voiceLine("done", "Verification pass complete."))
-	}
-	b.WriteString("\n")
-	b.WriteString(voiceLine("done", fmt.Sprintf("Phase %d verified and completed: %s", phase.ID, phase.Name)))
-	b.WriteString("\n")
-	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
-	renderContinueVerificationDetail(&b, result["verification"])
-	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
-		b.WriteString(voiceLine("evidence", "Operational evidence"))
-		b.WriteString("\n")
-		for _, issue := range issues {
-			if issue = strings.TrimSpace(issue); issue == "" {
-				continue
-			}
-			b.WriteString("  ")
-			b.WriteString(voiceLine("evidence", issue))
-			b.WriteString("\n")
-		}
-	}
-	renderCriterionEvidenceLines(&b, result["verification"])
-	b.WriteString(voiceLine("colony", "Workers (the helpers this phase used)"))
-	b.WriteString("\n")
-	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
-		b.WriteString(renderIndentedList(closed))
-	} else {
-		b.WriteString("  ")
-		b.WriteString(voiceLine("done", "No workers (helpers) required closing"))
-		b.WriteString("\n")
-	}
-	renderContinueWorkerFlowValue(&b, result["worker_flow"])
-	renderSpecialistFindingBlocks(&b, result["worker_flow"])
-	b.WriteString(voiceLine("evidence", "Verification passed during continue"))
-	b.WriteString("\n")
-	artifacts := []string{
-		displayDataPath(fmt.Sprintf("build/phase-%d/verification.json", phase.ID)),
-		displayDataPath(fmt.Sprintf("build/phase-%d/gates.json", phase.ID)),
-	}
-	if reviewReport := strings.TrimSpace(stringValue(result["review_report"])); reviewReport != "" {
-		artifacts = append(artifacts, reviewReport)
-	}
-	artifacts = append(artifacts,
-		displayDataPath(fmt.Sprintf("build/phase-%d/continue.json", phase.ID)),
-		displayDataPath("spawn-tree.txt"),
-	)
-	b.WriteString(renderArtifactsSection(artifacts...))
-	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
-	renderContinueGateDetail(&b, result["gates"])
-	if closed := stringSliceValue(result["closed_workers"]); len(closed) > 0 {
-		b.WriteString(voiceLine("colony", fmt.Sprintf("Workers (helpers) closed: %d", len(closed))))
-		b.WriteString("\n")
-	}
-	b.WriteString(renderStageMarker("Housekeeping"))
-	if housekeeping != nil {
-		b.WriteString(voiceLine("focus", fmt.Sprintf("Signals: %d active -> %d active after housekeeping", housekeeping.ActiveBefore, housekeeping.ActiveAfter)))
-		b.WriteString("\n")
-		if housekeeping.Updated > 0 {
-			b.WriteString(voiceLine("history", fmt.Sprintf("Expired: %d time-based, %d low-strength, %d stale continue signals",
-				housekeeping.ExpiredByTime, housekeeping.DeactivatedByStrength, housekeeping.ExpiredWorkerContinue)))
-			b.WriteString("\n")
-		}
-	}
-
-	b.WriteString(renderLearningBeat(result["consolidation"]))
-	b.WriteString(renderImprovementPassBeat(result["improvement_pass"]))
-	b.WriteString(renderSuggestedSteering(state))
-
-	if final {
-		b.WriteString(renderStageMarker("Project Complete (Colony)"))
-		b.WriteString(renderProjectComplete(state, len(state.Plan.Phases)))
-		b.WriteString("\n\n")
-		b.WriteString(voiceLine("milestone", "Every phase in the plan is finished. The project is ready to be signed off as"))
-		b.WriteString("\n")
-		b.WriteString("complete -- the stage this project calls Crowned Anthill.\n")
-		b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
-		return b.String()
-	}
-
-	if nextPhase != nil {
-		b.WriteString(renderStageMarker("Next Phase"))
-		b.WriteString(voiceLine("next", fmt.Sprintf("Next phase ready: %d — %s", nextPhase.ID, nextPhase.Name)))
-		b.WriteString("\n")
-	}
-	// The classic end-of-phase footer: flags, steering signals with content
-	// and strength, and progress — the project's whole picture at the moment
-	// you decide what to do next.
-	b.WriteString(renderStageMarker("Project State (Colony)"))
-	b.WriteString(renderPhaseEndFooter(state, phase.ID))
-	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
-	return b.String()
-}
-
 // renderLearningBeat renders phase-end consolidation's result as a single
 // caste-styled "Learning" stage beat (D-06). raw is result["consolidation"]
 // (attachConsolidationSummary's map[string]interface{}), which may be nil
@@ -2498,14 +2406,20 @@ func renderContinueVisual(state colony.ColonyState, phase colony.Phase, housekee
 // I/O) and always renders something in one of four states: populated, zero,
 // failed, or absent. Silence is not a reachable output (D-07).
 func renderLearningBeat(raw interface{}) string {
+	return renderStageMarker("Learning") + renderLearningBeatLine(raw) + "\n"
+}
+
+// renderLearningBeatLine is renderLearningBeat's one content line without
+// its stage marker, so a screen that groups it under its own section header
+// (the check screen's BEHIND THE SCENES) shows exactly the same words.
+func renderLearningBeatLine(raw interface{}) string {
 	var b strings.Builder
-	b.WriteString(renderStageMarker("Learning"))
 	prefix := casteIdentity("librarian") + "  "
 
 	consolidation, ok := raw.(map[string]interface{})
 	if !ok || consolidation == nil {
 		b.WriteString(prefix)
-		b.WriteString("no consolidation result was recorded for this phase\n")
+		b.WriteString("no consolidation result was recorded for this phase")
 		return b.String()
 	}
 
@@ -2518,7 +2432,6 @@ func renderLearningBeat(raw interface{}) string {
 
 	b.WriteString(prefix)
 	b.WriteString(summary.LearningBeatLine())
-	b.WriteString("\n")
 	return b.String()
 }
 
@@ -2634,15 +2547,26 @@ func renderImprovementPassBeat(raw interface{}) string {
 	}
 	var b strings.Builder
 	b.WriteString(renderStageMarker("Trying a Proposed Change"))
-	for _, e := range events {
+	for _, line := range improvementPassBeatLines(raw) {
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// improvementPassBeatLines is renderImprovementPassBeat's content lines
+// without the stage marker -- the same sentences, for a screen that groups
+// them under its own section header.
+func improvementPassBeatLines(raw interface{}) []string {
+	var lines []string
+	for _, e := range improvementPassEventViewsFromRaw(raw) {
 		line := improvementPassEventSentence(e)
 		if line == "" {
 			continue
 		}
-		b.WriteString(voiceLine(improvementPassEventVoiceGlyph(e), line))
-		b.WriteString("\n")
+		lines = append(lines, voiceLine(improvementPassEventVoiceGlyph(e), line))
 	}
-	return b.String()
+	return lines
 }
 
 // renderSealConsolidationBeats renders a seal consolidation attempt as a
@@ -2727,70 +2651,6 @@ func renderContinuePlanOnlyVisual(state colony.ColonyState, phase colony.Phase, 
 	b.WriteString("Whatever is running this sends them, then records what they found with\n")
 	b.WriteString("`aether continue-finalize --completion-file <file>`.\n")
 	b.WriteString(renderNextActionCard(lifecycleNextActionForState(state, "continue", "", "")))
-	return b.String()
-}
-
-func renderContinueBlockedVisual(state colony.ColonyState, phase colony.Phase, result map[string]interface{}, reviewDepth colony.VerificationDepth) string {
-	var b strings.Builder
-	b.WriteString(renderBanner(commandEmoji("continue-blocked"), "Continue Blocked"))
-	b.WriteString(visualDividerStr())
-	b.WriteString(renderReviewDepthLine(reviewDepth, phase.ID, len(state.Plan.Phases)))
-	b.WriteString("\n")
-	b.WriteString(fmt.Sprintf("Phase %d remains active: %s\n", phase.ID, phase.Name))
-	// 208-04: name how much unfinished work was just written back onto the
-	// phase as tasks, in plain English -- the check failing is never a dead
-	// end, it is the work list moving forward.
-	if added := intValue(result["recovery_tasks_added"]); added > 0 {
-		noun := "piece"
-		if added != 1 {
-			noun = "pieces"
-		}
-		b.WriteString(fmt.Sprintf("%d %s of unfinished work were written back onto the phase as tasks so they can be picked up next.\n", added, noun))
-	}
-	renderContinueVerificationSummaryMap(&b, continueTypedResultMapValue(result["verification"]))
-	renderContinueVerificationDetail(&b, result["verification"])
-	renderContinueGateSummaryMap(&b, continueTypedResultMapValue(result["gates"]))
-	renderContinueGateDetail(&b, result["gates"])
-	renderContinueWorkerFlowValue(&b, result["worker_flow"])
-	renderSpecialistFindingBlocks(&b, result["worker_flow"])
-	artifacts := []string{}
-	if verificationReport := strings.TrimSpace(stringValue(result["verification_report"])); verificationReport != "" {
-		artifacts = append(artifacts, verificationReport)
-	}
-	if gateReport := strings.TrimSpace(stringValue(result["gate_report"])); gateReport != "" {
-		artifacts = append(artifacts, gateReport)
-	}
-	if reviewReport := strings.TrimSpace(stringValue(result["review_report"])); reviewReport != "" {
-		artifacts = append(artifacts, reviewReport)
-	}
-	if continueReport := strings.TrimSpace(stringValue(result["continue_report"])); continueReport != "" {
-		artifacts = append(artifacts, continueReport)
-	}
-	if len(artifacts) > 0 {
-		artifacts = append(artifacts, displayDataPath("spawn-tree.txt"))
-		b.WriteString(renderArtifactsSection(artifacts...))
-	}
-	if issues := stringSliceValue(result["operational_issues"]); len(issues) > 0 {
-		b.WriteString("Operational issues\n")
-		b.WriteString(renderIndentedList(issues))
-	}
-	renderCriterionEvidenceLines(&b, result["verification"])
-	if blockers := stringSliceValue(result["blocking_issues"]); len(blockers) > 0 {
-		b.WriteString("Blocking issues\n")
-		b.WriteString(renderIndentedList(blockers))
-		b.WriteString(renderBlockedWayForward(continueTypedResultMapValue(result["gates"])))
-	}
-	// D-11: a still-failing automatic repair's four-part handback -- what is
-	// failing, what was tried and why it did not take, where the project
-	// stands now, and the one thing to do next -- read before the closing
-	// next-step line so the owner sees what happened before what to do.
-	// Additive only: repairHandbackFromVerificationValue returns nil for
-	// every outcome except a still-failing check-fix repair, so a blocked
-	// screen with nothing to hand back is unchanged.
-	if handback := repairHandbackFromVerificationValue(result["verification"]); handback != nil {
-		b.WriteString(renderFailedRepairHandback(*handback))
-	}
-	b.WriteString(renderLifecycleClosingForState(result, state, "continue"))
 	return b.String()
 }
 

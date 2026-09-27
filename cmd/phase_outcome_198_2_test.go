@@ -513,7 +513,7 @@ func TestBothCheckLanesLeaveTheSameOutcomeText(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read direct-lane outcome.md: %v", err)
 		}
-		for _, want := range []string{"Both lanes leave the same outcome text (direct)", "Phase 1 verified and completed"} {
+		for _, want := range []string{"Both lanes leave the same outcome text (direct)", "PHASE 1 CHECKED AND SIGNED OFF"} {
 			if !strings.Contains(string(directOutcome), want) {
 				t.Errorf("direct-lane outcome.md missing %q, got:\n%s", want, string(directOutcome))
 			}

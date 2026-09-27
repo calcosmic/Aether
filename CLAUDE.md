@@ -251,7 +251,21 @@ Color maps in `cmd/codex_visuals.go`: `casteColorMap` (ANSI codes), `casteEmojiM
 
 ### Stage Markers
 
-Build and continue output uses `── Stage Name ──` separators between sections (Context, Tasks, Dispatch, Verification, Housekeeping, Next Phase, Colony Complete).
+Build output uses `── Stage Name ──` separators between sections (Context, Tasks, Dispatch, Verification, Housekeeping, Next Phase, Colony Complete).
+
+The check screen (`aether continue`, both the signed-off and the blocked
+version) uses the owner's chosen layout instead (2026-09-27): a verdict box
+at the very top (a heavy line, the verdict, one plain sentence, a heavy line),
+then sections that each open with a heavy spaced-letter header such as
+`━━ 🔎 C H E C K S ━━` with exactly one blank line above it — CHECKS, WHAT
+WAS PROVEN, SAFETY REVIEW, HELPERS (only when a helper did not finish), BEHIND
+THE SCENES (the blocked screen leads with WHAT TO FIX). Lists are capped with
+an honest "… N more", and the full detail is one command away (`aether phase
+N`). The pieces (`renderVerdictBox`, `renderScreenSection`,
+`writeScreenSection`, `capScreenLines`, `plainDuration`,
+`cmd/screen_sections.go`) are shared so other screens can adopt them. Locked
+by `TestCheckScreenLeadsWithTheVerdict`, `TestCheckScreenSectionsAreSeparated`,
+`TestCheckScreenStaysShort` and `TestBlockedCheckScreenSaysWhatToFix`.
 
 ### YAML Source Chain
 

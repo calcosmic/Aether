@@ -39,6 +39,11 @@ func TestCurationAntCasteIdentitiesAreDistinct(t *testing.T) {
 // TestContinueVisualAlwaysRendersLearningBeat pins D-06/D-07: a phase advance
 // must render a Learning stage in exactly one of four honest states --
 // populated, zero, failed, or absent -- and silence must be impossible.
+// continueLearningSectionHeader is where the learning beat lives on the
+// check screen since the owner's 2026-09-27 layout: under the heavy BEHIND
+// THE SCENES header rather than its own thin "── Learning ──" marker.
+var continueLearningSectionHeader = spacedTitle("Behind The Scenes")
+
 func TestContinueVisualAlwaysRendersLearningBeat(t *testing.T) {
 	t.Setenv("AETHER_FORCE_COLOR", "1")
 
@@ -59,7 +64,7 @@ func TestContinueVisualAlwaysRendersLearningBeat(t *testing.T) {
 			},
 		}
 		output := renderContinueVisual(state, phase, nil, false, nextPhase, result, colony.VerificationDepthLight)
-		if !strings.Contains(output, "── Learning ──") {
+		if !strings.Contains(output, continueLearningSectionHeader) {
 			t.Fatalf("expected a Learning stage marker, got:\n%s", output)
 		}
 		if !strings.Contains(output, "3") || !strings.Contains(output, "1") {
@@ -76,10 +81,10 @@ func TestContinueVisualAlwaysRendersLearningBeat(t *testing.T) {
 			},
 		}
 		output := renderContinueVisual(state, phase, nil, false, nextPhase, result, colony.VerificationDepthLight)
-		if !strings.Contains(output, "── Learning ──") {
+		if !strings.Contains(output, continueLearningSectionHeader) {
 			t.Fatalf("expected a Learning stage marker, got:\n%s", output)
 		}
-		if !strings.Contains(output, "colony observed nothing new this phase") {
+		if !strings.Contains(output, "Lessons: nothing new learned this phase") {
 			t.Fatalf("expected the D-07 zero-state sentence, got:\n%s", output)
 		}
 	})
@@ -92,10 +97,10 @@ func TestContinueVisualAlwaysRendersLearningBeat(t *testing.T) {
 			},
 		}
 		output := renderContinueVisual(state, phase, nil, false, nextPhase, result, colony.VerificationDepthLight)
-		if !strings.Contains(output, "── Learning ──") {
+		if !strings.Contains(output, continueLearningSectionHeader) {
 			t.Fatalf("expected a Learning stage marker, got:\n%s", output)
 		}
-		if !strings.Contains(output, "phase advanced WITHOUT consolidation —") {
+		if !strings.Contains(output, "Lessons: the learning step FAILED this phase —") {
 			t.Fatalf("expected the D-05 failure wording, got:\n%s", output)
 		}
 		if !strings.Contains(output, "curation sentinel detected corrupt stores") {
@@ -106,10 +111,10 @@ func TestContinueVisualAlwaysRendersLearningBeat(t *testing.T) {
 	t.Run("absent", func(t *testing.T) {
 		result := map[string]interface{}{}
 		output := renderContinueVisual(state, phase, nil, false, nextPhase, result, colony.VerificationDepthLight)
-		if !strings.Contains(output, "── Learning ──") {
+		if !strings.Contains(output, continueLearningSectionHeader) {
 			t.Fatalf("expected a Learning stage marker even with no consolidation key recorded, got:\n%s", output)
 		}
-		if !strings.Contains(output, "no consolidation result was recorded") {
+		if !strings.Contains(output, "Lessons: no learning result was recorded for this phase") {
 			t.Fatalf("expected an explicit no-result-recorded statement, got:\n%s", output)
 		}
 	})

@@ -348,14 +348,18 @@ func TestChatPathShowsChecksGatesAndEvidence(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"Build ✓ (1.0s)",
-		"Tests ✗ — 2 of 12 tests failed",
-		"└── npm test",
-		"✗ the build/test checks passed",
+		// 2026-09-27 owner layout: one line per check, the failed command
+		// on the failed line, the unmet gate named, each requirement by
+		// name (its proof stays in `aether phase N`), the reviewers' notes
+		// under SAFETY REVIEW.
+		"Build passed",
+		"(1s)",
+		"Tests failed — 2 of 12 tests failed (ran: npm test)",
+		"Not yet true: the build/test checks passed",
 		"└── fix the failing build/test check and run aether continue",
-		"✓ Login works — proved by: 3 tests passed, auth.go present",
-		"🔍 Specialist Findings",
-		"found: high: race condition in dispatch loop",
+		"✓ Login works",
+		"S A F E T Y   R E V I E W",
+		"high: race condition in dispatch loop",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("chat-path output missing %q, got:\n%s", want, output)

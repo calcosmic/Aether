@@ -342,18 +342,21 @@ func TestContinuePassAndFailGatesUseDifferentSymbols(t *testing.T) {
 	rendered := renderVoiceContinueMidphaseScreen(t)
 	glyphs := sortedGlyphsLongestFirst(voiceGlyphSet())
 
+	// 2026-09-27 owner layout: passing gates are counted on one line, and
+	// every check that did not pass is named on its own line, so the pass
+	// line is the passed build check and the fail line the unmet gate.
 	var passLine, failLine string
 	for _, line := range strings.Split(rendered, "\n") {
 		trimmed := strings.TrimSpace(line)
 		switch {
-		case strings.Contains(trimmed, "the build's own plan file is on disk"):
+		case strings.Contains(trimmed, "Build passed"):
 			passLine = trimmed
 		case strings.Contains(trimmed, "the build/test checks passed"):
 			failLine = trimmed
 		}
 	}
 	if passLine == "" || failLine == "" {
-		t.Fatalf("could not find both a passing and a failing gate line in:\n%s", rendered)
+		t.Fatalf("could not find both a passing check line and a failing gate line in:\n%s", rendered)
 	}
 	if !voiceLineIsLed(passLine, glyphs) || !voiceLineIsLed(failLine, glyphs) {
 		t.Fatalf("gate lines are not both glyph-led: pass=%q fail=%q", passLine, failLine)
@@ -372,16 +375,20 @@ func TestContinueScreenFactsUnchanged(t *testing.T) {
 	rendered := renderVoiceContinueMidphaseScreen(t)
 	_, phase, housekeeping, _, _ := continueScreenFixture()
 
-	wantPhaseLine := fmt.Sprintf("Phase %d verified and completed: %s", phase.ID, phase.Name)
-	if !strings.Contains(rendered, wantPhaseLine) {
-		t.Errorf("continue screen no longer reports %q:\n%s", wantPhaseLine, rendered)
-	}
-	for _, gate := range []string{"the build's own plan file is on disk", "the build/test checks passed"} {
-		if !strings.Contains(rendered, gate) {
-			t.Errorf("continue screen no longer names gate %q:\n%s", gate, rendered)
+	// 2026-09-27 owner layout: the verdict box names the phase; passing
+	// gates are counted on one line and only an unmet gate is named.
+	for _, want := range []string{
+		fmt.Sprintf("PHASE %d CHECKED AND SIGNED OFF", phase.ID),
+		"for " + phase.Name,
+		"Gates: 1/2 passed",
+		"the build/test checks passed",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("continue screen no longer reports %q:\n%s", want, rendered)
 		}
 	}
-	wantSignalsLine := fmt.Sprintf("Signals: %d active -> %d active after housekeeping", housekeeping.ActiveBefore, housekeeping.ActiveAfter)
+	// Same fact since the owner's 2026-09-27 layout, in plain words.
+	wantSignalsLine := fmt.Sprintf("%d still active", housekeeping.ActiveAfter)
 	if !strings.Contains(rendered, wantSignalsLine) {
 		t.Errorf("continue screen no longer reports %q:\n%s", wantSignalsLine, rendered)
 	}

@@ -794,29 +794,28 @@ func TestContinueVisualOutputShowsVerificationArtifactsAndSpawnTree(t *testing.T
 
 	output := stdout.(*bytes.Buffer).String()
 	expectedWatcher := deterministicAntName("watcher", "phase:1:continue:watcher")
+	// 2026-09-27 owner layout: the check screen leads with its verdict and
+	// its sections; the artifact file list and the all-completed helper
+	// roster left the default screen (they stay in the JSON result and are
+	// one command away), so they must NOT appear here.
+	_ = expectedWatcher
 	for _, want := range []string{
-		"── Verification ──",
-		"Phase 1 verified and completed: Verify contracts",
-		"Continue Worker Flow",
-		expectedWatcher + " completed",
-		"Watcher " + expectedWatcher + " completed independent verification before advancement",
-		"Signal housekeeping completed",
-		"── Housekeeping ──",
-		"A R T I F A C T S",
-		"Workers",
-		"Forge-41",
-		"Keen-42",
-		"Verification passed during continue",
-		"── Next Phase ──",
-		".aether/data/build/phase-1/verification.json",
-		".aether/data/build/phase-1/gates.json",
-		".aether/data/build/phase-1/review.json",
-		".aether/data/build/phase-1/continue.json",
-		".aether/data/spawn-tree.txt",
+		"PHASE 1 CHECKED AND SIGNED OFF",
+		"Everything passed for Verify contracts.",
+		"C H E C K S",
+		"B E H I N D   T H E   S C E N E S",
+		"Steering notes: ",
+		"Full detail: `aether phase 1`",
+		"Next phase ready:",
 		"it is safe to close this chat",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("continue visual output missing %q\n%s", want, output)
+		}
+	}
+	for _, gone := range []string{"A R T I F A C T S", ".aether/data/build/phase-1/verification.json", ".aether/data/spawn-tree.txt", "Workers (the helpers", "── Verification ──"} {
+		if strings.Contains(output, gone) {
+			t.Errorf("continue visual output still shows %q\n%s", gone, output)
 		}
 	}
 	if strings.Contains(output, "Forge-41 [builder] completed") {
@@ -883,20 +882,20 @@ func TestContinueBlockedVisualOutputShowsWorkerFlow(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"C O N T I N U E   B L O C K E D",
-		"Continue Worker Flow",
+		"PHASE 1 NOT SIGNED OFF",
+		"W H A T   T O   F I X",
+		// A helper that did not finish keeps the helper list on screen.
+		"H E L P E R S",
 		"Continue watcher rejected the phase",
 		"blocked",
 		"W H A T   N E X T",
-		"A R T I F A C T S",
-		".aether/data/build/phase-1/verification.json",
-		".aether/data/build/phase-1/gates.json",
-		".aether/data/build/phase-1/continue.json",
-		".aether/data/spawn-tree.txt",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("blocked continue visual output missing %q\n%s", want, output)
 		}
+	}
+	if strings.Contains(output, "A R T I F A C T S") || strings.Contains(output, ".aether/data/build/phase-1/verification.json") {
+		t.Errorf("blocked continue visual output still lists file paths\n%s", output)
 	}
 	if strings.Contains(output, "Run `aether continue` to recover the blocked work") {
 		t.Fatalf("blocked continue suggested the identical no-op retry:\n%s", output)
@@ -1003,12 +1002,11 @@ func TestContinueVisualOutputShowsColonyCompleteStageMarker(t *testing.T) {
 
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
-		"Phase 1 verified and completed: Finish the final slice",
-		// Widened for Phase "Classic Visual Voice" plan 04: the continue
-		// screen's stage marker now names "project" beside "colony" (the
-		// widened plain-English scan), unlike the build screen's marker,
-		// which is unchanged.
-		"── Project Complete (Colony) ──",
+		"PHASE 1 CHECKED AND SIGNED OFF",
+		"Everything passed for Finish the final slice. The project is complete.",
+		// 2026-09-27 owner layout: the project-complete block is drawn
+		// unchanged, set off by a blank line instead of a thin stage marker.
+		"P R O J E C T   C O M P L E T E",
 		"Every phase in the plan is finished.",
 		"$ant-seal",
 		"it is safe to close this chat",

@@ -232,5 +232,40 @@
     "key": "milestone",
     "finalizer": "seal",
     "reason": "Always the constant \"Crowned Anthill\" today -- renderSealVisual shows this fact via fixed prose (the title art and \"Colony sealed at Crowned Anthill\" line) rather than re-reading a dynamic value; there is currently only one milestone name a seal can reach."
+  },
+  {
+    "key": "verification_report",
+    "finalizer": "continue advanced",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "gate_report",
+    "finalizer": "continue advanced",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "review_report",
+    "finalizer": "continue advanced",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "continue_report",
+    "finalizer": "continue advanced",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "verification_report",
+    "finalizer": "continue blocked",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "gate_report",
+    "finalizer": "continue blocked",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
+  },
+  {
+    "key": "continue_report",
+    "finalizer": "continue blocked",
+    "reason": "Saved report file path. The owner's 2026-09-27 check-screen layout took the file-path list off the default screen; the report stays on disk and in the JSON result, and the screen points to `aether phase N` for the full detail."
   }
 ]

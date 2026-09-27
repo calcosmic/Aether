@@ -265,7 +265,10 @@ func TestChatPathShowsWorkerMeasurements(t *testing.T) {
 			DurationReported: true, ToolCount: 14, ToolCountReported: true,
 		},
 		{
-			Stage: "review", Caste: "auditor", Name: "Roam-90", Status: "completed",
+			// 2026-09-27 owner layout: the helper list (and each helper's
+			// measured figures) shows only when a helper did not finish,
+			// so one helper here ends blocked.
+			Stage: "review", Caste: "auditor", Name: "Roam-90", Status: "blocked",
 			Summary:           "checked quality",
 			Duration:          0,
 			DurationReported:  false,

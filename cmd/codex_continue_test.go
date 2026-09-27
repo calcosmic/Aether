@@ -6185,10 +6185,11 @@ func TestContinueVisualAnnouncesDeterministicVerificationFlow(t *testing.T) {
 	output := stdout.(*bytes.Buffer).String()
 	for _, want := range []string{
 		"Running deterministic verification for phase 1 before watcher/review workers",
-		"Continue Worker Flow",
-		"Deterministic verification completed",
-		"Continue watcher skipped",
-		"Review wave skipped",
+		// 2026-09-27 owner layout: the check results are the CHECKS
+		// section; a roster of helpers that all finished or were skipped
+		// no longer shows (it stays in the JSON result and `aether phase`).
+		"C H E C K S",
+		"Build passed",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("visual output missing %q:\n%s", want, output)

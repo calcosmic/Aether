@@ -389,10 +389,12 @@ func TestContinueSurfacesSuggestedSteering(t *testing.T) {
 
 	output := renderContinueVisual(state, state.Plan.Phases[0], nil, false, nil, map[string]interface{}{}, colony.VerificationDepthStandard)
 	for _, want := range []string{
-		"── Suggested Steering ──",
+		// 2026-09-27 owner layout: the suggestions sit, one line each,
+		// under the check screen's BEHIND THE SCENES section.
+		"B E H I N D   T H E   S C E N E S",
+		"2 steering suggestions",
 		"nothing is written until you approve it",
 		"1. 🚫 [REDIRECT] never edit generated files by hand",
-		"└── 3 generated files were hand-edited this phase",
 		"aether suggest-approve --approve sg_1",
 		"2. 🎯 [FOCUS] the exporter module",
 	} {
@@ -407,7 +409,7 @@ func TestContinueSurfacesSuggestedSteering(t *testing.T) {
 	// No pending suggestions → no section, no nagging.
 	state.PendingSuggestions = nil
 	quiet := renderContinueVisual(state, state.Plan.Phases[0], nil, false, nil, map[string]interface{}{}, colony.VerificationDepthStandard)
-	if strings.Contains(quiet, "Suggested Steering") {
+	if strings.Contains(quiet, "nothing is written until you approve it") || strings.Contains(quiet, "suggest-approve --approve") {
 		t.Errorf("empty suggestion list still rendered the section")
 	}
 }

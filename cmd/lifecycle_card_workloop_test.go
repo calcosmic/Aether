@@ -121,7 +121,7 @@ func workLoopSurfaces() []workLoopSurface {
 			"No state was changed and no workers were spawned."),
 		commandSurface("checking the work", "continue",
 			[]string{"continue"}, builtWorkLoopState,
-			"── Verification ──"),
+			"C H E C K S"),
 		commandSurface("the shared closeout", "build",
 			[]string{"closeout", "build"}, builtWorkLoopState,
 			"State: "),
@@ -135,7 +135,7 @@ func workLoopSurfaces() []workLoopSurface {
 			name:     "a check that is blocked",
 			visual:   blockedCheckRun,
 			envelope: blockedCheckRun,
-			keep:     []string{"Blocking issues", "Way forward"},
+			keep:     []string{"W H A T   T O   F I X", "Way forward"},
 		},
 		{
 			// Recording work that helpers did outside the program.
@@ -404,7 +404,9 @@ func TestBlockedCheckStillExplainsItself(t *testing.T) {
 		t.Fatalf("the blocked check does not end with the shared card:\n%s", run.visual)
 	}
 	above := run.visual[:cardIndex]
-	for _, want := range []string{"Blocking issues", "Way forward"} {
+	// 2026-09-27 owner layout: the blocking issues sit under the heavy
+	// WHAT TO FIX header, with the way forward beneath them.
+	for _, want := range []string{spacedTitle("What To Fix"), "Way forward"} {
 		if !strings.Contains(above, want) {
 			t.Errorf("a blocked check no longer shows %q above the closing block:\n%s", want, above)
 		}
