@@ -302,6 +302,15 @@ func TestPhase199GateReceipt(t *testing.T) {
 	}
 }
 
+// Later phases verify the archived proof without claiming that this checkout
+// preserves the original owner's local scratch. The exact owner-audit entry
+// point above retains its stricter workspace-preservation contract.
+func TestPhase199ArchivedGateReceipt(t *testing.T) {
+	if err := validatePhase199ArchivedReceiptAtRoot(findTestModuleRoot(t), loadPhase199GateReceipt(t), time.Now().UTC()); err != nil {
+		t.Fatalf("validate archived Phase 199 gate receipt: %v", err)
+	}
+}
+
 func validatePhase199ArchivedReceiptAtRoot(root string, receipt phase199GateReceipt, now time.Time) error {
 	if err := validatePhase199GateReceiptForMode(receipt, now, true); err != nil {
 		return fmt.Errorf("schema: %w", err)

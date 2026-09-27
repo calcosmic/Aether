@@ -165,11 +165,11 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 	const safeToClose = "it is safe to close this chat"
 	const holdTheChat = "Don't close this chat yet"
 
-	// Without persisted worker handoffs: the section must hold the user
+	// Without persisted worker handoffs: the screen must hold the user
 	// back, never claim safety.
 	out := renderCeremonyCloseoutVisual(result)
-	if !strings.Contains(out, "Handoff") {
-		t.Fatalf("build closeout has no Handoff section:\n%s", out)
+	if !strings.Contains(out, "This phase's helpers left no notes behind.") {
+		t.Fatalf("build closeout does not disclose missing helper notes:\n%s", out)
 	}
 	if !strings.Contains(out, holdTheChat) {
 		t.Fatalf("closeout without handoffs does not hold the user back:\n%s", out)
@@ -177,8 +177,8 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 	if strings.Contains(out, safeToClose) {
 		t.Fatalf("closeout says it is safe to close the chat with no handoffs recorded:\n%s", out)
 	}
-	if !strings.Contains(out, "Colony State") {
-		t.Fatalf("build closeout lost the colony-state footer:\n%s", out)
+	if !strings.Contains(out, closeoutGoal) || !strings.Contains(out, "Phase 1 of 1: First") {
+		t.Fatalf("build closeout lost the project and phase context:\n%s", out)
 	}
 
 	// With handoffs recorded AND the handoff file on disk, the claim
@@ -194,7 +194,7 @@ func TestBuildCloseoutHandoffSectionHouseStyle(t *testing.T) {
 		t.Fatalf("write handoff file: %v", err)
 	}
 	out = renderCeremonyCloseoutVisual(result)
-	if !strings.Contains(out, "were saved for phase 1") {
+	if !strings.Contains(out, "The helpers' notes are saved for the next phase.") {
 		t.Fatalf("closeout does not confirm the notes this build's helpers left:\n%s", out)
 	}
 	if !strings.Contains(out, safeToClose) {

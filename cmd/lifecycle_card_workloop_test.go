@@ -115,7 +115,7 @@ func workLoopSurfaces() []workLoopSurface {
 	return []workLoopSurface{
 		commandSurface("building a phase", "build",
 			[]string{"build", "1"}, buildableWorkLoopState,
-			"── Tasks ──", "── Dispatch ──"),
+			"C H E C K S", "── Dispatch ──"),
 		commandSurface("building a phase, plan only", "build",
 			[]string{"build", "1", "--plan-only"}, buildableWorkLoopState,
 			"No state was changed and no workers were spawned."),
@@ -129,7 +129,7 @@ func workLoopSurfaces() []workLoopSurface {
 			name:     "building a phase that only partly finished",
 			visual:   partlyFinishedBuildRun,
 			envelope: partlyFinishedBuildRun,
-			keep:     []string{"Finished and kept", "Still to do", "NOT ready to be checked"},
+			keep:     []string{"F I N I S H E D   A N D   K E P T", "S T I L L   T O   D O", "NOT ready to be checked"},
 		},
 		{
 			name:     "a check that is blocked",
@@ -138,12 +138,13 @@ func workLoopSurfaces() []workLoopSurface {
 			keep:     []string{"W H A T   T O   F I X", "Way forward"},
 		},
 		{
-			// Recording work that helpers did outside the program.
-			name: "recording work done outside the program",
+			// Without accepted completion evidence, rendering an external
+			// finalizer must not assert that results have been recorded.
+			name: "external finalizer without completion evidence",
 			visual: rendererSurface(func(state colony.ColonyState) string {
 				return renderBuildFinalizeVisual(state, state.Plan.Phases[0], nil)
 			}, "build"),
-			keep: []string{"External Task worker results recorded."},
+			keep: []string{"PHASE 1 PARTLY BUILT", "0 of 1 tasks done; 1 still to do."},
 		},
 		{
 			// The check prepared but not run: the manifest-only variant.
@@ -336,7 +337,7 @@ func TestWorkLoopCardsComeFromTheResolver(t *testing.T) {
 			}
 			for _, keep := range surface.keep {
 				if !strings.Contains(run.visual, keep) {
-					t.Errorf("%s lost %q from above the closing block -- only the what-next block was supposed to change",
+					t.Errorf("%s lost the situation-specific fact %q from above the closing block",
 						surface.name, keep)
 				}
 			}

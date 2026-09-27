@@ -101,9 +101,10 @@ func TestPlanningPublicPaths200(t *testing.T) {
 			t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
 				options := planningVisualOptions{Width: width}
 				views := map[string]string{
-					"specification": renderPlanningSpecificationVisual(planningVisualSpecificationFixture(), options),
-					"iteration":     renderPlanningIterationVisual(planningVisualIterationFixture(colony.PlanningStopPassCap), options),
-					"candidate":     renderPlanningCandidateVisual(review, options),
+					"specification":    renderPlanningSpecificationVisual(planningVisualSpecificationFixture(), options),
+					"iteration":        renderPlanningIterationVisual(planningVisualIterationFixture(colony.PlanningStopPassCap), options),
+					"candidate":        renderPlanningCandidateVisual(review, options),
+					"candidate detail": renderPlanningCandidateVisual(review, planningVisualOptions{Width: width, Detail: true}),
 				}
 				for name, output := range views {
 					assertPlanningVisualWidth(t, name, output, width)
@@ -115,8 +116,14 @@ func TestPlanningPublicPaths200(t *testing.T) {
 					t.Fatalf("width %d abbreviates Specification:\n%s", width, views["specification"])
 				}
 				candidateWords := strings.Join(strings.Fields(views["candidate"]), " ")
-				if !strings.Contains(views["iteration"], "iteration cap") || !strings.Contains(candidateWords, review.EvidenceThatWouldChange) || !strings.Contains(candidateWords, review.Recommendation.Rationale) {
-					t.Fatalf("width %d lost persisted planning semantics", width)
+				for _, want := range []string{"PLAN READY", review.Candidate.Proposal.Phases[0].Name, review.ResidualGaps[0].Description, "Accept this candidate?", review.AcceptanceCommand} {
+					if !strings.Contains(candidateWords, want) {
+						t.Errorf("width %d lost candidate decision %q:\n%s", width, want, views["candidate"])
+					}
+				}
+				detailWords := strings.Join(strings.Fields(views["candidate detail"]), " ")
+				if !strings.Contains(views["iteration"], "iteration cap") || !strings.Contains(detailWords, review.EvidenceThatWouldChange) || !strings.Contains(detailWords, review.Recommendation.Rationale) {
+					t.Fatalf("width %d lost persisted planning detail", width)
 				}
 			})
 		}
@@ -266,7 +273,7 @@ func TestPlanningPublicPaths200(t *testing.T) {
 		for _, proof := range []string{
 			`^TestCurrentVocabulary199($|/)`,
 			`^TestPhase199GateReceiptSchema$`,
-			`^TestPhase199GateReceipt$`,
+			`^TestPhase199ArchivedGateReceipt$`,
 		} {
 			planningPublicPaths200RunProof(t, repoRoot, proof)
 		}

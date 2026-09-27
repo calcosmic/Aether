@@ -689,6 +689,10 @@ func nativeGapCancellationRefusalFacts(r codexNativeLiveReceipt, capture nativeG
 func nativeGapCancellationRefusalFixture(t *testing.T) (codexNativeLiveReceipt, nativeGapCancellationRefusalCapture) {
 	t.Helper()
 	fixtureRoot := setupExternalBuildAttemptTest(t)
+	fixtureRoot, err := filepath.EvalSymlinks(fixtureRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The general admission fixture deliberately starts with legacy state whose
 	// compatibility fields are normalized only in memory by the runtime. This
 	// immutable replay control needs an already-current raw state: persist its
@@ -701,10 +705,6 @@ func nativeGapCancellationRefusalFixture(t *testing.T) (codexNativeLiveReceipt, 
 		t.Fatal(err)
 	}
 	manifest := prepareBoundBuildManifestOnly(t, fixtureRoot)
-	fixtureRoot, err = filepath.EvalSymlinks(fixtureRoot)
-	if err != nil {
-		t.Fatal(err)
-	}
 	dispatch := manifest.Dispatches[0]
 	request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: dispatch.Name, TaskID: normalizedDispatchTaskID(dispatch), HostSessionID: "admission-host", Workspace: fixtureRoot, HostPermission: "workspace_write"}
 	request = nativeReserveForTest(t, request)

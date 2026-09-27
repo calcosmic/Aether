@@ -322,8 +322,8 @@ func TestPrintBriefMatchesTaskPacketStandard(t *testing.T) {
 }
 
 // TestBuildContextShowsSteeringSignals: the operator's active signals render
-// under the build's Context stage — the steering loop is visible at the
-// moment it takes effect. Fails if the Context stage goes silent again.
+// in the closing card — the steering loop is visible at the moment it takes
+// effect, without a duplicate count or an empty-signal section.
 func TestBuildContextShowsSteeringSignals(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	saveGlobals(t)
@@ -331,9 +331,10 @@ func TestBuildContextShowsSteeringSignals(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(tmpDir) })
 	store = s
 
+	now := time.Now().UTC().Format(time.RFC3339)
 	pf := colony.PheromoneFile{Signals: []colony.PheromoneSignal{
-		{ID: "s1", Type: "REDIRECT", Content: []byte(`{"text":"never touch the billing tables"}`), Active: true, CreatedAt: "2026-08-16T00:00:00Z"},
-		{ID: "s2", Type: "FOCUS", Content: []byte(`{"text":"the auth module"}`), Active: true, CreatedAt: "2026-08-16T00:00:00Z"},
+		{ID: "s1", Type: "REDIRECT", Content: []byte(`{"text":"never touch the billing tables"}`), Strength: floatPtr(1), Active: true, CreatedAt: now},
+		{ID: "s2", Type: "FOCUS", Content: []byte(`{"text":"the auth module"}`), Strength: floatPtr(1), Active: true, CreatedAt: now},
 		{ID: "s3", Type: "FOCUS", Content: []byte(`{"text":"expired note"}`), Active: false, CreatedAt: "2026-01-01T00:00:00Z"},
 	}}
 	if err := s.SaveJSON("pheromones.json", pf); err != nil {
@@ -345,11 +346,9 @@ func TestBuildContextShowsSteeringSignals(t *testing.T) {
 	output := renderBuildVisualWithDispatches(state, state.Plan.Phases[0], nil, colony.VerificationDepthStandard)
 
 	for _, want := range []string{
-		"Steering signals: 2 active — injected into every worker prompt",
-		`🚫 [`,
-		`"never touch the billing tables"`,
-		`🎯 [`,
-		`"the auth module"`,
+		"Your standing instructions",
+		"REDIRECT: never touch the billing tables",
+		"FOCUS: the auth module",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("build Context missing %q in:\n%s", want, output)
@@ -359,13 +358,13 @@ func TestBuildContextShowsSteeringSignals(t *testing.T) {
 		t.Errorf("inactive signal leaked into the build Context")
 	}
 
-	// With no signals, the stage says so and teaches the steering commands.
+	// With no signals, there is no empty section or zero-count clutter.
 	if err := s.SaveJSON("pheromones.json", colony.PheromoneFile{Signals: []colony.PheromoneSignal{}}); err != nil {
 		t.Fatalf("clear signals: %v", err)
 	}
 	empty := renderBuildVisualWithDispatches(state, state.Plan.Phases[0], nil, colony.VerificationDepthStandard)
-	if !strings.Contains(empty, "Steering signals: none") {
-		t.Errorf("empty-signal build Context missing the none line:\n%s", empty)
+	if strings.Contains(empty, "Your standing instructions") || strings.Contains(empty, "Steering signals: none") {
+		t.Errorf("empty-signal build contains an empty steering section:\n%s", empty)
 	}
 }
 

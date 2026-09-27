@@ -24,6 +24,10 @@ import (
 func nativeRecoveryFixture(t *testing.T, count int) (codexBuildManifest, []codexNativeWorkerRequest) {
 	t.Helper()
 	root := setupExternalBuildAttemptTest(t)
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var state colony.ColonyState
 	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
 		t.Fatal(err)
@@ -39,7 +43,6 @@ func nativeRecoveryFixture(t *testing.T, count int) (codexBuildManifest, []codex
 	if len(manifest.Dispatches) != count {
 		t.Fatalf("want %d runtime assignments: %+v", count, manifest.Dispatches)
 	}
-	root, _ = filepath.EvalSymlinks(root)
 	requests := make([]codexNativeWorkerRequest, count)
 	for i, d := range manifest.Dispatches {
 		requests[i] = codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: d.Name, TaskID: normalizedDispatchTaskID(d), HostSessionID: "recovery-host", Workspace: root, HostPermission: "workspace_write"}

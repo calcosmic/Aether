@@ -34,6 +34,14 @@ func sealedEndgameState(t *testing.T) colony.ColonyState {
 		Goal:      fixtureGoal("Ship the billing rewrite"),
 		State:     colony.StateCOMPLETED,
 		Milestone: "Crowned Anthill",
+		SealOutcome: &colony.SealOutcome{
+			OutcomeKind:     colony.OutcomeKindVerifiedCompletion,
+			Disposition:     colony.SealDispositionVerified,
+			CompletedPhases: []int{1, 2},
+			StateEffect:     colony.LifecycleStateEffectCommitted,
+			Transaction:     colony.LifecycleTransactionReference{Stage: colony.TransactionStageVerified},
+			Provenance:      colony.RecoveryProvenanceConfirmed,
+		},
 		Plan: colony.Plan{Phases: []colony.Phase{
 			fixturePhase(1, "Foundations", colony.PhaseCompleted),
 			fixturePhase(2, "Billing engine", colony.PhaseCompleted),
@@ -68,8 +76,9 @@ func TestSealEndsWithTheCard(t *testing.T) {
 			run.card, run.visual)
 	}
 	for _, keep := range []string{
-		"The project (this colony) stands crowned and finished (sealed).",
-		"The coordinator (Queen) that decides your team keeps this wisdom in QUEEN.md for next time.",
+		"PROJECT SEALED — FINISHED",
+		"Ship the billing rewrite",
+		"Full detail: `aether status --detail`",
 	} {
 		if !strings.Contains(run.visual, keep) {
 			t.Errorf("seal lost %q from above the closing block", keep)

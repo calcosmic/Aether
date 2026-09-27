@@ -114,7 +114,8 @@ func seedOneHelpfulApplicationCreditBuildAttempt(t *testing.T, phaseID int) {
 	state.CurrentPhase, state.State = phaseID, colony.StateEXECUTING
 	applyAcceptedBuildTestExecutionFacts(t, root, state)
 	dispatches := []codexBuildDispatch{{Name: "Mason-1", Caste: "builder", TaskID: fmt.Sprintf("%d.1", phaseID)}}
-	earlier := commitTestBuildStartAt(t, root, phaseID, time.Now().UTC(), testBuildStartOptions{AttemptID: "attempt-a", Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
+	generatedAt := time.Now().UTC()
+	earlier := commitTestBuildStartAt(t, root, phaseID, generatedAt, testBuildStartOptions{Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
 	earlierRel := earlier.AttemptPath
 	if err := attachBuildFreeCheckReport(earlierRel, buildFreeCheckReport{
 		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,
@@ -124,7 +125,7 @@ func seedOneHelpfulApplicationCreditBuildAttempt(t *testing.T, phaseID int) {
 		t.Fatalf("attach earlier free-check report: %v", err)
 	}
 
-	latest := commitTestBuildStartAt(t, root, phaseID, time.Now().UTC(), testBuildStartOptions{AttemptID: "attempt-b", Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
+	latest := commitTestBuildStartAt(t, root, phaseID, generatedAt.Add(time.Second), testBuildStartOptions{Dispatches: dispatches, MakeLatest: testBuildStartBool(true)})
 	latestRel := latest.AttemptPath
 	if err := attachBuildFreeCheckReport(latestRel, buildFreeCheckReport{
 		RecordedAt: time.Now().UTC().Format(time.RFC3339), Phase: phaseID,

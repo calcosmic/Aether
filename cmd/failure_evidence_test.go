@@ -23,10 +23,11 @@ import (
 
 // commitFailureEvidenceAttempt admits the fixture through the same accepted
 // plan and build-start transaction used by production.
-func commitFailureEvidenceAttempt(t *testing.T, phase int, attemptID string, dispatches []codexBuildDispatch) *storage.Store {
+func commitFailureEvidenceAttempt(t *testing.T, dispatches []codexBuildDispatch) testBuildStartFixture {
 	t.Helper()
 	saveGlobals(t)
 	goal := "Record worker failure evidence"
+	const phase = 1
 	tasks := make([]colony.Task, len(dispatches))
 	for i := range dispatches {
 		id := fmt.Sprintf("%d.%d", phase, i+1)
@@ -37,10 +38,9 @@ func commitFailureEvidenceAttempt(t *testing.T, phase int, attemptID string, dis
 		Version: "3.0", Goal: &goal, State: colony.StateEXECUTING, CurrentPhase: phase,
 		Plan: colony.Plan{Phases: []colony.Phase{{ID: phase, Name: goal, Status: colony.PhaseInProgress, Tasks: tasks}}},
 	})
-	commitTestBuildStartAt(t, accepted.Root, phase, time.Now().UTC(), testBuildStartOptions{
-		AttemptID: attemptID, Dispatches: dispatches, MakeLatest: testBuildStartBool(true),
+	return commitTestBuildStartAt(t, accepted.Root, phase, time.Now().UTC(), testBuildStartOptions{
+		Dispatches: dispatches, MakeLatest: testBuildStartBool(true),
 	})
-	return store
 }
 
 // ---------------------------------------------------------------------------
@@ -50,11 +50,11 @@ func commitFailureEvidenceAttempt(t *testing.T, phase int, attemptID string, dis
 func TestFailureEvidenceCarriesTheAttemptIdentity(t *testing.T) {
 	saveGlobals(t)
 
-	const phase = 7
-	const attemptID = "attempt-evidence-1"
-	s := commitFailureEvidenceAttempt(t, phase, attemptID, []codexBuildDispatch{
+	fixture := commitFailureEvidenceAttempt(t, []codexBuildDispatch{
 		{Name: "Mason-1", Caste: "builder", JobName: "job-alpha"},
 	})
+	s, phase := store, fixture.Phase.ID
+	attemptID := fixture.Attempt.ID
 
 	dispatch := codex.WorkerDispatch{WorkerName: "Mason-1", Caste: "builder", Workflow: "build", Phase: phase}
 	result := codex.DispatchResult{
@@ -99,11 +99,11 @@ func TestFailureEvidenceCarriesTheAttemptIdentity(t *testing.T) {
 func TestBlockerTruthIsOneStore(t *testing.T) {
 	saveGlobals(t)
 
-	const phase = 9
-	const attemptID = "attempt-blocker-1"
-	s := commitFailureEvidenceAttempt(t, phase, attemptID, []codexBuildDispatch{
+	fixture := commitFailureEvidenceAttempt(t, []codexBuildDispatch{
 		{Name: "Hammer-3", Caste: "builder"},
 	})
+	s, phase := store, fixture.Phase.ID
+	attemptID := fixture.Attempt.ID
 
 	dispatch := codex.WorkerDispatch{WorkerName: "Hammer-3", Caste: "builder", Workflow: "build", Phase: phase}
 	result := codex.DispatchResult{
@@ -161,12 +161,12 @@ func TestBlockerTruthIsOneStore(t *testing.T) {
 func TestEscalatedCountHasOneCountingPath(t *testing.T) {
 	saveGlobals(t)
 
-	const phase = 11
-	s := commitFailureEvidenceAttempt(t, phase, "attempt-count-1", []codexBuildDispatch{
+	fixture := commitFailureEvidenceAttempt(t, []codexBuildDispatch{
 		{Name: "Worker-A", Caste: "builder"},
 		{Name: "Worker-B", Caste: "builder"},
 		{Name: "Worker-C", Caste: "builder"},
 	})
+	s, phase := store, fixture.Phase.ID
 
 	workers := []struct {
 		name    string
