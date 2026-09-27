@@ -3292,10 +3292,10 @@ func TestVisualsConfigOriginalFileValuesMatchCompiledDefaults(t *testing.T) {
 
 func TestCodexVisualsPlanningRoutesCanonicalCandidate(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	result := planCandidateReviewResult(planningVisualCandidateFixture())
+	result := planCandidateReviewResult(screenPlanCandidateFixture())
 	output := renderPlanVisual(result)
 
-	for _, want := range []string{"Plan Candidate", "CANDIDATE — NOT ACTIVE", "Queen recommendation", "Accept this candidate?"} {
+	for _, want := range []string{"PLAN READY", "Review it, then approve it.", "T H E   P H A S E S", "Accept this candidate?"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("canonical candidate route missing %q:\n%s", want, output)
 		}

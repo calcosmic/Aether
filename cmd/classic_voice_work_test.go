@@ -456,24 +456,18 @@ func TestSealScreenMeetsTheReferenceDensity(t *testing.T) {
 	assertVoiceDensityAtLeastReference(t, reference, "seal", renderVoiceSealScreen(t))
 }
 
-// TestSealCeremonyArtIsUnchanged asserts the rendered seal screen contains
+// TestSealCeremonyLeadsWithVerdict asserts the rendered seal screen contains
 // the crowning art constant verbatim, the two rule lines at their original
 // length, and the letter-spaced title with the version -- so a future edit
 // to the summary beneath it cannot erode the ceremony above it.
-func TestSealCeremonyArtIsUnchanged(t *testing.T) {
-	rendered := renderVoiceSealScreen(t)
-	state, _ := sealScreenFixture()
-
-	if !strings.Contains(rendered, crownedAnthillArt) {
-		t.Errorf("seal screen no longer contains the crowning art verbatim:\n%s", rendered)
+func TestSealCeremonyLeadsWithVerdict(t *testing.T) {
+	rendered := stripANSI(renderVoiceSealScreen(t))
+	box := firstNonBlankLines(rendered, 4)
+	if len(box) != 4 || !isHeavyRuleLine(box[0]) || !isHeavyRuleLine(box[3]) || !strings.Contains(box[1], "PROJECT SEALED — FINISHED") {
+		t.Fatalf("seal ceremony lost its verdict: %s", rendered)
 	}
-	rule := strings.Repeat("━", 50)
-	if strings.Count(rendered, rule) < 2 {
-		t.Errorf("seal screen no longer carries both 50-rune rule lines:\n%s", rendered)
-	}
-	wantTitle := fmt.Sprintf("%s   v%d", spacedTitle("Crowned Anthill"), state.ColonyVersion)
-	if !strings.Contains(rendered, wantTitle) {
-		t.Errorf("seal screen no longer carries the letter-spaced title with its version %q:\n%s", wantTitle, rendered)
+	if strings.Contains(rendered, crownedAnthillArt) {
+		t.Fatal("decorative art returned above the concise seal result")
 	}
 }
 

@@ -253,7 +253,7 @@ func TestSealTransaction199ForcedTruth(t *testing.T) {
 			t.Setenv("AETHER_FORCE_COLOR", mode.forceColor)
 			t.Setenv("NO_COLOR", mode.noColor)
 			output := RenderSealOutcome(result)
-			if !strings.Contains(output, "⛔ FORCED SEAL — COMPLETION NOT VERIFIED") || !strings.Contains(output, "The colony was force-sealed for recordkeeping. Completion was not verified.") {
+			if !strings.Contains(output, "PROJECT CLOSED EARLY") || !strings.Contains(output, "Completion was not verified.") || !strings.Contains(output, result.Outcome.OwnerReason) {
 				t.Fatalf("forced render missing exact truth copy:\n%s", output)
 			}
 			lower := strings.ToLower(output)
