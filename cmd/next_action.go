@@ -1041,7 +1041,7 @@ func changedFromInput(in nextActionInput, state colony.ColonyState) []string {
 func lastCommandPlainEnglish(command string) string {
 	switch strings.ToLower(strings.TrimSpace(command)) {
 	case "seal":
-		return "seal (closing the project record)"
+		return "seal (marking the project record closed)"
 	default:
 		return command
 	}
