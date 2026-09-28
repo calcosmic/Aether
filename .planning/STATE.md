@@ -6,11 +6,11 @@ current_phase: 210
 current_phase_name: Two-Week Freeze
 current_plan: 1
 total_plans_in_phase: 2
-status: awaiting_checkpoint
-stopped_at: Plan 210-01 Task 3 - trial running; owner confirmation of the first real session and blocker ledger pending
-last_updated: "2026-09-27T20:33:47Z"
-last_activity: 2026-09-27
-last_activity_desc: Resumed Phase 210 from existing trial records; recorder checks pass, 12 blockers recorded, owner confirmation pending
+status: executing
+stopped_at: Phase 210 trial running; owner reply recorded, real deck work corroborated, ledger completeness unknown
+last_updated: "2026-09-28"
+last_activity: 2026-09-28
+last_activity_desc: Checked French Fluency deck records at the owner's request; preserved 12 recorded blockers without claiming owner confirmation
 progress:
   total_phases: 5
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
 **Current focus:** Phase 210 — Two-Week Freeze
 **Active milestone:** v1.29 Use It Every Day, Phases 206-210. Phases 204.2-204.5 remain parked by the 2026-09-20 decision; Phase 205 acceptance was superseded on 2026-09-21. The older qualification and operator notes below are historical, not the next work.
-**Trial now:** Running 2026-09-25 through 2026-10-09 in French Fluency, with additions allowed as recorded in `210-FREEZE-START.md`. The ledger has 12 rows on 2026-09-27. Plan 210-01 Tasks 1-2 have existing records; Task 3 still needs the owner's own account and confirmation of the count. No plan or requirement is newly marked complete.
+**Trial now:** Running 2026-09-25 through 2026-10-09 in French Fluency, with additions allowed as recorded in `210-FREEZE-START.md`. The owner answered on 2026-09-28: "You can look for yourself, we created a new deck" and, about the ledger, "i dunno". Read-only inspection corroborates French Essentials (41 source entries, installed 2026-09-25 per the project records) and French Basics (99 entries, installed 2026-09-27 per the records). The ledger still has 12 rows; its completeness is unknown, not owner-confirmed. The reply is recorded in the phase handoff. Plan 210-01's accuracy criterion remains unverified; no plan or requirement is newly marked complete.
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -37,11 +37,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 210 (Two-Week Freeze) — TRIAL RUNNING; OWNER CHECKPOINT
+Phase: 210 (Two-Week Freeze) — TRIAL RUNNING
 Next phase: None scheduled; Plan 210-02 closes this trial on 2026-10-09 unless the owner explicitly ends it early
-Status: Awaiting the owner confirmation required by Plan 210-01 Task 3; ordinary trial use continues
+Status: Owner replied; real work corroborated; ledger completeness recorded as unknown; ordinary trial use continues
 Plan: 1 of 2
-Last activity: 2026-09-27 — Recorder checks passed; 12 blockers counted; stale pre-start handoff reconciled
+Last activity: 2026-09-28 — Inspected the two real deck sources and project records; recorded the owner's uncertainty without changing the count
 
 ## Performance Metrics
 
@@ -859,8 +859,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-27T20:33:47Z
-Stopped at: Plan 210-01 Task 3 — first-session account and ledger confirmation pending; trial remains running
+Last session: 2026-09-28
+Stopped at: Trial running; owner response received, deck work corroborated, ledger completeness unknown
 Resume file: .planning/phases/210-two-week-freeze/.continue-here.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
@@ -914,7 +914,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- Resume Plan 210-01 at Task 3. Show the actual tally (12 on 2026-09-27) and ask for the owner's first real French Fluency task and whether the ledger matches. Record the answer verbatim; do not infer approval from successful file checks.
+- The owner has answered Plan 210-01 Task 3. His real deck work is corroborated in French Fluency; he does not know whether the ledger is complete. Retain 12 as the recorded count, not a certified total, and carry the verification limitation into the closing report. Do not repeat the same questions or turn "i dunno" into approval.
 - Do not repeat the project/date interview, create an empty ledger, reinstall, or republish. The start record and real blocker history already exist; verification details are in the phase handoff.
 - Keep trial recording active through 2026-10-09. Plan 210-02 cannot begin before that date unless the owner explicitly closes the trial early. UED-19 and UED-20 remain unchecked pending actual closeout evidence.
 - Keep output print-friendly: plain text, short paragraphs, no heavy borders, shaded blocks or filled progress bars (owner request, 2026-09-27).
