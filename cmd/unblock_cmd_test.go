@@ -508,3 +508,54 @@ func TestUnblock_RecoverySummaryIncludesFixerOption(t *testing.T) {
 		t.Error("summary should contain '/ant-unblock --dispatch' command")
 	}
 }
+
+// Phase 210 blocker 14 (2026-10-02): Autopilot stopped on a blocker a helper
+// raised ("stray folders break the deck's template check; they need deleting")
+// and told the owner to run /ant-unblock. Unblock only knew about failed
+// checks, so it answered "No gate results found for phase 2. Run /ant-continue"
+// -- a dead end that never mentioned the actual problem. Unblock now shows
+// every open blocker, what it says needs doing, and how to mark it resolved.
+func TestUnblockShowsAnOpenBlockerAndHowToClearIt(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	goal := "Grow the deck"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+	})
+	const problem = "templates/.aether and templates/.claude are stray folders that break the template check; delete them"
+	rootCmd.SetArgs([]string{"flag-add", "--type", "blocker", "--severity", "high", "--phase", "2", "--title", problem})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("flag-add: %v", err)
+	}
+	var flags colony.FlagsFile
+	raw, err := os.ReadFile(filepath.Join(dataDir, pendingDecisionsFile))
+	if err != nil || json.Unmarshal(raw, &flags) != nil || len(flags.Decisions) != 1 {
+		t.Fatalf("fixture: want one flag raised by flag-add (err %v): %s", err, raw)
+	}
+	flagID := flags.Decisions[0].ID
+
+	resetRootCmd(t)
+	stdout.(*bytes.Buffer).Reset()
+	rootCmd.SetArgs([]string{"unblock"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unblock returned error: %v", err)
+	}
+	output := stdout.(*bytes.Buffer).String()
+	if strings.Contains(output, "No gate results found") {
+		t.Fatalf("unblock must not dead-end on missing check results while a blocker is open:\n%s", output)
+	}
+	for _, want := range []string{problem, "aether flag-resolve --id " + flagID} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("unblock output is missing %q:\n%s", want, output)
+		}
+	}
+}

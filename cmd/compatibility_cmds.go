@@ -303,7 +303,11 @@ var runCompatibilityCmd = &cobra.Command{
 			return nil
 		}
 		if _, ok := lifecycleCloseoutProjectionFromValue(result[lifecycleProjectionKey]); !ok {
-			if preflight, found := autopilotPreflightFromValue(result["preflight"]); found {
+			// The start-of-run decision is only still true for a dry run, which
+			// changes nothing. After a real run it named work the run had
+			// already finished, such as building phase 1 again (Phase 210
+			// blockers 8 and 14), so a real run reads the project afresh.
+			if preflight, found := autopilotPreflightFromValue(result["preflight"]); found && boolValue(result["dry_run"]) {
 				projection := preflight.Projection
 				result[lifecycleProjectionKey] = &projection
 			} else {

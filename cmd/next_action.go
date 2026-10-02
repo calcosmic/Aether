@@ -263,6 +263,7 @@ const (
 	candidateSeal            nextActionCandidateKey = "seal"
 	candidateEntomb          nextActionCandidateKey = "entomb"
 	candidateResume          nextActionCandidateKey = "resume"
+	candidateUnblock         nextActionCandidateKey = "unblock"
 	candidateResumeDashboard nextActionCandidateKey = "resume_dashboard"
 	candidateStatus          nextActionCandidateKey = "status"
 	candidateFlags           nextActionCandidateKey = "flags"
@@ -388,6 +389,11 @@ var nextActionCandidates = []nextActionCandidate{
 		Key:      candidateResume,
 		Template: "aether resume",
 		Why:      "Reload where things stand, so you can carry on without repeating yourself.",
+	},
+	{
+		Key:      candidateUnblock,
+		Template: "aether unblock",
+		Why:      "See what is stopping work and exactly how to clear it.",
 	},
 	{
 		// A read-only, non-mutating look at where things stand. It is distinct

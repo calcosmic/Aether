@@ -306,6 +306,13 @@ func lifecycleStopBlockReason() string {
 	if (state.State != colony.StateEXECUTING && state.State != colony.StateBUILT) || state.Paused {
 		return ""
 	}
+	// An open blocker means the project is already waiting on the owner and
+	// nothing can move until they deal with it. Demanding a pause here only
+	// turned "waiting on you" into a paused project that needed /ant-resume
+	// first (Phase 210 blockers 14 and 15).
+	if flags, ok := loadFlagsFile(store); ok && len(classifyOpenFlags(flags.Decisions).Blockers) > 0 {
+		return ""
+	}
 	if allowStopAfterRecentResume() {
 		return ""
 	}

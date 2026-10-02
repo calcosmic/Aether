@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
 )
@@ -114,5 +116,71 @@ func TestNextActionCardUsesProjection(t *testing.T) {
 	}
 	if !strings.Contains(string(resolverSource), "projectLifecycle(") {
 		t.Fatal("next_action.go does not delegate lifecycle policy to projectLifecycle")
+	}
+}
+
+// Phase 210 blocker 15 (2026-10-02): a project stopped on an open blocker was
+// told "run /ant-resume" by every screen, including the resume screen itself.
+// Resume cannot clear a blocker, so following the advice looped forever. The
+// one decision now names the command that shows the blocker and how to clear
+// it -- the same command Autopilot's own stop screen already names.
+func TestOpenBlockerNamesUnblockNotResume(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+	var buf bytes.Buffer
+	stdout = &buf
+	stderr = &bytes.Buffer{}
+
+	s, root := newTestStoreCmd(t)
+	goal := "grow the deck"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Safety net", Status: colony.PhaseCompleted},
+			{ID: 2, Name: "Eight piles", Status: colony.PhaseInProgress},
+		}},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+	rootCmd.SetArgs([]string{"flag-add", "--type", "blocker", "--severity", "high", "--phase", "2",
+		"--title", "stray folders break the deck's template check"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("flag-add: %v", err)
+	}
+
+	facts, err := loadLifecycleFacts(root, s, time.Now())
+	if err != nil {
+		t.Fatalf("load facts: %v", err)
+	}
+	answer := resolveNextAction(nextActionInput{Facts: facts, State: facts.State.Value})
+	if answer.Command != "aether unblock" {
+		t.Fatalf("an open blocker must name `aether unblock`, got %q (%s)", answer.Command, answer.Recommendation)
+	}
+	if strings.Contains(renderNextActionCardForPlatform(answer, "claude"), "/ant-resume") {
+		t.Fatalf("the card must never send the owner back to resume for a blocker resume cannot clear:\n%s",
+			renderNextActionCardForPlatform(answer, "claude"))
+	}
+
+	var flags colony.FlagsFile
+	if err := s.LoadJSON(pendingDecisionsFile, &flags); err != nil {
+		t.Fatal(err)
+	}
+	for i := range flags.Decisions {
+		flags.Decisions[i].Resolved = true
+	}
+	if err := s.SaveJSON(pendingDecisionsFile, flags); err != nil {
+		t.Fatal(err)
+	}
+	facts, err = loadLifecycleFacts(root, s, time.Now())
+	if err != nil {
+		t.Fatalf("reload facts: %v", err)
+	}
+	answer = resolveNextAction(nextActionInput{Facts: facts, State: facts.State.Value})
+	if answer.Command == "aether unblock" || answer.Command == "aether resume" {
+		t.Fatalf("once the blocker is resolved the card must move on, got %q", answer.Command)
 	}
 }

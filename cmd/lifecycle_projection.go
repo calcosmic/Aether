@@ -379,6 +379,15 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 			blockers = append(blockers, colony.LifecycleIssue{ID: fmt.Sprintf("phase-%d-failed", phase.ID), Summary: fmt.Sprintf("Phase %d failed", phase.ID)})
 		}
 	}
+	// An open blocker flag waits on the owner, and resume cannot clear one:
+	// sending the owner to resume here looped forever (Phase 210 blocker 15).
+	// Autopilot's own stop screen already names unblock for the same state.
+	if len(classifyOpenFlags(facts.Blockers.Value).Blockers) > 0 {
+		return lifecycleActionFromCandidate("unblock", candidateUnblock, "A problem is stopping work and needs you; this shows what it is and how to clear it.", evidence), []LifecycleActionChoice{
+			lifecycleChoiceFromCandidate("status", candidateStatus, "Inspect the blockers without changing state."),
+			lifecycleChoiceFromCandidate("history", candidateHistory, "Review the evidence leading to the block."),
+		}, colony.OutcomeKindRecoveryRequired, closure, provenance
+	}
 	if len(blockers) > 0 {
 		return lifecycleActionFromCandidate("resume", candidateResume, "Lifecycle work is blocked; resume reconciles the durable evidence before work continues.", evidence), []LifecycleActionChoice{
 			lifecycleChoiceFromCandidate("status", candidateStatus, "Inspect the blockers without changing state."),

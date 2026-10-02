@@ -2365,3 +2365,63 @@ func TestSelectOracleQuestionSmartEmptyPlan(t *testing.T) {
 		t.Errorf("empty plan should return fallback question, got ID=%q", result.ID)
 	}
 }
+
+// Phase 210 blockers 8 and 14: autopilot's own closing card offered the
+// "what next" it had worked out before the run started ("build phase 1, or
+// run Autopilot") even after the run had moved the project on, so the owner
+// was told to repeat finished work. The closing card must come from the
+// project as it stands when the run ends.
+func TestRunClosingCardReflectsTheProjectAfterTheRun(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	goal := "Run one autopilot phase and read the closing card"
+	now := time.Now().UTC()
+	accepted := createApprovedAcceptedBuildTestColony(t, colony.ColonyState{
+		Version:       "3.0",
+		Goal:          &goal,
+		State:         colony.StateREADY,
+		CurrentPhase:  1,
+		InitializedAt: &now,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase 1", Status: colony.PhaseReady, Tasks: []colony.Task{{ID: ptrString("1.1"), Goal: "Implement it", Status: colony.TaskPending}}},
+			},
+		},
+	})
+	root := accepted.Root
+	withWorkingDir(t, root)
+	agentsDir := filepath.Join(root, ".codex", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	for _, agentName := range []string{"aether-builder.toml", "aether-watcher.toml"} {
+		role := strings.TrimSuffix(strings.TrimPrefix(agentName, "aether-"), ".toml")
+		if err := os.WriteFile(filepath.Join(agentsDir, agentName), validCodexAgentTOML(strings.TrimSuffix(agentName, ".toml"), role), 0644); err != nil {
+			t.Fatalf("write %s: %v", agentName, err)
+		}
+	}
+
+	rootCmd.SetArgs([]string{"run", "--max-phases", "1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+	env := parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	result := env["result"].(map[string]interface{})
+
+	var after colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &after); err != nil {
+		t.Fatalf("load state after run: %v", err)
+	}
+	if after.State == colony.StateREADY {
+		t.Fatalf("fixture: the run was expected to move the project past READY, state = %s", after.State)
+	}
+	projection, ok := lifecycleCloseoutProjectionFromValue(result[lifecycleProjectionKey])
+	if !ok {
+		t.Fatalf("run result carries no closing decision: %v", result[lifecycleProjectionKey])
+	}
+	if projection.NextAction.ID == "choose_execution_mode" {
+		t.Fatalf("closing card still offers the start-of-run choice to build phase 1 or run Autopilot, though the run moved the project on (state %s): %#v",
+			after.State, projection.NextAction)
+	}
+}

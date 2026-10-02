@@ -659,6 +659,81 @@ func TestHookStopBlocksActiveExecution(t *testing.T) {
 	}
 }
 
+// Phase 210 blocker 14/15 (2026-10-02): Autopilot stopped in phase 2 on a
+// blocker only the owner could clear, and nothing was running. The stop check
+// still refused to let the chat finish until it ran `aether pause`, which
+// turned "waiting on you" into a paused project that then needed /ant-resume
+// before anything else -- an extra step the owner hit for nothing. A project
+// stopped on an open blocker is already waiting on the owner; walking away
+// from it is exactly right.
+func TestHookStopLetsTheChatEndWhileABlockerWaitsOnTheOwner(t *testing.T) {
+	saveGlobalsCmd(t)
+	resetRootCmd(t)
+
+	var buf bytes.Buffer
+	stdout = &buf
+	var errBuf bytes.Buffer
+	stderr = &errBuf
+
+	s, tmpDir := newTestStoreCmd(t)
+	defer os.RemoveAll(tmpDir)
+
+	goal := "grow the deck"
+	state := colony.ColonyState{
+		Version:      "1.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+		Plan: colony.Plan{
+			Phases: []colony.Phase{
+				{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+				{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+			},
+		},
+	}
+	if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+		t.Fatal(err)
+	}
+
+	rootCmd.SetArgs([]string{"flag-add", "--type", "blocker", "--severity", "high", "--phase", "2",
+		"--title", "stray folders break the deck's template check"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("flag-add returned error: %v", err)
+	}
+	var flags colony.FlagsFile
+	if err := s.LoadJSON(pendingDecisionsFile, &flags); err != nil || len(classifyOpenFlags(flags.Decisions).Blockers) != 1 {
+		t.Fatalf("fixture: want one open blocker raised by flag-add, got %+v (err %v)", flags.Decisions, err)
+	}
+
+	resetRootCmd(t)
+	buf.Reset()
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "" {
+		t.Fatalf("a project stopped on an open blocker must let the chat end without a forced pause, got %q", got)
+	}
+
+	// Once the blocker is resolved the phase is ordinary unfinished work
+	// again, and the original check comes back.
+	flags.Decisions[0].Resolved = true
+	if err := s.SaveJSON(pendingDecisionsFile, flags); err != nil {
+		t.Fatal(err)
+	}
+	resetRootCmd(t)
+	buf.Reset()
+	setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+	rootCmd.SetArgs([]string{"hook-stop"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("hook-stop returned error: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"decision":"block"`) {
+		t.Fatalf("with no open blocker the unfinished-phase check must still apply, got %q", buf.String())
+	}
+}
+
 func TestHookStopAllowsPausedActiveExecution(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)

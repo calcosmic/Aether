@@ -39,14 +39,23 @@ or (3) dispatch the Fixer agent to investigate and apply fixes.`,
 			return nil
 		}
 
+		// An open blocker flag stops work just as surely as a failed check.
+		// Autopilot sends the owner here for both, so answering "no check
+		// results" while a blocker sat open was a dead end (Phase 210
+		// blocker 14).
+		var openBlockers []colony.FlagEntry
+		if flags, ok := loadFlagsFile(store); ok {
+			openBlockers = classifyOpenFlags(flags.Decisions).Blockers
+		}
+
 		results, err := gateResultsReadPhase(phaseNum)
-		if err != nil || len(results) == 0 {
+		hasGateResults := err == nil && len(results) > 0
+		dispatch, _ := cmd.Flags().GetBool("dispatch")
+		if !hasGateResults && (dispatch || len(openBlockers) == 0) {
 			outputOK(fmt.Sprintf("No gate results found for phase %d. Run /ant-continue to run gates.", phaseNum))
 			return nil
 		}
 
-		// Check if --dispatch flag is set
-		dispatch, _ := cmd.Flags().GetBool("dispatch")
 		if dispatch {
 			fixerMode, _ := cmd.Flags().GetString("fixer-mode")
 			if err := dispatchFixer(phaseNum, fixerMode); err != nil {
@@ -57,20 +66,46 @@ or (3) dispatch the Fixer agent to investigate and apply fixes.`,
 		}
 
 		// Build recovery summary
-		summary := buildGateRecoverySummary(phaseNum, results)
+		summary := buildOpenBlockerSummary(openBlockers)
+		if hasGateResults {
+			if summary != "" {
+				summary += "\n"
+			}
+			summary += buildGateRecoverySummary(phaseNum, results)
+		}
 		if shouldRenderVisualOutput(stderr) {
 			writeVisualOutput(stderr, summary)
 		} else {
 			data, _ := json.Marshal(map[string]interface{}{
-				"ok":      true,
-				"phase":   phaseNum,
-				"summary": summary,
-				"results": results,
+				"ok":       true,
+				"phase":    phaseNum,
+				"summary":  summary,
+				"results":  results,
+				"blockers": openBlockers,
 			})
 			fmt.Fprintln(stdout, string(data))
 		}
 		return nil
 	},
+}
+
+// buildOpenBlockerSummary lists every open blocker in its own words -- a
+// helper's blocker already says what needs doing -- with the exact command
+// that marks it resolved once it is fixed. It returns "" when none is open.
+func buildOpenBlockerSummary(blockers []colony.FlagEntry) string {
+	if len(blockers) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Blocking work -- %d problem(s) stop progress until resolved\n", len(blockers)))
+	b.WriteString(strings.Repeat("-", 40))
+	b.WriteString("\n")
+	for i, flag := range blockers {
+		b.WriteString(fmt.Sprintf("\n  %d. %s\n", i+1, strings.Join(strings.Fields(flag.Description), " ")))
+		b.WriteString(fmt.Sprintf("     Once it is fixed, mark it resolved: aether flag-resolve --id %s --message \"<what was done>\"\n", flag.ID))
+	}
+	b.WriteString("\nWhen nothing is left blocking, run /ant-continue to check the phase.\n")
+	return b.String()
 }
 
 // buildGateRecoverySummary renders a human-readable Gate Recovery Summary
