@@ -377,10 +377,26 @@ func TestNextActionSpecCandidateAcceptedAndLegacyPrecedence(t *testing.T) {
 				facts.Specification.Value.Approved = false
 				facts.Planning.Value.PendingCandidateID = pendingCandidateID
 				facts.Planning.Value.PendingCandidateStatus = colony.PlanCandidatePendingReview
-				facts.Blockers.Value = []colony.FlagEntry{{ID: "recovery-first", Type: "blocker", Description: "recover the saved frontier"}}
+				facts.Blockers.Value = []colony.FlagEntry{{ID: nextActionActiveRecoveryFlagID, Type: "blocker", Description: "recover the saved frontier"}}
 				return facts
 			},
 			wantAction: "resume", wantCommand: "aether resume",
+		},
+		{
+			// Phase 210 blocker 15: a blocker a helper raised waits on the
+			// owner, and resume cannot clear it.
+			name: "an owner blocker beats unsettled spec and candidate authority",
+			facts: func() LifecycleFacts {
+				facts := acceptedFacts()
+				facts.Intent.Value.UnresolvedDiscussionCount = 1
+				facts.Specification.Value.Status = colony.SpecStatusDraft
+				facts.Specification.Value.Approved = false
+				facts.Planning.Value.PendingCandidateID = pendingCandidateID
+				facts.Planning.Value.PendingCandidateStatus = colony.PlanCandidatePendingReview
+				facts.Blockers.Value = []colony.FlagEntry{{ID: "flag_1", Type: "blocker", Source: "escalation", Description: "stray folders break the template check"}}
+				return facts
+			},
+			wantAction: "unblock", wantCommand: "aether unblock",
 		},
 		{
 			name: "accepted charter with unsettled material intent returns to discuss",

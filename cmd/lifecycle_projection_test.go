@@ -26,6 +26,7 @@ func TestLifecycleProjectionStateTable(t *testing.T) {
 		{name: "executing", facts: projectionFacts(projectionState(colony.StateEXECUTING, true, false)), wantAction: "continue", wantRuntime: "aether continue", wantClosure: "open", wantOutcome: colony.OutcomeKindInProgress},
 		{name: "paused", facts: projectionFacts(projectionState(colony.StateREADY, true, true)), wantAction: "resume", wantRuntime: "aether resume", wantClosure: "open", wantOutcome: colony.OutcomeKindPaused},
 		{name: "blocked", facts: projectionBlockedFacts(), wantAction: "resume", wantRuntime: "aether resume", wantClosure: "open", wantOutcome: colony.OutcomeKindRecoveryRequired},
+		{name: "blocked on the owner", facts: projectionOwnerBlockedFacts(), wantAction: "unblock", wantRuntime: "aether unblock", wantClosure: "open", wantOutcome: colony.OutcomeKindRecoveryRequired},
 		{name: "verified complete", facts: projectionFacts(projectionState(colony.StateCOMPLETED, true, false)), wantAction: "seal", wantRuntime: "aether seal", wantClosure: "ready_to_seal", wantOutcome: colony.OutcomeKindCompleted},
 		{name: "forced incomplete", facts: projectionSealedFacts(colony.SealDispositionForcedIncomplete), wantAction: "inspect_sealed", wantRuntime: "aether status", wantClosure: "forced_incomplete", wantOutcome: colony.OutcomeKindForcedIncompleteClosure},
 		{name: "sealed", facts: projectionSealedFacts(colony.SealDispositionVerified), wantAction: "inspect_sealed", wantRuntime: "aether status", wantClosure: "verified", wantOutcome: colony.OutcomeKindVerifiedCompletion},
@@ -218,7 +219,15 @@ func projectionEmptyFacts() LifecycleFacts {
 
 func projectionBlockedFacts() LifecycleFacts {
 	facts := projectionFacts(projectionState(colony.StateEXECUTING, true, false))
-	facts.Blockers.Value = []colony.FlagEntry{{ID: "block-1", Type: "blocker", Description: "evidence conflict"}}
+	facts.Blockers.Value = []colony.FlagEntry{{ID: nextActionActiveRecoveryFlagID, Type: "blocker", Description: "evidence conflict"}}
+	return facts
+}
+
+// projectionOwnerBlockedFacts is a blocker a helper raised for the owner to
+// clear, the kind resume can never clear (Phase 210 blocker 15).
+func projectionOwnerBlockedFacts() LifecycleFacts {
+	facts := projectionFacts(projectionState(colony.StateEXECUTING, true, false))
+	facts.Blockers.Value = []colony.FlagEntry{{ID: "flag_1", Type: "blocker", Source: "escalation", Description: "stray folders break the template check"}}
 	return facts
 }
 

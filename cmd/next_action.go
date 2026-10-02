@@ -790,7 +790,7 @@ func nextActionFacts(in nextActionInput) LifecycleFacts {
 	}
 	if in.Recovery != nil {
 		flags = appendLifecycleFlagOnce(flags, colony.FlagEntry{
-			ID:          "active-recovery",
+			ID:          nextActionActiveRecoveryFlagID,
 			Type:        "blocker",
 			Description: strings.TrimSpace(in.Recovery.Summary),
 			Source:      in.Recovery.ReportPath,
@@ -798,7 +798,7 @@ func nextActionFacts(in nextActionInput) LifecycleFacts {
 	}
 	if in.BuildLooksAbandoned {
 		flags = appendLifecycleFlagOnce(flags, colony.FlagEntry{
-			ID:          "abandoned-build-evidence",
+			ID:          nextActionAbandonedBuildFlagID,
 			Type:        "blocker",
 			Description: "the saved execution has no live dispatch evidence",
 			Source:      "build manifest",
@@ -807,6 +807,14 @@ func nextActionFacts(in nextActionInput) LifecycleFacts {
 	facts.Blockers.Value = flags
 	return facts
 }
+
+// The resolver stands these two rows in for evidence that is not a flag at
+// all: a phase check that stopped with its own recovery report, and a build
+// with no live dispatch record. Resume reconciles both.
+const (
+	nextActionActiveRecoveryFlagID = "active-recovery"
+	nextActionAbandonedBuildFlagID = "abandoned-build-evidence"
+)
 
 func appendLifecycleFlagOnce(flags []colony.FlagEntry, candidate colony.FlagEntry) []colony.FlagEntry {
 	for _, existing := range flags {

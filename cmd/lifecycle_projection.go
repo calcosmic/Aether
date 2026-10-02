@@ -252,6 +252,23 @@ func lifecycleProjectionOpenItems(facts LifecycleFacts, receiptBlockers []colony
 	return blockers, decisions
 }
 
+// lifecycleOwnerBlockers returns the open blockers only the owner can clear.
+// Two kinds stay with resume: the stand-in rows the resolver adds for a
+// stopped check or an abandoned build, which resume reconciles, and a planning
+// failure, which planning itself resolves.
+func lifecycleOwnerBlockers(flags []colony.FlagEntry) []colony.FlagEntry {
+	var owner []colony.FlagEntry
+	for _, flag := range classifyOpenFlags(flags).Blockers {
+		switch {
+		case flag.ID == nextActionActiveRecoveryFlagID || flag.ID == nextActionAbandonedBuildFlagID:
+		case strings.TrimSpace(flag.Source) == planFinalizeFailureSource:
+		default:
+			owner = append(owner, flag)
+		}
+	}
+	return owner
+}
+
 func lifecycleProjectionCommand(runtimeCommand, platform string) string {
 	if platform == "codex" {
 		// Change only the command prefix, preserving every argument byte.
@@ -379,10 +396,11 @@ func lifecycleProjectionDecision(facts LifecycleFacts, blockers []colony.Lifecyc
 			blockers = append(blockers, colony.LifecycleIssue{ID: fmt.Sprintf("phase-%d-failed", phase.ID), Summary: fmt.Sprintf("Phase %d failed", phase.ID)})
 		}
 	}
-	// An open blocker flag waits on the owner, and resume cannot clear one:
-	// sending the owner to resume here looped forever (Phase 210 blocker 15).
-	// Autopilot's own stop screen already names unblock for the same state.
-	if len(classifyOpenFlags(facts.Blockers.Value).Blockers) > 0 {
+	// A blocker a build or a helper raised waits on the owner, and resume
+	// cannot clear one: sending the owner to resume here looped forever
+	// (Phase 210 blocker 15). Autopilot's own stop screen already names
+	// unblock for the same state.
+	if len(lifecycleOwnerBlockers(facts.Blockers.Value)) > 0 {
 		return lifecycleActionFromCandidate("unblock", candidateUnblock, "A problem is stopping work and needs you; this shows what it is and how to clear it.", evidence), []LifecycleActionChoice{
 			lifecycleChoiceFromCandidate("status", candidateStatus, "Inspect the blockers without changing state."),
 			lifecycleChoiceFromCandidate("history", candidateHistory, "Review the evidence leading to the block."),
