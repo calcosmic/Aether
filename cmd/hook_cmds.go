@@ -313,6 +313,12 @@ func lifecycleStopBlockReason() string {
 	if flags, ok := loadFlagsFile(store); ok && len(classifyOpenFlags(flags.Decisions).Blockers) > 0 {
 		return ""
 	}
+	// The phase's own check already ran since its last build and stopped on
+	// something to fix. "Finish with aether continue" would only stop again,
+	// and a pause would cut off whatever the owner sent to fix it.
+	if loadActiveRecoveryGuidance(state) != nil {
+		return ""
+	}
 	if allowStopAfterRecentResume() {
 		return ""
 	}

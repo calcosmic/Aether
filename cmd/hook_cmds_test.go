@@ -734,6 +734,63 @@ func TestHookStopLetsTheChatEndWhileABlockerWaitsOnTheOwner(t *testing.T) {
 	}
 }
 
+// Phase 210 (2026-10-02, Finish the Track deck): the phase 2 check ran and
+// stopped on one failing test, then the owner sent helpers to investigate.
+// Every time the chat paused to wait for them, the stop check demanded
+// "finish with aether continue, or run aether pause" -- but the check had
+// just run and would only stop again, and a pause would have cut the helpers
+// off and needed a resume afterwards. Once a phase's own check has run since
+// its last build and stopped, the project is waiting on a fix, not on a check.
+func TestHookStopLetsTheChatEndAfterThePhaseCheckStopped(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		checkedAt   time.Duration // relative to now; the build started 10 minutes ago
+		wantBlocked bool
+	}{
+		{name: "check stopped after the last build", checkedAt: -time.Minute, wantBlocked: false},
+		{name: "check report older than the last build", checkedAt: -time.Hour, wantBlocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+			var buf bytes.Buffer
+			stdout = &buf
+			stderr = &bytes.Buffer{}
+
+			s, _ := newTestStoreCmd(t)
+			now := time.Now().UTC()
+			buildStarted := now.Add(-10 * time.Minute)
+			goal := "grow the deck"
+			state := colony.ColonyState{
+				Version:        "1.0",
+				Goal:           &goal,
+				State:          colony.StateBUILT,
+				CurrentPhase:   2,
+				BuildStartedAt: &buildStarted,
+				Plan: colony.Plan{Phases: []colony.Phase{
+					{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+					{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+				}},
+			}
+			if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			seedBlockedContinueReport(t, s.BasePath(), 2, now.Add(tc.checkedAt),
+				"One check still fails: the card list still says three experiments per session.", "aether status", codexContinueRecoveryPlan{})
+
+			setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+			rootCmd.SetArgs([]string{"hook-stop"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("hook-stop returned error: %v", err)
+			}
+			blocked := strings.Contains(buf.String(), `"decision":"block"`)
+			if blocked != tc.wantBlocked {
+				t.Fatalf("blocked = %v, want %v (output %q)", blocked, tc.wantBlocked, buf.String())
+			}
+		})
+	}
+}
+
 func TestHookStopAllowsPausedActiveExecution(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)
