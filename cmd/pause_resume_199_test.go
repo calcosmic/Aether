@@ -585,3 +585,50 @@ func Example_pauseResume199Contract() {
 	fmt.Println(pauseReplayMessage)
 	// Output: Already paused; the existing validated handoff was retained.
 }
+
+// Phase 210 blocker 15 (2026-10-02), replayed through the real commands: a
+// helper raised a blocker, the chat was made to pause, and the owner typed
+// /ant-resume twice. Both resume screens said "run /ant-resume" again, because
+// resume cannot clear a blocker. After resuming, the screen must name the
+// command that shows the blocker and how to clear it.
+func TestResumeWithAnOpenBlockerNeverPointsBackToResume(t *testing.T) {
+	fixture := newPauseResume199Fixture(t)
+	var flags colony.FlagsFile
+	if err := store.LoadJSON(pendingDecisionsFile, &flags); err != nil {
+		t.Fatalf("load decisions: %v", err)
+	}
+	phase := 1
+	// Shaped like the escalation record a stuck builder really raises.
+	flags.Decisions = append(flags.Decisions, colony.FlagEntry{
+		ID: "flag_1790964792_97368c17", Type: "blocker", Phase: &phase, Source: "escalation",
+		Description: "templates/.aether and templates/.claude are stray folders that break the template check; delete them",
+		CreatedAt:   fixture.now.Add(-time.Minute).Format(time.RFC3339),
+	})
+	if err := store.SaveJSON(pendingDecisionsFile, flags); err != nil {
+		t.Fatalf("save decisions: %v", err)
+	}
+	if _, err := pauseColonyAt(fixture.now); err != nil {
+		t.Fatalf("pause: %v", err)
+	}
+
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	for attempt := 1; attempt <= 2; attempt++ {
+		var buf bytes.Buffer
+		stdout = &buf
+		stderr = &bytes.Buffer{}
+		resetRootCmd(t)
+		rootCmd.SetArgs([]string{"resume"})
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("resume attempt %d: %v", attempt, err)
+		}
+		env := parseEnvelope(t, buf.String())
+		result, _ := env["result"].(map[string]interface{})
+		if result == nil {
+			t.Fatalf("resume attempt %d returned no result: %s", attempt, buf.String())
+		}
+		if got := stringValue(result[nextActionCommandKey]); got != "aether unblock" {
+			t.Fatalf("resume attempt %d named %q as the next step, want `aether unblock` (the command that shows the blocker): %s",
+				attempt, got, buf.String())
+		}
+	}
+}
