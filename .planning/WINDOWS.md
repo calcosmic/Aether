@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 49
+open_count: 51
 waived_count: 0
-fixed_count: 27
-total_count: 76
-last_updated: 2026-09-26T16:28:56.288Z
+fixed_count: 29
+total_count: 80
+last_updated: 2026-10-02T21:00:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -91,8 +91,12 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 72 | 210 | unmet-truth | cmd/memory_feed.go |  | Found 2026-09-25 while fixing the owner's screen-noise report: several failure-log entries written in the same second get the same ID (seen: three check-worker entries all midden_1790369854_17344). 'aether midden-acknowledge --id' can then hit the wrong entry or several at once. Not fixed: nothing the owner hit. | open |  | 2026-09-25T21:01:18.590Z |  |
 | 73 | 210 | unmet-truth | .aether/.gitignore |  | Noticed 2026-09-25 by a GSD session in the owner's JUCE Plugin Licensing project (not counted as a freeze blocker: the owner was not using Aether): Aether's .aether/.gitignore is not tracked in git there, so .aether/locks/*.lock and .aether/data/spend/session.json appear as untracked files inside every git worktree, and GSD's worktree merge gate refused to merge finished branches (cleanup_blocked / worktree_dirty). | open |  | 2026-09-26T10:17:32.455Z |  |
 | 74 | 210 | unmet-truth | cmd/compatibility_cmds_test.go |  | TestSwarmCompatibilityWatchReportsActiveWorkers failed once in a full suite run on 2026-09-26 (active_count = 0, want 1) and passed 5/5 alone; nothing changed that day touches it. Likely order- or timing-dependent. Not fixed: not something the owner hit. | open |  | 2026-09-26T12:36:42.682Z |  |
-| 75 | 210 | unmet-truth | cmd/next_action.go |  | Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone. | open |  | 2026-09-26T13:27:16.876Z |  |
-| 76 | 210 | unmet-truth | cmd/compatibility_cmds.go |  | Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision. | open |  | 2026-09-26T16:28:56.288Z |  |
+| 75 | 210 | unmet-truth | cmd/next_action.go |  | Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone. | fixed | Fixed c2486a16 (Phase 210 blocker 15): an open blocker now names unblock on every closing card, and unblock lists each open blocker with its exact flag-resolve command. | 2026-09-26T13:27:16.876Z | 2026-10-02T19:45:00.000Z |
+| 76 | 210 | unmet-truth | cmd/compatibility_cmds.go |  | Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision. | fixed | Fixed c2486a16 (Phase 210 blocker 14): a real run reads the project afresh for its closing card; only a dry run reuses the start-of-run decision. | 2026-09-26T16:28:56.288Z | 2026-10-02T19:45:00.000Z |
+| 77 | 210 | unmet-truth | cmd/next_action.go |  | Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02): after a phase check stops with its own recovery report, every closing card (status, swarm, resume) names '/ant-resume', but resume has nothing to reconcile when the project is not paused (buildResumeDashboardResult only overrides for a saved completion packet or an unfinished build attempt), so its own card names '/ant-resume' again and the owner loops. Owner-raised blocker flags were moved to unblock in c2486a16/1dd31331; the stopped-check stand-in ('active-recovery') deliberately still routes to resume per the Phase 200 tests (TestRecoveryCommandFromDiskIsGated, TestResolveNextActionUsesTheRecoveryReportCommand) and needs its own decision. | open |  | 2026-10-02T21:00:00.000Z |  |
+| 78 | 210 | unmet-truth | cmd/publish_cmd_test.go |  | Found 2026-10-02 while fixing Phase 210 blockers 14-15: a full 'go test ./... -timeout 90m' run in a throwaway checkout replaced the owner's real ~/.local/bin/aether with a build of that checkout (binary contains the checkout's source paths; installed 22:23 mid-suite). Some test builds and installs the program without isolating HOME or --binary-dest. The owner's install was restored and the pre-fix version rebuilt as a backup; the offending test is not yet identified (publish_cmd_test.go's publish calls all pass --skip-build-binary). | open |  | 2026-10-02T21:00:00.000Z |  |
+| 79 | 210 | unmet-truth | cmd/medic_cmd.go |  | Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether medic --deep' did not detect the phase 2 build-plan/record task-set mismatch that 'aether status' reported as 'RECORDS DISAGREE', and reported two critical issues that look stale: hub Claude/OpenCode commands '67 files, expected 60' (the repo ships more than 60 wrappers) and 'Wrapper for build/continue/init/seal/plan not found' in a project whose wrappers work. | open |  | 2026-10-02T21:00:00.000Z |  |
+| 80 | 210 | unmet-truth | cmd/swarm_cmd.go |  | Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm --plan-only' gave workers only 'Target: the flags' with no context; 'swarm-finalize' rejected the completion twice (findings must be strings, task must match the manifest text exactly); the swarm closeout repeated blockers the fix had already cleared. Also from blocker 17: an owner answer recorded with 'decision-answer' did not reach the capped prompt_section, and 'build-completion-stage' rejects a free-text handoff verification_status (pass/fail/partial/not_run/unknown) that the build wrapper never mentions. | open |  | 2026-10-02T21:00:00.000Z |  |
 
 ````json
 [
@@ -991,10 +995,10 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "file": "cmd/next_action.go",
     "line": null,
     "description": "Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with aether flag-resolve). Close by making one decision name the command, and by that command offering 'mark this resolved' when the owner confirms the cause is gone.",
-    "status": "open",
-    "reason": "",
+    "status": "fixed",
+    "reason": "Fixed c2486a16 (Phase 210 blocker 15): an open blocker now names unblock on every closing card, and unblock lists each open blocker with its exact flag-resolve command.",
     "recorded_at": "2026-09-26T13:27:16.876Z",
-    "resolved_at": null
+    "resolved_at": "2026-10-02T19:45:00.000Z"
   },
   {
     "id": 76,
@@ -1003,9 +1007,57 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "file": "cmd/compatibility_cmds.go",
     "line": null,
     "description": "Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision.",
+    "status": "fixed",
+    "reason": "Fixed c2486a16 (Phase 210 blocker 14): a real run reads the project afresh for its closing card; only a dry run reuses the start-of-run decision.",
+    "recorded_at": "2026-09-26T16:28:56.288Z",
+    "resolved_at": "2026-10-02T19:45:00.000Z"
+  },
+  {
+    "id": 77,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/next_action.go",
+    "line": null,
+    "description": "Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02): after a phase check stops with its own recovery report, every closing card (status, swarm, resume) names '/ant-resume', but resume has nothing to reconcile when the project is not paused (buildResumeDashboardResult only overrides for a saved completion packet or an unfinished build attempt), so its own card names '/ant-resume' again and the owner loops. Owner-raised blocker flags were moved to unblock in c2486a16/1dd31331; the stopped-check stand-in ('active-recovery') deliberately still routes to resume per the Phase 200 tests (TestRecoveryCommandFromDiskIsGated, TestResolveNextActionUsesTheRecoveryReportCommand) and needs its own decision.",
     "status": "open",
     "reason": "",
-    "recorded_at": "2026-09-26T16:28:56.288Z",
+    "recorded_at": "2026-10-02T21:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 78,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/publish_cmd_test.go",
+    "line": null,
+    "description": "Found 2026-10-02 while fixing Phase 210 blockers 14-15: a full 'go test ./... -timeout 90m' run in a throwaway checkout replaced the owner's real ~/.local/bin/aether with a build of that checkout (binary contains the checkout's source paths; installed 22:23 mid-suite). Some test builds and installs the program without isolating HOME or --binary-dest. The owner's install was restored and the pre-fix version rebuilt as a backup; the offending test is not yet identified (publish_cmd_test.go's publish calls all pass --skip-build-binary).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-02T21:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 79,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/medic_cmd.go",
+    "line": null,
+    "description": "Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether medic --deep' did not detect the phase 2 build-plan/record task-set mismatch that 'aether status' reported as 'RECORDS DISAGREE', and reported two critical issues that look stale: hub Claude/OpenCode commands '67 files, expected 60' (the repo ships more than 60 wrappers) and 'Wrapper for build/continue/init/seal/plan not found' in a project whose wrappers work.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-02T21:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 80,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/swarm_cmd.go",
+    "line": null,
+    "description": "Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm --plan-only' gave workers only 'Target: the flags' with no context; 'swarm-finalize' rejected the completion twice (findings must be strings, task must match the manifest text exactly); the swarm closeout repeated blockers the fix had already cleared. Also from blocker 17: an owner answer recorded with 'decision-answer' did not reach the capped prompt_section, and 'build-completion-stage' rejects a free-text handoff verification_status (pass/fail/partial/not_run/unknown) that the build wrapper never mentions.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-02T21:00:00.000Z",
     "resolved_at": null
   }
 ]
