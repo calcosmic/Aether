@@ -791,6 +791,76 @@ func TestHookStopLetsTheChatEndAfterThePhaseCheckStopped(t *testing.T) {
 	}
 }
 
+// Phase 210 (2026-10-02, Finish the Track deck): Autopilot built phase 3 and
+// stopped on purpose for the owner to look at the result, then the stop check
+// demanded "finish with aether continue, or run aether pause". Running the
+// check would skip the owner's look, and a pause adds a resume step. An open
+// checkpoint Autopilot queued for the owner on the current phase means the
+// project is waiting on the owner. Shapes below are the real records.
+func TestHookStopLetsTheChatEndWhileACheckpointWaitsOnTheOwner(t *testing.T) {
+	phase := func(n int) *int { return &n }
+	for _, tc := range []struct {
+		name        string
+		rows        []colony.FlagEntry
+		wantBlocked bool
+	}{
+		{name: "visual check open on the current phase", wantBlocked: false, rows: []colony.FlagEntry{{
+			ID: "cp_c5f7ade343f2cf208feb", Type: "visual-checkpoint", Source: "autopilot-visual-checkpoint", Phase: phase(3),
+			Description: "Phase 3: please visually confirm the user-interface changes look and behave correctly before the project is signed off.",
+		}}},
+		{name: "live-behaviour check open on the current phase", wantBlocked: false, rows: []colony.FlagEntry{{
+			ID: "cp_runtime", Type: "runtime-verification", Source: "autopilot-runtime-verification", Phase: phase(3),
+			Description: "Phase 3: please confirm the running behaviour.",
+		}}},
+		{name: "only an earlier phase's check is open", wantBlocked: true, rows: []colony.FlagEntry{{
+			ID: "cp_141bf8872d7af6926391", Type: "visual-checkpoint", Source: "autopilot-visual-checkpoint", Phase: phase(2),
+			Description: "Phase 2: please visually confirm the user-interface changes look and behave correctly before the project is signed off.",
+		}}},
+		{name: "the current phase's check is resolved", wantBlocked: true, rows: []colony.FlagEntry{{
+			ID: "cp_c5f7ade343f2cf208feb", Type: "visual-checkpoint", Source: "autopilot-visual-checkpoint", Phase: phase(3), Resolved: true,
+			Description: "Phase 3: please visually confirm the user-interface changes look and behave correctly before the project is signed off.",
+		}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+			var buf bytes.Buffer
+			stdout = &buf
+			stderr = &bytes.Buffer{}
+
+			s, _ := newTestStoreCmd(t)
+			goal := "grow the deck"
+			state := colony.ColonyState{
+				Version:      "1.0",
+				Goal:         &goal,
+				State:        colony.StateBUILT,
+				CurrentPhase: 3,
+				Plan: colony.Plan{Phases: []colony.Phase{
+					{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+					{ID: 2, Name: "Phase Two", Status: colony.PhaseCompleted},
+					{ID: 3, Name: "Phase Three", Status: colony.PhaseInProgress},
+				}},
+			}
+			if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.SaveJSON(pendingDecisionsFile, colony.FlagsFile{Version: "1", Decisions: tc.rows}); err != nil {
+				t.Fatal(err)
+			}
+
+			setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+			rootCmd.SetArgs([]string{"hook-stop"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("hook-stop returned error: %v", err)
+			}
+			blocked := strings.Contains(buf.String(), `"decision":"block"`)
+			if blocked != tc.wantBlocked {
+				t.Fatalf("blocked = %v, want %v (output %q)", blocked, tc.wantBlocked, buf.String())
+			}
+		})
+	}
+}
+
 func TestHookStopAllowsPausedActiveExecution(t *testing.T) {
 	saveGlobalsCmd(t)
 	resetRootCmd(t)

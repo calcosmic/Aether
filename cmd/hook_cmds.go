@@ -319,6 +319,12 @@ func lifecycleStopBlockReason() string {
 	if loadActiveRecoveryGuidance(state) != nil {
 		return ""
 	}
+	// Autopilot stopped on purpose and queued a check only the owner can do
+	// (look at the result, or try the running behaviour) for this phase.
+	// Running continue would skip that look; a pause only adds a resume step.
+	if ownerCheckpointOpenForPhase(state.CurrentPhase) {
+		return ""
+	}
 	if allowStopAfterRecentResume() {
 		return ""
 	}
@@ -340,6 +346,26 @@ func lifecycleStopBlockReason() string {
 		"Aether is still in %s. Finish the lifecycle with `aether continue`, or run `aether pause` before stopping.",
 		phaseLabel,
 	)
+}
+
+// ownerCheckpointOpenForPhase reports whether Autopilot left an unresolved
+// owner checkpoint (a visual look or a runtime check) on this phase. An
+// earlier phase's leftover checkpoint does not count.
+func ownerCheckpointOpenForPhase(phaseID int) bool {
+	flags, ok := loadFlagsFile(store)
+	if !ok {
+		return false
+	}
+	for _, entry := range flags.Decisions {
+		if entry.Resolved || entry.Phase == nil || *entry.Phase != phaseID {
+			continue
+		}
+		switch normalizedFlagType(entry.Type) {
+		case autopilotCheckpointTypeVisual, autopilotCheckpointTypeRuntimeVerification:
+			return true
+		}
+	}
+	return false
 }
 
 // stopHookScreenRelayReason is the plain-English block reason for the screen
