@@ -266,6 +266,34 @@
       "content_digest": "225723e8f99121273147f13d0702260259e8b4fb06a866be262e4b3cad444f21"
     },
     {
+      "id": "fixture-2af6aacfa17d",
+      "title": "[broad-invariant] unmet-truth: cmd/compatibility_cmds.go. Phase 210 blocker 8 side issue (French Basics, 2026-09-2",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/compatibility_cmds.go. Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision.",
+        "reference": "76"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/compatibility_cmds.go. Phase 210 blocker 8 side issue (French Basics, 2026-09-26): after autopilot finished phase 1 and stopped in phase 2, the run's own closing card offered '/ant-build 1' while saved state and aether status said phase 2. The run card's projection comes from a snapshot taken before the phase advanced. Same family as the blocker 6 disagreement: every closing card should read one fresh decision.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "76"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "2af6aacfa17d3e68b96379835ffeb7e9bb7a52508dad0612ecc32e0fd8986297",
+      "guard": {
+        "test": "TestRunClosingCardReflectsTheProjectAfterTheRun",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-2b84f3f641cb",
       "title": "[broad-invariant] TestStatusPausedColonyIgnoresStaleSpawnTreeWorkers. 203-14's family tree was added to the status",
       "failing_baseline": {
@@ -1090,6 +1118,34 @@
       "content_digest": "9f73d33df4f331074d8479b5ab178d1991ef5c2c93cd7fc805485ec25ba0d092",
       "guard": {
         "test": "TestDirectBuildLaneAcceptsAnHonestNoChangeWorker",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-aa8be627e674",
+      "title": "[broad-invariant] unmet-truth: cmd/next_action.go. Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/next_action.go. Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with ae",
+        "reference": "75"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/next_action.go. Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed build left an escalated blocker flag, autopilot's stop screen said 'Next step: /ant-unblock' (autopilot_policy.go NextActionTemplate for blocker_escalated) while the shared next-up card (resolveNextAction) said '/ant-resume'. Two surfaces named different commands for one state, and neither would have cleared a blocker whose cause was already fixed (the owner's chat was stuck; resolved by hand with ae",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "75"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "aa8be627e674bce0b7e0bfb9b7cec53ef99e1d4989aa406f1b08a2898b947f93",
+      "guard": {
+        "test": "TestResumeWithAnOpenBlockerNeverPointsBackToResume",
         "package": "cmd"
       }
     },
