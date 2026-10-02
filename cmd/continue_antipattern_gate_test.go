@@ -338,3 +338,74 @@ func TestAntiPatternGateDoesNotCountAbsentFilesAsScanned(t *testing.T) {
 		}
 	})
 }
+
+// Phase 210 blocker 16 (2026-10-02, Finish the Track deck): a helper listed
+// its whole output folder ("finish-the-track/dist") instead of naming each
+// file. The scan tried to read the folder as a file, could not, and failed
+// the phase under the heading "Critical patterns detected" although nothing
+// had been found. A claimed folder is now scanned file by file -- more is
+// checked than before, not less -- and a scan that genuinely cannot run says
+// so instead of claiming it found something.
+func TestAntiPatternGateScansTheFilesInsideAClaimedFolder(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	dist := filepath.Join(tmpDir, "finish-the-track", "dist")
+	if err := os.MkdirAll(filepath.Join(dist, "media"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		"PREVIEW.html":    "<!doctype html><title>Preview</title>\n",
+		"media/style.css": "body { margin: 0 }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dist, filepath.FromSlash(name)), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("CleanFolderIsScannedFileByFile", func(t *testing.T) {
+		findings, executed := checkAntiPatternGate([]string{"finish-the-track/dist"})
+		if !executed.Passed || strings.Contains(executed.Detail, "directory") {
+			t.Fatalf("a claimed folder must be scanned, not read as a file: %q", executed.Detail)
+		}
+		if !findings.Passed || !strings.Contains(findings.Detail, "scanned 2 of 2") {
+			t.Fatalf("both files inside the folder must be scanned and counted, got: %+v", findings)
+		}
+	})
+
+	t.Run("AFindingInsideTheFolderIsStillCaught", func(t *testing.T) {
+		leak := filepath.Join(dist, "media", "config.js")
+		if err := os.WriteFile(leak, []byte("var apiKey = \"sk-live-4f9a8b7c6d\"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(leak)
+		findings, _ := checkAntiPatternGate([]string{"finish-the-track/dist"})
+		if findings.Passed || !strings.Contains(findings.Detail, "config.js") {
+			t.Fatalf("a credential inside a claimed folder must fail the scan and name the file, got: %+v", findings)
+		}
+	})
+
+	t.Run("AScanThatCannotRunDoesNotClaimAFinding", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root can read an unreadable file")
+		}
+		locked := filepath.Join(tmpDir, "locked.txt")
+		if err := os.WriteFile(locked, []byte("x\n"), 0o000); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(locked)
+		findings, executed := checkAntiPatternGate([]string{"locked.txt"})
+		if executed.Passed {
+			t.Fatalf("an unreadable claimed file must fail the executed check, got: %+v", executed)
+		}
+		if strings.Contains(executed.FixHint, "Critical patterns detected") {
+			t.Fatalf("a scan that could not run must not say critical patterns were detected: %q", executed.FixHint)
+		}
+		if !findings.Passed {
+			t.Fatalf("nothing was found, so the findings check itself must not fail: %+v", findings)
+		}
+	})
+}

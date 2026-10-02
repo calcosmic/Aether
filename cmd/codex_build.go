@@ -2960,6 +2960,14 @@ func codexBuildTaskPlans(phase colony.Phase) []codexBuildTaskPlan {
 		}
 	}
 	for idx, task := range phase.Tasks {
+		// A stopped check's own recovery job is a reminder on the saved
+		// record, never work a build plan lists. Copying it in as an
+		// unnumbered "task-N" made every later save refuse, because the
+		// record's side of the comparison rightly leaves it out (Phase 210
+		// blocker 17; phaseTaskIDSet).
+		if taskIsRecoveryTask(task) {
+			continue
+		}
 		taskPlans = append(taskPlans, codexBuildTaskPlan{
 			ID:        buildTaskID(task, idx),
 			Goal:      task.Goal,
@@ -3677,6 +3685,33 @@ func manifestTaskIDSet(tasks []codexBuildTaskPlan) []string {
 	return uniqueSortedStrings(ids)
 }
 
+// manifestTaskIDSetExcludingRecovery sets aside the plan entries that are the
+// phase's own recovery jobs, recognised structurally by the recovery marker
+// on the phase's task at that position, never by wording. Build plans written
+// before recovery jobs were left out of them carry these entries, and without
+// this the project they belong to could never save again (Phase 210 blocker
+// 17). Anything else the plan lists that the phase does not hold still
+// refuses.
+func manifestTaskIDSetExcludingRecovery(tasks []codexBuildTaskPlan, phase colony.Phase) []string {
+	recoveryIDs := map[string]bool{}
+	realIDs := map[string]bool{}
+	for idx, task := range phase.Tasks {
+		if taskIsRecoveryTask(task) {
+			recoveryIDs[buildTaskID(task, idx)] = true
+		} else {
+			realIDs[buildTaskID(task, idx)] = true
+		}
+	}
+	var ids []string
+	for _, id := range manifestTaskIDSet(tasks) {
+		if recoveryIDs[id] && !realIDs[id] {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 func validateBuildManifestTaskSetForPhase(manifest codexContinueManifest, phase colony.Phase, allowMissingTasks bool) error {
 	if !manifest.Present {
 		return nil
@@ -3684,7 +3719,7 @@ func validateBuildManifestTaskSetForPhase(manifest codexContinueManifest, phase 
 	if len(manifest.Data.Tasks) == 0 && allowMissingTasks {
 		return nil
 	}
-	manifestIDs := manifestTaskIDSet(manifest.Data.Tasks)
+	manifestIDs := manifestTaskIDSetExcludingRecovery(manifest.Data.Tasks, phase)
 	stateIDs := phaseTaskIDSet(phase)
 	if stringSlicesEqual(manifestIDs, stateIDs) {
 		return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -470,6 +471,46 @@ func checkAllTasksCompleted(phaseNum int) gateCheck {
 // joined with "..". Do NOT use storage.ResolveAetherRoot -- the comment
 // above resolveTestCommand records it resolving to the wrong repository
 // under `go test`.
+// expandClaimedFolders replaces a claimed folder with the ordinary files
+// inside it. A helper that listed its whole output folder instead of naming
+// each file left the scan reading the folder as a file, which failed the
+// phase under "Critical patterns detected" although nothing had been found
+// (Phase 210 blocker 16). Shortcuts are never followed.
+func expandClaimedFolders(root string, files []string) []string {
+	expanded := make([]string, 0, len(files))
+	for _, f := range files {
+		claim := strings.TrimSpace(f)
+		resolved := claim
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(root, claim)
+		}
+		info, err := os.Lstat(resolved)
+		if claim == "" || err != nil || !info.IsDir() {
+			expanded = append(expanded, f)
+			continue
+		}
+		before := len(expanded)
+		_ = filepath.WalkDir(resolved, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil || !entry.Type().IsRegular() {
+				return nil
+			}
+			if filepath.IsAbs(claim) {
+				expanded = append(expanded, path)
+			} else if rel, relErr := filepath.Rel(root, path); relErr == nil {
+				expanded = append(expanded, filepath.ToSlash(rel))
+			}
+			return nil
+		})
+		// A folder with no ordinary file in it gives the scan nothing to
+		// read; keeping the claim leaves it failing as unscannable, exactly
+		// as before, rather than quietly passing as "nothing claimed".
+		if len(expanded) == before {
+			expanded = append(expanded, f)
+		}
+	}
+	return expanded
+}
+
 func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 	findingsCheck := gateCheck{Name: "anti_pattern"}
 	executedCheck := gateCheck{Name: "anti_pattern_executed"}
@@ -477,7 +518,7 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 	if store == nil {
 		executedCheck.Passed = false
 		executedCheck.Detail = "antipattern scan could not execute: no store initialized, colony root unresolvable"
-		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern_executed")
 		executedCheck.RecoveryOptions = []string{
 			"Fix manually and run aether continue",
 			"Run aether unblock --dispatch for guided recovery",
@@ -488,6 +529,7 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 	}
 
 	root := filepath.Join(filepath.Dir(store.BasePath()), "..")
+	files = expandClaimedFolders(root, files)
 
 	var allCriticals []AntipatternFinding
 	scannedFiles := 0
@@ -527,7 +569,7 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 	if len(scanErrors) > 0 {
 		executedCheck.Passed = false
 		executedCheck.Detail = fmt.Sprintf("antipattern scan could not execute for %d file(s): %s", len(scanErrors), strings.Join(scanErrors, "; "))
-		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern_executed")
 		executedCheck.RecoveryOptions = []string{
 			"Fix manually and run aether continue",
 			"Run aether unblock --dispatch for guided recovery",
@@ -543,7 +585,7 @@ func checkAntiPatternGate(files []string) (gateCheck, gateCheck) {
 		executedCheck.Passed = false
 		executedCheck.Detail = fmt.Sprintf("antipattern scan executed against 0 of %d claimed file(s); none could be read (absent: %s)",
 			claimedFiles, strings.Join(absentFiles, ", "))
-		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern")
+		executedCheck.FixHint = gateRecoveryTemplate("anti_pattern_executed")
 		executedCheck.RecoveryOptions = []string{
 			"Fix manually and run aether continue",
 			"Run aether unblock --dispatch for guided recovery",
@@ -908,6 +950,10 @@ var gateRecoveryTemplates = map[string]string{
 	"anti_pattern": "Anti-pattern gate failed: Critical patterns detected.\n" +
 		"1. Review the critical anti-patterns listed above\n" +
 		"2. Fix each critical finding (exposed secrets, SQL injection, crash patterns)\n" +
+		"3. Re-run `aether continue` to re-scan",
+	"anti_pattern_executed": "Anti-pattern scan could not run on every claimed file; nothing was found, but nothing can be trusted either.\n" +
+		"1. Check that each file named above exists and can be read\n" +
+		"2. If a helper listed something that is not an ordinary file, rebuild that task so it names its files\n" +
 		"3. Re-run `aether continue` to re-scan",
 	"charter_compliance": "Charter compliance gate failed: a declared governance tool was not exercised.\n" +
 		"1. Review the unexercised tool(s) named above\n" +

@@ -514,3 +514,86 @@ func TestHumanTaskWithRecoveryLikeGoalIsNeverExcluded(t *testing.T) {
 		t.Fatalf("phaseTaskIDSet excluded the human-authored task with a colliding Goal (id %q); got %v", humanTaskID, ids)
 	}
 }
+
+// Phase 210 blocker 17 (2026-10-02, Finish the Track deck): a phase check
+// stopped and wrote its own "Finish task 2.3 (needs reconciling)" job onto the
+// phase, then the owner rebuilt just task 2.3. The fresh build plan copied that
+// recovery job in as an unnumbered "task-4", while the saved project record
+// rightly leaves recovery jobs out, so saving the rebuild refused forever:
+// "build manifest task set does not match COLONY_STATE (manifest: 2.1, 2.2,
+// 2.3, task-4; state: 2.1, 2.2, 2.3)". A build plan must leave recovery jobs
+// out too, as the saved record does.
+func TestRebuildingOneTaskAfterAStoppedCheckStillMatchesTheRecord(t *testing.T) {
+	_, taskOneID, _ := blockedRecoveryFixture(t)
+
+	first := runBlockedContinue(t)
+	if intValue(first["recovery_tasks_added"]) == 0 {
+		t.Fatalf("fixture: the stopped check was expected to add recovery jobs, got %v", first)
+	}
+
+	resetRootCmd(t)
+	stdout.(*bytes.Buffer).Reset()
+	rootCmd.SetArgs([]string{"build", "1", "--task", taskOneID, "--plan-only"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("build --task --plan-only returned error: %v", err)
+	}
+
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	recoveryJobs := 0
+	for _, task := range state.Plan.Phases[0].Tasks {
+		if taskIsRecoveryTask(task) {
+			recoveryJobs++
+		}
+	}
+	if recoveryJobs == 0 {
+		t.Fatalf("fixture: the phase should still carry the stopped check's recovery jobs: %+v", state.Plan.Phases[0].Tasks)
+	}
+	manifest := loadCodexContinueManifest(1)
+	if !manifest.Present {
+		t.Fatalf("the targeted rebuild wrote no build plan: %s", stdout.(*bytes.Buffer).String())
+	}
+	if err := validateBuildManifestTaskSetForPhase(manifest, state.Plan.Phases[0], true); err != nil {
+		t.Fatalf("a rebuild after a stopped check must still match the saved record: %v", err)
+	}
+}
+
+// The owner's own project already holds a build plan written before the fix
+// above, with the recovery job copied in. Saving that rebuild must work too,
+// or the project stays stuck until the whole phase is rebuilt. The comparison
+// sets aside exactly the plan entries that are the phase's own recovery jobs,
+// recognised by the structural recovery marker on the phase, never by wording.
+func TestABuildPlanWrittenBeforeTheFixStillMatchesTheRecord(t *testing.T) {
+	_, _, _ = blockedRecoveryFixture(t)
+	if intValue(runBlockedContinue(t)["recovery_tasks_added"]) == 0 {
+		t.Fatal("fixture: the stopped check was expected to add recovery jobs")
+	}
+	var state colony.ColonyState
+	if err := store.LoadJSON("COLONY_STATE.json", &state); err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	phase := state.Plan.Phases[0]
+
+	// The plan exactly as the old code wrote it: every phase job, recovery
+	// jobs included, each under the ID the runtime derives for it.
+	var oldPlan []codexBuildTaskPlan
+	for idx, task := range phase.Tasks {
+		oldPlan = append(oldPlan, codexBuildTaskPlan{ID: buildTaskID(task, idx), Goal: task.Goal, Status: task.Status})
+	}
+	if len(oldPlan) == len(tasksExcludingRecovery(phase.Tasks)) {
+		t.Fatalf("fixture: the old-style plan should include recovery jobs: %+v", oldPlan)
+	}
+	manifest := codexContinueManifest{Present: true, Data: codexBuildManifest{Tasks: oldPlan}}
+	if err := validateBuildManifestTaskSetForPhase(manifest, phase, true); err != nil {
+		t.Fatalf("an old build plan carrying the phase's own recovery jobs must still match: %v", err)
+	}
+
+	// A plan entry that is NOT one of the phase's recovery jobs still refuses.
+	extra := codexContinueManifest{Present: true, Data: codexBuildManifest{Tasks: append(append([]codexBuildTaskPlan(nil), oldPlan...),
+		codexBuildTaskPlan{ID: "task-99", Goal: "work nobody planned"})}}
+	if err := validateBuildManifestTaskSetForPhase(extra, phase, true); err == nil {
+		t.Fatal("a plan entry the phase does not hold must still be refused")
+	}
+}
