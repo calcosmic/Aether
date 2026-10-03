@@ -597,3 +597,56 @@ func TestABuildPlanWrittenBeforeTheFixStillMatchesTheRecord(t *testing.T) {
 		t.Fatal("a plan entry the phase does not hold must still be refused")
 	}
 }
+
+// Phase 210 blockers 16-17 (Finish the Track deck, 2026-10-02/03): after a
+// phase check stopped, the status card named /ant-resume and resume named
+// /ant-resume again, forever -- reproduced here with the owner's shape (phase
+// built, its check stopped since, nothing paused). Resume is the one recovery
+// door; it must hand over the stopped check's own way forward: the targeted
+// command the check named, or a re-check once the problem is fixed.
+func TestResumeAfterAStoppedCheckHandsOverItsWayForward(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		checkNext string
+		wantNext  string
+	}{
+		{name: "the check named no targeted step", checkNext: "aether status", wantNext: "aether continue"},
+		{name: "the check named a targeted rebuild", checkNext: "aether build 2 --task 2.1", wantNext: "aether build 2 --task 2.1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "json")
+			saveGlobals(t)
+			resetRootCmd(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+			goal := "Grow the deck"
+			built := time.Now().UTC().Add(-30 * time.Minute)
+			createTestColonyState(t, dataDir, colony.ColonyState{
+				Version: "3.0", Goal: &goal, State: colony.StateBUILT, CurrentPhase: 2, BuildStartedAt: &built,
+				Plan: colony.Plan{Phases: []colony.Phase{
+					{ID: 1, Name: "Safety net", Status: colony.PhaseCompleted},
+					{ID: 2, Name: "Eight piles", Status: colony.PhaseInProgress, Tasks: []colony.Task{{ID: ptrString("2.1"), Goal: "Do it", Status: colony.TaskCompleted}}},
+				}},
+			})
+			seedBlockedContinueReport(t, dataDir, 2, time.Now().UTC().Add(-time.Minute),
+				"The bound criterion fails: PREVIEW.html is unverified.", tc.checkNext, codexContinueRecoveryPlan{ReverifyCommand: "aether continue"})
+
+			for attempt := 1; attempt <= 2; attempt++ {
+				resetRootCmd(t)
+				var buf bytes.Buffer
+				stdout = &buf
+				stderr = &bytes.Buffer{}
+				rootCmd.SetArgs([]string{"resume"})
+				if err := rootCmd.Execute(); err != nil {
+					t.Fatalf("resume attempt %d: %v", attempt, err)
+				}
+				env := parseLifecycleEnvelope(t, buf.String())
+				result, _ := env["result"].(map[string]interface{})
+				if got := stringValue(result[nextActionCommandKey]); got != tc.wantNext {
+					t.Fatalf("resume attempt %d named %q, want %q (never resume again):\n%s", attempt, got, tc.wantNext, buf.String())
+				}
+			}
+		})
+	}
+}

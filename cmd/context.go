@@ -709,6 +709,24 @@ func buildResumeDashboardResult() map[string]interface{} {
 		}
 		result["resume_override_command"] = next
 		result["resume_override_why"] = why
+	} else if guidance := loadActiveRecoveryGuidance(state); guidance != nil {
+		// The phase's own check stopped since its last build. Resume is the
+		// recovery door, so it hands over that check's way forward -- the
+		// targeted step it named, or a re-check once the problem is fixed --
+		// instead of naming itself again (Phase 210 blockers 16-17).
+		next := "aether continue"
+		why := "The last check of this phase stopped. Fix what it reported, then run this to check the phase again."
+		if summary := strings.TrimSpace(guidance.Summary); summary != "" {
+			why = "The last check of this phase stopped: " + summary + " Fix that, then run this to check the phase again."
+		}
+		if targeted := strings.TrimSpace(guidance.Next); guidance.HasTargetedRoute && targeted != "aether status" && targeted != "aether resume" {
+			if _, ok := availableCommand(targeted); ok {
+				next = targeted
+				why = "The last check of this phase stopped and named this exact step for clearing it."
+			}
+		}
+		result["resume_override_command"] = next
+		result["resume_override_why"] = why
 	}
 	closeLifecycleRun(result, state, "resume-dashboard")
 	return result
