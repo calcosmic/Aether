@@ -50,6 +50,34 @@
       "content_digest": "05a7247fbe72f78026f116a442745d1febe625d833fa81dc3722fb82e92577f2"
     },
     {
+      "id": "fixture-0b247f076d4e",
+      "title": "[broad-invariant] unmet-truth: cmd/next_action.go. Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/next_action.go. Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02): after a phase check stops with its own recovery report, every closing card (status, swarm, resume) names '/ant-resume', but resume has nothing to reconcile when the project is not paused (buildResumeDashboardResult only overrides for a saved completion packet or an unfinished build attempt), so its own card names '/ant-resume' again and the owner loops. Owner-raised blocker flags were moved to unbl",
+        "reference": "77"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/next_action.go. Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02): after a phase check stops with its own recovery report, every closing card (status, swarm, resume) names '/ant-resume', but resume has nothing to reconcile when the project is not paused (buildResumeDashboardResult only overrides for a saved completion packet or an unfinished build attempt), so its own card names '/ant-resume' again and the owner loops. Owner-raised blocker flags were moved to unbl",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "77"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "0b247f076d4ecc7424174df556338e1efd4b5468169359a1077c004daed93c54",
+      "guard": {
+        "test": "TestResumeAfterAStoppedCheckHandsOverItsWayForward",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-0b946259e159",
       "title": "[broad-invariant] TestDeliberatelyDroppedDisplayChoicesStayDropped. 203-14 put a retired phrase into a comment tha",
       "failing_baseline": {
@@ -1336,6 +1364,34 @@
       "privacy": "repo_local",
       "severity": "medium",
       "content_digest": "bcc133cfef8dbfc2996a2b84eb976e761a12fc9cdb53cff6eac64365fe27fcab"
+    },
+    {
+      "id": "fixture-c0cef990f623",
+      "title": "[broad-invariant] unmet-truth: cmd/compatibility_cmds.go. Owner's ruling 2026-10-03 not yet implemented: when Auto",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/compatibility_cmds.go. Owner's ruling 2026-10-03 not yet implemented: when Autopilot reaches a step that needs the owner's OK or his own machine (Phase 210 rows 10-11: autopilot helpers run in a sandbox that cannot run the installer's 'is Anki open?' check), the chat should ask him yes or no about that one step, do it on yes, and carry on. The ask-then-do flow already works in the guided chat build (French Basics phase 4 installed that way, row 12); Autopilot needs to hand such",
+        "reference": "81"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/compatibility_cmds.go. Owner's ruling 2026-10-03 not yet implemented: when Autopilot reaches a step that needs the owner's OK or his own machine (Phase 210 rows 10-11: autopilot helpers run in a sandbox that cannot run the installer's 'is Anki open?' check), the chat should ask him yes or no about that one step, do it on yes, and carry on. The ask-then-do flow already works in the guided chat build (French Basics phase 4 installed that way, row 12); Autopilot needs to hand such",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "81"
+        }
+      ],
+      "privacy": "redacted",
+      "severity": "medium",
+      "content_digest": "c0cef990f62380fee349896e5833aac36e1a3733c0e42383921b0624658f012a",
+      "guard": {
+        "test": "TestUnblockOffersTheChatAStepALockedDownHelperCouldNotDo",
+        "package": "cmd"
+      }
     },
     {
       "id": "fixture-c44507ac4771",

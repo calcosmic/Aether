@@ -7,10 +7,10 @@ current_phase_name: Two-Week Freeze
 current_plan: 1
 total_plans_in_phase: 2
 status: executing
-stopped_at: Phase 210 trial running; owner reply recorded, real deck work corroborated, ledger completeness unknown
-last_updated: "2026-09-28"
-last_activity: 2026-09-28
-last_activity_desc: Checked French Fluency deck records at the owner's request; preserved 12 recorded blockers without claiming owner confirmation
+stopped_at: Phase 210 trial running; resume fix ce44d325 suite-verified and installed 2026-10-03, ledger at 19 rows
+last_updated: "2026-10-03"
+last_activity: 2026-10-03
+last_activity_desc: Full suite passed on the resume fix (only the two known failures), published and installed with backup, integrity 5/5; defect register entries 77 and 81 marked fixed and guarded in the regression bank; freeze rows 10, 11 and 16-18 updated
 progress:
   total_phases: 5
   completed_phases: 4
@@ -39,9 +39,9 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 Phase: 210 (Two-Week Freeze) — TRIAL RUNNING
 Next phase: None scheduled; Plan 210-02 closes this trial on 2026-10-09 unless the owner explicitly ends it early
-Status: Owner replied; real work corroborated; ledger completeness recorded as unknown; ordinary trial use continues
+Status: Trial running; 19 rows in the ledger; every fix to date is installed; ledger completeness still not owner-confirmed
 Plan: 1 of 2
-Last activity: 2026-09-28 — Inspected the two real deck sources and project records; recorded the owner's uncertainty without changing the count
+Last activity: 2026-10-03 — Verified and installed the resume fix (ce44d325); records updated
 
 ## Performance Metrics
 
@@ -859,8 +859,8 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 
 ## Session Continuity
 
-Last session: 2026-09-28
-Stopped at: Trial running; owner response received, deck work corroborated, ledger completeness unknown
+Last session: 2026-10-03
+Stopped at: Resume fix ce44d325 verified (full suite: only the two known failures), published from a throwaway worktree and installed 18:55, integrity 5/5; backup in ~/.aether-backups/pre-resume-fix-20261003T185516
 Resume file: .planning/phases/210-two-week-freeze/.continue-here.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
