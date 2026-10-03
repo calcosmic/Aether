@@ -1,78 +1,87 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-25T17:40:00Z",
+  "timestamp": "2026-10-03T14:10:50.575Z",
   "phase": "210",
   "phase_name": "Two-Week Freeze",
   "phase_dir": ".planning/phases/210-two-week-freeze",
   "plan": 1,
   "task": 3,
   "total_tasks": 3,
-  "status": "in_progress",
+  "status": "paused",
   "completed_tasks": [
     {
       "id": 1,
       "name": "Fix the dates, the projects and the definition before the clock starts",
       "status": "done",
-      "progress": "Owner confirmed 2026-09-25: start today (25 Sep to 9 Oct), French Fluency on the list, list open to additions, today's lock-up counted as blocker 1."
+      "commit": "fb7d413e"
     },
     {
       "id": 2,
       "name": "Write the start record, the empty ledger, and the recorder",
-      "status": "done",
-      "progress": "210-FREEZE-START.md, 210-BLOCKERS.md (1 row), CLAUDE.md freeze section, machine-wide catch-all appended (backup ~/.claude/CLAUDE.md.backup-2026-09-25-pre-freeze). Plan verify printed VERIFY_OK; tally 1."
+      "status": "done"
+    },
+    {
+      "id": "fixes-2026-10-02/03",
+      "name": "Fix every stop the owner hit in the Finish the Track deck (rows 13-19) and the open items he asked to be fixed",
+      "status": "done except publish of ce44d325",
+      "commit": "c2486a16..ce44d325",
+      "progress": "Published and installed (integrity 5/5): subfolder stray projects, forced pause (3 cases), owner-blocker resume loop, unblock dead end, stale autopilot closing card, folder claims in the risky-code scan, build plan vs record mismatch, autopilot keeps going past owner checks and asks once at the end, CI guard only for helpers, medic false alarms, swarm and owner-answer rough edges, practice-project test leak into the real HOME, autopilot handover of steps a locked-down helper could not do (a1bf1ca4). Committed but NOT yet suite-verified or published: ce44d325 (resume hands over a stopped check's way forward)."
     }
   ],
   "remaining_tasks": [
     {
+      "id": "publish-ce44d325",
+      "name": "Verify and publish the resume fix",
+      "status": "in_progress",
+      "note": "Targeted groups (Resume|Recovery|NextAction|Lifecycle|Pause|FailedCheck|Orientation|SessionStart|Decider) passed on ce44d325; the one red in that run (TestCLIInterruptedBuildResumesThroughForceRedispatch) came from a commit made mid-run and passes alone. Remaining: full suite in a throwaway worktree with a throwaway HOME, then back up ~/.aether/system, ~/.claude/commands, ~/.codex/skills/aether, opencode commands and the binary, then `aether publish --package-dir <worktree> --channel stable --binary-dest $HOME/.local/bin` from that worktree, then `aether integrity`."
+    },
+    {
       "id": 3,
-      "name": "Prove the recorder works on the first real day",
+      "name": "Prove the recorder works on the first real day (210-01 Task 3)",
       "status": "awaiting_owner",
-      "note": "Blocker 1 was written into the ledger by the chat, but AFTER it was fixed, not before (the freeze section did not exist yet when the report arrived). The owner still needs to do one ordinary real piece of work in French Fluency and confirm the ledger matches."
+      "note": "Ledger now holds 19 rows. Completeness is still not owner-confirmed."
+    },
+    {
+      "id": "210-02",
+      "name": "Close the fortnight",
+      "status": "not_started",
+      "note": "Precondition: 2026-10-09 reached, or the owner says to close early. He declined closing early on 2026-10-03."
     }
   ],
   "blockers": [],
   "async_jobs": [],
   "human_actions_pending": [
     {
-      "action": "Do one ordinary real piece of work in French Fluency through Aether (phase 2 is next), then say whether anything stopped him and confirm the ledger matches.",
-      "blocking": true
+      "action": "Keep using Aether in real projects; in the Finish the Track deck, look at the preview page and type /ant-continue.",
+      "context": "Phase 3 of that deck was built and is waiting on his visual look.",
+      "blocking": false
     }
   ],
   "decisions": [
     {
-      "decision": "Phase 209 signed off at 6/6 UAT checks, with two items left openly on the defect register rather than closed on paper.",
-      "rationale": "Owner ruling at UAT 2026-09-24: fix the false escalation before the trial, leave the unproven planning hand-off for the trial itself to exercise.",
-      "phase": "209"
-    },
-    {
-      "decision": "The default menu is ten commands in two groups, not the proposed six.",
-      "rationale": "Owner ruling 2026-09-24 on the real rendered screen. /ant-init kept because it promises 'start a project' where /ant-go promises 'do this thing'; oracle, swarm and dream added because he actually reaches for them.",
-      "phase": "209"
-    },
-    {
-      "decision": "The installed program was rebuilt and replaced before the fortnight, and the machine's shared command copy was re-published from this repo.",
-      "rationale": "Owner approved both 2026-09-25 after being shown that the installed build predated the escalation fix and that /ant-go was missing from every project outside this repo. A local install and a local hub sync are not the npm/GitHub publish that D-01 and the milestone rules put out of scope.",
+      "decision": "Do not close the fortnight early.",
+      "rationale": "Offered closing early with 19 stops against a limit of about 2, the owner answered 'I just want to have it that it doesn't have any of these fucking issues again'. Recorded in 210-FREEZE-START.md Rule changes.",
       "phase": "210"
     },
     {
-      "decision": "A one-line temporary catch-all goes into the owner's machine-wide instructions when the fortnight starts.",
-      "rationale": "Owner approved 2026-09-25 after being shown the undercount risk: the recorder in this repo only fires when he comes here, so a blocker dealt with entirely inside another project would go uncounted and flatter the final verdict.",
+      "decision": "Autopilot keeps going past owner checks and asks once at the end.",
+      "rationale": "Owner chose from options 2026-10-03; implemented 23508ed6.",
       "phase": "210"
     },
     {
-      "decision": "Blocker 1 (French Fluency lock-up) fixed and installed; fixed binary built from bcf60ed4, backup at ~/.local/bin/aether.backup-1.0.88-pre-french-fix.",
-      "rationale": "Owner approved install and unstick 2026-09-25. Real project: status loads, resume no longer loops, autopilot preview plans phases 2-4.",
+      "decision": "When Autopilot reaches a step that needs the owner's OK, the chat asks yes or no, does it, and carries on.",
+      "rationale": "Owner chose from options 2026-10-03; implemented a1bf1ca4 via aether unblock marking blockers raised by runtime-worker-dispatch builds and the run/unblock wrapper steps.",
       "phase": "210"
     },
     {
-      "decision": "'No test command' as warning-not-failure: owner chose 'warn and carry on', NOT implemented yet, pushed back.",
-      "rationale": "The failure comes from the accepted plan's per-goal 'must be proven by tests' requirement, not the test step itself; honouring the choice means marking goals test-proven when no test ran, and a helper could reach that by removing the test command. Awaiting owner's answer to the pushback. WINDOWS 66.",
+      "decision": "The CI workflow guard applies only to Aether's own helpers.",
+      "rationale": "Owner chose from options 2026-10-03; implemented 9d2f32e5.",
       "phase": "210"
     }
   ],
   "uncommitted_files": [
     ".aether/CONTEXT.md (modified before this session; not this session's work, left alone)"
   ],
-  "next_action": "Wait for the owner's first real session in French Fluency (Task 3), and his answer on the 'no test command' pushback.",
-  "context_notes": "Phase 209 is complete and signed off; phase 210 is planned, checked and set up. The only thing between here and a running fortnight is the owner's own answer. The whole design of 210 rests on the final blocker count being honest including when it is bad, so nothing that would flatter that count should be allowed to creep in."
+  "next_action": "Run the full suite on ce44d325 in a throwaway worktree with a throwaway HOME, then back up and publish from that worktree and run aether integrity. Then mark WINDOWS 77 and 81 fixed (regenerate the bank and add guards) and update freeze rows 10, 11 and 16-18.",
+  "context_notes": "All work lives on branch oracle-reinstate, committed, not pushed. Two full-suite failures are pre-existing (TestCodexNativePhaseEvidence, TestDefaultOracleInvokerAvoidsOpenCodeInsideOpenCodeAgent). Run suites with env -u AETHER_SCREEN_RELAY and hash ~/.local/bin/aether before and after."
 }
