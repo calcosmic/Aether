@@ -1042,6 +1042,34 @@
       }
     },
     {
+      "id": "fixture-8a063277c9a1",
+      "title": "[broad-invariant] unmet-truth: cmd/swarm_cmd.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/swarm_cmd.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm --plan-only' gave workers only 'Target: the flags' with no context; 'swarm-finalize' rejected the completion twice (findings must be strings, task must match the manifest text exactly); the swarm closeout repeated blockers the fix had already cleared. Also from blocker 17: an owner answer recorded with 'decision-answer' did not reach the capped prompt_section, and 'build-completion-stage' rejects a fr",
+        "reference": "80"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/swarm_cmd.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm --plan-only' gave workers only 'Target: the flags' with no context; 'swarm-finalize' rejected the completion twice (findings must be strings, task must match the manifest text exactly); the swarm closeout repeated blockers the fix had already cleared. Also from blocker 17: an owner answer recorded with 'decision-answer' did not reach the capped prompt_section, and 'build-completion-stage' rejects a fr",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "80"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "8a063277c9a13c2a1b703f7567fb2cdfacb6f37b9e3b753e7a19a35553f78a97",
+      "guard": {
+        "test": "TestSwarmFinalizeAcceptsTheResultShapesWorkersReturn",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-901dfdf5d632",
       "title": "[broad-invariant] oracle (wrapper persistence suggestions). The wrapper tells the assistant to persist findings wi",
       "failing_baseline": {
@@ -1414,6 +1442,34 @@
       }
     },
     {
+      "id": "fixture-ce66e69e829f",
+      "title": "[broad-invariant] unmet-truth: cmd/medic_cmd.go. Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/medic_cmd.go. Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether medic --deep' did not detect the phase 2 build-plan/record task-set mismatch that 'aether status' reported as 'RECORDS DISAGREE', and reported two critical issues that look stale: hub Claude/OpenCode commands '67 files, expected 60' (the repo ships more than 60 wrappers) and 'Wrapper for build/continue/init/seal/plan not found' in a project whose wrappers work.",
+        "reference": "79"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/medic_cmd.go. Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether medic --deep' did not detect the phase 2 build-plan/record task-set mismatch that 'aether status' reported as 'RECORDS DISAGREE', and reported two critical issues that look stale: hub Claude/OpenCode commands '67 files, expected 60' (the repo ships more than 60 wrappers) and 'Wrapper for build/continue/init/seal/plan not found' in a project whose wrappers work.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "79"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "ce66e69e829f2cf736549701d192c65337cccaf598f9d282fd7e3706de6cc5f3",
+      "guard": {
+        "test": "TestMedicDeepTrustsACorrectInstall",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-cfab44c9d745",
       "title": "[broad-invariant] dream. Dream's activity logging writes to activity-log.jsonl while the Dreamer's own context ste",
       "failing_baseline": {
@@ -1486,6 +1542,34 @@
       "content_digest": "d12096a6c6515d2c2bf19590f46f6afbf0bc8e0b05bce64649fa903c73e72e19",
       "guard": {
         "test": "TestMemoryDetailsIsNoLongerAnAliasOfMemoryMetrics",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-d1fc355e03e4",
+      "title": "[broad-invariant] unmet-truth: cmd/publish_cmd_test.go. Found 2026-10-02 while fixing Phase 210 blockers 14-15: a ",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/publish_cmd_test.go. Found 2026-10-02 while fixing Phase 210 blockers 14-15: a full 'go test ./... -timeout 90m' run in a throwaway checkout replaced the owner's real ~/.local/bin/aether with a build of that checkout (binary contains the checkout's source paths; installed 22:23 mid-suite). Some test builds and installs the program without isolating HOME or --binary-dest. The owner's install was restored and the pre-fix version rebuilt as a backup; the offending test is not yet i",
+        "reference": "78"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/publish_cmd_test.go. Found 2026-10-02 while fixing Phase 210 blockers 14-15: a full 'go test ./... -timeout 90m' run in a throwaway checkout replaced the owner's real ~/.local/bin/aether with a build of that checkout (binary contains the checkout's source paths; installed 22:23 mid-suite). Some test builds and installs the program without isolating HOME or --binary-dest. The owner's install was restored and the pre-fix version rebuilt as a backup; the offending test is not yet i",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "78"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "d1fc355e03e4fb78c2c00455f41db872d0c4eb9ee6173028fa78dfdb0837b47b",
+      "guard": {
+        "test": "TestMessyPracticeProjectBuilderNeverWritesIntoHome",
         "package": "cmd"
       }
     },
