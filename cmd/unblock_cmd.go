@@ -89,6 +89,27 @@ or (3) dispatch the Fixer agent to investigate and apply fixes.`,
 	},
 }
 
+// unblockHandoverSentence marks a blocker one of Aether's own background
+// helpers raised because its locked-down workspace stopped it doing a step.
+const unblockHandoverSentence = "A helper working in Aether's own locked-down workspace could not do this itself. It can be done here in the chat once you say yes."
+
+// blockerFromLockedDownHelper reports whether one of Aether's own background
+// helpers -- the ones Autopilot and the direct build dispatch into a
+// locked-down workspace -- raised this blocker. It is recognised from the
+// build record the blocker names, never from the helper's own wording.
+func blockerFromLockedDownHelper(flag colony.FlagEntry) bool {
+	attemptID := strings.TrimSpace(flag.AttemptID)
+	if flag.Source != "escalation" || attemptID == "" || flag.Phase == nil {
+		return false
+	}
+	for _, record := range listBuildAttemptsForPhase(*flag.Phase) {
+		if record.ID == attemptID {
+			return record.ExecutionOwner == buildExecutionOwner("real", false)
+		}
+	}
+	return false
+}
+
 // buildOpenBlockerSummary lists every open blocker in its own words -- a
 // helper's blocker already says what needs doing -- with the exact command
 // that marks it resolved once it is fixed. It returns "" when none is open.
@@ -102,6 +123,9 @@ func buildOpenBlockerSummary(blockers []colony.FlagEntry) string {
 	b.WriteString("\n")
 	for i, flag := range blockers {
 		b.WriteString(fmt.Sprintf("\n  %d. %s\n", i+1, strings.Join(strings.Fields(flag.Description), " ")))
+		if blockerFromLockedDownHelper(flag) {
+			b.WriteString("     " + unblockHandoverSentence + "\n")
+		}
 		b.WriteString(fmt.Sprintf("     Once it is fixed, mark it resolved: aether flag-resolve --id %s --message \"<what was done>\"\n", flag.ID))
 	}
 	b.WriteString("\nWhen nothing is left blocking, run /ant-continue to check the phase.\n")

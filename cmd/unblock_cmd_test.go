@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/calcosmic/Aether/pkg/codex"
 	"github.com/calcosmic/Aether/pkg/colony"
 )
 
@@ -556,6 +558,106 @@ func TestUnblockShowsAnOpenBlockerAndHowToClearIt(t *testing.T) {
 	for _, want := range []string{problem, "aether flag-resolve --id " + flagID} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("unblock output is missing %q:\n%s", want, output)
+		}
+	}
+}
+
+// Owner's ruling 2026-10-03 (Phase 210 rows 10-11): when Autopilot stops
+// because one of Aether's own background helpers could not do a step in its
+// locked-down workspace (it could not run the installer's "is Anki open?"
+// check, or was not allowed to delete stray folders), the chat asks the owner
+// yes or no and does that step itself. Unblock marks exactly those blockers,
+// recognised from the build record the blocker names -- never from the
+// helper's own wording -- and leaves a chat-run build's blocker unmarked,
+// because the chat already had full access there.
+func TestUnblockOffersTheChatAStepALockedDownHelperCouldNotDo(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		dispatchMode string
+		wantHandover bool
+	}{
+		{name: "helper in Aether's locked-down workspace", dispatchMode: "real", wantHandover: true},
+		{name: "helper the chat dispatched itself", dispatchMode: "external-task", wantHandover: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AETHER_OUTPUT_MODE", "json")
+			saveGlobals(t)
+			resetRootCmd(t)
+			dataDir := setupBuildFlowTest(t)
+			root := filepath.Dir(filepath.Dir(dataDir))
+			withWorkingDir(t, root)
+
+			goal := "Install the French deck"
+			phase := colony.Phase{ID: 1, Name: "Live install", Status: colony.PhaseInProgress}
+			state := colony.ColonyState{Version: "3.0", Goal: &goal, State: colony.StateEXECUTING, CurrentPhase: 1,
+				Plan: colony.Plan{Phases: []colony.Phase{phase}}}
+			createTestColonyState(t, dataDir, state)
+
+			started := time.Now().UTC()
+			attemptID := deriveBuildAttemptID(started, 4242)
+			workspaceSHA, err := codex.WorkspaceFingerprint(root)
+			if err != nil {
+				t.Fatalf("workspace fingerprint: %v", err)
+			}
+			attemptRel, record, _, err := deriveBuildAttempt(buildAttemptDerivation{
+				State: state, Phase: phase, PhaseNumber: 1, StartedAt: started, AttemptID: attemptID,
+				RunID: "run-handover", ProcessID: 4242, WorkspaceSHA256: workspaceSHA, ExecutionOwner: buildExecutionOwner(tc.dispatchMode, false),
+				InitialDispatchMode: tc.dispatchMode,
+			})
+			if err != nil {
+				t.Fatalf("derive build attempt: %v", err)
+			}
+			if err := store.SaveJSON(attemptRel, record); err != nil {
+				t.Fatalf("save build attempt: %v", err)
+			}
+			const step = "Sandbox blocks the 'ps' call in scripts/install_essentials.py, so even the dry run cannot run from this session."
+			if err := recordWorkerBlockerFlag(workerOutcomeFacts{Workflow: "build", PhaseID: 1, WorkerName: "Anvil-22",
+				Caste: "builder", AttemptID: attemptID}, step); err != nil {
+				t.Fatalf("record worker blocker: %v", err)
+			}
+
+			resetRootCmd(t)
+			stdout.(*bytes.Buffer).Reset()
+			rootCmd.SetArgs([]string{"unblock"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("unblock: %v", err)
+			}
+			output := stdout.(*bytes.Buffer).String()
+			if !strings.Contains(output, step) {
+				t.Fatalf("unblock must list the blocker:\n%s", output)
+			}
+			offered := strings.Contains(output, unblockHandoverSentence)
+			if offered != tc.wantHandover {
+				t.Fatalf("handover offered = %v, want %v:\n%s", offered, tc.wantHandover, output)
+			}
+		})
+	}
+}
+
+// The chat recognises a step it may offer to do by the exact sentence
+// `aether unblock` prints. If either side is reworded alone, the handover
+// silently stops happening, so every unblock instruction copy must quote the
+// runtime's own sentence, and every run instruction copy must hand a blocker
+// stop over to /ant-unblock.
+func TestUnblockHandoverInstructionsQuoteTheRuntimeSentence(t *testing.T) {
+	root := findTestModuleRoot(t)
+	marker := strings.SplitN(unblockHandoverSentence, ".", 2)[0]
+	for _, rel := range []string{".claude/commands/ant/unblock.md", ".claude/commands/ant-unblock.md", ".opencode/commands/ant/unblock.md"} {
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), marker) {
+			t.Errorf("%s does not quote the runtime's handover sentence %q", rel, marker)
+		}
+	}
+	for _, rel := range []string{".claude/commands/ant/run.md", ".claude/commands/ant-run.md", ".opencode/commands/ant/run.md"} {
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), "go straight on to `/ant-unblock`") {
+			t.Errorf("%s does not hand a blocker stop over to /ant-unblock", rel)
 		}
 	}
 }

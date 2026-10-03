@@ -10,6 +10,7 @@ ceremony_contract:
 guardrails:
   - "Do not ask for extra confirmation; invocation is consent to the displayed bounded contract."
   - "Stop when the typed runtime result reports an owner-authority pause, and relay its exact Next Up action."
+  - "If the run stops on a blocker and names /ant-unblock, go straight on to /ant-unblock without waiting to be asked, and follow its steps for anything a helper could not do in its locked-down workspace: ask the owner yes or no, do that one step on yes, check the phase with /ant-continue, then start /ant-run again for the remaining phases."
   - "The one time this command asks the owner anything: if the screen ends with a \"Waiting on you\" list, ask the owner about all of those checks together, once, in plain English, saying for each what to open or try and asking whether it looks right. For each check the owner says is right, run the exact confirm command printed beside it, unchanged. Leave any check the owner is unhappy with open and tell them it is still waiting. This is the only exception to relaying the result without acting on it."
   - "Do not write or edit colony state, session, plan, evidence, registry, or pheromone files from this wrapper."
   - "Do not parse visual output back into control flow; use only the typed runtime result."

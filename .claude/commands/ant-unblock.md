@@ -16,6 +16,16 @@ The input is: `$ARGUMENTS`
 - `$ARGUMENTS` contains `--dispatch` -> execute `aether unblock $ARGUMENTS`. This spawns the Fixer to investigate and repair the failed gates.
 - Otherwise -> pass `$ARGUMENTS` through unchanged: the CLI owns `--phase`, `--dispatch`, and `--fixer-mode`.
 
+### Step 1b: Steps a helper could not do
+
+For each blocker the screen marks with "A helper working in Aether's own locked-down workspace could not do this itself":
+
+- Ask the owner one plain yes/no question about that one step. Say in ordinary words exactly what you will do, and show the exact command or change, before doing anything.
+- On yes, do exactly that step and nothing more, inside this project folder only. Then run the resolve command printed under it, with a short plain description of what you did.
+- On no, leave it open and tell the owner it is still waiting.
+
+When nothing is left blocking, run `/ant-continue` to check the phase. If this came from `/ant-run`, start `/ant-run` again afterwards so the remaining phases carry on.
+
 ### Step 2: Explain the mode before dispatching
 
 Fixer autonomy is set by `--fixer-mode` and defaults to `propose`:
