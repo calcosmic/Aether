@@ -162,6 +162,7 @@ func TestEmojiConsistencyMissing(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckStageMarkersPresent(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
 	yamlDir := filepath.Join(dir, ".aether", "commands")
@@ -193,6 +194,7 @@ func TestCheckStageMarkersPresent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckStageMarkersMissing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
 	yamlDir := filepath.Join(dir, ".aether", "commands")
@@ -227,6 +229,7 @@ func TestCheckStageMarkersMissing(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckStageMarkersMissingYAML(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
 	dataDir := filepath.Join(dir, ".aether", "data")
@@ -259,6 +262,7 @@ func TestCheckStageMarkersMissingYAML(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckStageMarkersLiteralMarkersNotRequired(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
 	yamlDir := filepath.Join(dir, ".aether", "commands")
@@ -289,6 +293,7 @@ func TestCheckStageMarkersLiteralMarkersNotRequired(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCheckContextClearGuidance(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	t.Run("no hardcoded patterns", func(t *testing.T) {
 		dir := t.TempDir()
 		continueDir := filepath.Join(dir, ".claude", "commands", "ant")
@@ -370,6 +375,7 @@ func TestCheckContextClearGuidance(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestScanCeremonyIntegrityIntegration(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	claudeDir := filepath.Join(dir, ".claude", "commands", "ant")
 	opencodeDir := filepath.Join(dir, ".opencode", "commands", "ant")

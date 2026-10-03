@@ -324,7 +324,43 @@ func scanColonyState(fc *fileChecker) []HealthIssue {
 		}
 	}
 
+	issues = append(issues, scanBuildPlanAgreement(state)...)
+
 	return issues
+}
+
+// scanBuildPlanAgreement reports when the current phase's build task list
+// (its build manifest) and the saved project record list different tasks.
+// Finishing the build and checking the phase both refuse in that state, using
+// this same decision (validateBuildManifestTaskSetForPhase, called the way
+// `aether continue` calls it), yet medic used to call such a colony healthy
+// (Phase 210 blocker 17). It is a warning: medic only reports it and never
+// changes either record.
+func scanBuildPlanAgreement(state colony.ColonyState) []HealthIssue {
+	if store == nil || state.CurrentPhase <= 0 {
+		return nil
+	}
+	var phase *colony.Phase
+	for i := range state.Plan.Phases {
+		if state.Plan.Phases[i].ID == state.CurrentPhase {
+			phase = &state.Plan.Phases[i]
+			break
+		}
+	}
+	if phase == nil {
+		return nil
+	}
+	manifest := loadCodexContinueManifest(phase.ID)
+	if validateBuildManifestTaskSetForPhase(manifest, *phase, true) == nil {
+		return nil
+	}
+	buildTasks := formatTaskIDSet(manifestTaskIDSetExcludingRecovery(manifest.Data.Tasks, *phase))
+	recordTasks := formatTaskIDSet(phaseTaskIDSet(*phase))
+	return []HealthIssue{issueWarning("state", manifest.Path, fmt.Sprintf(
+		"The records for phase %d disagree: the build's task list has %s, but the saved project record has %s. "+
+			"Until they match, finishing this build and checking the phase will both be refused. "+
+			"The program's way out is `%s`, which runs the phase's build again and writes a fresh task list from the saved record. Medic itself changes nothing.",
+		phase.ID, buildTasks, recordTasks, buildForceRedispatchCommand(phase.ID)))}
 }
 
 // ---------------------------------------------------------------------------

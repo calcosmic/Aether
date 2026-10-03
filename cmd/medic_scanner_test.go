@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/calcosmic/Aether/pkg/colony"
+	"github.com/calcosmic/Aether/pkg/storage"
 )
 
 // helper to create a JSON file in the data directory
@@ -845,6 +846,116 @@ func TestScanSessionMissingSessionID(t *testing.T) {
 	}
 	if !found {
 		t.Error("empty session ID should produce warning")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestMedicReportsABuildPlanThatDisagreesWithTheRecord
+// ---------------------------------------------------------------------------
+
+// buildPlanDisagreementFindings returns the medic findings about the current
+// phase's build plan and saved record listing different tasks.
+func buildPlanDisagreementFindings(t *testing.T, deep bool) []HealthIssue {
+	t.Helper()
+	result, err := performHealthScan(MedicOptions{Deep: deep})
+	if err != nil {
+		t.Fatalf("performHealthScan: %v", err)
+	}
+	var found []HealthIssue
+	for _, issue := range result.Issues {
+		if issue.Category == "state" && contains(issue.File, filepath.Join("build", "phase-2", "manifest.json")) {
+			found = append(found, issue)
+		}
+	}
+	return found
+}
+
+// Phase 210 blocker 17: phase 2's build plan listed 2.1, 2.2, 2.3 and task-4
+// while the saved project record listed 2.1, 2.2, 2.3, so every save and
+// check refused, yet `aether medic --deep` never mentioned it. The build plan
+// here is made by the runtime's own planner (codexBuildTaskPlans) from a phase
+// that still had an unnumbered fourth task, which is how "task-4" arises; the
+// saved record no longer has it.
+func TestMedicReportsABuildPlanThatDisagreesWithTheRecord(t *testing.T) {
+	saveGlobals(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("AETHER_HUB_DIR", t.TempDir())
+	project := t.TempDir()
+	dataDir := filepath.Join(project, ".aether", "data")
+	t.Setenv("AETHER_ROOT", project)
+	s, err := storage.NewStore(dataDir)
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	store = s
+
+	taskID := func(id string) *string { return &id }
+	planned := colony.Phase{
+		ID:     2,
+		Name:   "Finish the deck",
+		Status: colony.PhaseInProgress,
+		Tasks: []colony.Task{
+			{ID: taskID("2.1"), Goal: "Lay out the cards", Status: colony.TaskCompleted},
+			{ID: taskID("2.2"), Goal: "Write the prompts", Status: colony.TaskCompleted},
+			{ID: taskID("2.3"), Goal: "Add the shuffle", Status: colony.TaskCompleted},
+			{Goal: "Finish the shuffle", Status: colony.TaskPending},
+		},
+	}
+	recorded := planned
+	recorded.Tasks = append([]colony.Task{}, planned.Tasks[:3]...)
+
+	goal := "Eno-style creative flashcards"
+	writeJSONFile(t, dataDir, "COLONY_STATE.json", colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateBUILT,
+		CurrentPhase: 2,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Set up", Status: colony.PhaseCompleted},
+			recorded,
+		}},
+	})
+	manifestRel := filepath.Join("build", "phase-2", "manifest.json")
+	saveManifestFrom := func(phase colony.Phase) {
+		t.Helper()
+		if err := store.SaveJSON(manifestRel, codexBuildManifest{
+			Phase:        phase.ID,
+			PhaseName:    phase.Name,
+			Goal:         goal,
+			Root:         project,
+			DispatchMode: "real",
+			State:        "built",
+			Tasks:        codexBuildTaskPlans(phase),
+		}); err != nil {
+			t.Fatalf("save manifest: %v", err)
+		}
+	}
+
+	saveManifestFrom(planned)
+	for _, deep := range []bool{true, false} {
+		findings := buildPlanDisagreementFindings(t, deep)
+		if len(findings) != 1 {
+			t.Fatalf("deep=%v: want exactly one finding about phase 2's build plan and record disagreeing, got %+v", deep, findings)
+		}
+		got := findings[0]
+		if got.Severity != "warning" {
+			t.Errorf("deep=%v: severity = %q, want warning (a report, not a new stop)", deep, got.Severity)
+		}
+		if got.Fixable {
+			t.Errorf("deep=%v: medic must not offer to repair this itself: %+v", deep, got)
+		}
+		for _, want := range []string{"phase 2", "task-4", "2.1, 2.2, 2.3"} {
+			if !contains(got.Message, want) {
+				t.Errorf("deep=%v: message %q does not mention %q", deep, got.Message, want)
+			}
+		}
+	}
+
+	// Control: a build plan made from the saved record itself agrees, and
+	// medic must then say nothing about it.
+	saveManifestFrom(recorded)
+	if findings := buildPlanDisagreementFindings(t, true); len(findings) != 0 {
+		t.Errorf("an agreeing build plan was reported: %+v", findings)
 	}
 }
 

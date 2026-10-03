@@ -4,19 +4,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
-// Expected file counts across Aether surfaces. Update when commands/agents are added or removed.
+// Expected file counts across Aether agent and skill surfaces. Update when
+// agents or skills are added or removed.
+//
+// Menu commands have no typed count here on purpose. A typed "60" went stale
+// as commands were added and made `medic --deep` call a correct install broken
+// ("67 files, expected 60", Phase 210 blocker 17). The command set is the one
+// compiled into this program, wrapperCommandNames, which
+// TestWrapperCommandNamesMatchCanonicalCorpus keeps in lockstep with the
+// shipped .claude/commands/ant/*.md files.
 const (
-	expectedYAMLCommands     = 60
-	expectedClaudeCommands   = 60
-	expectedOpenCodeCommands = 60
-	expectedClaudeAgents     = 27
-	expectedOpenCodeAgents   = 28 // 27 castes plus the restricted primary router
-	expectedCodexAgents      = 27
-	expectedColonySkills     = 55
-	expectedDomainSkills     = 31
-	expectedCodexSkills      = expectedColonySkills + expectedDomainSkills
+	expectedClaudeAgents   = 27
+	expectedOpenCodeAgents = 28 // 27 castes plus the restricted primary router
+	expectedCodexAgents    = 27
+	expectedColonySkills   = 55
+	expectedDomainSkills   = 31
+	expectedCodexSkills    = expectedColonySkills + expectedDomainSkills
 )
 
 // wrapperSurface represents a surface to check for file count parity.
@@ -34,10 +41,11 @@ func scanWrapperParity(fc *fileChecker) []HealthIssue {
 		return issues
 	}
 
+	shippedCommands := shippedWrapperCommandCount()
 	surfaces := []wrapperSurface{
-		{"YAML commands", filepath.Join(fc.repoRoot, ".aether", "commands", "*.yaml"), expectedYAMLCommands},
-		{"Claude commands", filepath.Join(fc.repoRoot, ".claude", "commands", "ant", "*.md"), expectedClaudeCommands},
-		{"OpenCode commands", filepath.Join(fc.repoRoot, ".opencode", "commands", "ant", "*.md"), expectedOpenCodeCommands},
+		{"YAML commands", filepath.Join(fc.repoRoot, ".aether", "commands", "*.yaml"), shippedCommands},
+		{"Claude commands", filepath.Join(fc.repoRoot, ".claude", "commands", "ant", "*.md"), shippedCommands},
+		{"OpenCode commands", filepath.Join(fc.repoRoot, ".opencode", "commands", "ant", "*.md"), shippedCommands},
 		{"Codex agents", filepath.Join(fc.repoRoot, ".codex", "agents", "*.toml"), expectedCodexAgents},
 		{"Claude agents", filepath.Join(fc.repoRoot, ".claude", "agents", "ant", "*.md"), expectedClaudeAgents},
 		{"OpenCode agents", filepath.Join(fc.repoRoot, ".opencode", "agents", "*.md"), expectedOpenCodeAgents},
@@ -121,23 +129,36 @@ func scanHubPublishIntegrity() []HealthIssue {
 		return issues
 	}
 
+	const republish = "Republish from the Aether repo with `aether publish --package-dir <Aether checkout>`, then rerun `aether update --force` in target repos."
+
+	// Menu commands are checked by name against the set this program ships,
+	// so a hub is only reported when a command it should carry is missing.
+	commandSurfaces := []wrapperSurface{
+		{"Hub Claude commands", filepath.Join(hubSystem, "commands", "claude", "*.md"), shippedWrapperCommandCount()},
+		{"Hub OpenCode commands", filepath.Join(hubSystem, "commands", "opencode", "*.md"), shippedWrapperCommandCount()},
+	}
+	counts := make(map[string]int, len(commandSurfaces))
+	for _, s := range commandSurfaces {
+		counts[s.name] = countFilesInDir(s.pattern)
+		dir := filepath.Dir(s.pattern)
+		if missing := missingShippedWrappers(dir); len(missing) > 0 {
+			issues = append(issues, issueCritical("publish", dir,
+				fmt.Sprintf("%s is missing %d of the %d menu commands this version of Aether ships (%s), so the shared copy of Aether on this machine is incomplete. %s",
+					s.name, len(missing), s.expected, summarizeNames(missing, 5), republish)))
+		}
+	}
+
 	surfaces := []wrapperSurface{
-		{"Hub Claude commands", filepath.Join(hubSystem, "commands", "claude", "*.md"), expectedClaudeCommands},
 		{"Hub Claude agents", filepath.Join(hubSystem, "agents-claude", "*.md"), expectedClaudeAgents},
-		{"Hub OpenCode commands", filepath.Join(hubSystem, "commands", "opencode", "*.md"), expectedOpenCodeCommands},
 		{"Hub OpenCode agents", filepath.Join(hubSystem, "agents", "*.md"), expectedOpenCodeAgents},
 		{"Hub Codex agents", filepath.Join(hubSystem, "codex", "*.toml"), expectedCodexAgents},
 		{"Hub shipped skills", filepath.Join(hubSystem, "skills", "*", "*", "SKILL.md"), expectedCodexSkills},
 	}
-
-	counts := make(map[string]int, len(surfaces))
 	for _, s := range surfaces {
 		actual := countFilesInDir(s.pattern)
-		counts[s.name] = actual
 		if actual != s.expected {
 			issues = append(issues, issueCritical("publish", filepath.Dir(s.pattern),
-				fmt.Sprintf("%s has %d files, expected %d. Republish from the Aether repo with `aether publish --package-dir <Aether checkout>`, then rerun `aether update --force` in target repos.",
-					s.name, actual, s.expected)))
+				fmt.Sprintf("%s has %d files, expected %d. %s", s.name, actual, s.expected, republish)))
 		}
 	}
 
@@ -148,6 +169,33 @@ func scanHubPublishIntegrity() []HealthIssue {
 	}
 
 	return issues
+}
+
+// shippedWrapperCommandCount is how many `/ant-…` menu commands this program
+// ships, read from the compiled-in wrapperCommandNames set rather than typed.
+func shippedWrapperCommandCount() int {
+	return len(wrapperCommandNames)
+}
+
+// missingShippedWrappers lists, sorted, the shipped menu commands that have no
+// <name>.md wrapper in dir.
+func missingShippedWrappers(dir string) []string {
+	var missing []string
+	for name := range wrapperCommandNames {
+		if _, err := os.Stat(filepath.Join(dir, name+".md")); err != nil {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+// summarizeNames joins up to limit names and says how many more there are.
+func summarizeNames(names []string, limit int) string {
+	if len(names) <= limit {
+		return strings.Join(names, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(names[:limit], ", "), len(names)-limit)
 }
 
 // countFilesInDir returns the number of files matching the given glob pattern.

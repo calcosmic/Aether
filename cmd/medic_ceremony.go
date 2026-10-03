@@ -29,22 +29,75 @@ var stateChangingCommands = []string{"build", "continue", "init", "seal", "plan"
 // like "aether ceremony spawn-plan", "aether ceremony wave-start", etc.
 var ceremonyRefPattern = regexp.MustCompile(`aether ceremony`)
 
+// claudeWrapperLocation says where the Claude wrapper for one command really
+// is. The repo's own copy (.claude/commands/ant/<name>.md) exists only in the
+// Aether source checkout, or in an older project not yet updated: in an
+// ordinary project `aether update` deliberately removes it and installs the
+// wrapper into the home Claude folder as ant-<name>.md instead. Looking only
+// inside the project made `medic --deep` call every working project's
+// wrappers "not found" (Phase 210 blocker 17).
+type claudeWrapperLocation struct {
+	path  string // the wrapper found, or where it should be when missing
+	found bool
+	// authored is true for the repo's own copy. Only that copy's content is
+	// checked here: an installed copy is the shipped wrapper itself, whose
+	// content is checked where it is written, in the Aether repo.
+	authored bool
+}
+
+// installedClaudeWrapperPath is where install and update put the Claude
+// wrapper for a command (claudeCommandDestRelPath under the home
+// .claude/commands folder), or "" when the home folder is unknown.
+func installedClaudeWrapperPath(command string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, ".claude", "commands", claudeCommandDestRelPath(command+".md"))
+}
+
+func locateClaudeWrapper(fc *fileChecker, command string) claudeWrapperLocation {
+	repoCopy := filepath.Join(fc.repoRoot, ".claude", "commands", "ant", command+".md")
+	if fileExists(repoCopy) {
+		return claudeWrapperLocation{path: repoCopy, found: true, authored: true}
+	}
+	installed := installedClaudeWrapperPath(command)
+	if installed != "" && fileExists(installed) {
+		return claudeWrapperLocation{path: installed, found: true}
+	}
+	if installed == "" || isAetherSourceCheckout(fc.repoRoot) {
+		return claudeWrapperLocation{path: repoCopy, authored: true}
+	}
+	return claudeWrapperLocation{path: installed}
+}
+
+// missingWrapperRemedy is the plain next step for a wrapper that is missing
+// from where it should be.
+func missingWrapperRemedy(loc claudeWrapperLocation) string {
+	if loc.authored {
+		return "Its source file is missing from this checkout."
+	}
+	return "Run `aether update --force` to reinstall it."
+}
+
 // checkStageMarkers verifies that state-changing command wrappers reference
 // the runtime ceremony commands (not literal stage markers), and that YAML
 // source files exist for each state-changing command.
 func checkStageMarkers(fc *fileChecker) []HealthIssue {
 	var issues []HealthIssue
 
-	claudeCmdDir := filepath.Join(fc.repoRoot, ".claude", "commands", "ant")
-
 	for _, cmd := range stateChangingCommands {
-		wrapperPath := filepath.Join(claudeCmdDir, cmd+".md")
-		content, err := os.ReadFile(wrapperPath)
+		loc := locateClaudeWrapper(fc, cmd)
+		if !loc.found {
+			issues = append(issues, issueWarning("ceremony", loc.path,
+				fmt.Sprintf("Wrapper for '%s' not found: the /ant-%s menu command is not where Claude Code looks for it. %s", cmd, cmd, missingWrapperRemedy(loc))))
+			continue
+		}
+		if !loc.authored {
+			continue
+		}
+		content, err := os.ReadFile(loc.path)
 		if err != nil {
-			if os.IsNotExist(err) {
-				issues = append(issues, issueWarning("ceremony", cmd,
-					fmt.Sprintf("Wrapper for '%s' not found", cmd)))
-			}
 			continue
 		}
 
@@ -69,13 +122,17 @@ func checkStageMarkers(fc *fileChecker) []HealthIssue {
 func checkContextClearGuidance(fc *fileChecker) []HealthIssue {
 	var issues []HealthIssue
 
-	continuePath := filepath.Join(fc.repoRoot, ".claude", "commands", "ant", "continue.md")
-	content, err := os.ReadFile(continuePath)
+	loc := locateClaudeWrapper(fc, "continue")
+	if !loc.found {
+		issues = append(issues, issueWarning("ceremony", loc.path,
+			"continue.md not found (context-clear guidance missing). "+missingWrapperRemedy(loc)))
+		return issues
+	}
+	if !loc.authored {
+		return issues
+	}
+	content, err := os.ReadFile(loc.path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			issues = append(issues, issueWarning("ceremony", "continue.md",
-				"continue.md not found (context-clear guidance missing)"))
-		}
 		return issues
 	}
 

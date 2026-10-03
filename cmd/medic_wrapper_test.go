@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/colony"
 )
 
 // ---------------------------------------------------------------------------
@@ -69,17 +71,12 @@ func TestScanWrapperParityHealthy(t *testing.T) {
 		}
 	}
 
-	// Create expected number of YAML commands (50)
-	for i := 0; i < expectedYAMLCommands; i++ {
-		writeFile(t, aetherDir, fmt.Sprintf("commands/cmd%d.yaml", i), []byte("test"))
-	}
-	// Create expected number of Claude commands (50)
-	for i := 0; i < expectedClaudeCommands; i++ {
-		writeFile(t, claudeDir, fmt.Sprintf("commands/ant/cmd%d.md", i), []byte("test"))
-	}
-	// Create expected number of OpenCode commands (50)
-	for i := 0; i < expectedOpenCodeCommands; i++ {
-		writeFile(t, opencodeDir, fmt.Sprintf("commands/ant/cmd%d.md", i), []byte("test"))
+	// One YAML definition and one wrapper per platform for every menu command
+	// this program ships, named the way the source tree names them.
+	for name := range wrapperCommandNames {
+		writeFile(t, aetherDir, "commands/"+name+".yaml", []byte("test"))
+		writeFile(t, claudeDir, "commands/ant/"+name+".md", []byte("test"))
+		writeFile(t, opencodeDir, "commands/ant/"+name+".md", []byte("test"))
 	}
 	// Create expected number of Codex agents (25)
 	for i := 0; i < expectedCodexAgents; i++ {
@@ -148,7 +145,7 @@ func TestScanWrapperParityMismatch(t *testing.T) {
 
 	found := false
 	for _, issue := range issues {
-		if issue.Severity == "warning" && contains(issue.Message, "YAML commands") && contains(issue.Message, "3") && contains(issue.Message, fmt.Sprintf("%d", expectedYAMLCommands)) {
+		if issue.Severity == "warning" && contains(issue.Message, "YAML commands") && contains(issue.Message, "3") && contains(issue.Message, fmt.Sprintf("%d", shippedWrapperCommandCount())) {
 			found = true
 		}
 	}
@@ -179,16 +176,16 @@ func TestScanWrapperParityCrossSurfaceMismatch(t *testing.T) {
 		}
 	}
 
-	// Create 50 YAML commands (correct count)
-	for i := 0; i < expectedYAMLCommands; i++ {
+	// Every shipped YAML definition, but two Claude and three OpenCode
+	// wrappers short.
+	shipped := shippedWrapperCommandCount()
+	for i := 0; i < shipped; i++ {
 		writeFile(t, aetherDir, fmt.Sprintf("commands/cmd%d.yaml", i), []byte("test"))
 	}
-	// Create only 48 Claude commands (mismatch)
-	for i := 0; i < 48; i++ {
+	for i := 0; i < shipped-2; i++ {
 		writeFile(t, claudeDir, fmt.Sprintf("commands/ant/cmd%d.md", i), []byte("test"))
 	}
-	// Create only 47 OpenCode commands (mismatch)
-	for i := 0; i < 47; i++ {
+	for i := 0; i < shipped-3; i++ {
 		writeFile(t, opencodeDir, fmt.Sprintf("commands/ant/cmd%d.md", i), []byte("test"))
 	}
 
@@ -228,9 +225,11 @@ func TestScanHubPublishIntegrityHealthy(t *testing.T) {
 		}
 	}
 
-	for i := 0; i < expectedClaudeCommands; i++ {
-		writeFile(t, systemDir, fmt.Sprintf("commands/claude/cmd%d.md", i), []byte("test"))
-		writeFile(t, systemDir, fmt.Sprintf("commands/opencode/cmd%d.md", i), []byte("test"))
+	// The hub carries one wrapper per platform for every menu command this
+	// program ships, under the command's own name.
+	for name := range wrapperCommandNames {
+		writeFile(t, systemDir, "commands/claude/"+name+".md", []byte("test"))
+		writeFile(t, systemDir, "commands/opencode/"+name+".md", []byte("test"))
 	}
 	for i := 0; i < expectedClaudeAgents; i++ {
 		writeFile(t, systemDir, fmt.Sprintf("agents-claude/agent%d.md", i), []byte("test"))
@@ -297,6 +296,7 @@ func TestScanHubPublishIntegrityMismatch(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDeepScanIncludesWrapperParity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // installed wrappers live under HOME; never read the real one
 	dir := t.TempDir()
 	markAetherSourceCheckout(t, dir)
 	dataDir := filepath.Join(dir, ".aether", "data")
@@ -362,5 +362,90 @@ func TestDeepScanIncludesWrapperParity(t *testing.T) {
 		if issue.Category == "wrapper" || issue.Category == "publish" {
 			t.Error("non-deep scan should NOT include wrapper parity or publish integrity issues")
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestMedicDeepTrustsACorrectInstall
+// ---------------------------------------------------------------------------
+
+// medicDeepInstallFaults returns the hub, wrapper and ceremony findings a deep
+// scan raised at warning or critical level: the findings that tell the owner
+// his install is broken.
+func medicDeepInstallFaults(t *testing.T) []HealthIssue {
+	t.Helper()
+	result, err := performHealthScan(MedicOptions{Deep: true})
+	if err != nil {
+		t.Fatalf("performHealthScan: %v", err)
+	}
+	var faults []HealthIssue
+	for _, issue := range result.Issues {
+		switch issue.Category {
+		case "publish", "wrapper", "ceremony":
+			if issue.Severity == "critical" || issue.Severity == "warning" {
+				faults = append(faults, issue)
+			}
+		}
+	}
+	return faults
+}
+
+// Phase 210 blocker 17: in an ordinary project with a working install,
+// `aether medic --deep` said the shared install had "67 files, expected 60"
+// (a typed count that went stale as commands were added) and that the
+// build/continue/init/seal/plan wrappers were "not found" (it looked inside
+// the project, where `aether update` deliberately removes them; they live in
+// the home Claude folder). The install here is the real one: `aether install`
+// run against this very source checkout into a throwaway home, so the hub and
+// the installed wrappers have exactly the shape the runtime produces.
+func TestMedicDeepTrustsACorrectInstall(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("AETHER_CHANNEL", "stable")
+	if ok, output := runAntSkillInstall(t, home); !ok {
+		t.Fatalf("install failed: %s", output)
+	}
+	hubDir := filepath.Join(home, ".aether")
+	t.Setenv("AETHER_HUB_DIR", hubDir)
+
+	project := t.TempDir()
+	if isAetherSourceCheckout(project) {
+		t.Fatalf("fixture project %s must be an ordinary project, not an Aether checkout", project)
+	}
+	goal := "An ordinary project with a working install"
+	writeJSONFile(t, filepath.Join(project, ".aether", "data"), "COLONY_STATE.json", colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+	t.Setenv("AETHER_ROOT", project)
+
+	for _, issue := range medicDeepInstallFaults(t) {
+		t.Errorf("a correct install was reported as faulty: [%s] %s (%s)", issue.Severity, issue.Message, issue.File)
+	}
+
+	// The same checks must still catch a genuinely incomplete install.
+	// Remove one published wrapper and one installed wrapper, then rescan.
+	if err := os.Remove(filepath.Join(hubDir, "system", "commands", "claude", "build.md")); err != nil {
+		t.Fatalf("remove hub wrapper: %v", err)
+	}
+	installedBuild := filepath.Join(home, ".claude", "commands", claudeCommandDestRelPath("build.md"))
+	if err := os.Remove(installedBuild); err != nil {
+		t.Fatalf("remove installed wrapper: %v", err)
+	}
+	var hubCaught, wrapperCaught bool
+	for _, issue := range medicDeepInstallFaults(t) {
+		if issue.Category == "publish" && issue.Severity == "critical" && contains(issue.Message, "Hub Claude commands") {
+			hubCaught = true
+		}
+		if issue.Category == "ceremony" && contains(issue.Message, "Wrapper for 'build' not found") {
+			wrapperCaught = true
+		}
+	}
+	if !hubCaught {
+		t.Error("a hub missing a published Claude wrapper was not reported")
+	}
+	if !wrapperCaught {
+		t.Error("a missing installed /ant-build wrapper was not reported")
 	}
 }
