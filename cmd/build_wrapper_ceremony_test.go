@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/calcosmic/Aether/pkg/codex"
 )
 
 func TestBuildWrapperCeremonyContract(t *testing.T) {
@@ -333,4 +335,64 @@ func TestBuildWrapperStageSkeletonAndParity(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestBuildWrapperNamesTheHandoffVerificationStatusValues: the build wrapper
+// tells every worker its handoff must carry `verification_status`, and
+// `build-completion-stage` refuses the whole completion when that field holds
+// free text (Phase 210 blocker 17). The wrapper must therefore name the exact
+// values the runtime accepts. The list is read from the runtime's own refusal
+// message, never typed here, so a value added to or removed from the runtime
+// check is caught by name on every wrapper copy.
+func TestBuildWrapperNamesTheHandoffVerificationStatusValues(t *testing.T) {
+	refusal := codex.ValidateWorkerHandoff(codex.WorkerHandoff{VerificationStatus: "all 32 tests pass after the fix"})
+	if refusal == nil {
+		t.Fatal("the runtime accepted a free-text verification_status; this test's premise is gone")
+	}
+	const marker = "must be "
+	msg := refusal.Error()
+	idx := strings.Index(msg, marker)
+	if idx < 0 {
+		t.Fatalf("cannot read the allowed values out of the runtime refusal %q", msg)
+	}
+	list := strings.ReplaceAll(msg[idx+len(marker):], ", or ", ", ")
+	allowed := strings.Split(list, ", ")
+	if len(allowed) < 2 {
+		t.Fatalf("parsed too few allowed values from %q: %v", msg, allowed)
+	}
+	for _, value := range allowed {
+		if err := codex.ValidateWorkerHandoff(codex.WorkerHandoff{VerificationStatus: value}); err != nil {
+			t.Fatalf("runtime refuses its own named value %q: %v", value, err)
+		}
+	}
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	for _, rel := range []string{
+		".claude/commands/ant/build.md",
+		".claude/commands/ant-build.md",
+		".opencode/commands/ant/build.md",
+	} {
+		content, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		var handoffLine string
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.Contains(line, "The `handoff` object is mandatory") {
+				handoffLine = line
+				break
+			}
+		}
+		if handoffLine == "" {
+			t.Fatalf("%s no longer carries the handoff instruction line", rel)
+		}
+		for _, value := range allowed {
+			if !strings.Contains(handoffLine, "`"+value+"`") {
+				t.Errorf("%s handoff instruction does not name the accepted verification_status value `%s`:\n%s", rel, value, handoffLine)
+			}
+		}
+	}
 }
