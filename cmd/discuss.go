@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -2011,14 +2012,20 @@ type clarifiedIntentPromptLine struct {
 	line  string
 }
 
+// Clarified-intent entries arrive oldest first. Both bounded renderers below
+// admit them from the NEWEST end, so when the cap is reached it is the oldest
+// answers that are left out -- never the one the owner has just given, which
+// the very next worker needs (Phase 210 blocker 17). The admitted lines are
+// then put back in their original, oldest-first order, so a section that fits
+// whole reads exactly as it always did.
 func renderBoundedClarifiedIntentPromptLines(entries []clarifiedIntentEntry) []clarifiedIntentPromptLine {
 	rendered := make([]clarifiedIntentPromptLine, 0, clarifiedIntentMaxEntries)
 	sectionChars := 0
-	for _, entry := range entries {
+	for i := len(entries) - 1; i >= 0; i-- {
 		if len(rendered) >= clarifiedIntentMaxEntries {
 			break
 		}
-		item, ok := boundedClarifiedIntentPromptLine(entry)
+		item, ok := boundedClarifiedIntentPromptLine(entries[i])
 		if !ok {
 			continue
 		}
@@ -2029,6 +2036,7 @@ func renderBoundedClarifiedIntentPromptLines(entries []clarifiedIntentEntry) []c
 		rendered = append(rendered, item)
 		sectionChars += lineChars
 	}
+	slices.Reverse(rendered)
 	return rendered
 }
 
@@ -2053,11 +2061,13 @@ func renderClarifiedIntentPromptEntriesWithIntegrity(entries []clarifiedIntentEn
 		source = pendingDecisionsFile
 	}
 	sectionChars := 0
-	for idx, entry := range entries {
+	// Newest first, then restored to oldest first below -- see the note above
+	// renderBoundedClarifiedIntentPromptLines.
+	for idx := len(entries) - 1; idx >= 0; idx-- {
 		if len(result.Lines) >= clarifiedIntentMaxEntries {
 			break
 		}
-		item, ok := boundedClarifiedIntentPromptLine(entry)
+		item, ok := boundedClarifiedIntentPromptLine(entries[idx])
 		if !ok {
 			continue
 		}
@@ -2087,6 +2097,10 @@ func renderClarifiedIntentPromptEntriesWithIntegrity(entries []clarifiedIntentEn
 		result.DecisionIDs = append(result.DecisionIDs, item.entry.ID)
 		sectionChars += lineChars
 	}
+	slices.Reverse(result.Lines)
+	slices.Reverse(result.DecisionIDs)
+	slices.Reverse(result.Blocked)
+	slices.Reverse(result.Warnings)
 	return result
 }
 

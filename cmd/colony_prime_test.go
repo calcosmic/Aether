@@ -446,12 +446,24 @@ func TestClarifiedIntentPromptEntriesCapsEntryCount(t *testing.T) {
 	if len(got) != clarifiedIntentMaxEntries {
 		t.Fatalf("rendered entries = %d, want cap %d", len(got), clarifiedIntentMaxEntries)
 	}
+	// The cap keeps the NEWEST answers (Phase 210 blocker 17): an answer just
+	// given must reach the next worker, so it is the oldest that drop out.
 	body := strings.Join(got, "\n")
-	if !strings.Contains(body, fmt.Sprintf("Question %02d?", clarifiedIntentMaxEntries)) {
-		t.Fatalf("entry cap should include the last in-range question, got %q", body)
+	newest := fmt.Sprintf("Question %02d?", clarifiedIntentMaxEntries+2)
+	oldestKept := fmt.Sprintf("Question %02d?", 3)
+	if !strings.Contains(body, newest) {
+		t.Fatalf("entry cap should include the newest question, got %q", body)
 	}
-	if strings.Contains(body, fmt.Sprintf("Question %02d?", clarifiedIntentMaxEntries+1)) {
-		t.Fatalf("entry cap should exclude later questions, got %q", body)
+	if !strings.Contains(body, oldestKept) {
+		t.Fatalf("entry cap should include the oldest question that still fits, got %q", body)
+	}
+	for _, dropped := range []string{"Question 01?", "Question 02?"} {
+		if strings.Contains(body, dropped) {
+			t.Fatalf("entry cap should drop the oldest questions first, got %q", body)
+		}
+	}
+	if strings.Index(body, oldestKept) > strings.Index(body, newest) {
+		t.Fatalf("kept answers should still read oldest first, got %q", body)
 	}
 }
 
@@ -477,11 +489,13 @@ func TestClarifiedIntentPromptEntriesCapsSectionLength(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("rendered entries = %d, want 3 before section cap", len(got))
 	}
-	if !strings.Contains(sectionBody, "Question 03?") {
-		t.Fatalf("section cap should include the last fitting question, got %q", sectionBody)
+	// Newest kept first (Phase 210 blocker 17): 06, 05 and 04 fit; 03 is the
+	// first answer that would overflow, counting back from the newest.
+	if !strings.Contains(sectionBody, "Question 04?") || !strings.Contains(sectionBody, "Question 06?") {
+		t.Fatalf("section cap should keep the newest answers that fit, got %q", sectionBody)
 	}
-	if strings.Contains(sectionBody, "Question 04?") {
-		t.Fatalf("section cap should exclude the first overflowing question, got %q", sectionBody)
+	if strings.Contains(sectionBody, "Question 03?") {
+		t.Fatalf("section cap should exclude the first overflowing older question, got %q", sectionBody)
 	}
 }
 

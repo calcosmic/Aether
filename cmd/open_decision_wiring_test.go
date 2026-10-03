@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -62,5 +63,52 @@ func TestBuildBriefTellsWorkersToRouteJudgementCalls(t *testing.T) {
 	brief := composeBuildManifestBrief(tmpDir, phase, dispatch, time.Now(), false)
 	if !strings.Contains(brief, codex.HandoffOpenDecisionsGuidance) {
 		t.Fatalf("build brief missing the open-decisions routing guidance.\nbrief tail:\n%s", brief[maxInt(0, len(brief)-600):])
+	}
+}
+
+// TestNewestOwnerAnswerReachesTheWorkerPrompt (Phase 210 blocker 17): an
+// owner's answer recorded with `aether decision-answer` must reach the very
+// next worker, even when the project already holds more earlier answers than
+// the capped CLARIFIED INTENT section can carry. The cap used to keep the
+// OLDEST answers, so a just-given ruling was silently dropped and the chat had
+// to relay it by hand. Every answer here is written by the runtime's own
+// writer, so the ordering is the one a real project produces.
+func TestNewestOwnerAnswerReachesTheWorkerPrompt(t *testing.T) {
+	saveGlobalsCmd(t)
+	s, tmpDir := newTestStoreCmd(t)
+	t.Cleanup(func() { os.RemoveAll(tmpDir) })
+	store = s
+
+	for i := 1; i <= clarifiedIntentMaxEntries; i++ {
+		if _, err := recordDecisionAnswer(fmt.Sprintf("Earlier question %d?", i), fmt.Sprintf("Earlier answer %d", i), 1, "worker-handoff"); err != nil {
+			t.Fatalf("record earlier answer %d: %v", i, err)
+		}
+	}
+	const answer = "Leave the templates alone; only the data file changes"
+	newest, err := recordDecisionAnswer("Which file should the fix touch?", answer, 2, "worker-handoff")
+	if err != nil {
+		t.Fatalf("record newest answer: %v", err)
+	}
+
+	// The prompt_section `aether decision-answer` hands back to the wrapper.
+	if section := renderClarifiedIntentSection(); !strings.Contains(section, answer) {
+		t.Fatalf("decision-answer prompt_section dropped the answer just given.\nsection:\n%s", section)
+	}
+	// The capsule every later worker brief starts from.
+	if capsule := resolveCodexWorkerContext(); !strings.Contains(capsule, answer) {
+		t.Fatalf("worker context capsule dropped the answer just given.\ncapsule:\n%s", capsule)
+	}
+	rendered := clarifiedIntentPromptRenderResult()
+	found := false
+	for _, id := range rendered.DecisionIDs {
+		if id == newest.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("newest decision %s missing from the delivered decision IDs %v", newest.ID, rendered.DecisionIDs)
+	}
+	if len(rendered.Lines) > clarifiedIntentMaxEntries {
+		t.Fatalf("section grew past its cap: %d lines", len(rendered.Lines))
 	}
 }

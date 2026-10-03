@@ -493,7 +493,11 @@ func TestCodexNativeContextPacking(t *testing.T) {
 		ids = append(ids, answer.ID)
 	}
 	manifest := prepareBoundBuildManifestOnly(t, root)
-	if len(manifest.ContextDecisionIDs) != 3 || !reflect.DeepEqual(manifest.ContextDecisionIDs, ids[:3]) {
+	// The capsule carries the NEWEST answers that fit (Phase 210 blocker 17);
+	// older ones follow at launch and then through context delivery, so every
+	// answer still arrives exactly once and none is starved.
+	n := len(ids)
+	if len(manifest.ContextDecisionIDs) != 3 || !reflect.DeepEqual(manifest.ContextDecisionIDs, ids[n-3:]) {
 		t.Fatalf("capsule packing lost exact rendered IDs: %v", manifest.ContextDecisionIDs)
 	}
 	// The section itself survives the existing protected-intent policy; each
@@ -511,8 +515,8 @@ func TestCodexNativeContextPacking(t *testing.T) {
 	canonical, _ := filepath.EvalSymlinks(root)
 	request := codexNativeWorkerRequest{SchemaVersion: 1, Phase: 1, ExecutionBinding: *manifest.ExecutionBinding, WorkerName: dispatch.Name, TaskID: dispatch.TaskID, HostSessionID: "packed-host", Workspace: canonical, HostPermission: "workspace_write"}
 	_, response := nativeLaunchPayloadForTest(t, request)
-	if !reflect.DeepEqual(response.Worker.Native.ContextDecisionIDs, ids[:6]) {
-		t.Fatal("previously packed IDs starved remaining answers at launch")
+	if !reflect.DeepEqual(response.Worker.Native.ContextDecisionIDs, append(append([]string(nil), ids[n-3:]...), ids[n-6:n-3]...)) {
+		t.Fatalf("previously packed IDs starved remaining answers at launch: %v", response.Worker.Native.ContextDecisionIDs)
 	}
 	request.LaunchID, request.ChildID = response.Worker.ProviderRunID, "packed-child"
 	request.DispatchSHA256, request.PromptSHA256 = response.Worker.Native.DispatchSHA256, response.Worker.Native.PromptSHA256
@@ -520,7 +524,7 @@ func TestCodexNativeContextPacking(t *testing.T) {
 		t.Fatal(err)
 	}
 	delivery := nativeContextResponseForTest(t, request)["context_delivery"].(map[string]any)
-	expectedIDs := []any{ids[6], ids[7], ids[8]}
+	expectedIDs := []any{ids[0], ids[1], ids[2]}
 	if !reflect.DeepEqual(delivery["decision_ids"], expectedIDs) {
 		t.Fatalf("packing did not leave exactly the still-undelivered answers: %v", delivery["decision_ids"])
 	}
