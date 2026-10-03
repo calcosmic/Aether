@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,6 +59,99 @@ var (
 	journeyTestSharedDest string
 	journeyTestSharedErr  error
 )
+
+// journeyTestHomeStandIn creates a throwaway stand-in for the home folder
+// of whoever runs the tests, shaped like the owner's real one: it already
+// holds an empty .local/bin, the exact folder `aether install` picks for a
+// rebuilt binary whenever it exists (defaultLocalBinaryDest,
+// cmd/install_cmd.go). WINDOWS.md entry 78: a full `go test ./...` run
+// replaced the owner's real ~/.local/bin/aether because the builder script
+// below was handed the real home folder.
+func journeyTestHomeStandIn(parent string) (string, error) {
+	home := filepath.Join(parent, "home-stand-in")
+	if err := os.MkdirAll(filepath.Join(home, ".local", "bin"), 0o755); err != nil {
+		return "", fmt.Errorf("create home stand-in: %w", err)
+	}
+	return home, nil
+}
+
+var (
+	journeyGoCacheEnvOnce sync.Once
+	journeyGoCacheEnvVals []string
+)
+
+// journeyGoCacheEnv pins the Go build and module caches to the values this
+// test process already resolved, so a `go` invocation under the home
+// stand-in reuses the warm caches instead of rebuilding cold or downloading
+// modules into the stand-in. Empty when `go env` cannot be read.
+func journeyGoCacheEnv() []string {
+	journeyGoCacheEnvOnce.Do(func() {
+		names := []string{"GOCACHE", "GOMODCACHE", "GOPATH"}
+		out, err := exec.Command("go", append([]string{"env"}, names...)...).Output()
+		if err != nil {
+			return
+		}
+		lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+		if len(lines) != len(names) {
+			return
+		}
+		for i, name := range names {
+			if value := strings.TrimSpace(lines[i]); value != "" {
+				journeyGoCacheEnvVals = append(journeyGoCacheEnvVals, name+"="+value)
+			}
+		}
+	})
+	return journeyGoCacheEnvVals
+}
+
+// journeyBuilderSubprocessEnv is journeyFilteredSubprocessEnv with HOME
+// pointed at home (and the Go caches pinned), for every run of the
+// practice-project builder script in this file. The script runs
+// `aether install` and `aether update --force`, both of which write into
+// whatever HOME they are given; the real one must never reach them from a
+// test.
+func journeyBuilderSubprocessEnv(home string) []string {
+	pinned := append([]string{"HOME=" + home}, journeyGoCacheEnv()...)
+	override := make(map[string]bool, len(pinned))
+	for _, kv := range pinned {
+		override[kv[:strings.Index(kv, "=")+1]] = true
+	}
+	base := journeyFilteredSubprocessEnv()
+	env := make([]string, 0, len(base)+len(pinned))
+	for _, kv := range base {
+		if eq := strings.Index(kv, "="); eq >= 0 && override[kv[:eq+1]] {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, pinned...)
+}
+
+// journeyHomeStandInWrites lists, top-most path first, everything that
+// appeared in a home stand-in other than the empty .local/bin it was
+// created with. A leaked folder is reported once, not file by file.
+func journeyHomeStandInWrites(home string) ([]string, error) {
+	var written []string
+	err := filepath.WalkDir(home, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(home, path)
+		if err != nil {
+			return err
+		}
+		switch rel {
+		case ".", ".local", filepath.Join(".local", "bin"):
+			return nil
+		}
+		written = append(written, filepath.ToSlash(rel))
+		if d.IsDir() {
+			return fs.SkipDir
+		}
+		return nil
+	})
+	return written, err
+}
 
 // journeyFilteredSubprocessEnv returns a copy of the current process
 // environment with every COLONY_DATA_DIR entry removed.
@@ -141,9 +235,14 @@ func journeyTestSharedProject(t *testing.T) (bin, dest string) {
 			return
 		}
 		builtDest := filepath.Join(tmp, "dest")
+		home, err := journeyTestHomeStandIn(tmp)
+		if err != nil {
+			journeyTestSharedErr = err
+			return
+		}
 		script := filepath.Join(root, "scripts", "build-messy-practice-project.sh")
 		runCmd := exec.Command(script, builtDest, "--aether-bin", builtBin)
-		runCmd.Env = journeyFilteredSubprocessEnv()
+		runCmd.Env = journeyBuilderSubprocessEnv(home)
 		if out, err := runCmd.CombinedOutput(); err != nil {
 			journeyTestSharedErr = fmt.Errorf("build practice project: %w\n%s", err, out)
 			return
@@ -722,9 +821,13 @@ func TestMessyPracticeProjectBuilderRunsCleanTwice(t *testing.T) {
 		wantIDs = append(wantIDs, trap.ID)
 	}
 
+	home, err := journeyTestHomeStandIn(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for run := 1; run <= 2; run++ {
 		runCmd := exec.Command(script, dest, "--aether-bin", bin)
-		runCmd.Env = journeyFilteredSubprocessEnv()
+		runCmd.Env = journeyBuilderSubprocessEnv(home)
 		out, err := runCmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("run %d: builder script failed: %v\n%s", run, err, out)
@@ -746,6 +849,52 @@ func TestMessyPracticeProjectBuilderRunsCleanTwice(t *testing.T) {
 	}
 }
 
+// TestMessyPracticeProjectBuilderNeverWritesIntoHome guards WINDOWS.md entry
+// 78: a full `go test ./...` run replaced the owner's real installed program
+// at ~/.local/bin/aether, and his Claude, OpenCode and Codex command files,
+// because the builder script's `aether install` and `aether update --force`
+// wrote into the home folder of whoever ran it. The builder is handed a
+// stand-in home shaped like the owner's (an empty .local/bin already
+// present) and must leave it exactly as it found it.
+func TestMessyPracticeProjectBuilderNeverWritesIntoHome(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a full practice project; skipped under -short")
+	}
+	bin, _ := journeyTestSharedProject(t)
+	home, err := journeyTestHomeStandIn(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "dest")
+	runCmd := exec.Command(journeyTestBuilderScript(t), dest, "--aether-bin", bin)
+	runCmd.Env = journeyBuilderSubprocessEnv(home)
+
+	// The check below means nothing unless the builder really is handed the
+	// stand-in, and only the stand-in, as its home folder.
+	var homes []string
+	for _, kv := range runCmd.Env {
+		if strings.HasPrefix(kv, "HOME=") {
+			homes = append(homes, strings.TrimPrefix(kv, "HOME="))
+		}
+	}
+	if len(homes) != 1 || homes[0] != home {
+		t.Fatalf("the builder must be handed exactly one home folder, the stand-in %s; got %v", home, homes)
+	}
+
+	if out, err := runCmd.CombinedOutput(); err != nil {
+		t.Fatalf("builder script failed: %v\n%s", err, out)
+	}
+	written, err := journeyHomeStandInWrites(home)
+	if err != nil {
+		t.Fatalf("inspect the home stand-in: %v", err)
+	}
+	if len(written) > 0 {
+		t.Fatalf("building the practice project wrote into the home folder it was handed (%s): %s -- "+
+			"on the owner's machine this replaces his installed aether program (.local/bin/aether) "+
+			"and his Claude, OpenCode and Codex command files", home, strings.Join(written, ", "))
+	}
+}
+
 // TestMessyPracticeProjectBuilderRefusesAForeignDirectory points the builder
 // at a directory holding one unrelated file (no marker from a prior run of
 // this script) and asserts a non-zero exit naming the destination, with the
@@ -762,8 +911,12 @@ func TestMessyPracticeProjectBuilderRefusesAForeignDirectory(t *testing.T) {
 		t.Fatalf("write unrelated fixture file: %v", err)
 	}
 
+	home, err := journeyTestHomeStandIn(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	refuseCmd := exec.Command(script, dest)
-	refuseCmd.Env = journeyFilteredSubprocessEnv()
+	refuseCmd.Env = journeyBuilderSubprocessEnv(home)
 	out, err := refuseCmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected the builder to refuse a foreign directory, but it exited 0:\n%s", out)
@@ -793,9 +946,13 @@ func TestMessyPracticeProjectBuilderRequiresADestination(t *testing.T) {
 		t.Fatalf("test setup: expected an empty working directory, found %d entries", len(before))
 	}
 
+	home, err := journeyTestHomeStandIn(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command(script)
 	cmd.Dir = dest
-	cmd.Env = journeyFilteredSubprocessEnv()
+	cmd.Env = journeyBuilderSubprocessEnv(home)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("expected the builder to refuse with no destination argument, but it exited 0:\n%s", out)

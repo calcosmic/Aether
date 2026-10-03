@@ -9,11 +9,17 @@
 # which traps exist.
 #
 # ISOLATION RULE, followed throughout this script: nothing here writes to
-# the real $HOME/.claude/ or the real ~/.aether/ hub. The hub is isolated
-# via AETHER_HUB_DIR, pointed inside the destination directory. HOME itself
-# is deliberately left ALONE (never overridden) -- the same rule
-# scripts/proof-screens-reach-the-owner.sh already follows -- because
-# nothing in this script needs to read or write through it.
+# the caller's home folder or the real ~/.aether/ hub. The hub is isolated
+# via AETHER_HUB_DIR, pointed inside the destination directory. Every
+# aether command runs with HOME pointed at a throwaway home folder inside
+# the destination directory too (in_isolated_home), because `aether
+# install` and `aether update --force` write the Claude, OpenCode and Codex
+# command files into whatever HOME they are given -- and `aether install`
+# never rebuilds a binary here (--skip-build-binary): the binary under test
+# is already built. Before this, a `go test ./...` run replaced the owner's
+# real ~/.local/bin/aether (WINDOWS.md entry 78). The caller's HOME is
+# still left alone for everything else (git, jq), and for the chats a
+# journey later drives, whose sign-in lives there.
 #
 # GIT DISCIPLINE, followed throughout this script: `git add -A` / `git add
 # .` is NEVER used past the very first (pre-`aether init`) commit. Every
@@ -142,7 +148,7 @@ apply_trap_out_of_date_code_map() {
   local bin="$2"
   local snapshot="$repo/.aether/data/survey/territory-snapshot.json"
   [ -f "$snapshot" ] && return 0
-  "$bin" journey-seed-stale-survey "$repo" >/dev/null || fail "journey-seed-stale-survey failed"
+  in_isolated_home "$bin" journey-seed-stale-survey "$repo" >/dev/null || fail "journey-seed-stale-survey failed"
   local i
   for i in $(seq 1 "$OUT_OF_DATE_CODE_MAP_CHURN_COMMITS"); do
     printf 'churn %s\n' "$i" >> "$repo/CHURN.md"
@@ -165,7 +171,7 @@ apply_trap_specification_corrected_mid_planning() {
   local bin="$2"
   local stage_state="$repo/.aether/data/planning/journey-trap-run/stage-state.json"
   [ -f "$stage_state" ] && return 0
-  "$bin" journey-seed-superseded-plan "$repo" >/dev/null || fail "journey-seed-superseded-plan failed"
+  in_isolated_home "$bin" journey-seed-superseded-plan "$repo" >/dev/null || fail "journey-seed-superseded-plan failed"
 }
 
 # apply_trap_leftover_junk_data seeds .aether/data/midden.json (the
@@ -298,13 +304,19 @@ else
   fi
 fi
 
-# Isolate the hub only. HOME is intentionally untouched -- see the
+# Isolate the hub, and the home folder every aether command sees -- see the
 # ISOLATION RULE above.
 export AETHER_HUB_DIR="$DEST/.journey-hub"
 mkdir -p "$AETHER_HUB_DIR"
+ISOLATED_HOME="$DEST/.journey-home"
+mkdir -p "$ISOLATED_HOME"
+
+# in_isolated_home runs one command with HOME pointed at ISOLATED_HOME.
+in_isolated_home() { HOME="$ISOLATED_HOME" "$@"; }
 
 step "installing package into isolated hub"
-(cd "$ROOT" && "$BIN" install --package-dir "$ROOT" >/dev/null) || fail "aether install failed"
+(cd "$ROOT" && in_isolated_home "$BIN" install --package-dir "$ROOT" --home-dir "$ISOLATED_HOME" --skip-build-binary >/dev/null) \
+  || fail "aether install failed"
 
 # --- Construct the practice project ----------------------------------------
 
@@ -340,11 +352,11 @@ EOF
   git -C "$REPO" commit -q -m "initial commit" || fail "initial commit in the practice project failed"
 
   step "aether init in the practice project"
-  (cd "$REPO" && "$BIN" init "Practice the daily lifecycle on a messy real project" >/dev/null 2>&1) \
+  (cd "$REPO" && in_isolated_home "$BIN" init "Practice the daily lifecycle on a messy real project" >/dev/null 2>&1) \
     || fail "aether init failed in the practice project"
 
   step "aether update --force in the practice project (the install path under test)"
-  (cd "$REPO" && "$BIN" update --force >/dev/null) || fail "aether update --force failed in the practice project"
+  (cd "$REPO" && in_isolated_home "$BIN" update --force >/dev/null) || fail "aether update --force failed in the practice project"
 
   # Mark $REPO itself (not just $DEST) as a genuine practice project. The
   # hidden journey-seed-* commands operate directly on $REPO (their own
