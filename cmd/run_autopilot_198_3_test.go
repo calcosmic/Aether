@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -143,8 +146,10 @@ func TestRunHeadlessAndInteractiveCheckpointDispositions(t *testing.T) {
 	if !active || headless.Code != autopilotTriggerRuntimeVerificationNeeded || headless.Disposition != autopilotDispositionQueueAndContinue {
 		t.Fatalf("headless runtime decision = %+v active=%t", headless, active)
 	}
+	// Owner's ruling 2026-10-03: a chat-started run saves the check and keeps
+	// building too, instead of pausing for it.
 	interactive, active := evaluateAutopilotRunStage(result, blockerSnapshot{}, blockerSnapshot{}, false)
-	if !active || interactive.Code != autopilotTriggerRuntimeVerificationNeeded || interactive.Disposition != autopilotDispositionPause {
+	if !active || interactive.Code != autopilotTriggerRuntimeVerificationNeeded || interactive.Disposition != autopilotDispositionQueueAndContinue {
 		t.Fatalf("interactive runtime decision = %+v active=%t", interactive, active)
 	}
 }
@@ -555,35 +560,131 @@ func TestRunReplanCadenceDoesNotUseInvocationCounter(t *testing.T) {
 	}
 }
 
-func TestRunInteractiveVisualCheckpointPausesBeforeContinue(t *testing.T) {
+// Owner's ruling 2026-10-03 (Phase 210 row 19, recorded in
+// 210-FREEZE-START.md): Autopilot started from a chat no longer stops after
+// each phase for the owner's look. It saves each visual or hands-on check,
+// keeps building, and at the end lists every check still waiting on the
+// owner, each with a confirm command carrying a fresh one-time code that
+// really does confirm it. Nothing is signed off until the owner has looked.
+func TestRunInteractiveQueuesOwnerChecksAndListsThemAtTheEnd(t *testing.T) {
 	t.Setenv("AETHER_OUTPUT_MODE", "json")
 	saveGlobals(t)
 	resetRootCmd(t)
 	_, root := seedRunFixture(t, 2)
 	installAutopilotRunTestDeps(t)
+	mutateRunFixtureState(t, func(state *colony.ColonyState) {
+		state.Plan.Phases = []colony.Phase{
+			{ID: 1, Name: "First", Status: colony.PhaseReady},
+			{ID: 2, Name: "Second", Status: colony.PhasePending},
+		}
+		state.CurrentPhase = 1
+		state.State = colony.StateREADY
+	})
 
-	continueCalls := 0
+	buildCalls, continueCalls := 0, 0
 	runAutopilotBuild = func(_ string, phaseNum int, _ []string, _ bool, _ codexBuildOptions) (map[string]interface{}, error) {
+		buildCalls++
 		mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.CurrentPhase = phaseNum
 			state.State = colony.StateBUILT
 			state.Plan.Phases[phaseNum-1].Status = colony.PhaseInProgress
 		})
 		return map[string]interface{}{"state": colony.StateBUILT, "claims_path": "fixture-claims.json"}, nil
 	}
 	runAutopilotMaterializeVisual = func(_ string, phaseNum int, _ map[string]interface{}) ([]autopilotCheckpointReference, error) {
-		return []autopilotCheckpointReference{{ID: "cp-visual", Type: autopilotCheckpointTypeVisual, Phase: phaseNum, RecoveryCommand: "aether decision-answer"}}, nil
+		if phaseNum != 1 {
+			return nil, nil
+		}
+		decision, _, err := upsertAutopilotCheckpoint(PendingDecision{
+			Type: autopilotCheckpointTypeVisual, Description: "Phase 1: please visually confirm the user-interface changes look and behave correctly before the project is signed off.", Source: "test",
+		}, phaseNum, "visual", checkpointTestGeneration(t, "run-visual", "run-visual-evidence"))
+		if err != nil {
+			return nil, err
+		}
+		return []autopilotCheckpointReference{checkpointReference(decision)}, nil
 	}
-	runAutopilotContinue = func(string, codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
+	runAutopilotContinue = func(_ string, _ codexContinueOptions) (map[string]interface{}, colony.ColonyState, colony.Phase, *colony.Phase, *signalHousekeepingResult, bool, error) {
 		continueCalls++
-		return nil, colony.ColonyState{}, colony.Phase{}, nil, nil, false, errors.New("continue should not run")
+		current, err := loadCompatibilityColonyState()
+		if err != nil {
+			t.Fatalf("load state in continue stub: %v", err)
+		}
+		phase := current.Plan.Phases[current.CurrentPhase-1]
+		var checkpoints []autopilotCheckpointReference
+		if phase.ID == 2 {
+			decision, _, checkpointErr := upsertAutopilotCheckpoint(PendingDecision{
+				Type: autopilotCheckpointTypeRuntimeVerification, Description: "Confirm runtime checkpoint", Source: "test",
+			}, phase.ID, "runtime", checkpointTestGeneration(t, "run-runtime", "run-runtime-evidence"))
+			if checkpointErr != nil {
+				t.Fatalf("persist runtime checkpoint: %v", checkpointErr)
+			}
+			checkpoints = []autopilotCheckpointReference{checkpointReference(decision)}
+		}
+		final := phase.ID == 2
+		updated := mutateRunFixtureState(t, func(state *colony.ColonyState) {
+			state.Plan.Phases[phase.ID-1].Status = colony.PhaseCompleted
+			if final {
+				state.State = colony.StateCOMPLETED
+				return
+			}
+			state.CurrentPhase = phase.ID + 1
+			state.Plan.Phases[phase.ID].Status = colony.PhaseReady
+			state.State = colony.StateREADY
+		})
+		return map[string]interface{}{
+			"advanced":          true,
+			"state":             updated.State,
+			"next":              "aether build",
+			"autopilot_signals": continueReviewAutopilotSignals(nil, checkpoints),
+		}, updated, phase, nil, nil, final, nil
 	}
 
 	result, err := runCompatibilityAutopilot(root, runCompatibilityOptions{Context: context.Background()})
 	if err != nil {
 		t.Fatalf("interactive run: %v", err)
 	}
-	if result["trigger_code"] != autopilotTriggerVisualCheckpointNeeded || continueCalls != 0 {
-		t.Fatalf("interactive checkpoint result=%+v continue_calls=%d", result, continueCalls)
+	if buildCalls != 2 || continueCalls != 2 {
+		t.Fatalf("a chat-started run must not stop for owner checks: build=%d continue=%d, want 2/2 (result %+v)", buildCalls, continueCalls, result)
+	}
+	if result["trigger_code"] == autopilotTriggerVisualCheckpointNeeded || result["trigger_code"] == autopilotTriggerRuntimeVerificationNeeded {
+		t.Fatalf("run stopped on an owner check instead of saving it: %+v", result)
+	}
+
+	checks, ok := result["owner_checks"].([]autopilotCheckpointReference)
+	if !ok || len(checks) != 2 {
+		t.Fatalf("the end of the run must list both checks still waiting on the owner, got %#v", result["owner_checks"])
+	}
+	capabilityPattern := regexp.MustCompile(`--checkpoint-capability '([^']+)'`)
+	var visual autopilotCheckpointReference
+	for _, check := range checks {
+		if !capabilityPattern.MatchString(check.RecoveryCommand) || strings.TrimSpace(check.Question) == "" {
+			t.Fatalf("each waiting check needs its question and a confirm command with a one-time code: %+v", check)
+		}
+		if check.Type == autopilotCheckpointTypeVisual {
+			visual = check
+		}
+	}
+	if visual.ID == "" {
+		t.Fatalf("the visual check is missing from the end-of-run list: %+v", checks)
+	}
+	if !strings.Contains(renderRunCompatibilityVisual(result), visual.RecoveryCommand) {
+		t.Fatalf("the run's own screen must show the confirm command:\n%s", renderRunCompatibilityVisual(result))
+	}
+
+	// The listed command must really confirm the check.
+	capability := capabilityPattern.FindStringSubmatch(visual.RecoveryCommand)[1]
+	resetRootCmd(t)
+	stdout = &bytes.Buffer{}
+	stderr = &bytes.Buffer{}
+	rootCmd.SetArgs([]string{"decision-answer", "--question", visual.Question, "--answer", "confirmed",
+		"--phase", strconv.Itoa(visual.Phase), "--checkpoint-capability", capability})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("confirm command: %v", err)
+	}
+	for _, decision := range loadPendingDecisionFile().Decisions {
+		if decision.ID == visual.ID && !decision.Resolved {
+			t.Fatalf("the listed confirm command did not confirm the check: %s %s", stdout.(*bytes.Buffer).String(), stderr.(*bytes.Buffer).String())
+		}
 	}
 }
 

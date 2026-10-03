@@ -921,6 +921,45 @@ func autopilotCheckpointSealBlockers(state colony.ColonyState) ([]colony.FlagEnt
 // was handed. This matters for tests and for any future caller that validates
 // a store before installing it as the process-global runtime store.
 func autopilotCheckpointSealBlockersFromStore(checkpointStore *storage.Store, state colony.ColonyState) ([]colony.FlagEntry, error) {
+	open, err := issueOpenCheckpointCapabilitiesFromStore(checkpointStore, state)
+	if err != nil || len(open) == 0 {
+		return nil, err
+	}
+	blockers := []colony.FlagEntry{}
+	for _, decision := range open {
+		phaseID := 0
+		if decision.Phase != nil {
+			phaseID = *decision.Phase
+		}
+		detail := "owner verification is still waiting"
+		switch decision.Type {
+		case autopilotCheckpointTypeVisual:
+			detail = "the user-interface changes still need your visual confirmation"
+		case autopilotCheckpointTypeRuntimeVerification:
+			if criterion := strings.TrimSpace(decision.Criterion); criterion != "" {
+				detail = fmt.Sprintf("%q still needs your hands-on confirmation", criterion)
+			}
+		}
+		command := checkpointDecisionAnswerCommand(decision)
+		blockers = append(blockers, colony.FlagEntry{
+			ID:              decision.ID,
+			Type:            "blocker",
+			Description:     fmt.Sprintf("Phase %d checkpoint %s (%s): %s.", phaseID, decision.ID, decision.Type, detail),
+			Phase:           decision.Phase,
+			Source:          "autopilot_checkpoint",
+			CreatedAt:       decision.CreatedAt,
+			RecoveryCommand: command,
+		})
+	}
+	return blockers, nil
+}
+
+// issueOpenCheckpointCapabilitiesFromStore issues a fresh one-time answer
+// capability for every unresolved owner checkpoint in scope and returns those
+// rows with the raw capability attached in memory only. Sealing and the end of
+// an Autopilot run both list what still waits on the owner through this one
+// routine, so neither can mint a second kind of authorization.
+func issueOpenCheckpointCapabilitiesFromStore(checkpointStore *storage.Store, state colony.ColonyState) ([]PendingDecision, error) {
 	if checkpointStore == nil {
 		return nil, fmt.Errorf("load checkpoint seal blockers: no store initialized")
 	}
@@ -971,36 +1010,14 @@ func autopilotCheckpointSealBlockersFromStore(checkpointStore *storage.Store, st
 		return nil, fmt.Errorf("persist checkpoint seal capabilities in %s: %w", pendingDecisionsFile, err)
 	}
 
-	blockers := []colony.FlagEntry{}
+	var open []PendingDecision
 	for _, decision := range file.Decisions {
 		if decision.Resolved || !isAutopilotCheckpointType(decision.Type) || !pendingDecisionMatchesScope(decision, scope) {
 			continue
 		}
-		phaseID := 0
-		if decision.Phase != nil {
-			phaseID = *decision.Phase
-		}
-		detail := "owner verification is still waiting"
-		switch decision.Type {
-		case autopilotCheckpointTypeVisual:
-			detail = "the user-interface changes still need your visual confirmation"
-		case autopilotCheckpointTypeRuntimeVerification:
-			if criterion := strings.TrimSpace(decision.Criterion); criterion != "" {
-				detail = fmt.Sprintf("%q still needs your hands-on confirmation", criterion)
-			}
-		}
-		command := checkpointDecisionAnswerCommand(decision)
-		blockers = append(blockers, colony.FlagEntry{
-			ID:              decision.ID,
-			Type:            "blocker",
-			Description:     fmt.Sprintf("Phase %d checkpoint %s (%s): %s.", phaseID, decision.ID, decision.Type, detail),
-			Phase:           decision.Phase,
-			Source:          "autopilot_checkpoint",
-			CreatedAt:       decision.CreatedAt,
-			RecoveryCommand: command,
-		})
+		open = append(open, decision)
 	}
-	return blockers, nil
+	return open, nil
 }
 
 // autopilotCheckpointCompatibilityIDsFromStore projects only the stable

@@ -124,13 +124,16 @@ func autopilotTriggerSpecs() []autopilotTriggerSpec {
 			HeadlessDisposition:    autopilotDispositionStop,
 			InteractiveDisposition: autopilotDispositionStop,
 		},
+		// Owner's ruling 2026-10-03: a run started from a chat saves owner
+		// checks and keeps building, exactly like an unattended run, and
+		// lists them at the end; nothing is signed off until the owner looks.
 		{
 			Code:                   autopilotTriggerRuntimeVerificationNeeded,
 			Label:                  "Runtime verification needed",
 			Detection:              "A current criterion needs hands-on owner verification that the program cannot perform.",
 			NextActionTemplate:     "aether decision-answer {decision_id} {answer}",
 			HeadlessDisposition:    autopilotDispositionQueueAndContinue,
-			InteractiveDisposition: autopilotDispositionPause,
+			InteractiveDisposition: autopilotDispositionQueueAndContinue,
 		},
 		{
 			Code:                   autopilotTriggerVisualCheckpointNeeded,
@@ -138,7 +141,7 @@ func autopilotTriggerSpecs() []autopilotTriggerSpec {
 			Detection:              "Current build claims include user-interface work that needs an owner's visual judgement.",
 			NextActionTemplate:     "aether decision-answer {decision_id} {answer}",
 			HeadlessDisposition:    autopilotDispositionQueueAndContinue,
-			InteractiveDisposition: autopilotDispositionPause,
+			InteractiveDisposition: autopilotDispositionQueueAndContinue,
 		},
 		{
 			Code:                   autopilotTriggerReplanDue,

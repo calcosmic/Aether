@@ -936,6 +936,18 @@ func finishAutopilotInvocation(invocation *autopilotInvocation, state colony.Col
 	if len(decision.Evidence) > 0 {
 		result["trigger_evidence"] = decision.Evidence
 	}
+	// Owner's ruling 2026-10-03: a run saves owner checks instead of stopping
+	// for each one, so its end lists every check still waiting, each with a
+	// freshly issued confirm command, for the chat to ask the owner about once.
+	if !opts.DryRun {
+		if open, openErr := issueOpenCheckpointCapabilitiesFromStore(store, state); openErr == nil && len(open) > 0 {
+			checks := make([]autopilotCheckpointReference, 0, len(open))
+			for _, decision := range open {
+				checks = append(checks, checkpointReference(decision))
+			}
+			result["owner_checks"] = checks
+		}
+	}
 	if len(decision.Checkpoints) > 0 {
 		result["checkpoints"] = decision.Checkpoints
 	}
@@ -1593,6 +1605,10 @@ func syncRunAutopilotStateWithReport(state colony.ColonyState, opts runCompatibi
 }
 
 func renderRunCompatibilityVisual(result map[string]interface{}) string {
+	return renderRunCompatibilityVisualBody(result) + renderRunOwnerChecks(result["owner_checks"])
+}
+
+func renderRunCompatibilityVisualBody(result map[string]interface{}) string {
 	if strings.TrimSpace(stringValue(result["report_persist_error"])) != "" {
 		return renderRunReportPersistenceFailure(result)
 	}
@@ -1684,6 +1700,36 @@ func renderRunCompatibilityVisual(result map[string]interface{}) string {
 		fmt.Sprintf("Run `%s` for the next lifecycle step.", next),
 		fmt.Sprintf("Stop reason: %s", emptyFallback(stringValue(result["stopped_reason"]), "none")),
 	))
+	return b.String()
+}
+
+// renderRunOwnerChecks lists every check still waiting on the owner at the end
+// of a run: what to look at, and the exact command that confirms it once it is
+// right. It returns "" when nothing is waiting.
+func renderRunOwnerChecks(value interface{}) string {
+	var checks []autopilotCheckpointReference
+	switch typed := value.(type) {
+	case []autopilotCheckpointReference:
+		checks = typed
+	case nil:
+		return ""
+	default:
+		data, err := json.Marshal(value)
+		if err != nil || json.Unmarshal(data, &checks) != nil {
+			return ""
+		}
+	}
+	if len(checks) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nWaiting on you -- %d check(s) to look at before the project can be signed off\n", len(checks))
+	for _, check := range checks {
+		fmt.Fprintf(&b, "  - %s\n", emptyFallback(strings.TrimSpace(check.Question), "Please check this phase's result."))
+		if command := strings.TrimSpace(check.RecoveryCommand); command != "" {
+			fmt.Fprintf(&b, "    Once you have looked and it is right: `%s`\n", command)
+		}
+	}
 	return b.String()
 }
 

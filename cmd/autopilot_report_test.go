@@ -305,7 +305,9 @@ func TestRunReportTerminalCategoriesPersistVersionedRecord(t *testing.T) {
 		{name: "successful completion", state: reportTestState(colony.StateCOMPLETED, 3), decision: autopilotRunDecisionForCode(autopilotTriggerColonyComplete, false, nil), outcome: "completed"},
 		{name: "genuine stop", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerDeterministicVerificationFailed, false, nil), outcome: "genuine_stop"},
 		{name: "normal stop", state: reportTestState(colony.StateREADY, 2), decision: autopilotRunDecisionForCode(autopilotTriggerCancelled, false, nil), outcome: "normal_stop"},
-		{name: "interactive pause", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerRuntimeVerificationNeeded, false, nil), outcome: "paused"},
+		// Owner checks no longer pause a chat-started run (owner's ruling
+		// 2026-10-03); a due replan still does, so it carries the pause case.
+		{name: "interactive pause", state: reportTestState(colony.StateBUILT, 2), decision: autopilotRunDecisionForCode(autopilotTriggerReplanDue, false, nil), outcome: "paused"},
 	}
 
 	for _, tc := range tests {
