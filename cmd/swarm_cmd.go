@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -58,17 +59,112 @@ type swarmWorkerPlan struct {
 }
 
 type swarmWorkerResponse struct {
-	Role           string   `json:"role"`
-	Status         string   `json:"status"`
-	Summary        string   `json:"summary"`
-	Findings       []string `json:"findings,omitempty"`
-	Evidence       []string `json:"evidence,omitempty"`
-	RootCause      string   `json:"root_cause,omitempty"`
-	Recommendation string   `json:"recommendation,omitempty"`
-	ProposedFix    string   `json:"proposed_fix,omitempty"`
-	FilesTouched   []string `json:"files_touched,omitempty"`
-	TestsWritten   []string `json:"tests_written,omitempty"`
-	Verification   []string `json:"verification,omitempty"`
+	Role           string        `json:"role"`
+	Status         string        `json:"status"`
+	Summary        string        `json:"summary"`
+	Findings       swarmTextList `json:"findings,omitempty"`
+	Evidence       swarmTextList `json:"evidence,omitempty"`
+	RootCause      string        `json:"root_cause,omitempty"`
+	Recommendation string        `json:"recommendation,omitempty"`
+	ProposedFix    string        `json:"proposed_fix,omitempty"`
+	FilesTouched   []string      `json:"files_touched,omitempty"`
+	TestsWritten   []string      `json:"tests_written,omitempty"`
+	Verification   swarmTextList `json:"verification,omitempty"`
+}
+
+// swarmTextList is a list of descriptive lines a swarm worker reports:
+// findings, evidence, verification notes. Each worker's own agent definition
+// often returns these items as small objects -- {"description", "file",
+// "line"} from the tracker, {"finding", "source", "confidence"} from the
+// oracle -- and swarm-finalize used to refuse the whole completion over that
+// (Phase 210 blocker 16). These lines never decide a worker's status, the
+// run's outcome, or any credit, so an object item is folded into one line of
+// text with every field kept, in a fixed order. It is stored and serialised
+// as plain strings, exactly as before.
+type swarmTextList []string
+
+// swarmTextLeadKeys are the fields that, when present, already hold the
+// sentence itself; the remaining fields are kept as "key: value" detail.
+var swarmTextLeadKeys = []string{"summary", "text", "finding", "description", "detail", "claim", "message", "title"}
+
+func (l *swarmTextList) UnmarshalJSON(data []byte) error {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.UseNumber()
+	var raw interface{}
+	if err := decoder.Decode(&raw); err != nil {
+		return err
+	}
+	items, isList := raw.([]interface{})
+	if !isList {
+		items = []interface{}{raw}
+	}
+	out := make(swarmTextList, 0, len(items))
+	for _, item := range items {
+		if text := swarmTextFromJSON(item); text != "" {
+			out = append(out, text)
+		}
+	}
+	if raw == nil {
+		out = nil
+	}
+	*l = out
+	return nil
+}
+
+// swarmTextFromJSON renders one decoded JSON value as a single line.
+func swarmTextFromJSON(value interface{}) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case json.Number:
+		return v.String()
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case []interface{}:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			if text := swarmTextFromJSON(item); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "; ")
+	case map[string]interface{}:
+		lead, leadKey := "", ""
+		for _, key := range swarmTextLeadKeys {
+			if text := swarmTextFromJSON(v[key]); text != "" {
+				lead, leadKey = text, key
+				break
+			}
+		}
+		keys := make([]string, 0, len(v))
+		for key := range v {
+			if key != leadKey {
+				keys = append(keys, key)
+			}
+		}
+		sort.Strings(keys)
+		details := make([]string, 0, len(keys))
+		for _, key := range keys {
+			if text := swarmTextFromJSON(v[key]); text != "" {
+				details = append(details, key+": "+text)
+			}
+		}
+		switch {
+		case lead == "":
+			return strings.Join(details, "; ")
+		case len(details) == 0:
+			return lead
+		default:
+			return lead + " (" + strings.Join(details, "; ") + ")"
+		}
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
 }
 
 type swarmWorkerExecution struct {
@@ -953,6 +1049,12 @@ func renderExternalSwarmWorkerBrief(root, target, swarmID string, plan swarmWork
 	b.WriteString(plan.Task)
 	b.WriteString("\n\nReturn a terminal structured result to the wrapper. Do not hand-edit `.aether/data/`; the wrapper will pass your result to `aether swarm-finalize`.\n")
 	b.WriteString("\nRequired result fields: name, caste, role, task, status, summary. Include files/tests/blockers/response when relevant.\n")
+	// The finalizer matches each result to its assignment by these values, so
+	// state them exactly rather than leaving the worker to guess (Phase 210
+	// blocker 16: guessed task wording was refused twice).
+	b.WriteString("Use exactly these values: name `" + plan.Name + "`, caste `" + plan.Caste + "`, role `" + plan.Role + "`, task `" + strings.TrimSpace(plan.Task) + "` (or its task_id `" + plan.TaskID + "`).\n")
+	b.WriteString("status is one of: " + strings.Join(swarmTerminalWorkerStatusValues(), ", ") + ".\n")
+	b.WriteString("In `response`, `findings`, `evidence` and `verification` are lists of plain sentences (strings), not objects.\n")
 	b.WriteString("Builder may edit code. Tracker, Scout, Archaeologist, and Watcher should stay read-only unless the user explicitly asked otherwise.\n")
 	return strings.TrimSpace(b.String())
 }
@@ -1307,8 +1409,8 @@ func mergeExternalSwarmResults(manifest swarmManifest, results []swarmWorkerExec
 		if err := validateExternalSwarmIdentity(name, "role", result.Role, plan.Role); err != nil {
 			return nil, err
 		}
-		if err := validateExternalSwarmIdentity(name, "task", result.Task, plan.Task); err != nil {
-			return nil, err
+		if !swarmSubmittedTaskMatchesPlan(result.Task, plan) {
+			return nil, fmt.Errorf("external swarm worker result %s task %q does not match its assignment: use the manifest task text %q or its task_id %q", name, strings.TrimSpace(result.Task), plan.Task, plan.TaskID)
 		}
 		if err := validateExternalSwarmIdentity(name, "response.role", result.Response.Role, plan.Role); err != nil {
 			return nil, err
@@ -1369,6 +1471,28 @@ func validateExternalSwarmIdentity(workerName, field, submitted, manifestValue s
 		return fmt.Errorf("external swarm worker result %s %s %q does not match manifest value %q", workerName, field, submitted, manifestValue)
 	}
 	return nil
+}
+
+// swarmSubmittedTaskMatchesPlan reports whether a worker's `task` names its
+// own manifest assignment. Workers naturally name it by the dispatch's
+// task_id ("swarm.scout") or copy the sentence with different spacing,
+// capitals or a dropped full stop, and the owner's swarm-finalize refused both
+// (Phase 210 blocker 16). Those are the same assignment, so they are accepted;
+// any other wording is still refused. The result is keyed to its assignment by
+// name, and the recorded task is always the manifest's own text.
+func swarmSubmittedTaskMatchesPlan(submitted string, plan swarmWorkerPlan) bool {
+	submitted = strings.TrimSpace(submitted)
+	if submitted == "" {
+		return true
+	}
+	if id := strings.TrimSpace(plan.TaskID); id != "" && submitted == id {
+		return true
+	}
+	return normalizedSwarmTaskText(submitted) == normalizedSwarmTaskText(plan.Task)
+}
+
+func normalizedSwarmTaskText(text string) string {
+	return strings.TrimRight(strings.ToLower(strings.Join(strings.Fields(text), " ")), ".")
 }
 
 func swarmTerminalWorkerStatusValues() []string {

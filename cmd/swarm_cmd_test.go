@@ -1321,3 +1321,114 @@ func workerMapsHaveCaste(workers []interface{}, caste string) bool {
 	}
 	return false
 }
+
+// TestSwarmFinalizeAcceptsTheResultShapesWorkersReturn (Phase 210 blocker
+// 16): the owner's swarm-finalize refused a real completion twice -- first
+// because three investigators reported each finding as a small object (the
+// shape their own agent definitions use), then because workers named their
+// assignment by its task ID instead of copying the manifest's sentence. The
+// finding objects below carry the exact keys those real workers returned.
+// Findings are descriptive only; the identity checks that decide which
+// result belongs to which assignment still refuse a task that is neither the
+// manifest text nor its ID (see the "forged task" case in
+// TestSwarmFinalizeRejectsUnboundOrNonTerminalEvidenceWithoutMutation).
+func TestSwarmFinalizeAcceptsTheResultShapesWorkersReturn(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Finish the deck"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	manifest := issuedSwarmManifestForTest(t, root, "the flags")
+	// The handed-out brief states the exact identity the finalizer checks, so
+	// a worker never has to guess it.
+	for _, plan := range manifest.Dispatches {
+		for _, want := range []string{"`" + plan.Name + "`", "`" + plan.Caste + "`", "`" + strings.TrimSpace(plan.Task) + "`", "`" + plan.TaskID + "`", "plain sentences"} {
+			if !strings.Contains(plan.Brief, want) {
+				t.Errorf("%s brief does not state %s:\n%s", plan.Name, want, plan.Brief)
+			}
+		}
+	}
+	objectFindings := map[string][]interface{}{
+		"tracker": {map[string]interface{}{
+			"severity": "high", "file": "finish-the-track/data/cards.json", "line": 15,
+			"description": "assumptions[7] is written verbatim into dist/ALL_CARDS.md",
+		}},
+		"oracle": {map[string]interface{}{
+			"finding": "write_catalog copies the assumptions list word for word",
+			"source":  "finish-the-track/scripts/build.py:221-222", "confidence": "high",
+		}},
+		"archaeologist": {map[string]interface{}{
+			"risk_level": "HIGH", "evidence_ref": "plan task 3.2 (pending)",
+			"original_issue":     "test_no_session_limit_or_minutes_in_exports fails",
+			"what_history_shows": "the plan rewrites the assumptions only in phase 3",
+		}},
+	}
+	dispatches := make([]map[string]interface{}, 0, len(manifest.Dispatches))
+	for _, plan := range manifest.Dispatches {
+		findings := objectFindings[plan.Role]
+		if findings == nil {
+			findings = []interface{}{plan.Role + " finding in plain words"}
+		}
+		task := plan.TaskID // workers naturally name the assignment by its ID
+		if plan.Role == "scout" {
+			task = plan.Task
+		}
+		dispatches = append(dispatches, map[string]interface{}{
+			"name": plan.Name, "caste": plan.Caste, "role": plan.Role, "task": task,
+			"status": "completed", "summary": plan.Role + " finished.",
+			"response": map[string]interface{}{
+				"role": plan.Role, "status": "completed", "summary": plan.Role + " finished.",
+				"findings": findings,
+				"evidence": []interface{}{"unittest: 32 tests OK"},
+			},
+		})
+	}
+	data, err := json.Marshal(map[string]interface{}{"swarm_manifest": manifest, "dispatches": dispatches})
+	if err != nil {
+		t.Fatalf("marshal completion: %v", err)
+	}
+	completionPath := filepath.Join(t.TempDir(), "swarm-completion.json")
+	if err := os.WriteFile(completionPath, data, 0644); err != nil {
+		t.Fatalf("write completion: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"swarm-finalize", "--completion-file", completionPath})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("swarm-finalize refused a completion shaped the way real workers return it: %v\n%s%s", err, stdout.(*bytes.Buffer).String(), fmt.Sprint(stderr))
+	}
+
+	var record swarmResultRecord
+	if err := store.LoadJSON(filepath.ToSlash(filepath.Join("swarms", manifest.SwarmID, "result.json")), &record); err != nil {
+		t.Fatalf("finalize wrote no swarm result: %v", err)
+	}
+	byRole := map[string]swarmWorkerExecution{}
+	for _, worker := range record.Workers {
+		byRole[worker.Role] = worker
+	}
+	for _, plan := range manifest.Dispatches {
+		if got := byRole[plan.Role].Task; got != plan.Task {
+			t.Errorf("%s recorded task %q, want the manifest's own text %q", plan.Role, got, plan.Task)
+		}
+	}
+	for role, want := range map[string][]string{
+		"tracker":       {"assumptions[7] is written verbatim into dist/ALL_CARDS.md", "line: 15", "finish-the-track/data/cards.json"},
+		"oracle":        {"write_catalog copies the assumptions list word for word", "finish-the-track/scripts/build.py:221-222"},
+		"archaeologist": {"test_no_session_limit_or_minutes_in_exports fails", "the plan rewrites the assumptions only in phase 3"},
+	} {
+		findings := strings.Join(byRole[role].Response.Findings, "\n")
+		for _, fragment := range want {
+			if !strings.Contains(findings, fragment) {
+				t.Errorf("%s finding lost %q; recorded findings:\n%s", role, fragment, findings)
+			}
+		}
+	}
+}
