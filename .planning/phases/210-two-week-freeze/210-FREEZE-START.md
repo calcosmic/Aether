@@ -106,3 +106,13 @@ and real use is what should find out whether it works. If he hits it, it counts 
   plain-English verdict in a heavy-lined box first, then each section under its own heavy line
   with space between, details kept. Rolled out check screen first, then build, status, plan and
   finish. From this date the trial measures the new screens.
+- **2026-10-03, close early declined; three behaviour changes chosen.** Offered closing the
+  fortnight early (19 recorded stops against a limit of about 2), the owner answered: "I just
+  want to have it that it doesn't have any of these fucking issues again". The trial was not
+  closed. He then chose, from offered options: (1) Autopilot keeps building instead of stopping
+  after each phase for a visual look, collects the looks, and asks once at the end or sooner if
+  something genuinely breaks; nothing is signed off until he has looked. (2) When Autopilot
+  reaches a step that needs his OK to do something real (such as installing a deck into Anki),
+  the chat asks him yes or no about that one step, does it on yes, and carries on, with no loop.
+  (3) The guard on CI workflow files applies only to Aether's own helpers, not to his own chat
+  or GSD running in it. From this date the trial measures a program with these changes.
