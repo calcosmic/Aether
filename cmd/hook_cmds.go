@@ -85,7 +85,7 @@ var hookPreToolUseCmd = &cobra.Command{
 		}
 
 		if strings.EqualFold(toolName, "Write") || strings.EqualFold(toolName, "Edit") {
-			if reason := protectedHookWriteReason(target, cwd); reason != "" {
+			if reason := protectedHookWriteReason(target, cwd, hookCallerIsHelper(input)); reason != "" {
 				if tracer != nil {
 					var state colony.ColonyState
 					if loadErr := store.LoadJSON("COLONY_STATE.json", &state); loadErr == nil && state.RunID != nil {
@@ -910,7 +910,14 @@ var sanctionedDataWritePrefixes = []string{
 	"/.aether/data/territory-candidates/",
 }
 
-func protectedHookWriteReason(target, cwd string) string {
+// protectedHookWriteReason returns why a Write/Edit to target is refused, or
+// "" to allow it. fromHelper (see hookCallerIsHelper) narrows only the
+// CI-workflow case: owner's ruling 2026-10-03 (Phase 210 freeze, blocker 13)
+// -- that guard applies only to Aether's own helpers, never to the owner's
+// own chat or a tool such as GSD running in it, which it had blocked from
+// rewriting a ci.yml its approved plan required. Every other protected path
+// is refused for everyone.
+func protectedHookWriteReason(target, cwd string, fromHelper bool) string {
 	normalized := normalizeHookPath(target, cwd)
 	if normalized == "" {
 		return ""
@@ -932,7 +939,7 @@ func protectedHookWriteReason(target, cwd string) string {
 		return "Protected environment file. Do not edit `.env*` through a hook-triggered write."
 	case strings.HasSuffix(slash, "/.codex/config.toml"):
 		return "Protected Codex config path. Do not edit `.codex/config.toml` from a worker."
-	case strings.Contains(slash, "/.github/workflows/"):
+	case fromHelper && strings.Contains(slash, "/.github/workflows/"):
 		return "Protected CI path. Workflow files require explicit user direction."
 	default:
 		return ""
@@ -1148,4 +1155,12 @@ func init() {
 // to the hooks it runs, so the variable is visible here.
 func isAetherSpawnedWorker() bool {
 	return strings.TrimSpace(os.Getenv("AETHER_WORKER_NAME")) != ""
+}
+
+// hookCallerIsHelper reports whether a hook event came from a helper rather
+// than the owner's own top-level chat: a worker Aether spawned, or a sub-agent
+// the platform itself reports through agent_id -- the same two signals
+// hook-stop uses to exempt helpers.
+func hookCallerIsHelper(input claudeHookInput) bool {
+	return isAetherSpawnedWorker() || strings.TrimSpace(input.AgentID) != ""
 }

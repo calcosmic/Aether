@@ -176,6 +176,72 @@ func TestHookPreToolUseAllowsSanctionedScratchDirs(t *testing.T) {
 	})
 }
 
+// TestCIWorkflowGuardAppliesOnlyToHelpers pins Phase 210 freeze blocker 13:
+// the CI-workflow guard blocked the owner's own GSD chat in another project
+// from rewriting .github/workflows/ci.yml, which its approved plan required.
+// Owner's ruling (2026-10-03): the guard on CI workflow files applies only to
+// Aether's own helpers, not to his own chat or GSD running in it. The last
+// case proves only the CI case relaxed -- colony state stays protected from
+// the owner's chat too.
+func TestCIWorkflowGuardAppliesOnlyToHelpers(t *testing.T) {
+	ciWorkflow := filepath.Join(".github", "workflows", "ci.yml")
+	colonyState := filepath.Join(".aether", "data", "COLONY_STATE.json")
+	cases := []struct {
+		name       string
+		rel        string
+		workerName string
+		agentID    string
+		wantReason string // empty means the write must be allowed
+	}{
+		{"owner_chat_edits_ci_workflow", ciWorkflow, "", "", ""},
+		{"aether_worker_edits_ci_workflow", ciWorkflow, "Weld-32", "", "Protected CI path"},
+		{"platform_subagent_edits_ci_workflow", ciWorkflow, "", "ae93ff782863d564f", "Protected CI path"},
+		{"owner_chat_edits_colony_state", colonyState, "", "", "Protected colony state path"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+
+			var buf bytes.Buffer
+			stdout = &buf
+			var errBuf bytes.Buffer
+			stderr = &errBuf
+
+			_, tmpDir := newTestStoreCmd(t)
+			defer os.RemoveAll(tmpDir)
+
+			t.Setenv("AETHER_WORKER_NAME", tt.workerName)
+
+			target := filepath.Join(tmpDir, tt.rel)
+			setHookStdin(t, `{"hook_event_name":"PreToolUse","agent_id":"`+tt.agentID+`","tool_name":"Edit","tool_input":{"file_path":"`+target+`"}}`)
+
+			rootCmd.SetArgs([]string{"hook-pre-tool-use"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("hook-pre-tool-use returned error: %v", err)
+			}
+
+			out := strings.TrimSpace(buf.String())
+			if tt.wantReason == "" {
+				if out != "" {
+					t.Fatalf("write to %s was blocked; want allowed. output: %s", tt.rel, out)
+				}
+				return
+			}
+			var result map[string]interface{}
+			if err := json.Unmarshal([]byte(out), &result); err != nil {
+				t.Fatalf("unmarshal hook output %q: %v", out, err)
+			}
+			if result["decision"] != "block" {
+				t.Fatalf("decision = %v, want block", result["decision"])
+			}
+			if reason, _ := result["reason"].(string); !strings.Contains(reason, tt.wantReason) {
+				t.Fatalf("reason = %q, want it to contain %q", reason, tt.wantReason)
+			}
+		})
+	}
+}
+
 // TestHookPreToolUseSymlinkInsideSanctionedDirCannotEscape is WR-05's
 // regression proof: normalizeHookPath used to be purely lexical, so a
 // symlink planted inside an allowlisted scratch subdir (planning/) but
