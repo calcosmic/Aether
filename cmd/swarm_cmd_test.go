@@ -1432,3 +1432,102 @@ func TestSwarmFinalizeAcceptsTheResultShapesWorkersReturn(t *testing.T) {
 		}
 	}
 }
+
+// TestSwarmCloseoutListsOnlyBlockersStillOpen (Phase 210 blocker 16): an
+// investigator reports what blocks the phase BEFORE the fix wave runs. Once
+// the builder has fixed it and the verifying watcher passed, the closeout used
+// to keep listing that cleared blocker under "Blockers". It must list only
+// blockers still open -- and never hide one when the verification did not
+// pass, or when a worker itself ended blocked.
+func TestSwarmCloseoutListsOnlyBlockersStillOpen(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Finish the deck"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version: "3.0",
+		Goal:    &goal,
+		State:   colony.StateREADY,
+	})
+
+	manifest := issuedSwarmManifestForTest(t, root, "the flags")
+	const cleared = "cards.json line 15 still contains the three-experiments-per-session rule"
+	const stuck = "the oracle could not reach the documentation site"
+	const unverified = "the watcher could not open a browser to check the preview"
+	results := func(watcherStatus string, watcherBlockers []string) []swarmWorkerExecution {
+		runs := validExternalSwarmResults(manifest, "completed")
+		for i := range runs {
+			switch runs[i].Role {
+			case "scout":
+				runs[i].Blockers = []string{cleared}
+			case "oracle":
+				runs[i].Status, runs[i].Response.Status = "blocked", "blocked"
+				runs[i].Blockers = []string{stuck}
+			case "builder":
+				runs[i].Status, runs[i].Response.Status = "code_written", "code_written"
+			case "watcher":
+				runs[i].Status, runs[i].Response.Status = watcherStatus, watcherStatus
+				runs[i].Blockers = watcherBlockers
+			}
+		}
+		return runs
+	}
+	writeCompletion := func(runs []swarmWorkerExecution) string {
+		data, err := json.Marshal(externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: runs})
+		if err != nil {
+			t.Fatalf("marshal completion: %v", err)
+		}
+		path := filepath.Join(t.TempDir(), "swarm-completion.json")
+		if err := os.WriteFile(path, data, 0644); err != nil {
+			t.Fatalf("write completion: %v", err)
+		}
+		return path
+	}
+
+	// The fix was verified: the investigator's cleared blocker is gone from
+	// the closeout and from the finalizer's result; the oracle, which itself
+	// ended blocked, keeps its blocker.
+	verified := results("passed", nil)
+	result, visual := renderCeremonyCloseout("swarm", writeCompletion(verified))
+	listed := strings.Join(stringSliceValue(result["completion_blockers"]), "\n")
+	if strings.Contains(listed, cleared) || strings.Contains(visual, cleared) {
+		t.Errorf("swarm closeout still lists a blocker the verified fix cleared.\nlisted: %s\nscreen:\n%s", listed, visual)
+	}
+	if !strings.Contains(listed, stuck) {
+		t.Errorf("swarm closeout hid the blocker of a worker that itself ended blocked.\nlisted: %s", listed)
+	}
+	finalized, err := runSwarmFinalize(root, externalSwarmCompletion{SwarmManifest: &manifest, Dispatches: verified})
+	if err != nil {
+		t.Fatalf("finalize verified swarm: %v", err)
+	}
+	finalBlockers := strings.Join(stringSliceValue(finalized["blockers"]), "\n")
+	if strings.Contains(finalBlockers, cleared) || !strings.Contains(finalBlockers, stuck) {
+		t.Errorf("swarm-finalize result blockers = %q; want the still-open one only", finalBlockers)
+	}
+
+	// The verification did NOT pass: nothing was proven cleared, so every
+	// reported blocker stays listed.
+	unproven := results("blocked", []string{unverified})
+	result, _ = renderCeremonyCloseout("swarm", writeCompletion(unproven))
+	listed = strings.Join(stringSliceValue(result["completion_blockers"]), "\n")
+	for _, want := range []string{cleared, stuck, unverified} {
+		if !strings.Contains(listed, want) {
+			t.Errorf("unverified swarm closeout dropped %q.\nlisted: %s", want, listed)
+		}
+	}
+	merged, err := mergeExternalSwarmResults(manifest, unproven)
+	if err != nil {
+		t.Fatalf("merge unverified results: %v", err)
+	}
+	_, _, _, _, blockers, err := summarizeSwarmOutcome(merged)
+	if err != nil {
+		t.Fatalf("summarize unverified swarm: %v", err)
+	}
+	if got := strings.Join(blockers, "\n"); !strings.Contains(got, cleared) || !strings.Contains(got, unverified) {
+		t.Errorf("unverified swarm outcome dropped a blocker: %q", got)
+	}
+}

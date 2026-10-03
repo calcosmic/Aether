@@ -2050,9 +2050,63 @@ func renderSwarmFindingSummary(runs []swarmWorkerExecution) string {
 	return strings.Join(lines, "\n")
 }
 
+// swarmBlockerReport is the two facts about one worker that decide whether
+// the blockers it reported are still open once a swarm run has ended.
+type swarmBlockerReport struct {
+	Wave   int
+	Passed bool
+}
+
+// swarmBlockersSuperseded is the one rule for which reported blockers are
+// still open when a swarm run ends, shared by the finalizer's result and the
+// closeout screen. Investigators and the builder report what blocks the work
+// BEFORE the verifying wave runs. When that verifying wave ran and every one
+// of its workers passed, those earlier reports from workers that themselves
+// finished have been acted on and checked, so they are no longer open (Phase
+// 210 blocker 16: the closeout kept listing a blocker the fix had already
+// cleared). Nothing is superseded when the verifying wave did not run or did
+// not pass, and a worker that itself ended blocked, failed or timed out
+// always keeps its blockers. The result is one flag per report, in order.
+func swarmBlockersSuperseded(reports []swarmBlockerReport) []bool {
+	superseded := make([]bool, len(reports))
+	verifyingWave := swarmWaveForCaste("watcher")
+	verified := false
+	for _, report := range reports {
+		if report.Wave < verifyingWave {
+			continue
+		}
+		if !report.Passed {
+			return superseded
+		}
+		verified = true
+	}
+	if !verified {
+		return superseded
+	}
+	for i, report := range reports {
+		superseded[i] = report.Wave < verifyingWave && report.Passed
+	}
+	return superseded
+}
+
+// swarmRunPassed reports a swarm worker's own terminal status as a pass.
+func swarmRunPassed(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "completed", "passed", "code_written":
+		return true
+	default:
+		return false
+	}
+}
+
 func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation, rootCause, solution string, blockers []string, err error) {
 	status = "completed"
-	for _, run := range runs {
+	reports := make([]swarmBlockerReport, len(runs))
+	for i, run := range runs {
+		reports[i] = swarmBlockerReport{Wave: swarmWaveForCaste(run.Caste), Passed: swarmRunPassed(run.Status)}
+	}
+	superseded := swarmBlockersSuperseded(reports)
+	for i, run := range runs {
 		if run.Response.RootCause != "" && rootCause == "" {
 			rootCause = run.Response.RootCause
 		}
@@ -2062,7 +2116,7 @@ func summarizeSwarmOutcome(runs []swarmWorkerExecution) (status, recommendation,
 		if run.Response.Recommendation != "" {
 			recommendation = run.Response.Recommendation
 		}
-		if len(run.Blockers) > 0 {
+		if len(run.Blockers) > 0 && !superseded[i] {
 			blockers = append(blockers, run.Blockers...)
 		}
 		switch strings.ToLower(strings.TrimSpace(run.Status)) {

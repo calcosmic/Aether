@@ -164,6 +164,21 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 	}
 
 	workers := closeoutWorkerMaps(raw)
+	superseded := closeoutSupersededSwarmBlockers(raw, workers)
+	for i, worker := range workers {
+		if !superseded[i] || len(stringSliceValue(worker["blockers"])) == 0 {
+			continue
+		}
+		// The worker card shows what this helper found; a blocker the
+		// verified fix already cleared is not repeated under it.
+		trimmed := make(map[string]interface{}, len(worker))
+		for key, value := range worker {
+			if key != "blockers" {
+				trimmed[key] = value
+			}
+		}
+		workers[i] = trimmed
+	}
 	details["completion_workers"] = workers
 	details["completion_worker_count"] = len(workers)
 	completed, failed, blocked := 0, 0, 0
@@ -203,6 +218,34 @@ func closeoutCompletionDetails(path string) map[string]interface{} {
 		details["completion_phase_count"] = len(phases)
 	}
 	return details
+}
+
+// closeoutSupersededSwarmBlockers applies the swarm's one still-open rule
+// (swarmBlockersSuperseded) to a swarm completion packet: which workers'
+// reported blockers the verified fix has already cleared. Any other
+// workflow's packet gets no flags set, so its closeout is unchanged. A
+// worker's wave comes from the swarm manifest the packet carries, falling
+// back to its caste's wave.
+func closeoutSupersededSwarmBlockers(raw map[string]interface{}, workers []map[string]interface{}) []bool {
+	_, manifest := closeoutManifest(raw)
+	if strings.TrimSpace(stringValue(manifest["workflow"])) != "swarm" {
+		return make([]bool, len(workers))
+	}
+	waveByName := map[string]int{}
+	for _, dispatch := range mapSliceValue(manifest["dispatches"]) {
+		if name := strings.TrimSpace(stringValue(dispatch["name"])); name != "" {
+			waveByName[name] = intValue(dispatch["wave"])
+		}
+	}
+	reports := make([]swarmBlockerReport, len(workers))
+	for i, worker := range workers {
+		wave := waveByName[strings.TrimSpace(stringValue(worker["name"]))]
+		if wave == 0 {
+			wave = swarmWaveForCaste(strings.TrimSpace(stringValue(worker["caste"])))
+		}
+		reports[i] = swarmBlockerReport{Wave: wave, Passed: normalizeCloseoutWorkerStatus(worker) == "completed"}
+	}
+	return swarmBlockersSuperseded(reports)
 }
 
 func closeoutManifest(raw map[string]interface{}) (string, map[string]interface{}) {
