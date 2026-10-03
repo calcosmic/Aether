@@ -1433,6 +1433,73 @@ func TestSwarmFinalizeAcceptsTheResultShapesWorkersReturn(t *testing.T) {
 	}
 }
 
+// TestSwarmBriefCarriesWhatTheTargetRefersTo (Phase 210 blocker 16): the
+// owner typed "/ant-swarm the flags" and every investigator was handed only
+// "Target: the flags", with nothing saying which flags those were or which
+// phase the project was on. Each worker's brief -- on the wrapper lane and on
+// the direct lane -- must carry the current phase and the open items the
+// owner sees waiting on him, and never an item already resolved. The flags
+// are raised and resolved through the runtime's own commands.
+func TestSwarmBriefCarriesWhatTheTargetRefersTo(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+	goal := "Grow the deck"
+	const phaseName = "Eight piles in the build, cards shown as ideas"
+	createTestColonyState(t, dataDir, colony.ColonyState{
+		Version:      "3.0",
+		Goal:         &goal,
+		State:        colony.StateREADY,
+		CurrentPhase: 2,
+		Plan: colony.Plan{Phases: []colony.Phase{
+			{ID: 1, Name: "Safety net before any change", Status: colony.PhaseCompleted},
+			{ID: 2, Name: phaseName, Status: colony.PhaseInProgress},
+		}},
+	})
+
+	run := func(args ...string) map[string]interface{} {
+		t.Helper()
+		resetFlags(rootCmd)
+		stdout.(*bytes.Buffer).Reset()
+		rootCmd.SetArgs(args)
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatalf("aether %v: %v", args, err)
+		}
+		return parseEnvelope(t, stdout.(*bytes.Buffer).String())
+	}
+	const open = "test_no_session_limit_or_minutes_in_exports fails: ALL_CARDS.md still carries the per-session rule"
+	const cleared = "stray .aether folders inside finish-the-track/templates"
+	run("flag-add", "--type", "blocker", "--title", open, "--phase", "2")
+	created := run("flag-add", "--type", "blocker", "--title", cleared, "--phase", "2")
+	id := stringValue(mapValue(mapValue(created["result"])["flag"])["id"])
+	if id == "" {
+		t.Fatalf("flag-add returned no id: %#v", created)
+	}
+	run("flag-resolve", "--id", id, "--message", "deleted by hand")
+
+	manifest := issuedSwarmManifestForTest(t, root, "the flags")
+	check := func(lane, brief string) {
+		t.Helper()
+		for _, want := range []string{open, phaseName} {
+			if !strings.Contains(brief, want) {
+				t.Errorf("%s brief does not carry %q:\n%s", lane, want, brief)
+			}
+		}
+		if strings.Contains(brief, cleared) {
+			t.Errorf("%s brief carries a flag that was already resolved:\n%s", lane, brief)
+		}
+	}
+	for _, plan := range manifest.Dispatches {
+		check("wrapper-lane "+plan.Name, plan.Brief)
+	}
+	plan := manifest.Dispatches[0]
+	check("direct-lane "+plan.Name, renderSwarmWorkerBrief(root, "the flags", manifest.SwarmID, plan, "", filepath.Join(root, "response.json")))
+}
+
 // TestSwarmCloseoutListsOnlyBlockersStillOpen (Phase 210 blocker 16): an
 // investigator reports what blocks the phase BEFORE the fix wave runs. Once
 // the builder has fixed it and the verifying watcher passed, the closeout used

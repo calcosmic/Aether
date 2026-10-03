@@ -1038,6 +1038,50 @@ func swarmStageName(wave int) string {
 	}
 }
 
+// renderSwarmProjectContext is the bounded picture of where the project
+// stands that every swarm worker's brief carries, so a target such as "the
+// flags" reaches the workers with the concrete items it refers to (Phase 210
+// blocker 16: every investigator was handed only "Target: the flags"). The
+// open items are the very list the owner's own closing card shows under
+// "Waiting on you" -- resolved items left out, at most five, each trimmed --
+// taken from the one shared answer rather than a second reading of the
+// project. A line the prompt-integrity check would block is left out. It
+// reads and never writes, and returns "" where no project is set up.
+func renderSwarmProjectContext() string {
+	if store == nil {
+		return ""
+	}
+	in := loadNextActionInputForCommand("")
+	if in.NoColony {
+		return ""
+	}
+	state := in.State
+	var lines []string
+	if total := len(state.Plan.Phases); state.CurrentPhase > 0 && total > 0 {
+		line := fmt.Sprintf("- Current phase: %d of %d", state.CurrentPhase, total)
+		if name := strings.TrimSpace(lookupPhaseName(state, state.CurrentPhase)); name != "" && name != "(unnamed)" {
+			line += " -- " + name
+		}
+		lines = append(lines, line)
+	}
+	var open []string
+	source := filepath.Join(store.BasePath(), pendingDecisionsFile)
+	for _, item := range nextActionFlagLines(resolveNextAction(in).Open.Flags) {
+		if colony.AssessPromptSource(source, item).Action == colony.PromptIntegrityActionBlock {
+			continue
+		}
+		open = append(open, "  - "+item)
+	}
+	if len(open) > 0 {
+		lines = append(lines, "- Open items waiting on the owner (flags, blockers, checkpoints):")
+		lines = append(lines, open...)
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "Where the project stands (the target may refer to these):\n" + strings.Join(lines, "\n")
+}
+
 func renderExternalSwarmWorkerBrief(root, target, swarmID string, plan swarmWorkerPlan) string {
 	var b strings.Builder
 	b.WriteString("Swarm ID: " + swarmID + "\n")
@@ -1045,6 +1089,9 @@ func renderExternalSwarmWorkerBrief(root, target, swarmID string, plan swarmWork
 	b.WriteString("Workspace: " + root + "\n")
 	b.WriteString("Role: " + plan.Role + "\n")
 	b.WriteString("Wave: " + fmt.Sprintf("%d", plan.Wave) + " (" + swarmStageName(plan.Wave) + ")\n\n")
+	if projectContext := renderSwarmProjectContext(); projectContext != "" {
+		b.WriteString(projectContext + "\n\n")
+	}
 	b.WriteString("Assignment:\n")
 	b.WriteString(plan.Task)
 	b.WriteString("\n\nReturn a terminal structured result to the wrapper. Do not hand-edit `.aether/data/`; the wrapper will pass your result to `aether swarm-finalize`.\n")
@@ -1914,6 +1961,9 @@ func renderSwarmWorkerBrief(root, target, swarmID string, plan swarmWorkerPlan, 
 	b.WriteString(task)
 	b.WriteString("\n\n## Swarm Context\n\n")
 	b.WriteString("- Target: " + strings.TrimSpace(target) + "\n")
+	if projectContext := renderSwarmProjectContext(); projectContext != "" {
+		b.WriteString("\n" + projectContext + "\n")
+	}
 	if strings.TrimSpace(priorSummary) != "" {
 		b.WriteString("\n### Prior Swarm Findings\n\n")
 		b.WriteString(strings.TrimSpace(priorSummary))
