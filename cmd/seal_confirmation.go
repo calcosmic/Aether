@@ -100,10 +100,7 @@ func writeSealStateOfPlayCategory(b *strings.Builder, label string, items []stri
 // itself proof the recorded answer covers exactly this set of problems —
 // never an inference from card wording.
 func sealConfirmationQuestionText(namedProblems []string) string {
-	if len(namedProblems) == 0 {
-		return "Seal this verified colony and write its Crowned Anthill record? [y/N]"
-	}
-	return fmt.Sprintf("Force-seal this incomplete colony with %d unresolved item(s)? This records an owner override; it does not verify completion. [y/N]", len(namedProblems))
+	return sealConfirmationWording(len(namedProblems))
 }
 
 // sealConfirmationAnswerSource is "seal-force-confirmation" when the

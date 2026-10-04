@@ -93,7 +93,7 @@ For each dispatch:
 2. Run `AETHER_OUTPUT_MODE=json aether spawn-log --parent "Queen" --caste "<caste>" --name "<name>" --task "<task>" --depth 1`.
 3. Spawn the host agent using `agent_name` as the subagent type.
 4. Use the exact visible description: `{caste emoji} {Caste} {name}: {task}`.
-5. Give the worker the exact `brief` from the manifest.
+5. Give the worker the exact `brief` from the manifest, VERBATIM — never summarize, shorten, or rewrite it. It carries the result shape `seal-finalize` checks, including the handoff; a reviewer that never sees it returns a result the finalizer refuses.
 6. Tell the worker this is final review before seal and it must not modify repo source files.
 7. Collect a terminal result with:
    - `name`
@@ -105,6 +105,7 @@ For each dispatch:
    - `summary`
    - `blockers`
    - `report`
+   - `handoff` — mandatory for every reviewer that finished (`completed` or `passed`): `{changed_files, commands_run, verification_status, known_failures, open_decisions, assumptions, next_worker_instructions, do_not_repeat, freshness}` (freshness: RFC3339 timestamp of evidence collection, or `not-run`). `seal-finalize` refuses a finished reviewer without one. `verification_status` must be exactly one of `pass`, `fail`, `partial`, `not_run`, or `unknown`.
    - optional `findings` or `issues` objects shaped as `{domain,severity,file,line,category,description,suggestion,blocking}`
    - optional `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons`
 8. Run `AETHER_OUTPUT_MODE=json aether spawn-complete --name "<name>" --status "<status>" --summary "<summary>"`.
@@ -140,7 +141,18 @@ Write a JSON completion packet:
           "blocking": false
         }
       ],
-      "reusable_lessons": ["Keep release provenance checks in the final seal review."]
+      "reusable_lessons": ["Keep release provenance checks in the final seal review."],
+      "handoff": {
+        "changed_files": [],
+        "commands_run": ["Read the release manifest and dependency files"],
+        "verification_status": "pass",
+        "known_failures": [],
+        "open_decisions": [],
+        "assumptions": [],
+        "next_worker_instructions": "Sign release provenance before the next public release.",
+        "do_not_repeat": [],
+        "freshness": "2026-01-01T00:00:00Z"
+      }
     }
   ]
 }

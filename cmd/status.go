@@ -227,7 +227,7 @@ func computeWarnings(state colony.ColonyState, s *storage.Store) []string {
 	// 3. Unacknowledged midden warning
 	if s != nil {
 		var mf colony.MiddenFile
-		if s.LoadJSON("midden.json", &mf) == nil {
+		if failureLogNeedsOwner(state) && s.LoadJSON("midden.json", &mf) == nil {
 			unackCount := 0
 			for _, entry := range mf.Entries {
 				if entry.Acknowledged == nil || *entry.Acknowledged == false {
@@ -708,7 +708,24 @@ func oracleGuidedAction(root string) (guidedAction, bool) {
 	}, true
 }
 
+// failureLogNeedsOwner reports whether unacknowledged entries in the log of
+// things that went wrong should be raised as waiting on the owner. A project
+// finished with a verified seal passed every phase check and was signed off,
+// so its old failures are history, not to-dos (Phase 210, the Finish the
+// Track deck, 2026-10-03). The entries stay untouched; midden-review still
+// shows them when asked.
+func failureLogNeedsOwner(state colony.ColonyState) bool {
+	finished := state.State == colony.StateCOMPLETED &&
+		state.SealOutcome != nil &&
+		state.SealOutcome.Disposition == colony.SealDispositionVerified
+	return !finished
+}
+
 func middenGuidedAction(s *storage.Store) (guidedAction, bool) {
+	var state colony.ColonyState
+	if s.LoadJSON("COLONY_STATE.json", &state) == nil && !failureLogNeedsOwner(state) {
+		return guidedAction{}, false
+	}
 	var mf colony.MiddenFile
 	if err := s.LoadJSON("midden.json", &mf); err != nil {
 		return guidedAction{}, false

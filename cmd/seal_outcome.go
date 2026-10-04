@@ -545,7 +545,18 @@ func sealPreservedContents() []SealPreservedContent {
 // fact that the override does not verify completion.
 func SealConfirmationCopy(preflight SealPreflight) string {
 	if preflight.Disposition == colony.SealDispositionForcedIncomplete {
-		return fmt.Sprintf("Force-seal this incomplete colony with %d unresolved item(s)? This records an owner override; it does not verify completion. [y/N]", len(preflight.UnresolvedItems))
+		return sealConfirmationWording(len(preflight.UnresolvedItems))
 	}
-	return "Seal this verified colony and write its Crowned Anthill record? [y/N]"
+	return sealConfirmationWording(0)
+}
+
+// sealConfirmationWording is the one plain-English wording of the last
+// question before a project is marked finished. The question shown and the
+// text a recorded answer is matched against (sealConfirmationQuestionText)
+// both come from here, so they can never drift apart.
+func sealConfirmationWording(unresolved int) string {
+	if unresolved > 0 {
+		return fmt.Sprintf("Mark this project finished with %d item(s) still unresolved? This records your decision; it does not verify completion. [y/N]", unresolved)
+	}
+	return "Mark this project finished and verified, and write its closing summary? [y/N]"
 }

@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -83,6 +86,87 @@ func TestSealFinalReviewBriefHandoffSchemaCoversEveryQueenSelectedCaste(t *testi
 			// channel (mirrors D-06's reasoning for continue).
 			if strings.Count(sealExternalBriefWithHandoffSchema(brief), codex.HandoffFieldsSummary) != 2 {
 				t.Fatalf("sealExternalBriefWithHandoffSchema is not idempotent-safe to detect double-wrapping for caste %q", spec.Caste)
+			}
+		})
+	}
+}
+
+// TestSealWrapperExampleResultPassesTheFinalizer: the seal wrapper tells the
+// chat what to collect from each final reviewer and shows an example result,
+// and seal-finalize refuses a completed reviewer without a handoff. On
+// 2026-10-03 (Finish the Track deck) a chat collected exactly the wrapper's
+// list, wrote its own short reviewer prompts instead of the runtime brief,
+// and seal-finalize refused all three results until handoffs were added by
+// hand. The wrapper's own example must therefore pass the real finalizer, and
+// its collection list must name the handoff, on every wrapper copy. The
+// planned reviewer comes from the runtime's own planner, so only the result
+// shape is the wrapper's.
+func TestSealWrapperExampleResultPassesTheFinalizer(t *testing.T) {
+	root, phase, state := seedHandoffColonyForBriefTests(t, "seal-wrapper-example-result")
+	planned := plannedExternalSealReviewDispatches(root, state, phase, &codex.FakeInvoker{}, 0, colony.VerificationDepthHeavy)
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	for _, rel := range []string{
+		".claude/commands/ant/seal.md",
+		".claude/commands/ant-seal.md",
+		".opencode/commands/ant/seal.md",
+	} {
+		t.Run(rel, func(t *testing.T) {
+			raw, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+			if err != nil {
+				t.Fatalf("read %s: %v", rel, err)
+			}
+			content := string(raw)
+
+			collect := strings.Index(content, "Collect a terminal result with:")
+			if collect < 0 {
+				t.Fatalf("%s no longer carries the reviewer result list", rel)
+			}
+			list := content[collect:]
+			if end := strings.Index(list, "\n8. "); end >= 0 {
+				list = list[:end]
+			}
+			if !strings.Contains(list, "`handoff`") {
+				t.Fatalf("%s: the reviewer result list never names `handoff`, which seal-finalize requires:\n%s", rel, list)
+			}
+
+			section := content[strings.Index(content, "## Completion Packet"):]
+			start := strings.Index(section, "```json\n")
+			if start < 0 {
+				t.Fatalf("%s: no example completion packet", rel)
+			}
+			body := section[start+len("```json\n"):]
+			body = body[:strings.Index(body, "\n```")]
+			var example externalSealCompletion
+			if err := json.Unmarshal([]byte(body), &example); err != nil {
+				t.Fatalf("%s: example completion packet is not valid JSON: %v", rel, err)
+			}
+			if len(example.Dispatches) == 0 {
+				t.Fatalf("%s: example completion packet has no reviewer result", rel)
+			}
+
+			for _, result := range example.Dispatches {
+				var plan *codexContinueExternalDispatch
+				for i := range planned {
+					if planned[i].Caste == result.Caste {
+						plan = &planned[i]
+					}
+				}
+				if plan == nil {
+					t.Fatalf("%s: example reviewer caste %q is not one the runtime plans at seal", rel, result.Caste)
+				}
+				if result.Stage != plan.Stage || result.TaskID != plan.TaskID {
+					t.Fatalf("%s: example identity stage=%q task_id=%q, runtime plans stage=%q task_id=%q", rel, result.Stage, result.TaskID, plan.Stage, plan.TaskID)
+				}
+				result.Name = plan.Name
+				result.Wave = plan.Wave
+				manifest := sealPlanManifest{Phase: phase.ID, Dispatches: []codexContinueExternalDispatch{*plan}}
+				if _, err := mergeExternalSealReviewResults(manifest, []codexContinueExternalDispatch{result}); err != nil {
+					t.Fatalf("%s: the wrapper's own example reviewer result is refused by seal-finalize: %v", rel, err)
+				}
 			}
 		})
 	}

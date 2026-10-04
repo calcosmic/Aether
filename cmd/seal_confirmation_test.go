@@ -390,7 +390,7 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 		s, _ := newSealConfirmationTestStore(t, "Nothing failing")
 		out := runSealForConfirmationTest(t, s)
 		assertSealNotCompleted(t, s)
-		if !strings.Contains(out, "Seal this verified colony and write its Crowned Anthill record?") {
+		if !strings.Contains(out, "Mark this project finished and verified, and write its closing summary?") {
 			t.Fatalf("expected the plain confirmation question, got:\n%s", out)
 		}
 	})
@@ -400,7 +400,7 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 		seedSealConfirmationIssue(t, s, "the deploy script is untested")
 		out := runSealForConfirmationTest(t, s)
 		assertSealNotCompleted(t, s)
-		if !strings.Contains(out, "Residual risks retained") || !strings.Contains(out, "Seal this verified colony and write its Crowned Anthill record?") {
+		if !strings.Contains(out, "Residual risks retained") || !strings.Contains(out, "Mark this project finished and verified, and write its closing summary?") {
 			t.Fatalf("expected verified closure question with retained risk, got:\n%s", out)
 		}
 	})
@@ -444,6 +444,75 @@ func TestSealAlwaysAsksBeforeFinishing(t *testing.T) {
 // recorded answer, and decideSealConfirmation's own signature proves it
 // cannot even see such text -- it takes a plain struct of already-resolved
 // facts, never a store handle or a rendered-card string.
+// TestFinishedProjectDoesNotListOldFailuresAsWaiting: after the Finish the
+// Track deck was finished and verified on 2026-10-03, its status still said
+// "11 unacknowledged failure(s)" under NEEDS YOU -- notes from a phase check
+// that stopped and later passed. A project finished with a verified seal
+// passed every check and was signed off, so its old failures are history,
+// not something waiting on the owner. The notes themselves stay untouched
+// and readable on request.
+func TestFinishedProjectDoesNotListOldFailuresAsWaiting(t *testing.T) {
+	s, _ := newSealConfirmationTestStore(t, "Finished with old failures")
+	beginSealConfirmationTest(t, s)
+	for _, message := range []string{
+		`criterion "The full unittest suite passes": required tests check failed -- check on phase 1`,
+		`criterion "The preview shows one card per pile": required tests check failed -- check on phase 1`,
+	} {
+		if err := recordWorkerFailureToMidden(middenCategoryCheckFailed, "aether continue", message, []string{"check"}); err != nil {
+			t.Fatalf("record failure: %v", err)
+		}
+	}
+
+	waitingOnOwner := func() (bool, bool) {
+		t.Helper()
+		var state colony.ColonyState
+		if err := s.LoadJSON("COLONY_STATE.json", &state); err != nil {
+			t.Fatalf("load state: %v", err)
+		}
+		warned := false
+		for _, warning := range computeWarnings(state, s) {
+			if strings.Contains(warning, "unacknowledged failure") {
+				warned = true
+			}
+		}
+		_, guided := middenGuidedAction(s)
+		return warned, guided
+	}
+	if warned, guided := waitingOnOwner(); !warned || !guided {
+		t.Fatalf("fixture broken: before finishing, old failures must show as waiting (warning=%v, guided action=%v)", warned, guided)
+	}
+
+	if _, err := recordSealConfirmationAnswer(sealConfirmationQuestionText(nil), "yes", "seal-confirmation"); err != nil {
+		t.Fatalf("record answer: %v", err)
+	}
+	executeSealForConfirmationTest(t)
+	assertSealCompleted(t, s)
+	var sealed colony.ColonyState
+	if err := s.LoadJSON("COLONY_STATE.json", &sealed); err != nil {
+		t.Fatalf("load sealed state: %v", err)
+	}
+	if sealed.SealOutcome == nil || sealed.SealOutcome.Disposition != colony.SealDispositionVerified {
+		t.Fatalf("fixture broken: expected a verified finish, got %+v", sealed.SealOutcome)
+	}
+
+	if warned, guided := waitingOnOwner(); warned || guided {
+		t.Fatalf("a finished, verified project still lists old failures as waiting on the owner (warning=%v, guided action=%v)", warned, guided)
+	}
+	var mf colony.MiddenFile
+	if err := s.LoadJSON("midden.json", &mf); err != nil {
+		t.Fatalf("load failure log: %v", err)
+	}
+	unacknowledged := 0
+	for _, entry := range mf.Entries {
+		if entry.Acknowledged == nil || !*entry.Acknowledged {
+			unacknowledged++
+		}
+	}
+	if unacknowledged != 2 {
+		t.Fatalf("the failure log itself must stay untouched: %d unacknowledged entries, want 2", unacknowledged)
+	}
+}
+
 func TestSealFinishAnywayIsRecordedNotInferred(t *testing.T) {
 	t.Run("an affirmative-looking card never proceeds without a recorded answer", func(t *testing.T) {
 		s, _ := newSealConfirmationTestStore(t, "Affirmative-looking card")

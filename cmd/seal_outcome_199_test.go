@@ -209,7 +209,7 @@ func TestSealOutcome199ConfirmCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := SealConfirmationCopy(verified), "Seal this verified colony and write its Crowned Anthill record? [y/N]"; got != want {
+	if got, want := SealConfirmationCopy(verified), "Mark this project finished and verified, and write its closing summary? [y/N]"; got != want {
 		t.Fatalf("verified confirmation = %q, want %q", got, want)
 	}
 
@@ -221,9 +221,51 @@ func TestSealOutcome199ConfirmCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "Force-seal this incomplete colony with 2 unresolved item(s)? This records an owner override; it does not verify completion. [y/N]"
+	want := "Mark this project finished with 2 item(s) still unresolved? This records your decision; it does not verify completion. [y/N]"
 	if got := SealConfirmationCopy(forced); got != want {
 		t.Fatalf("forced confirmation = %q, want %q", got, want)
+	}
+}
+
+// TestSealQuestionSpeaksPlainEnglish: the last question before a project is
+// marked finished reached the owner on 2026-10-03 as "Seal this verified
+// colony and write its Crowned Anthill record?" -- three words this
+// repository invented. Both versions of the question must be plain English,
+// and the wording shown must stay identical to the wording a recorded answer
+// is matched against, or the owner's "yes" would never be recognised.
+func TestSealQuestionSpeaksPlainEnglish(t *testing.T) {
+	verified, err := BuildSealPreflight(sealOutcome199Facts(), SealPreflightRequest{Caller: SealCallerDirectOwner})
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := sealOutcome199Facts()
+	facts.State.Value.Plan.Phases[1].Status = colony.PhaseInProgress
+	facts.State.Value.Plan.Phases[1].Tasks[0].Status = colony.TaskPending
+	facts.Progress.Value.Phases = facts.State.Value.Plan.Phases
+	forced, err := BuildSealPreflight(facts, SealPreflightRequest{Caller: SealCallerDirectOwner, Force: true, Reason: "owner override"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name      string
+		shown     string
+		answerKey string
+	}{
+		{"verified", SealConfirmationCopy(verified), sealConfirmationQuestionText(nil)},
+		{"forced", SealConfirmationCopy(forced), sealConfirmationQuestionText(make([]string, len(forced.UnresolvedItems)))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if violations := untranslatedRepoWords(tc.shown); len(violations) > 0 {
+				t.Errorf("question uses words this repository invented without explaining them:\n  %s\nquestion: %q", strings.Join(violations, "\n  "), tc.shown)
+			}
+			if strings.Contains(strings.ToLower(tc.shown), "anthill") {
+				t.Errorf("question names an internal stage: %q", tc.shown)
+			}
+			if tc.shown != tc.answerKey {
+				t.Errorf("question shown %q differs from the text a recorded answer is matched against %q", tc.shown, tc.answerKey)
+			}
+		})
 	}
 }
 
