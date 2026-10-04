@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/shelf-promote.yaml. Synced by aether update. -->
 ---
 name: ant-shelf-promote
 description: "⬆️ Promote a shelf item into a colony goal or todo"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/shelf-promote.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

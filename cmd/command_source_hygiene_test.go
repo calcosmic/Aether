@@ -198,7 +198,7 @@ func checkCommandSourceHygienePeerParity(root string) []sourceCheckIssue {
 			if err != nil || !isGeneratedAetherCommandWrapper(data) {
 				continue
 			}
-			firstLine := strings.SplitN(string(data), "\n", 2)[0]
+			firstLine, _ := managedCommandMarkerLine(data)
 			matches := sourceCheckGeneratedHeader.FindStringSubmatch(firstLine)
 			if matches == nil {
 				continue
@@ -352,7 +352,7 @@ func TestCommandWrappersReferenceRealYamlSources(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapperPath, err)
 			}
 
-			firstLine := strings.SplitN(string(content), "\n", 2)[0]
+			firstLine, _ := managedCommandMarkerLine(content)
 			matches := generatedCommandHeaderPattern.FindStringSubmatch(firstLine)
 			if matches == nil {
 				relativePath, err := filepath.Rel(repoRoot, wrapperPath)

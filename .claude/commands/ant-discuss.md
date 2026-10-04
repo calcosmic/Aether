@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/discuss.yaml. Synced by aether update. -->
 ---
 name: ant-discuss
 description: "💬 Resolve evidence-backed material decisions and hand settled intent to a draft specification"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/discuss.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

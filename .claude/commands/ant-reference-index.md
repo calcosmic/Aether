@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/reference-index.yaml. Synced by aether update. -->
 ---
 name: ant-reference-index
 description: "📇 Build the global reference library index"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/reference-index.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

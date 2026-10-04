@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/go.yaml. Synced by aether update. -->
 ---
 name: ant-go
 description: "Do what you asked for — the program picks a quick job or a planned one and says which"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/go.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

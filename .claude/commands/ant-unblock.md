@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/unblock.yaml. Synced by aether update. -->
 ---
 name: ant-unblock
 description: "🔧 Show blocked gates and optionally dispatch Fixer to repair them"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/unblock.yaml. Synced by aether update. -->
 
 You are the **Queen**. Surface blocked gates and, when asked, dispatch the Fixer through the runtime CLI — never diagnose or repair gates by hand from this command.
 

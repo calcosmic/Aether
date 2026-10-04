@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/entomb.yaml. Synced by aether update. -->
 ---
 name: ant-entomb
 description: "Archive and clear the sealed colony."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/entomb.yaml. Synced by aether update. -->
 
 You are the **Queen**. Delegate this archive-and-clear transaction to the runtime CLI.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/midden-review.yaml. Synced by aether update. -->
 ---
 name: ant-midden-review
 description: "🪵 Review the failure log — things that went wrong and have not been dealt with"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/midden-review.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

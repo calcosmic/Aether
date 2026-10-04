@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/resume.yaml. Synced by aether update. -->
 ---
 name: ant-resume
 description: "Validate and restore the safest honest recovery point."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/resume.yaml. Synced by aether update. -->
 
 You are the **Queen**. Use the Go `aether` CLI as the source of truth. Delegate the recovery ceremony to that runtime.
 

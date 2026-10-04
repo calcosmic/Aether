@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/dream.yaml. Synced by aether update. -->
 ---
 name: ant-dream
 description: "💭 The Dreamer — observes, imagines, and writes wisdom about the codebase"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/dream.yaml. Synced by aether update. -->
 
 > **Important:** This is a pure prompt command. Do NOT attempt to run `aether dream` — you ARE the Dreamer. Follow the instructions below directly.
 

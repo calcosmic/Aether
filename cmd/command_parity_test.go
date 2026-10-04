@@ -81,7 +81,7 @@ func loadYAMLBackedCommandWrappers(t *testing.T, repoRoot, dir string) map[strin
 			t.Fatalf("read %s: %v", wrapperPath, err)
 		}
 
-		firstLine := strings.SplitN(string(content), "\n", 2)[0]
+		firstLine, _ := managedCommandMarkerLine(content)
 		matches := generatedCommandHeaderPattern.FindStringSubmatch(firstLine)
 		if matches == nil {
 			relativePath, relErr := filepath.Rel(repoRoot, wrapperPath)

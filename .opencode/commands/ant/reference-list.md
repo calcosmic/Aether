@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/reference-list.yaml. Synced by aether update. -->
 ---
 name: ant-reference-list
 description: "📋 List installed global references"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/reference-list.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/preferences.yaml. Synced by aether update. -->
 ---
 name: ant-preferences
 description: "🧠 Add or list user preferences in hub QUEEN.md"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/preferences.yaml. Synced by aether update. -->
 
 You are the **Queen**. Manage user preferences through the runtime CLI — never edit `~/.aether/QUEEN.md` by hand from this command.
 

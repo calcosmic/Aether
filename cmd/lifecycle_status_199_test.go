@@ -55,7 +55,7 @@ func TestLifecycleStatusWrapper199(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read wrapper: %v", err)
 			}
-			firstLine := strings.SplitN(string(data), "\n", 2)[0]
+			firstLine, _ := managedCommandMarkerLine(data)
 			if want := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"; firstLine != want {
 				t.Fatalf("source linkage = %q, want %q", firstLine, want)
 			}

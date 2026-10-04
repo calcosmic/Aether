@@ -899,13 +899,38 @@ func isRetiredLifecycleWrapperPath(path string) bool {
 // "Generated from" form so downstream repos installed before the header
 // reform still get their stale wrappers pruned.
 func isGeneratedAetherCommandWrapper(data []byte) bool {
-	firstLine := strings.SplitN(string(data), "\n", 2)[0]
-	if strings.HasPrefix(firstLine, "<!-- Aether-managed: runtime spec at .aether/commands/") &&
-		strings.HasSuffix(firstLine, ". Synced by aether update. -->") {
+	marker, ok := managedCommandMarkerLine(data)
+	if !ok {
+		return false
+	}
+	if strings.HasPrefix(marker, "<!-- Aether-managed: runtime spec at .aether/commands/") &&
+		strings.HasSuffix(marker, ". Synced by aether update. -->") {
 		return true
 	}
-	return strings.HasPrefix(firstLine, "<!-- Generated from .aether/commands/") &&
-		strings.HasSuffix(firstLine, ".yaml - DO NOT EDIT DIRECTLY -->")
+	return strings.HasPrefix(marker, "<!-- Generated from .aether/commands/") &&
+		strings.HasSuffix(marker, ".yaml - DO NOT EDIT DIRECTLY -->")
+}
+
+// managedCommandMarkerLine returns the line that marks a command file as
+// Aether-managed. Claude Code reads a command's description only from front
+// matter at the very top of the file, so the marker now sits on the line right
+// after the front matter. Files installed before that change carry it as the
+// first line, and those must stay recognised or update would stop replacing
+// them. A marker anywhere else (in the body, or inside the front matter) does
+// not count, so a user's own file can never be claimed by accident.
+func managedCommandMarkerLine(data []byte) (string, bool) {
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	first, rest, _ := strings.Cut(text, "\n")
+	if first != "---" {
+		return first, true // legacy layout: the marker is line one
+	}
+	end := strings.Index(rest, "\n---\n")
+	if end < 0 {
+		return "", false
+	}
+	after := rest[end+len("\n---\n"):]
+	line, _, _ := strings.Cut(after, "\n")
+	return line, true
 }
 
 func removeLegacyClaudeCommandNamespace(commandsDir string) ([]string, []string) {

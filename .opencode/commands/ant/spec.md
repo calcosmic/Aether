@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/spec.yaml. Synced by aether update. -->
 ---
 name: ant-spec
 description: "📜 Review, revise, approve, or repair the owner-readable specification"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/spec.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

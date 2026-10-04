@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/council.yaml. Synced by aether update. -->
 ---
 name: ant-council
 description: "📜 Convene council for intent clarification via multi-choice questions"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/council.yaml. Synced by aether update. -->
 
 You are the **Queen Ant Colony**. Route council work through the runtime CLI.
 

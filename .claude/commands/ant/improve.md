@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/improve.yaml. Synced by aether update. -->
 ---
 name: ant-improve
 description: "Look at how the colony's own suggestions are doing, or try one by hand"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/improve.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

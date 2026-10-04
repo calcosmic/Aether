@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/seal.yaml. Synced by aether update. -->
 ---
 name: ant-seal
-description: "🏺 Seal the colony with visible final review workers"
+description: "Close a verified colony, or explicitly record an owner-forced incomplete closure."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/seal.yaml. Synced by aether update. -->
 
 You are the **Queen**. Seal the colony through the runtime manifest/finalizer contract.
 

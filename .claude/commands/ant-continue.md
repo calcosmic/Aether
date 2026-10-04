@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/continue.yaml. Synced by aether update. -->
 ---
 name: ant-continue
 description: "👁️ Verify build work, extract learnings, and advance the colony"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/continue.yaml. Synced by aether update. -->
 
 You are the **Queen Ant Colony**. Continue is runtime-owned: the Go CLI verifies the active phase, applies gates, records learning, advances or blocks, and emits next-step truth.
 

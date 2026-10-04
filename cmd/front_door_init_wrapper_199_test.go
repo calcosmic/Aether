@@ -125,7 +125,7 @@ func TestFrontDoorInitWrapperParity(t *testing.T) {
 				t.Fatalf("read %s: %v", wrapper.path, err)
 			}
 			text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-			if !strings.HasPrefix(text, managedHeader+"\n") {
+			if marker, _ := splitManagedMarker(text); marker != managedHeader {
 				t.Errorf("wrapper does not identify its canonical source")
 			}
 			assertFrontDoorInitContract199(t, text)

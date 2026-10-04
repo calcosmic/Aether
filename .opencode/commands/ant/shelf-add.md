@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/shelf-add.yaml. Synced by aether update. -->
 ---
 name: ant-shelf-add
 description: "📝 Add a note to the Aether shelf backlog"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/shelf-add.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

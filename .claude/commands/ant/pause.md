@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/pause.yaml. Synced by aether update. -->
 ---
 name: ant-pause
 description: "Stop at a safe boundary and save one resumable handoff."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/pause.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

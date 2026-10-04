@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/medic.yaml. Synced by aether update. -->
 ---
 name: ant-medic
 description: "🩹 Diagnose colony health — scan all colony data for corruption, staleness, and configuration issues"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/medic.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/organize.yaml. Synced by aether update. -->
 ---
 name: ant-organize
 description: "🧹 Run codebase hygiene report"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/organize.yaml. Synced by aether update. -->
 
 > **Important:** This is a pure prompt command. Do NOT attempt to run `aether organize`. Follow the instructions below directly.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/verify-castes.yaml. Synced by aether update. -->
 ---
 name: ant-verify-castes
 description: "✓ Verify colony caste assignments and system status"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/verify-castes.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

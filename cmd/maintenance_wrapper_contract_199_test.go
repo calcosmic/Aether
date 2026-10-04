@@ -71,8 +71,8 @@ func TestMaintenanceWrapperContract(t *testing.T) {
 				t.Fatalf("read generated maintenance wrapper: %v", err)
 			}
 			text := strings.ReplaceAll(string(data), "\r\n", "\n")
-			firstLine, managedBody, ok := strings.Cut(text, "\n")
-			if !ok {
+			firstLine, managedBody := splitManagedMarker(text)
+			if managedBody == "" {
 				t.Fatal("generated maintenance wrapper has no body")
 			}
 			if firstLine != wantHeader {

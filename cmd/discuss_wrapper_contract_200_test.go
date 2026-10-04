@@ -54,7 +54,7 @@ func TestDiscussWrapperContract200(t *testing.T) {
 	for _, path := range wrapperPaths {
 		text := readDiscussContractFile200(t, path)
 		wantHeader := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"
-		if !strings.HasPrefix(text, wantHeader+"\n") {
+		if marker, _ := splitManagedMarker(text); marker != wantHeader {
 			t.Errorf("%s lacks canonical source linkage", path)
 		}
 		if !strings.Contains(text, `description: "`+description+`"`) {

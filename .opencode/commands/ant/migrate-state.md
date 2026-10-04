@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/migrate-state.yaml. Synced by aether update. -->
 ---
 name: ant-migrate-state
 description: "🚚 One-time state migration from v1 to v2.0 format"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/migrate-state.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/import-signals.yaml. Synced by aether update. -->
 ---
 name: ant-import-signals
 description: "📥 Import pheromone signals from another colony's XML export"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/import-signals.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/data-clean.yaml. Synced by aether update. -->
 ---
 name: ant-data-clean
 description: "🧹 Scan and remove test artifacts from colony data files"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/data-clean.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

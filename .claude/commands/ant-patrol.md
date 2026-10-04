@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/patrol.yaml. Synced by aether update. -->
 ---
 name: ant-patrol
 description: "📊 Patrol the colony through the Aether CLI runtime"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/patrol.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

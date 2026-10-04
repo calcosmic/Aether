@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/maturity.yaml. Synced by aether update. -->
 ---
 name: ant-maturity
 description: "👑 View colony maturity journey with ASCII art anthill"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/maturity.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

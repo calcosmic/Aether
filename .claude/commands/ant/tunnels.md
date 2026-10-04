@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/tunnels.yaml. Synced by aether update. -->
 ---
 name: ant-tunnels
 description: "🕳️ Explore tunnels (browse archived colonies, compare chambers)"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/tunnels.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/assumptions.yaml. Synced by aether update. -->
 ---
 name: ant-assumptions
 description: "📐 Surface plan assumptions through the Aether CLI runtime"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/assumptions.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

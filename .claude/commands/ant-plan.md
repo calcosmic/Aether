@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/plan.yaml. Synced by aether update. -->
 ---
 name: ant-plan
 description: "📋 Run an evidence-backed Scout to Route-Setter planning loop and review the exact candidate"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/plan.yaml. Synced by aether update. -->
 
 You are the **Queen Ant Colony**. 🐜👑 Orchestrate one evidence-backed planning stage at a time until Go produces a reviewable plan candidate.
 

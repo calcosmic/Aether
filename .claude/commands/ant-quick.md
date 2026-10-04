@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/quick.yaml. Synced by aether update. -->
 ---
 name: ant-quick
 description: "⚡ Do one small job — one helper, the project's checks, no ceremony"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/quick.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

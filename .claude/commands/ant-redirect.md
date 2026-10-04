@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/redirect.yaml. Synced by aether update. -->
 ---
 name: ant-redirect
 description: "🚫 Emit a REDIRECT pheromone through the Aether CLI runtime"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/redirect.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

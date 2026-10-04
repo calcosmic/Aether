@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/swarm.yaml. Synced by aether update. -->
 ---
 name: ant-swarm
 description: "🔥 Real-time colony swarm display + visible bug-destroyer workers"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/swarm.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth. The runtime owns swarm artifacts, spawn-tree status, worker wave contracts, and final result persistence. The wrapper owns only visible platform worker ceremony.
 

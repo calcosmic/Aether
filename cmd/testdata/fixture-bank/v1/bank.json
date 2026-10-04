@@ -1098,6 +1098,34 @@
       }
     },
     {
+      "id": "fixture-87c589c5c176",
+      "title": "[broad-invariant] unmet-truth: cmd/platform_sync.go. Reported 2026-10-04 (noted in another chat, not a blocker; to",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/platform_sync.go. Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the ma",
+        "reference": "86"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/platform_sync.go. Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the ma",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "86"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "87c589c5c176323f0ea0456a2091bc8d016459ca22eda45920f34bd9b7ed1594",
+      "guard": {
+        "test": "TestManagedCommandFilesStartWithFrontMatter",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-8a063277c9a1",
       "title": "[broad-invariant] unmet-truth: cmd/swarm_cmd.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm ",
       "failing_baseline": {

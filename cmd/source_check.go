@@ -533,7 +533,7 @@ func checkGeneratedCommandSurfaces(root string) (int, []sourceCheckIssue) {
 				continue
 			}
 			checked++
-			firstLine := strings.SplitN(string(data), "\n", 2)[0]
+			firstLine, _ := managedCommandMarkerLine(data)
 			matches := sourceCheckGeneratedHeader.FindStringSubmatch(firstLine)
 			if matches == nil {
 				issues = append(issues, sourceCheckIssue{
@@ -651,20 +651,25 @@ func readSourceCheckCommandSpec(root, rel, commandName string) (sourceCheckComma
 func parseSourceCheckWrapper(data []byte) (sourceCheckWrapperFrontmatter, string, error) {
 	var frontmatter sourceCheckWrapperFrontmatter
 	text := strings.ReplaceAll(string(data), "\r\n", "\n")
-	_, bodyWithFrontmatter, ok := strings.Cut(text, "\n")
-	if !ok {
-		return frontmatter, "", fmt.Errorf("missing body after generated header")
+	// The marker is either line one (older layout) or the line after the front
+	// matter (current layout); strip it wherever it is so the body compared
+	// against the YAML never includes it.
+	if first, rest, ok := strings.Cut(text, "\n"); ok && first != "---" {
+		text = rest
 	}
-	if !strings.HasPrefix(bodyWithFrontmatter, "---\n") {
+	if !strings.HasPrefix(text, "---\n") {
 		return frontmatter, "", fmt.Errorf("missing opening frontmatter delimiter")
 	}
-	rest := strings.TrimPrefix(bodyWithFrontmatter, "---\n")
+	rest := strings.TrimPrefix(text, "---\n")
 	end := strings.Index(rest, "\n---\n")
 	if end < 0 {
 		return frontmatter, "", fmt.Errorf("missing closing frontmatter delimiter")
 	}
 	rawFrontmatter := rest[:end]
 	body := rest[end+len("\n---\n"):]
+	if first, remainder, ok := strings.Cut(body, "\n"); ok && sourceCheckGeneratedHeader.MatchString(first) {
+		body = remainder
+	}
 	if err := yaml.Unmarshal([]byte(rawFrontmatter), &frontmatter); err != nil {
 		return frontmatter, "", err
 	}

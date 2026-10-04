@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/chaos.yaml. Synced by aether update. -->
 ---
 name: ant-chaos
 description: "🎲 Resilience tester — probes edge cases, boundary conditions, and unexpected inputs"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/chaos.yaml. Synced by aether update. -->
 
 > **Important:** This is a pure prompt command. Do NOT attempt to run `aether chaos`. Follow the instructions below directly.
 

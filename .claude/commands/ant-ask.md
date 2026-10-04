@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/ask.yaml. Synced by aether update. -->
 ---
 name: ant-ask
 description: "💭 Ask the colony anything — auto-primed with its full memory"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/ask.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

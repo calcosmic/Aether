@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/flags.yaml. Synced by aether update. -->
 ---
 name: ant-flags
 description: "🚩 List project flags (blockers, issues, notes)"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/flags.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

@@ -330,9 +330,10 @@ func TestAutopilotWrapperContract199(t *testing.T) {
 			t.Fatal(readErr)
 		}
 		text := string(raw)
-		lines := strings.Split(text, "\n")
 		wantHeader := "<!-- Aether-managed: runtime spec at " + source + ". Synced by aether update. -->"
-		if len(lines) == 0 || lines[0] != wantHeader {
+		marker, withoutMarker := splitManagedMarker(text)
+		lines := strings.Split(withoutMarker, "\n")
+		if marker != wantHeader {
 			t.Errorf("%s lacks canonical source linkage", path)
 		}
 		if !strings.Contains(text, `description: "`+description+`"`) {
@@ -352,7 +353,7 @@ func TestAutopilotWrapperContract199(t *testing.T) {
 				t.Errorf("%s contains forbidden host behavior %q", path, forbidden)
 			}
 		}
-		body := strings.Join(lines[6:], "\n")
+		body := strings.Join(lines[5:], "\n")
 		if canonicalBody == "" {
 			canonicalBody = body
 		} else if body != canonicalBody {

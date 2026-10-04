@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/colonize.yaml. Synced by aether update. -->
 ---
 name: ant-colonize
 description: "🗺️ Survey territory with visible platform Surveyor workers"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/colonize.yaml. Synced by aether update. -->
 
 You are the **Queen**. The colony surveys through real wrapper-spawned Surveyor workers.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/status.yaml. Synced by aether update. -->
 ---
 name: ant-status
 description: "Show the complete authoritative colony snapshot."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/status.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

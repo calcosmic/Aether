@@ -169,7 +169,7 @@ func classicAssertCanonicalAndManagedCommand(t *testing.T, root string, row clas
 		if err != nil {
 			t.Fatalf("read %s wrapper for %s: %v", surface.platform, row.PublicName, err)
 		}
-		if !bytes.HasPrefix(data, []byte("<!-- Aether-managed: runtime spec at .aether/commands/"+row.PublicName+".yaml.")) {
+		if marker, _ := managedCommandMarkerLine(data); !strings.HasPrefix(marker, "<!-- Aether-managed: runtime spec at .aether/commands/"+row.PublicName+".yaml.") {
 			t.Fatalf("%s wrapper for %s is not canonical-YAML managed", surface.platform, row.PublicName)
 		}
 		classicAssertCommandMetadata(t, path, data, row, false)

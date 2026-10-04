@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/report.yaml. Synced by aether update. -->
 ---
 name: ant-report
 description: "📄 Write a bundle describing what Aether refused, what went wrong, and where this project is -- send it to whoever maintains Aether"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/report.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

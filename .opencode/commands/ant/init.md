@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/init.yaml. Synced by aether update. -->
 ---
 name: ant-init
 description: "Start a guided colony for one goal."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/init.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth, but do not skip the init
 foundation pass.

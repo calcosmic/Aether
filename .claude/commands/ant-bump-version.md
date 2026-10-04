@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/bump-version.yaml. Synced by aether update. -->
 ---
 name: ant-bump-version
 description: "🚀 Bump version across runtime files, docs, hub publish, commit, push, and tag for release"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/bump-version.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the version-file source of truth, then preserve the release workflow.
 

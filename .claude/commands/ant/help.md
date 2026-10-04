@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/help.yaml. Synced by aether update. -->
 ---
 name: ant-help
 description: "🐜 Show the guided Aether journey from runtime truth"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/help.yaml. Synced by aether update. -->
 
 You are the colony's guide. Use the Go `aether` CLI as the source of truth.
 

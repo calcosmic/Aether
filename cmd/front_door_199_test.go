@@ -371,10 +371,10 @@ func TestFrontDoorHelpWrapperParity(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-		if !strings.HasPrefix(text, header+"\n") {
+		marker, body := splitManagedMarker(text)
+		if marker != header {
 			t.Errorf("%s is missing source-linked managed header", path)
 		}
-		body := strings.TrimPrefix(text, header+"\n")
 		if shared == "" {
 			shared = body
 		} else if body != shared {

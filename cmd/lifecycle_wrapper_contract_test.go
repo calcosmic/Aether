@@ -542,6 +542,11 @@ var specialistCommandSurfaces = []string{
 // must update the recorded hash in the same commit with a stated reason.
 // This is a change-detection fence, not an integrity control against an
 // adversary (see threat T-165-06-05 in 165-06-PLAN.md).
+// 2026-10-04 (WINDOWS 86): the Aether-managed marker moved from line one to the
+// line after the front matter so Claude Code can read each command's
+// description. That is the only change to the .md command surfaces below; their
+// hashes were re-recorded after confirming each old hash is reproduced exactly
+// by moving the marker back to line one.
 var specialistCommandSurfaceHashes = map[string]string{
 	// chaos.md, archaeology.md, dream.md, oracle.md, swarm.md, colonize.md
 	// hashes updated 2026-09-21 (1.0.88 relay-the-card Part B): every
@@ -551,25 +556,25 @@ var specialistCommandSurfaceHashes = map[string]string{
 	// example command was also reflowed from 7 continuation lines to 4 so the
 	// relay sentence lands within the shared 6-line proximity window. Content
 	// addition/reflow only -- no flow, tool, or ceremony contract changed.
-	".claude/commands/ant/chaos.md":       "bd08ddc078e66e105f93b42bd2aba2171d6966d3ed01b9e5439fb2ddcd94cafc",
-	".claude/commands/ant/archaeology.md": "21c10cedf021404ca6e3016aa455789850f5447e78c0de09ccde03749d9136dc",
-	".claude/commands/ant/dream.md":       "d5ce1a7a54d27cb0c4d40b230d6e739456474694f32394007bd86260251a4dac",
-	".claude/commands/ant/oracle.md":      "95310f0c6072bab981436a687d2f6803258ab69ab89cf56130e243dffea6a31d",
-	".claude/commands/ant/swarm.md":       "eb48775763319c63b01e5c2923e3bd814533427b6837451a5cd1767e71f7da9b",
+	".claude/commands/ant/chaos.md":       "51a0722aff90ad438b48e6cbb8ad459965660cb1104e7ae81e88630183f2f553",
+	".claude/commands/ant/archaeology.md": "77e89a6ae7692d232d68264accd393301c94373f4de5d2b5e48b7316fe7c56aa",
+	".claude/commands/ant/dream.md":       "6e2bec8a40c548e4c8bd604ccea7b60e89a5fb8a28ab7f550fe9c61211e3a456",
+	".claude/commands/ant/oracle.md":      "d19f273090061809be0eda3c87e4ff34e042ff302775264d4fb748ae775fa729",
+	".claude/commands/ant/swarm.md":       "743f5a0212a4a11330b3bfab998e12d717c6dc5864c29a635643781d0c5b2280",
 	// colonize.md hash updated 2026-09-23 (208-09-PLAN.md, D-01): the
 	// existing-survey sentence was replaced with the owner's act-when-alone
 	// / ask-when-present ruling. Content wording change only -- no flow,
 	// tool, or ceremony contract changed; TestColonizeWrapperCarriesTheActWhenAloneRule
 	// covers the new content itself.
-	".claude/commands/ant/colonize.md":      "7c8b3918aeace20d166691154e7d1991cceabe054aecad0b2971d59db0f05ce9",
-	".claude/commands/ant/council.md":       "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
-	".opencode/commands/ant/chaos.md":       "bd08ddc078e66e105f93b42bd2aba2171d6966d3ed01b9e5439fb2ddcd94cafc",
-	".opencode/commands/ant/archaeology.md": "21c10cedf021404ca6e3016aa455789850f5447e78c0de09ccde03749d9136dc",
-	".opencode/commands/ant/dream.md":       "d5ce1a7a54d27cb0c4d40b230d6e739456474694f32394007bd86260251a4dac",
-	".opencode/commands/ant/oracle.md":      "95310f0c6072bab981436a687d2f6803258ab69ab89cf56130e243dffea6a31d",
-	".opencode/commands/ant/swarm.md":       "eb48775763319c63b01e5c2923e3bd814533427b6837451a5cd1767e71f7da9b",
-	".opencode/commands/ant/colonize.md":    "7c8b3918aeace20d166691154e7d1991cceabe054aecad0b2971d59db0f05ce9",
-	".opencode/commands/ant/council.md":     "c7fbb1923890e84687fb23c40d8b8e88d6543ef0bf9fb8d5c931b4d1d853e568",
+	".claude/commands/ant/colonize.md":      "402f30df86889ce502cceb167a64d96e73cf67cd7214598fb5300ab523e08a21",
+	".claude/commands/ant/council.md":       "d41be8ae08e3b7084b2b2242c5c68257c96dae1a5561c7fa8aed0206d58c1c6e",
+	".opencode/commands/ant/chaos.md":       "51a0722aff90ad438b48e6cbb8ad459965660cb1104e7ae81e88630183f2f553",
+	".opencode/commands/ant/archaeology.md": "77e89a6ae7692d232d68264accd393301c94373f4de5d2b5e48b7316fe7c56aa",
+	".opencode/commands/ant/dream.md":       "6e2bec8a40c548e4c8bd604ccea7b60e89a5fb8a28ab7f550fe9c61211e3a456",
+	".opencode/commands/ant/oracle.md":      "d19f273090061809be0eda3c87e4ff34e042ff302775264d4fb748ae775fa729",
+	".opencode/commands/ant/swarm.md":       "743f5a0212a4a11330b3bfab998e12d717c6dc5864c29a635643781d0c5b2280",
+	".opencode/commands/ant/colonize.md":    "402f30df86889ce502cceb167a64d96e73cf67cd7214598fb5300ab523e08a21",
+	".opencode/commands/ant/council.md":     "d41be8ae08e3b7084b2b2242c5c68257c96dae1a5561c7fa8aed0206d58c1c6e",
 	// aether-sage hashes updated 2026-08-21 (no-change vocabulary round): the
 	// worker response contract gained completed_no_change as a first-class
 	// success (ruling D6), and every agent definition that spells out its own

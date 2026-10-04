@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/pheromones.yaml. Synced by aether update. -->
 ---
 name: ant-pheromones
 description: "🎯 View and manage active pheromone signals"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/pheromones.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

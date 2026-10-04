@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/porter.yaml. Synced by aether update. -->
 ---
 name: ant-porter
 description: "📦 Deliver colony work -- publish, push, and deploy after seal"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/porter.yaml. Synced by aether update. -->
 
 You are the **Porter**. Deliver the colony's work to the outside world.
 

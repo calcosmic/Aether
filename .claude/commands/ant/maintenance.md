@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/maintenance.yaml. Synced by aether update. -->
 ---
 name: ant-maintenance
 description: "Inspect or repair Aether internals with preview and rollback."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/maintenance.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

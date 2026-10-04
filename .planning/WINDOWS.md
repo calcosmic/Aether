@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 49
+open_count: 48
 waived_count: 0
-fixed_count: 37
+fixed_count: 38
 total_count: 86
-last_updated: 2026-10-04T13:00:00.000Z
+last_updated: 2026-10-04T18:00:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -102,7 +102,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 83 | 210 | unmet-truth | cmd/seal_outcome.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'. | fixed | Fixed 25c060b9: both versions are plain English and come from one wording function, so the question shown and the text a recorded answer is matched against cannot drift apart. Guarded by TestSealQuestionSpeaksPlainEnglish. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 | 84 | 210 | unmet-truth | cmd/status.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed. | fixed | Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 | 85 | 210 | unmet-truth | cmd/golden_workflow_test.go |  | TestGoldenContinueVisualOutput failed once in a full suite run on 2026-10-04 (line 42: got 'Tests passed (1s)', want 'Tests passed (under 1s)') and passed 3/3 alone; the golden check screen includes a measured duration, so a loaded machine can push the test step past one second. Nothing that day touched the check screen. Not fixed: not something the owner hit. | open |  | 2026-10-04T12:00:00.000Z |  |
-| 86 | 210 | unmet-truth | cmd/platform_sync.go | 903 | Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the marker on the first line is how update recognises a file it may overwrite (cmd/platform_sync.go) and what the source check expects (cmd/source_check.go), so both detectors and older installed files need handling together. | open |  | 2026-10-04T13:00:00.000Z |  |
+| 86 | 210 | unmet-truth | cmd/platform_sync.go | 903 | Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the marker on the first line is how update recognises a file it may overwrite (cmd/platform_sync.go) and what the source check expects (cmd/source_check.go), so both detectors and older installed files need handling together. | fixed | Fixed 2026-10-04: the Aether-managed marker now sits on the line after the front matter, so every command file starts with its description. Update and prune recognise the marker in either position (managedCommandMarkerLine), so files already installed in the old layout are still replaced and user-written files are never claimed; the source check accepts both. Proven on a copy of the real installed commands in a throwaway home: all 67 migrated, two decoy user files untouched. Also found: TestYAMLWrapperContract had silently skipped every command until now, which exposed the seal wrapper's description disagreeing with seal.yaml; aligned to the YAML. Guarded by TestManagedCommandFilesStartWithFrontMatter and TestManagedMarkerIsRecognisedInBothLayouts. | 2026-10-04T13:00:00.000Z | 2026-10-04T18:00:00.000Z |
 
 ````json
 [
@@ -1133,10 +1133,10 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "file": "cmd/platform_sync.go",
     "line": 903,
     "description": "Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the marker on the first line is how update recognises a file it may overwrite (cmd/platform_sync.go) and what the source check expects (cmd/source_check.go), so both detectors and older installed files need handling together.",
-    "status": "open",
-    "reason": "",
+    "status": "fixed",
+    "reason": "Fixed 2026-10-04: the Aether-managed marker now sits on the line after the front matter, so every command file starts with its description. Update and prune recognise the marker in either position (managedCommandMarkerLine), so files already installed in the old layout are still replaced and user-written files are never claimed; the source check accepts both. Proven on a copy of the real installed commands in a throwaway home: all 67 migrated, two decoy user files untouched. Also found: TestYAMLWrapperContract had silently skipped every command until now, which exposed the seal wrapper's description disagreeing with seal.yaml; aligned to the YAML. Guarded by TestManagedCommandFilesStartWithFrontMatter and TestManagedMarkerIsRecognisedInBothLayouts.",
     "recorded_at": "2026-10-04T13:00:00.000Z",
-    "resolved_at": null
+    "resolved_at": "2026-10-04T18:00:00.000Z"
   }
 ]
 ````

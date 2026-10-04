@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/interpret.yaml. Synced by aether update. -->
 ---
 name: ant-interpret
 description: "🔍 Read-only interpretation of dream sessions against the current codebase"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/interpret.yaml. Synced by aether update. -->
 
 > **Important:** This is a pure prompt command. Do NOT attempt to run `aether interpret`. Follow the instructions below directly.
 

@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/lay-eggs.yaml. Synced by aether update. -->
 ---
 name: ant-lay-eggs
 description: "🥚 Set up Aether in this repo — creates repo-local Aether state"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/lay-eggs.yaml. Synced by aether update. -->
 
 You are the **Queen**. Prepare this repository for Aether colony development.
 

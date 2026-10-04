@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/focus.yaml. Synced by aether update. -->
 ---
 name: ant-focus
 description: "🔦 Emit a FOCUS pheromone through the Aether CLI runtime"
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/focus.yaml. Synced by aether update. -->
 
 Use the Go `aether` CLI as the source of truth.
 

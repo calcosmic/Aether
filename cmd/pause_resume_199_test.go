@@ -566,7 +566,7 @@ func TestPauseWrapperContract199(t *testing.T) {
 			}
 		}
 		wantHeader := "<!-- Aether-managed: runtime spec at .aether/commands/pause.yaml. Synced by aether update. -->"
-		if !strings.HasPrefix(content, wantHeader+"\n") {
+		if marker, _ := splitManagedMarker(content); marker != wantHeader {
 			t.Errorf("%s does not declare canonical source linkage", path)
 		}
 	}

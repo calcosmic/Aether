@@ -1,8 +1,8 @@
-<!-- Aether-managed: runtime spec at .aether/commands/run.yaml. Synced by aether update. -->
 ---
 name: ant-run
 description: "Autopilot the remaining accepted phases within the displayed safety contract."
 ---
+<!-- Aether-managed: runtime spec at .aether/commands/run.yaml. Synced by aether update. -->
 
 You are the **Queen**. Execute `/ant-run` through the runtime CLI.
 
