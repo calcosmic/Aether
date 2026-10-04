@@ -41,7 +41,7 @@ Phase: 210 (Two-Week Freeze) — TRIAL RUNNING
 Next phase: None scheduled; Plan 210-02 closes this trial on 2026-10-09 unless the owner explicitly ends it early
 Status: Trial running; 19 rows in the ledger; every fix to date is installed; ledger completeness still not owner-confirmed
 Plan: 1 of 2
-Last activity: 2026-10-04 — Installed three seal fixes (25c060b9, 71fb5f6a) and the owner's seal ruling (b66b2889); records updated
+Last activity: 2026-10-04 — Installed three seal fixes (25c060b9, 71fb5f6a), the owner's seal ruling (b66b2889) and command descriptions shown in menus (ce887007); post-trial proposal recorded
 
 ## Performance Metrics
 
