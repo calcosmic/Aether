@@ -2,9 +2,9 @@
 schema_version: 1
 open_count: 47
 waived_count: 0
-fixed_count: 34
-total_count: 81
-last_updated: 2026-10-03T16:55:00.000Z
+fixed_count: 37
+total_count: 84
+last_updated: 2026-10-04T08:26:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -98,6 +98,9 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 79 | 210 | unmet-truth | cmd/medic_cmd.go |  | Phase 210 blocker 17 (Finish the Track deck, 2026-10-02): 'aether medic --deep' did not detect the phase 2 build-plan/record task-set mismatch that 'aether status' reported as 'RECORDS DISAGREE', and reported two critical issues that look stale: hub Claude/OpenCode commands '67 files, expected 60' (the repo ships more than 60 wrappers) and 'Wrapper for build/continue/init/seal/plan not found' in a project whose wrappers work. | fixed | Fixed 0757f20b: medic checks the hub command by command against the built-in command list instead of a typed 60, looks for wrappers where update installs them (the home Claude folder), and warns when the current phase's build plan and saved record disagree; guarded by TestMedicDeepTrustsACorrectInstall and TestMedicReportsABuildPlanThatDisagreesWithTheRecord. | 2026-10-02T21:00:00.000Z | 2026-10-03T13:20:00.000Z |
 | 80 | 210 | unmet-truth | cmd/swarm_cmd.go |  | Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): 'swarm --plan-only' gave workers only 'Target: the flags' with no context; 'swarm-finalize' rejected the completion twice (findings must be strings, task must match the manifest text exactly); the swarm closeout repeated blockers the fix had already cleared. Also from blocker 17: an owner answer recorded with 'decision-answer' did not reach the capped prompt_section, and 'build-completion-stage' rejects a free-text handoff verification_status (pass/fail/partial/not_run/unknown) that the build wrapper never mentions. | fixed | Fixed a748e038..04910667: swarm briefs carry the current phase and open items; swarm-finalize accepts the object-shaped findings workers return and a task matched by ID or normalised text; the closeout drops blockers a verified fix cleared; capped clarified intent keeps the newest owner answers; the build wrapper names the allowed verification_status values. Each guarded by a named test. | 2026-10-02T21:00:00.000Z | 2026-10-03T13:20:00.000Z |
 | 81 | 210 | unmet-truth | cmd/compatibility_cmds.go |  | Owner's ruling 2026-10-03 not yet implemented: when Autopilot reaches a step that needs the owner's OK or his own machine (Phase 210 rows 10-11: autopilot helpers run in a sandbox that cannot run the installer's 'is Anki open?' check), the chat should ask him yes or no about that one step, do it on yes, and carry on. The ask-then-do flow already works in the guided chat build (French Basics phase 4 installed that way, row 12); Autopilot needs to hand such a stop over to it, structurally (e.g. a blocker raised by a sandboxed Autopilot worker's attempt), instead of suggesting /ant-run again. | fixed | Fixed a1bf1ca4: aether unblock marks a blocker raised by one of Aether's own background helpers (recognised from the build record's execution owner, never the helper's wording) as a step the chat can do; /ant-run hands such a stop to /ant-unblock, which asks the owner yes or no, does the step on yes, resolves the blocker, checks the phase and restarts /ant-run. Guarded by TestUnblockOffersTheChatAStepALockedDownHelperCouldNotDo. | 2026-10-03T13:20:00.000Z | 2026-10-03T16:55:00.000Z |
+| 82 | 210 | unmet-truth | cmd/seal_final_review.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): seal-finalize refused all three final reviewers' results with 'completed without a handoff', and the chat had to add handoffs by hand and finalize again. The seal wrapper's list of what to collect from each reviewer never named the handoff the finalizer requires, its example result had none, and the chat wrote its own short reviewer prompts instead of passing the runtime brief that states the contract. | fixed | Fixed 25c060b9: every seal wrapper copy names the mandatory handoff and its allowed verification_status values, insists the runtime brief is passed verbatim, and carries an example result the real finalizer accepts. Guarded by TestSealWrapperExampleResultPassesTheFinalizer. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
+| 83 | 210 | unmet-truth | cmd/seal_outcome.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'. | fixed | Fixed 25c060b9: both versions are plain English and come from one wording function, so the question shown and the text a recorded answer is matched against cannot drift apart. Guarded by TestSealQuestionSpeaksPlainEnglish. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
+| 84 | 210 | unmet-truth | cmd/status.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed. | fixed | Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 
 ````json
 [
@@ -1072,6 +1075,42 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "reason": "Fixed a1bf1ca4: aether unblock marks a blocker raised by one of Aether's own background helpers (recognised from the build record's execution owner, never the helper's wording) as a step the chat can do; /ant-run hands such a stop to /ant-unblock, which asks the owner yes or no, does the step on yes, resolves the blocker, checks the phase and restarts /ant-run. Guarded by TestUnblockOffersTheChatAStepALockedDownHelperCouldNotDo.",
     "recorded_at": "2026-10-03T13:20:00.000Z",
     "resolved_at": "2026-10-03T16:55:00.000Z"
+  },
+  {
+    "id": 82,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/seal_final_review.go",
+    "line": null,
+    "description": "Finish the Track deck seal, 2026-10-03 (not a blocker): seal-finalize refused all three final reviewers' results with 'completed without a handoff', and the chat had to add handoffs by hand and finalize again. The seal wrapper's list of what to collect from each reviewer never named the handoff the finalizer requires, its example result had none, and the chat wrote its own short reviewer prompts instead of passing the runtime brief that states the contract.",
+    "status": "fixed",
+    "reason": "Fixed 25c060b9: every seal wrapper copy names the mandatory handoff and its allowed verification_status values, insists the runtime brief is passed verbatim, and carries an example result the real finalizer accepts. Guarded by TestSealWrapperExampleResultPassesTheFinalizer.",
+    "recorded_at": "2026-10-04T08:26:00.000Z",
+    "resolved_at": "2026-10-04T08:26:00.000Z"
+  },
+  {
+    "id": 83,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/seal_outcome.go",
+    "line": null,
+    "description": "Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'.",
+    "status": "fixed",
+    "reason": "Fixed 25c060b9: both versions are plain English and come from one wording function, so the question shown and the text a recorded answer is matched against cannot drift apart. Guarded by TestSealQuestionSpeaksPlainEnglish.",
+    "recorded_at": "2026-10-04T08:26:00.000Z",
+    "resolved_at": "2026-10-04T08:26:00.000Z"
+  },
+  {
+    "id": 84,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/status.go",
+    "line": null,
+    "description": "Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed.",
+    "status": "fixed",
+    "reason": "Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting.",
+    "recorded_at": "2026-10-04T08:26:00.000Z",
+    "resolved_at": "2026-10-04T08:26:00.000Z"
   }
 ]
 ````

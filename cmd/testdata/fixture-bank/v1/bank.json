@@ -294,6 +294,34 @@
       "content_digest": "225723e8f99121273147f13d0702260259e8b4fb06a866be262e4b3cad444f21"
     },
     {
+      "id": "fixture-24b6ada4bd2d",
+      "title": "[broad-invariant] unmet-truth: cmd/seal_final_review.go. Finish the Track deck seal, 2026-10-03 (not a blocker): s",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/seal_final_review.go. Finish the Track deck seal, 2026-10-03 (not a blocker): seal-finalize refused all three final reviewers' results with 'completed without a handoff', and the chat had to add handoffs by hand and finalize again. The seal wrapper's list of what to collect from each reviewer never named the handoff the finalizer requires, its example result had none, and the chat wrote its own short reviewer prompts instead of passing the runtime brief that states the contract.",
+        "reference": "82"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/seal_final_review.go. Finish the Track deck seal, 2026-10-03 (not a blocker): seal-finalize refused all three final reviewers' results with 'completed without a handoff', and the chat had to add handoffs by hand and finalize again. The seal wrapper's list of what to collect from each reviewer never named the handoff the finalizer requires, its example result had none, and the chat wrote its own short reviewer prompts instead of passing the runtime brief that states the contract.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "82"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "24b6ada4bd2de2ba96857a80fc593a1d3354eabb62824cb6534c74a12a4bbbea",
+      "guard": {
+        "test": "TestSealWrapperExampleResultPassesTheFinalizer",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-2af6aacfa17d",
       "title": "[broad-invariant] unmet-truth: cmd/compatibility_cmds.go. Phase 210 blocker 8 side issue (French Basics, 2026-09-2",
       "failing_baseline": {
@@ -1178,6 +1206,34 @@
       }
     },
     {
+      "id": "fixture-a45ae2239105",
+      "title": "[broad-invariant] unmet-truth: cmd/seal_outcome.go. Finish the Track deck seal, 2026-10-03 (not a blocker): the la",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/seal_outcome.go. Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'.",
+        "reference": "83"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/seal_outcome.go. Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "83"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "a45ae2239105b52034e330c058b8514c896106002053022bfff547f465838df3",
+      "guard": {
+        "test": "TestSealQuestionSpeaksPlainEnglish",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-aa8be627e674",
       "title": "[broad-invariant] unmet-truth: cmd/next_action.go. Phase 210 blocker 6 (French Basics, 2026-09-26): after a failed",
       "failing_baseline": {
@@ -1626,6 +1682,34 @@
       "content_digest": "d1fc355e03e4fb78c2c00455f41db872d0c4eb9ee6173028fa78dfdb0837b47b",
       "guard": {
         "test": "TestMessyPracticeProjectBuilderNeverWritesIntoHome",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-d51d2dad74d1",
+      "title": "[broad-invariant] unmet-truth: cmd/status.go. Finish the Track deck seal, 2026-10-03 (not a blocker): after the pr",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/status.go. Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed.",
+        "reference": "84"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/status.go. Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "84"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "d51d2dad74d195028ede647d116dad6cc16f3481d2a6a72b05212220eadb1656",
+      "guard": {
+        "test": "TestFinishedProjectDoesNotListOldFailuresAsWaiting",
         "package": "cmd"
       }
     },
