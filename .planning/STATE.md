@@ -8,9 +8,9 @@ current_plan: 1
 total_plans_in_phase: 2
 status: executing
 stopped_at: Phase 210 trial running; resume fix ce44d325 suite-verified and installed 2026-10-03, ledger at 19 rows
-last_updated: "2026-10-03"
-last_activity: 2026-10-03
-last_activity_desc: Full suite passed on the resume fix (only the two known failures), published and installed with backup, integrity 5/5; defect register entries 77 and 81 marked fixed and guarded in the regression bank; freeze rows 10, 11 and 16-18 updated
+last_updated: "2026-10-04"
+last_activity: 2026-10-04
+last_activity_desc: Fixed and installed three rough edges from the deck project's finish (seal handoff instructions, plain-English final question, finished projects no longer list old failures); full suite clean apart from the two known failures
 progress:
   total_phases: 5
   completed_phases: 4
@@ -41,7 +41,7 @@ Phase: 210 (Two-Week Freeze) — TRIAL RUNNING
 Next phase: None scheduled; Plan 210-02 closes this trial on 2026-10-09 unless the owner explicitly ends it early
 Status: Trial running; 19 rows in the ledger; every fix to date is installed; ledger completeness still not owner-confirmed
 Plan: 1 of 2
-Last activity: 2026-10-03 — Verified and installed the resume fix (ce44d325); records updated
+Last activity: 2026-10-04 — Installed three seal fixes (25c060b9, 71fb5f6a); records updated
 
 ## Performance Metrics
 
