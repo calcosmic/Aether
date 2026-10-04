@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 47
+open_count: 48
 waived_count: 0
 fixed_count: 37
-total_count: 84
-last_updated: 2026-10-04T08:26:00.000Z
+total_count: 85
+last_updated: 2026-10-04T12:00:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -101,6 +101,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 82 | 210 | unmet-truth | cmd/seal_final_review.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): seal-finalize refused all three final reviewers' results with 'completed without a handoff', and the chat had to add handoffs by hand and finalize again. The seal wrapper's list of what to collect from each reviewer never named the handoff the finalizer requires, its example result had none, and the chat wrote its own short reviewer prompts instead of passing the runtime brief that states the contract. | fixed | Fixed 25c060b9: every seal wrapper copy names the mandatory handoff and its allowed verification_status values, insists the runtime brief is passed verbatim, and carries an example result the real finalizer accepts. Guarded by TestSealWrapperExampleResultPassesTheFinalizer. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 | 83 | 210 | unmet-truth | cmd/seal_outcome.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): the last question before a project is marked finished reached the owner as 'Seal this verified colony and write its Crowned Anthill record?', three words the repository invented; the forced version said 'Force-seal this incomplete colony'. | fixed | Fixed 25c060b9: both versions are plain English and come from one wording function, so the question shown and the text a recorded answer is matched against cannot drift apart. Guarded by TestSealQuestionSpeaksPlainEnglish. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 | 84 | 210 | unmet-truth | cmd/status.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed. | fixed | Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
+| 85 | 210 | unmet-truth | cmd/golden_workflow_test.go |  | TestGoldenContinueVisualOutput failed once in a full suite run on 2026-10-04 (line 42: got 'Tests passed (1s)', want 'Tests passed (under 1s)') and passed 3/3 alone; the golden check screen includes a measured duration, so a loaded machine can push the test step past one second. Nothing that day touched the check screen. Not fixed: not something the owner hit. | open |  | 2026-10-04T12:00:00.000Z |  |
 
 ````json
 [
@@ -1111,6 +1112,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "reason": "Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting.",
     "recorded_at": "2026-10-04T08:26:00.000Z",
     "resolved_at": "2026-10-04T08:26:00.000Z"
+  },
+  {
+    "id": 85,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/golden_workflow_test.go",
+    "line": null,
+    "description": "TestGoldenContinueVisualOutput failed once in a full suite run on 2026-10-04 (line 42: got 'Tests passed (1s)', want 'Tests passed (under 1s)') and passed 3/3 alone; the golden check screen includes a measured duration, so a loaded machine can push the test step past one second. Nothing that day touched the check screen. Not fixed: not something the owner hit.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-04T12:00:00.000Z",
+    "resolved_at": null
   }
 ]
 ````
