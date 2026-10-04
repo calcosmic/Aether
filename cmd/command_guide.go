@@ -257,6 +257,12 @@ func codexDirectBuildCommandGuide(def commandGuideDefinition) commandGuideDefini
 	return def
 }
 
+// sealOwnerDecidesFixesRule is the owner's ruling of 2026-10-04 (Phase 210):
+// during the Finish the Track deck's seal the chat changed the project's
+// installer after the final reviewers had checked it. Every surface that
+// drives a seal carries this sentence verbatim (TestSealFlowLeavesFixesToTheOwner).
+const sealOwnerDecidesFixesRule = "During seal, never change the project's own files yourself, not to apply a reviewer's suggestion and not to tidy notes or docs. List each reviewer suggestion in plain words and let the owner decide. A fix the owner wants is separate work: done after sealing, or done first and the seal run again so the reviewers check it. What gets marked verified must be exactly what the reviewers checked."
+
 func commandGuideCatalog() map[string]commandGuideDefinition {
 	catalog := make(map[string]commandGuideDefinition, len(commandGuideLiteralCommands())+7)
 	for _, command := range commandGuideLiteralCommands() {
@@ -591,6 +597,7 @@ func commandGuideCatalog() map[string]commandGuideDefinition {
 			finalizerCompletionContractStep("seal"),
 			"After each terminal result, render `AETHER_OUTPUT_MODE=visual aether ceremony worker-complete --workflow seal --worker-file <approved temp worker result JSON>`.",
 			"Preserve optional worker `findings`, `issues`, `recommendations`, `weak_spots`, `edge_cases_discovered`, and `reusable_lessons` fields in the completion JSON; the finalizer persists them.",
+			sealOwnerDecidesFixesRule,
 		},
 		RunCommand: "AETHER_OUTPUT_MODE=json aether seal-finalize --completion-file <approved temp completion JSON>",
 		PostSteps: []string{

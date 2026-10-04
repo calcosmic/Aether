@@ -43,5 +43,6 @@ guardrails:
   - "Do not run Porter delivery commands unless the user explicitly chooses them after seal-finalize."
   - "Do not describe platform reviewers as background agents or replace the live worker stack with a markdown table."
   - "Do not drop structured reviewer findings; seal-finalize persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied."
+  - "During seal, never change the project's own files yourself, not to apply a reviewer's suggestion and not to tidy notes or docs. List each reviewer suggestion in plain words and let the owner decide. A fix the owner wants is separate work: done after sealing, or done first and the seal run again so the reviewers check it. What gets marked verified must be exactly what the reviewers checked."
   - "If docs and runtime disagree, runtime wins."
   - "Show it in a fenced text block, from the first banner line (the line drawn with `━━`) to the end; leave out any running commentary above that line. After it, add at most two short sentences of your own, and never restate or replace the screen."

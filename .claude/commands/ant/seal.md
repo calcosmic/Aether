@@ -231,6 +231,7 @@ Never invoke entomb automatically; sealing retains active state for owner review
 - Do NOT run Porter delivery commands unless the user explicitly chooses them after `seal-finalize`.
 - Do NOT describe platform reviewers as background agents or replace the live worker stack with a markdown table.
 - Do NOT drop structured reviewer findings; `seal-finalize` persists them to final-review.json, review ledgers, the post-seal backlog, and QUEEN.md lessons when supplied.
+- During seal, never change the project's own files yourself, not to apply a reviewer's suggestion and not to tidy notes or docs. List each reviewer suggestion in plain words and let the owner decide. A fix the owner wants is separate work: done after sealing, or done first and the seal run again so the reviewers check it. What gets marked verified must be exactly what the reviewers checked.
 - Do NOT type the `aether decision-answer` finishing command on your own initiative, and NEVER infer a "yes" from anything other than the user explicitly answering the printed question.
 - Runtime output wins if this wrapper and the runtime disagree.
 

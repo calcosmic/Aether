@@ -116,3 +116,8 @@ and real use is what should find out whether it works. If he hits it, it counts 
   the chat asks him yes or no about that one step, does it on yes, and carries on, with no loop.
   (3) The guard on CI workflow files applies only to Aether's own helpers, not to his own chat
   or GSD running in it. From this date the trial measures a program with these changes.
+- **2026-10-04, the finishing step lists fixes instead of making them.** In the Finish the Track
+  deck's seal on 2026-10-03, the chat changed the project's installer after the final reviewers
+  had checked it, so the project was marked verified with lines no reviewer saw. Offered (A)
+  "just list it" or (B) "make the fix itself", the owner answered "A": during a seal the chat
+  never changes the project's files; it lists each reviewer suggestion and he decides.

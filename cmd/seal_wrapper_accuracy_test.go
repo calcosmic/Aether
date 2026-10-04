@@ -498,3 +498,58 @@ func TestEveryWrapperThatDrawsAScreenRelaysIt(t *testing.T) {
 		})
 	}
 }
+
+// TestSealFlowLeavesFixesToTheOwner locks the owner's ruling of 2026-10-04:
+// during the Finish the Track deck's seal the chat changed the project's
+// installer after the final reviewers had checked it, so the project was
+// marked verified with lines no reviewer saw. The owner chose that the seal
+// lists reviewer suggestions and he decides. The one rule sentence lives in
+// the runtime (sealOwnerDecidesFixesRule); every surface that drives a seal
+// must carry it verbatim, so no platform can quietly drop it.
+func TestSealFlowLeavesFixesToTheOwner(t *testing.T) {
+	rule := sealOwnerDecidesFixesRule
+	if !strings.Contains(rule, "never change the project's own files") {
+		t.Fatalf("the rule no longer forbids changing project files during seal: %q", rule)
+	}
+
+	guide, ok := commandGuideCatalog()["seal"]
+	if !ok {
+		t.Fatal("command guide has no seal entry")
+	}
+	if !containsString(append(append([]string{}, guide.PreSteps...), guide.PostSteps...), rule) {
+		t.Fatal("the seal command guide does not carry the rule")
+	}
+
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	var spec struct {
+		Guardrails []string `yaml:"guardrails"`
+	}
+	raw, err := os.ReadFile(filepath.Join(repoRoot, ".aether", "commands", "seal.yaml"))
+	if err != nil {
+		t.Fatalf("read seal.yaml: %v", err)
+	}
+	if err := yaml.Unmarshal(raw, &spec); err != nil {
+		t.Fatalf("parse seal.yaml: %v", err)
+	}
+	if !containsString(spec.Guardrails, rule) {
+		t.Fatal("seal.yaml guardrails do not carry the rule")
+	}
+
+	for _, rel := range []string{
+		".claude/commands/ant/seal.md",
+		".claude/commands/ant-seal.md",
+		".opencode/commands/ant/seal.md",
+		".aether/skills/colony/aether-colony-build-cycle/SKILL.md",
+	} {
+		content, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		if !strings.Contains(strings.Join(strings.Fields(string(content)), " "), rule) {
+			t.Errorf("%s does not carry the rule verbatim", rel)
+		}
+	}
+}

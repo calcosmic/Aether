@@ -687,6 +687,12 @@ AETHER_OUTPUT_MODE=visual aether ceremony closeout --workflow seal --completion-
     `AETHER_OUTPUT_MODE=visual aether status` first to review retained state;
     `aether entomb` remains a separate optional owner-confirmed archive-and-clear
     action. Never invoke entomb automatically.
+17. During seal, never change the project's own files yourself, not to apply a
+    reviewer's suggestion and not to tidy notes or docs. List each reviewer
+    suggestion in plain words and let the owner decide. A fix the owner wants is
+    separate work: done after sealing, or done first and the seal run again so
+    the reviewers check it. What gets marked verified must be exactly what the
+    reviewers checked.
 
 ## Guardrails
 
