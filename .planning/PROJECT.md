@@ -34,10 +34,12 @@ That means:
 
 ## Current State
 
+- **v1.29 Use It Every Day — SHIPPED 2026-10-05**: 5 phases (206-210), 36 plans, 19/20 requirements. Screens reach the owner, a messy practice project gates releases, refusals name a way forward, `/ant-go` picks the quick or planned route, and a two-week real-use freeze (closed early) counted 19 blockers. UED-19 (one real piece of work per project without a bug report) was not met; the owner chose to keep going by explicit override of the stopping rule. Archive: `.planning/milestones/v1.29-ROADMAP.md`.
+- **Product version: v1.0.88**, republished to the local hub many times during the freeze as each fix landed (latest 2026-10-05, commit 4334ff05).
 - **Phase 204.1 — Codex Ant Skill Surface complete (2026-09-16)**: all seven plans and the fresh-install review repair are merged. Nine canonical dollar skills have clean-install and normal legacy-update proof on fresh Codex CLI 0.154.0 sessions; immutable executable version metadata fixes unstamped Go-build installation. Eighteen positive live cases and four rejecting controls pass. The user delegated the three remaining guidance/scope reviews; the assistant passed them with provenance in 204.1-UAT.md. The full suite retains the same 17 historical failures. Qualification remains bounded to entrypoints/distribution; full workflows, native helpers, release qualification and Phase 205 owner acceptance remain pending.
 - **v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02**: 9 phases, 84 plans, 195 recorded tasks, and 48/48 requirements. The audit found no blocking requirement, integration, or end-to-end gaps; one Phase 198.2 real-project memory observation and documented warnings carry as explicit debt.
 - **Product version: v1.0.79** (last verified local release, recorded in Phase 205-13; Codex parity changes require a new qualified candidate)
-- **v1.28 Classic Colony Restoration is active**: approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
+- **v1.28 Classic Colony Restoration is paused** (Codex phases 204.2-204.5 parked 2026-09-20; Phase 205 superseded by v1.29 on 2026-09-21): approved Phases 199-205, including inserted 204.1-204.5, map 81 testable requirements and all 72 Classic capability rows. The authoritative brief is `.aether/dreams/2026-09-01-comprehensive-aether-colony-review.md`; the ledger is traceability, not another owner interview.
 - **Phase 199 — Front Door and Classic Contract is complete (2026-09-07)**: 34/34 plans and 12/12 owner UAT checks passed. The ordinary journey, shared lifecycle projection, safe pause/resume, honest seal/entomb split, expert maintenance boundary, and executable cross-platform Classic corpus are now delivered.
 - **Phase 204 -- Learning Governor is complete (2026-09-15)**: 16/16 plans including five gap-closure plans; re-verified 9/11 with two owner-accepted deferrals. The program's memory now carries versions and lineage, every run leaves a durable episode record, a real shadow grader and automatic canary pass run at the end of every check, and a source-improvement proposal can be drafted automatically but never merged, published or deployed by the program. Known open limits: the automatic hypothesis promoter cannot fire until the learning store and the guidance-application store share an identifier (WINDOWS.md entry 44); check-lane usage/cost recorded as absent (entry 48); 30 of 51 bank fixtures unguarded (entry 42).
 - The priority implementation spec v3 (Downloads, 2026-08-21) is the ratified governing backlog (ruling D1); its order was amended by D12 on 2026-08-22 so v1.27 leads with team judgement, single verification, the cost line, the next-action card and Classic display restoration
@@ -45,13 +47,13 @@ That means:
 - Four parallel execution paths have been reduced to two since v1.24: the Go runtime (authoritative) and the thin markdown wrappers; `control-ts/` retired in v1.25, the playbooks no longer loaded, 39 zero-reader config files and 8 dead commands deleted in v1.26
 - `v5.4.0` tag remains the Classic behaviour baseline; the 2026-08-22 display audit lists 19 Classic elements absent today and 13 thinner (recorded in `research/v1.27-milestone-brief.md`)
 
-## Current Milestone: v1.28 Classic Colony Restoration — Active
+## Paused Milestone: v1.28 Classic Colony Restoration (paused 2026-09-20/21; its requirements are in git at `7b93d78c:.planning/REQUIREMENTS.md`)
 
 **Goal:** Reunite the modern Go safety kernel with the understandable, visible, Queen-led February-April colony experience.
 
 **Approved delivery:** Phases 199-205, including Classic Visual Voice (202.1) and owner-requested Codex parity insertions (204.1-204.5). The remaining Phase 205 walkthrough and restoration seal follow the qualified Codex candidate. See the [2026-09-16 scope amendment](research/ant-codex-parity-2026-09-16/GSD-INTEGRATION.md).
 
-**Approved planning contract:** 81 requirements (65 existing plus 16 Codex ANT requirements) in `.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
+**Approved planning contract:** 81 requirements (65 existing plus 16 Codex ANT requirements), now only in git history at `7b93d78c:.planning/REQUIREMENTS.md`; 72/72 Classic capability rows routed in `.planning/research/v1.28-classic-capability-ledger.md`; no unsupported retirement and no repeat owner discovery round. Each Phase 199-204 must reconstruct the relevant Classic mechanism from historical source, audit the current Go path, explain what created the owner value, compare alternatives, and record an evidence-backed modern synthesis before implementation plans are approved. The three pending todos route to Phase 200 spec output, Phase 201 turnaround, and Phase 203 platform preflight.
 
 **Sequence:** Phases 199-204 restored the product; Phase 205 already completed plans 01-13 and plan 14 task 1. Owner direction on 2026-09-16 inserts Phases 204.1-204.5 before the remaining owner walkthrough, superseding the later-Codex deferral. Preserve completed evidence and the original before-inventory, then qualify a new candidate and separately record any new preparation before resuming acceptance.
 
@@ -378,7 +380,7 @@ v1.29 "Use It Every Day" is complete (Phase 210 closed 2026-10-05 by owner overr
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-10-05 after Phase 210 (the two-week freeze) closed with the owner's verdict*
+*Last updated: 2026-10-05 after the v1.29 milestone*
 
 ## Historical Milestone Briefs (superseded)
 

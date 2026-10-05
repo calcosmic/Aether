@@ -5,6 +5,9 @@ area: authorization
 source: Phase 203 closing code-review gate (203-REVIEW.md CR-02 and CR-04); owner decision 2026-09-13 to design this rather than patch it
 severity: critical
 windows_entries: [18, 30]
+audit_acknowledged:
+  milestone: v1.29
+  at: 2026-10-05
 ---
 
 ## Problem
@@ -65,11 +68,14 @@ Open questions the design has to answer:
   forge? A per-run secret issued at dispatch and carried in the worker's
   environment? Process ancestry? Something the owner alone holds for owner-only
   actions?
+
 - Is the owner's identity the same kind of fact as a coordinator's, or a
   different one? An interactive terminal can be evidence of an owner in a way it
   never is for a worker.
+
 - What is the fail-closed behaviour when the signal is unavailable — refuse, or
   degrade to the lowest privilege? Refusing must not strand an ordinary run.
+
 - Does this need to survive `aether run` (autopilot), where there is no human at
   the keyboard at all?
 
@@ -80,9 +86,12 @@ that fails when the requirement is unmet:
 
 - A caller claiming `--parent Queen` without genuinely being the coordinator is
   refused **by name**, and the depth cap holds.
+
 - A caller performing a revoke, appeal, pin or unpin without genuine owner
   authority is refused **by name**, and omitting `--actor` does not grant it.
+
 - Both refusals proven able to fail: remove the check, watch the test go red
   naming the right thing, restore.
+
 - Ordinary runs — including autopilot — are measurably unaffected when nobody is
   claiming anything they should not.

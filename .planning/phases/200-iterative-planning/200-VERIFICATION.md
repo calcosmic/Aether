@@ -5,17 +5,22 @@ status: gaps_found
 score: 47/64 must-haves verified
 overrides_applied: 0
 gaps:
+
   - truth: "Only the exact owner-approved specification can ground planning and execution."
     status: failed
     reason: "Specification validation checks stored digest syntax and cross-field equality but never recomputes item, revision, or approval-receipt digests from the stored body. Approved content can therefore be edited while retaining accepted identifiers."
     artifacts:
+
       - path: "cmd/planning_state.go"
         issue: "validateSpecificationState and validateSpecificationRevisionHashes validate stored hash shape, not canonical body equality."
+
       - path: "pkg/colony/specification.go"
         issue: "SpecRevision.Validate and SpecApprovalReceipt.Validate only validate structure and stored bindings."
+
       - path: "cmd/plan_authority.go"
         issue: "Execution authority trusts those unrecomputed stored values."
     missing:
+
       - "Recompute every typed item digest and the complete specification revision digest during state validation."
       - "Recompute approval receipt identity/token bindings and reject an edited approved body before plan or build authority is granted."
       - "Add post-approval tamper tests for every owner-readable specification section."
@@ -23,15 +28,20 @@ gaps:
     status: failed
     reason: "The candidate content hash excludes SemanticDelta, and nested delta validators only check stored hash syntax/ID suffixes. An edited candidate can claim affected semantic IDs and pass impact coverage without changing the owner acceptance binding."
     artifacts:
+
       - path: "cmd/codex_plan_finalize.go"
         issue: "Candidate hash input at lines 4084-4094 omits SemanticDelta, assessments, gaps, recommendation, and expiry."
+
       - path: "cmd/planning_state.go"
         issue: "validatePlanningDeltaShape does not recompute delta/change/authority-impact bodies."
+
       - path: "cmd/plan_impact.go"
         issue: "Impact coverage trusts mutable candidate.SemanticDelta values."
+
       - path: "cmd/plan_revision.go"
         issue: "Acceptance recomputes proposal phases but not the semantic delta used for reconciliation."
     missing:
+
       - "Bind all security-relevant candidate fields into a recomputed candidate digest."
       - "Derive or recompute reconciliation coverage from the exact base/current-spec/proposal tuple at acceptance."
       - "Add persisted-candidate semantic-delta tamper/refusal tests."
@@ -39,30 +49,40 @@ gaps:
     status: failed
     reason: "Root validation rejects only the final root component. An intermediate .aether symlink is followed by Lstat/EvalSymlinks, and no physical containment comparison is made before MkdirAll or lifecycle writes."
     artifacts:
+
       - path: "cmd/planning_timeline.go"
         issue: "canonicalPlanningTimelineRoot validates only the repository root; append then joins and creates .aether/data."
+
       - path: "cmd/planning_stage_receipt.go"
         issue: "planningStageRoots calls MkdirAll on a joined data root without validating intermediate components."
+
       - path: "cmd/specification.go"
         issue: "canonicalSpecificationRoot Lstats .aether/data but follows an intermediate .aether symlink."
+
       - path: "cmd/lifecycle_transaction.go"
         issue: "validateLifecycleDirectoryRoot resolves ancestors but does not prove data root containment beneath the physical repository root."
     missing:
+
       - "Resolve repository, .aether, and data roots physically and prove containment before any directory creation or write."
       - "Reject intermediate symlink components and add .aether/data path-escape tests for all Phase 200 writers."
   - truth: "Concurrent planning mutations preserve every committed update or reject a stale writer."
     status: failed
     reason: "Specification, timeline, candidate-acceptance, and build paths derive next state before entering their transaction/lock. The transaction captures the then-current file as its baseline, so a stale derived snapshot can overwrite a writer that committed between the initial read and transaction declaration. Several build transitions still use direct SaveJSON."
     artifacts:
+
       - path: "cmd/specification.go"
         issue: "State is loaded and next bytes are derived before commitSpecificationTargets opens its lifecycle transaction."
+
       - path: "cmd/planning_timeline.go"
         issue: "The index is read/extended before beginLifecycleTransaction."
+
       - path: "cmd/plan_revision.go"
         issue: "Acceptance loads and derives state at lines 799-959, then opens the transaction at line 964."
+
       - path: "cmd/codex_build.go"
         issue: "Build reads state then writes checkpoint/current state with direct SaveJSON."
     missing:
+
       - "Hold one repository-scoped lock from authoritative read through commit, or compare-and-swap against the digest of the state used to derive the write."
       - "Route remaining build state transitions through the same stale-writer guard."
       - "Add separate-process concurrency tests for spec revision/approval, timeline append, candidate acceptance, and build start/finalize."
@@ -70,13 +90,17 @@ gaps:
     status: failed
     reason: "PlanCandidate requires ExpiresAt and creation sets seven days, but acceptance never compares time with ExpiresAt or transitions pending_review to expired. The terminal candidate projection also omits expiry."
     artifacts:
+
       - path: "pkg/colony/planning.go"
         issue: "ExpiresAt is presence-validated only."
+
       - path: "cmd/plan_revision.go"
         issue: "acceptPlanCandidate accepts any pending_review candidate regardless of ExpiresAt."
+
       - path: "cmd/planning_visuals.go"
         issue: "planningCandidateProjection and terminal review expose no expiry field or recovery action."
     missing:
+
       - "Enforce an injected/current-time expiry boundary before acceptance and persist/refuse with an explicit expired status."
       - "Render the expiry and exact regeneration/review action in terminal and JSON projections."
       - "Test just-before, exact-boundary, just-after, replay, and clock-source cases."
@@ -84,14 +108,23 @@ gaps:
     status: failed
     reason: "The independent uncached full suite has four failures. All are protected inherited Phase 199 bookkeeping nodes, not Phase 200 behavior regressions, but the Phase 200 plan's repository-wide green-gate truth is still not met."
     artifacts:
+
       - path: "cmd/current_vocabulary_199_test.go"
         issue: "TestCurrentVocabulary199 and one subtest fail on inherited bookkeeping."
+
       - path: "cmd/phase199_gate_receipt_test.go"
         issue: "TestPhase199GateReceiptSchema and TestPhase199GateReceipt fail."
+
       - path: ".planning/phases/200-iterative-planning/200-GATE-RECEIPT.md"
         issue: "Receipt honestly records a non-green inherited baseline rather than a clean repository gate."
     missing:
+
       - "Resolve or formally waive the protected Phase 199 vocabulary/gate-receipt bookkeeping, then rerun uncached full and race suites."
+
+audit_acknowledged:
+  milestone: v1.29
+  at: 2026-10-05
+  status: gaps_found
 ---
 
 # Phase 200: Iterative Planning Verification Report

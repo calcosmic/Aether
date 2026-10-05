@@ -5,6 +5,7 @@ current task's changes touch; log, don't fix, everything else).
 
 ## 206-02 Task 1 — pre-existing orphan unrelated to the status line
 
+- **Status:** acknowledged
 `go test ./cmd -run TestNoRegisteredSubcommandIsUnreferenced` reports one real orphan that
 predates this plan and is untouched by it:
 

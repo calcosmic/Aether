@@ -2,13 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
-current_phase: 210
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 210 complete — all phases complete
-last_updated: "2026-10-05T11:28:51.164Z"
+last_updated: "2026-10-05T11:35:42.174Z"
 last_activity: 2026-10-05
-last_activity_desc: Phase 210 complete
-state_head: 765045db400d7f1686b7e5916bd390fcf876e48f
+last_activity_desc: Milestone v1.29 completed and archived
+state_head: 78d13033762c07dbe189faa3366585cc86e6c813
 progress:
   total_phases: 5
   completed_phases: 5
@@ -16,6 +15,7 @@ progress:
   completed_plans: 36
   percent: 100
 total_plans_in_phase: 2
+current_phase: 210
 current_plan: 1
 ---
 
@@ -37,11 +37,10 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 210
-Next phase: None scheduled; v1.29 is complete and the owner chooses the next milestone
-Status: All phases complete
-Plan: 2 of 2 complete
-Last activity: 2026-10-05 — Phase 210 complete
+Phase: Milestone v1.29 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-05 — Milestone v1.29 completed and archived
 
 ## Performance Metrics
 
@@ -822,6 +821,66 @@ Acknowledged at the v1.26 close (2026-08-22). Each is carried in `.planning/rese
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
+| todos | 2026-08-27-worker-turnaround-is-too-slow.md | (presence-only) | 2026-10-05 | v1.29 |
+| todos | 2026-09-13-nothing-proves-who-is-calling.md | (presence-only) | 2026-10-05 | v1.29 |
+| todos | 2026-10-04-helpers-only-when-they-earn-it.md | (presence-only) | 2026-10-05 | v1.29 |
+| uat_gaps | 198.2/198.2-UAT.md | partial | 2026-10-05 | v1.29 |
+| verification_gaps | 200/200-VERIFICATION.md | gaps_found | 2026-10-05 | v1.29 |
+| verification_gaps | 204.2/204.2-VERIFICATION.md | gaps_found | 2026-10-05 | v1.29 |
+| verification_gaps | 198.2/198.2-VERIFICATION.md | human_needed | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: TestBranchDispositionRecordsAllThreeBranches expects a pre-archive path | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: TestColonyPrimeMdDeletionProducesByteIdenticalOutput is suite-order sensitive | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Legacy Next Up snapshots still encode the pre-199 lifecycle policy | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-06 full command suite still crosses the staged lifecycle migration | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-09 supersedes legacy status-dashboard expectations | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-07 full command suite crosses the same staged migrations | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-10 full command suite still includes staged lifecycle migrations | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-19 maintenance YAML is not yet represented in the Codex command-guide catalog | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-13 supersedes public suffixed pause/resume compatibility tests | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-15 supersedes the pre-transaction seal ceremony assertions | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-16 supersedes direct, unconfirmed legacy entomb fixtures | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Plan 199-18 supersedes prefix-only data-clean deletion tests | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Update closing-card compatibility fixture removes an already-absent command | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Broad update-name selection includes a later-plan Next Up expectation | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 199/deferred-items.md: Curation command tests leak AETHER_ROOT into later package tests | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-07 — Phase 199 vocabulary inventory drift | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-07 — Phase 199 gate receipt timestamp staleness | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-07 — Specification command registration follows projection engine | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-07 — Restored specification journey awaits shared next-action and parity plans | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-07 — Staged-plan migration leaves legacy command-package expectations red | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-08 — Legacy Plan-only fixtures stop at the approved-SPEC boundary | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-08 — Repository-wide planning migration expectations remain red | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-08 — Legacy command-suite fixtures still predate iterative planning screens | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-08 — Remaining cross-plan migration gates are outside init ownership | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 200/deferred-items.md: 2026-09-08 — Remaining command-suite fixtures await the Phase 200 corpus pass | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: Full-suite black-box timeout | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: cmd visual-output tests assume a Codex platform environment | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: cmd package exceeds a 25-minute go test budget | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: Load-sensitive test timing in cmd and pkg/codex | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: cmd/criterion_owner_confirmation.go is not gofmt-clean | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: External completion packets cannot carry worktree-only file claims | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: TestAvailabilityProbeRetriesOnlyTimeouts fails when the whole suite runs at once | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: The full and race gates exhausted the machine's disk | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: Code review Info findings IN-01..IN-05 (195-REVIEW.md) | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-01 — the job planner mutated its caller's task list — RESOLVED 2026-08-27 | resolved | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-02 — an owner-facing sentence was capitalized by byte, not character — RESOLVED 2026-08 | resolved | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-03 — two workers with no task id compared equal — RESOLVED 2026-08-27 | resolved | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-04 — recovery-job reuse is approximate — STILL OPEN | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-05 — three finalize helpers each recompute the same two sets — STILL OPEN | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: Open items carried out of the third review (195-REVIEW.iter3.md) | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: WR-15 — what a "nothing needed changing" report may claim (OWNER DECISION) — IMPLEMENTED 2 | resolved | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-13 — the replay's existing-record branch has no assertion | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-14 — the ownership-key fallback collapses on two fully-anonymous dispatches | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: IN-16 — worktree refusal messages went to stderr, not the owner-facing stream | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 195/deferred-items.md: Also closed while recording these | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 197/deferred-items.md: From 197-05 | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 206/deferred-items.md: 206-02 Task 1 — pre-existing orphan unrelated to the status line | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 208/deferred-items.md: 208-01 | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 208/deferred-items.md: 208-16 (found during 208-13, written down here per this closing plan's own instruction) | acknowledged | 2026-10-05 | v1.29 |
+| deferred_items | 196/deferred-items.md (table row, cannot be marked by the tool): aether plan — cmd/codex_plan.go | open | 2026-10-05 | v1.29 |
+| deferred_items | 196/deferred-items.md (table row, cannot be marked by the tool): aether colonize — cmd/codex_colonize.go | open | 2026-10-05 | v1.29 |
+| deferred_items | 196/deferred-items.md (table row, cannot be marked by the tool): aether seal (its final review) — cmd/seal_final_review.go | open | 2026-10-05 | v1.29 |
+| deferred_items | 196/deferred-items.md (table row, cannot be marked by the tool): the automatic fix attempt — cmd/check_fix_attempt.go | open | 2026-10-05 | v1.29 |
 | uat_gaps | 173/173-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
 | uat_gaps | 72/72-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
 | uat_gaps | 76/76-HUMAN-UAT.md | partial | 2026-08-22 | v1.26 |
@@ -914,10 +973,7 @@ Historical receipts below describe the prepared 1.0.79 candidate. The owner subs
 
 ## Operator Next Steps
 
-- The owner has answered Plan 210-01 Task 3. His real deck work is corroborated in French Fluency; he does not know whether the ledger is complete. Retain 12 as the recorded count, not a certified total, and carry the verification limitation into the closing report. Do not repeat the same questions or turn "i dunno" into approval.
-- Do not repeat the project/date interview, create an empty ledger, reinstall, or republish. The start record and real blocker history already exist; verification details are in the phase handoff.
-- Keep trial recording active through 2026-10-09. Plan 210-02 cannot begin before that date unless the owner explicitly closes the trial early. UED-19 and UED-20 remain unchecked pending actual closeout evidence.
-- Keep output print-friendly: plain text, short paragraphs, no heavy borders, shaded blocks or filled progress bars (owner request, 2026-09-27).
+- Start the next milestone with /gsd-new-milestone
 
 ## Historical Operator Next Steps — superseded by the 2026-09-20 and 2026-09-21 decisions
 

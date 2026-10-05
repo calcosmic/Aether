@@ -6,6 +6,7 @@ current task's changes).
 
 ## 208-01
 
+- **Status:** acknowledged
 - `TestNoRegisteredSubcommandIsUnreferenced` fails on `aether codex-native-worker context-ack`
   ("registered but nothing calls it: searched wrappers, menu specs, hooks, scripts").
   Verified via a disposable git worktree pinned to commit `381fe03c` (the
@@ -17,6 +18,7 @@ current task's changes).
 
 ## 208-16 (found during 208-13, written down here per this closing plan's own instruction)
 
+- **Status:** acknowledged
 Three things noticed while widening the two safety checks around Aether's
 self-recovery mechanism (the code that lets the program quietly finish a
 stalled step on its own when nobody is there to ask). None of the three is a

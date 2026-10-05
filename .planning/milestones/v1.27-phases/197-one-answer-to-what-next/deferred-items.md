@@ -6,6 +6,7 @@ task's changes).
 
 ## From 197-05
 
+- **Status:** acknowledged
 - **RESOLVED 2026-08-29 (wave 5 gate).** It was not pre-existing: 197-05's new
   `TestCanonicalAliasDelegates` ran the real `pause` command, which repointed
   the package-level `store` at its temp root and never restored it; the

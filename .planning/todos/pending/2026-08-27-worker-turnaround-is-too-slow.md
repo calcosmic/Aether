@@ -5,6 +5,9 @@ area: orchestration/performance
 source: Owner feedback, 2026-08-27, during Phase 195 wave 5
 resolves_phase: 201
 priority: high
+audit_acknowledged:
+  milestone: v1.29
+  at: 2026-10-05
 ---
 
 ## The owner's observation (verbatim intent)
@@ -32,13 +35,16 @@ clean runs).
 1. **The `cmd` package test suite takes ~12 minutes.** This is the single
    largest term and it is this repo's own debt, not the framework's. Already
    tracked in `.planning/phases/195-coherent-jobs/deferred-items.md`.
+
 2. **The TDD contract multiplies test runs.** RED, GREEN, then a regression
    sweep, per task, two tasks per plan. That discipline is *why* this project
    stopped shipping unwired features — it is not waste — but it multiplies (1).
+
 3. **The dispatched brief is enormous.** Roughly a dozen required-reading files
    including CLAUDE.md and multi-thousand-line planning documents, read before
    any work starts. ~150-180 tool calls and ~400k context per executor, much of
    it re-reading what the previous executor already read.
+
 4. **Executors run on the cheaper model** (`executor_model: sonnet`), which
    needs more iterations to converge on intricate Go changes.
 
@@ -117,11 +123,14 @@ this is not a project-wide policy — this package never got it.
 
 - **Fix (1).** `t.Parallel()` coverage, splitting `cmd`, or a documented
   long-run lane. Biggest single win and it compounds with everything else.
+
 - **Fix (3).** Stop re-sending the whole planning corpus to every executor.
   The worker-handoff mechanism already exists for exactly this — carry forward
   a short relay note instead of making each worker rediscover the phase.
+
 - **Fix (4).** Reconsider `executor_model` per plan complexity; a faster model
   that converges in half the turns can be cheaper in wall-clock AND tokens.
+
 - **Measure it.** There is no turnaround metric today. The numbers above were
   gathered by hand from agent notifications. A per-plan duration and tool-call
   count belongs in the phase performance table automatically.
@@ -133,6 +142,7 @@ Not a fix — recorded so a later reader knows the baseline shifted:
 - Executor briefs trimmed to the files a plan actually needs.
 - Executors told not to run broad test sweeps; the orchestrator owns the full
   gate.
+
 - Executors moved off the cheap model for the remainder of Phase 195.
 - Per-wave full-suite gates dropped for single-plan waves, where no parallel
   merge exists for that gate to catch. The phase-level gate still runs.

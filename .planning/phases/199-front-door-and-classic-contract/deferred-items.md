@@ -2,6 +2,7 @@
 
 ## `TestBranchDispositionRecordsAllThreeBranches` expects a pre-archive path
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-01 overall verification (`go test ./...`)
 - **Observed:** The suite reported 8,567 passing tests, one failure, and 11 skips because the test expects `.planning/phases/196-see-what-it-cost/196-BRANCH-DISPOSITION.md`.
 - **Current artifact:** `.planning/milestones/v1.27-phases/196-see-what-it-cost/196-BRANCH-DISPOSITION.md`
@@ -11,6 +12,7 @@
 
 ## `TestColonyPrimeMdDeletionProducesByteIdenticalOutput` is suite-order sensitive
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-03 overall verification (`go test ./...` with the known archived-path test excluded)
 - **Observed:** The aggregate normal suite reported 8,636 passing tests, one failure, and 11 skips because colony-prime output differed before versus after deleting a generated `COLONY_PRIME.md`.
 - **Isolation check:** The exact failing test passed immediately on its own; Plan 199-03 changes only additive `pkg/colony` lifecycle contracts and optional JSON fields.
@@ -20,6 +22,7 @@
 
 ## Legacy Next Up snapshots still encode the pre-199 lifecycle policy
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-04 broader command-package verification (`go test ./cmd -count=1`)
 - **Observed:** The package run reported 7,088 passing tests, 60 failures, and 10 skips. Most failures assert the policy this plan deliberately supersedes: discuss before plan, build preferred over run, targeted recover/build-force routes instead of resume, mandatory entomb after seal, or golden cards containing those older recommendations.
 - **Isolation check:** The Plan 199-04 contract suite passes all 36 focused tests, and the existing read-only-loader and token-accounting guard tests pass. The package still compiles and reaches the later tests; the mismatches are expectation-level changes rather than a failure of the new projection path.
@@ -28,6 +31,7 @@
 
 ## Plan 199-06 full command suite still crosses the staged lifecycle migration
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-06 overall command-package verification (`go test ./cmd -count=1`)
 - **Observed:** After the plan-owned catalog, reachability, and visual-writer regressions were corrected, the remaining failures were the archived Plan 196 branch-disposition fixture plus legacy Next Up expectations in `TestWrapperPartialFinalizeDoesNotShowTheFinishedBuildScreen`, `TestPrintNextUpUsesTargetedRecoveryCommand`, `TestPrintNextUpReadyUsesCurrentPhaseBuild`, `TestWorkflowSuggestionsFailedPhase`, and `TestSwarmDestroyRunsWorkerWavesAndReturnsStructuredResult`.
 - **Isolation check:** Every Plan 199-06 contract and each directly affected audit gate passes in focused runs, including the maintenance landing, typed inspections, live skill inventory/diff, command catalog, reachability, visual-output discipline, and source-surface checks.
@@ -36,6 +40,7 @@
 
 ## Plan 199-09 supersedes legacy status-dashboard expectations
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-09 broader command-package verification (`go test ./cmd`)
 - **Observed:** The package run reported 7,157 passing tests, 100 failures, and 10 skips. The status-specific failures still assert the retired dashboard/JSON shape (granularity, version, memory-health, reconciliation, and hand-built Next Up fields), while the catalog/golden failures retain the prior status description. The remaining failures substantially overlap the already-deferred lifecycle-policy and archived-path items above.
 - **Isolation check:** The exact Plan 199-09 runtime contract passes all 18 focused cases, including full/compact semantic agreement, all five health states, responsive rendering, absent-evidence wording, and zero-write fixtures. The exact wrapper/source-hygiene commands pass 4 and 7 cases respectively.
@@ -44,6 +49,7 @@
 
 ## Plan 199-07 full command suite crosses the same staged migrations
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-07 overall verification (`go test ./cmd -count=1`)
 - **Observed:** The exact front-door and wrapper contracts pass, while the aggregate package still reports the already-recorded legacy status/Next Up expectations, the archived Phase 196 branch-disposition fixture, and the stale command-catalog golden from Plans 199-06/09.
 - **Isolation check:** All ten `TestFrontDoor*` cases, `TestCommandSourceHygiene`, the source-check regressions, the existing init compatibility suite, and `go test ./pkg/colony` pass in isolation. The catalog mismatch contains only the previously changed `maturity` and `status` metadata; it contains no Plan 199-07 command.
@@ -52,6 +58,7 @@
 
 ## Plan 199-10 full command suite still includes staged lifecycle migrations
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-10 overall command-package verification (`go test ./cmd -count=1`)
 - **Observed:** The aggregate package reported 7,201 passing tests, 108 failures, and 10 skips. The Plan 199-10 phase/history/agreement contracts pass all 29 focused cases in both normal and race-enabled runs. The broader failures remain concentrated in the already-recorded legacy status/Next Up expectations, old golden snapshots, missing archived Phase 196 fixture, and command-surface migrations owned by later Phase 199 plans.
 - **Isolation check:** Existing `TestHistory*` plus the new history tests pass together (15 cases), the exact phase suite passes 14 cases, and the cross-view agreement suite passes 8 cases. Refreshing the command catalog would also absorb previously deferred `maturity` and `status` metadata, confirming that its mismatch is a shared staged snapshot rather than an isolated Plan 199-10 fix.
@@ -60,6 +67,7 @@
 
 ## Plan 199-19 maintenance YAML is not yet represented in the Codex command-guide catalog
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-20 broader command-guide compatibility verification (`go test ./cmd -run '^TestCommandGuide' -count=1`).
 - **Observed:** `TestCommandGuideCoversAllYamlCommands` reports `maintenance` as missing because `.aether/commands/maintenance.yaml` exists while `commandGuideCatalog` has no corresponding Codex definition.
 - **Isolation check:** Plan 199-20's exact init parity, source-hygiene, wrapper-compatibility, and command-guide checks pass all 23 cases, and the live `command-guide init --platform codex` smoke check succeeds.
@@ -68,6 +76,7 @@
 
 ## Plan 199-13 supersedes public suffixed pause/resume compatibility tests
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-13 broader command-package verification (`go test ./cmd -count=1`).
 - **Observed:** The exact Plan 199-13 transaction, replay, provenance, redirect, wrapper, source-hygiene, and colony-model checks pass. The aggregate package still includes tests and catalog snapshots that require `pause-colony`/`resume-colony` to be public Cobra aliases or wrappers (`TestCanonicalAliasDelegates`, `TestTraceEndToEndResumeGeneratesNewRunID`, lifecycle reachability inventories, alias-repair reporting, and the audit catalog). `TestCLIInterruptedBuildResumesThroughForceRedispatch` also expects the older contradictory `EXECUTING`-with-no-start-time recovery state instead of the new safest runnable `READY` point. Other aggregate failures match the staged status/Next Up and archived-path items already recorded above.
 - **Isolation check:** A real subprocess accepts the bounded hidden input redirect before Cobra, while command metadata and generated pause surfaces contain no public alias. The exact crash matrix passes at validation, staging, intent, partial-target, and final-verification faults, with byte-stable replay and zero-write conflict proof.
@@ -76,6 +85,7 @@
 
 ## Plan 199-15 supersedes the pre-transaction seal ceremony assertions
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-15 broader seal verification (`go test ./cmd -run '^TestSeal' -count=1`).
 - **Observed:** The focused Plan 199-15 preflight/authority/transaction/replay/rendering suite passes all 40 selected cases, including the race-enabled run. The broader legacy seal selection still reports 26 top-level failures that expect the superseded flow: wisdom/curation writes before owner confirmation, the old “Finish this project?” questions, issue flags upgraded into the old confirmation path, immediate review archiving during seal, shared celebratory force output, missing-plan compatibility repair, and legacy Hive/curation counters.
 - **Isolation check:** The exact Task 1 and Task 2 commands pass after the final fixes, including all 15 injected target-commit crashes, transaction resume, exactly-once event/registry/Hive receipts, retained active state, forced forbidden-vocabulary checks in visual and NO_COLOR modes, and residual-risk partitioning. The broad failures are expectation-level conflicts with D-16/D-17 and `SYN-199-07`; no focused Plan 199-15 regression remains.
@@ -84,6 +94,7 @@
 
 ## Plan 199-16 supersedes direct, unconfirmed legacy entomb fixtures
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-16 broader entomb and repository verification (`go test ./cmd -run '^TestEntomb' -count=1` and `go test ./... -count=1`).
 - **Observed:** All 13 Plan 199-16 manifest, transaction, and wrapper tests pass, including the race-enabled run. The older entomb selection retains 10 failures: nine archive/reset/ceremony/sweep/registry/scope fixtures invoke `entomb` without `--confirm`, and all construct Crowned state without the typed seal outcome and closure evidence now required for archive verification.
 - **Isolation check:** The exact manifest suite proves byte tamper, missing input, cross-reference disagreement, forced-marker loss, and nondeterminism fail closed. The exact transaction suite proves zero-write refusal, all five ordered stages, fault retention, exactly-once replay, forced truth, and verified success. Wrapper and source-hygiene tests also pass.
@@ -92,6 +103,7 @@
 
 ## Plan 199-18 supersedes prefix-only data-clean deletion tests
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-18 cleanup compatibility verification (`go test ./cmd -run '^TestDataClean.*$' -count=1`).
 - **Observed:** `TestDataCleanConfirm` expects signals to be deleted solely because their IDs start with `test_` or `demo_`. Plan 199-18 deliberately removes that broad deletion authority: public `data-clean` now consumes a schema-versioned exact manifest whose owner and per-target baseline digest are validated before confirmation and commit. The prefix-sharing decoy and symlink/path-escape cases pass in the exact Plan 199-18 suite.
 - **Isolation check:** All 14 Plan 199-18 maintenance mutation tests pass in normal and race-enabled runs. Existing direct worker-debug retention helper tests and the complete `TestRegistry*` selection also pass.
@@ -100,6 +112,7 @@
 
 ## Update closing-card compatibility fixture removes an already-absent command
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-18 update compatibility verification (`TestUpdateEndsWithTheCard/when_it_repaired_a_missing_command_copy`).
 - **Observed:** The fixture first asserts that `ant-pause-colony.md` is absent and then calls `os.Remove` on that same absent path before invoking update, so it fails during setup with `no such file or directory` rather than exercising the Plan 199-18 transaction path.
 - **Isolation check:** The exact 10-case update/migration/generated/platform/binary suite passes, along with the existing update dry-run, alias reconciliation, managed-pruning, custom-preservation, migration rollback, and `runUpdateSync` compatibility lanes.
@@ -108,6 +121,7 @@
 
 ## Broad update-name selection includes a later-plan Next Up expectation
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-18 Wave 12 gate recovery (`go test ./cmd -run '^Test.*Update' -count=1`).
 - **Observed:** `TestHookPreCompactUpdatesSessionSummary` expects `SuggestedNext = "aether build 1"`, while the current authoritative lifecycle projection returns `aether status`. The test is selected only because its name contains “Updates”; it does not execute maintenance update.
 - **Isolation check:** Every Plan 199-18-owned update, stale-publish, binary-mode, deterministic no-spawn, registry, cleanup, source-hygiene, and wiring case passes after gate recovery. The only other broad-name failure is the already-recorded contradictory update closing-card setup.
@@ -116,6 +130,7 @@
 
 ## Curation command tests leak `AETHER_ROOT` into later package tests
 
+- **Status:** acknowledged
 - **Found during:** Plan 199-18 second Wave 12 gate recovery after the full command suite reported order-only update integration failures.
 - **Observed:** `TestCurationDryRunFalse` sets `AETHER_ROOT` to its temporary repository, then defers `os.Setenv("AETHER_ROOT", os.Getenv("AETHER_ROOT"))`; the deferred argument is captured after the assignment, so cleanup restores the same path after the temporary repository is removed. Running that test immediately before `TestE2EInstallSetupUpdateFlow` and `TestE2ERegressionStuckPlanInvestigation` reproduced both failures at repaired HEAD `e5f5912e`.
 - **Isolation check:** Both update tests passed alone 5/5, together 10/10, and shuffled together 10/10. The contaminated trio passed at Wave 11 `fed7e709` and pre-recovery `e23ba946`, whose update handler used raw cwd, but failed once update correctly honored the lifecycle root. Explicitly clearing `AETHER_ROOT` and `COLONY_DATA_DIR` in cwd-driven update fixtures made the contaminated trio pass 10/10 and the broader shuffled curation/install/regression selection pass 3/3.

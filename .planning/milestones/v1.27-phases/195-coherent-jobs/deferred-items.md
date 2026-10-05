@@ -2,6 +2,7 @@
 
 ## Full-suite black-box timeout
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-01 overall verification
 - **Command:** `go test ./...`
 - **Observed:** 1,520 tests passed and 1 skipped before `cmd` reached Go's 10-minute package timeout. The last started `cmd` test in the JSON log was `TestCLIErrorEnvelopeExitsNonZero` in `cmd/blackbox_harness_test.go`.
@@ -10,6 +11,7 @@
 
 ## `cmd` visual-output tests assume a Codex platform environment
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-03 Task 2 verification
 - **Command:** `go test ./cmd -count=1`
 - **Observed:** 11 visual-output tests fail under a Claude Code session
@@ -38,6 +40,7 @@
 
 ## `cmd` package exceeds a 25-minute `go test` budget
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-03 Task 2 verification
 - **Command:** `go test ./cmd -count=1 -timeout 25m`
 - **Observed:** `panic: test timed out after 25m0s` with `TestSurveyStaleness`
@@ -54,6 +57,7 @@
 
 ## Load-sensitive test timing in `cmd` and `pkg/codex`
 
+- **Status:** acknowledged
 - **Found during:** Phase 195 wave 3 and wave 4 post-merge gates
 - **Observed:** two tests fail only when the full package runs under load and
   pass on isolated reruns —
@@ -79,6 +83,7 @@
 
 ## `cmd/criterion_owner_confirmation.go` is not gofmt-clean
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-08 Task 2 verification
 - **Command:** `gofmt -l cmd/ pkg/`
 - **Observed:** `cmd/criterion_owner_confirmation.go` is reported unformatted. `git diff HEAD -- cmd/criterion_owner_confirmation.go` is empty, so the drift predates this plan and is not caused by it.
@@ -87,6 +92,7 @@
 
 ## External completion packets cannot carry worktree-only file claims
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-08 Task 2 (external-lane worktree parity)
 - **Command:** `go test ./cmd -run TestGroupedWorktreePartialReceiptsExternalLaneMatchesNative`
 - **Observed:** `validateCompletionPacketSemantics` -> `validateAndNormalizeClaimPathToRoot` refuses any `files_modified` claim that does not resolve inside the repository root (`claim_path.escapes_root`). A wrapper-submitted completion whose proof still lives only inside a worktree is therefore rejected before the receipt boundary is ever reached.
@@ -95,6 +101,7 @@
 
 ## `TestAvailabilityProbeRetriesOnlyTimeouts` fails when the whole suite runs at once
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-10 Task 1, `go test ./... -count=1` (the phase-wide gate)
 - **Command:** `go list ./... | grep -v '/cmd$' | xargs go test -count=1`
 - **Observed:** `pkg/codex` failed on the `a transient stall is retried and succeeds` subtest with `a probe that stalled once and then answered was reported as a failure: timed out`. Re-running the single test (`ok 4.542s`) and the whole package alone (`ok 22.658s`) both pass. The failure only appears when every package is compiled and run concurrently.
@@ -103,6 +110,7 @@
 
 ## The full and race gates exhausted the machine's disk
 
+- **Status:** acknowledged
 - **Found during:** Plan 195-10 Task 1, `go test ./... -race -count=1`
 - **Command:** `go list ./... | grep -v '/cmd$' | xargs go test -race -count=1 -p 2`
 - **Observed:** Six `pkg/agent/curation` tests and four packages failed with `TempDir: mkdir ...: no space left on device` / `[build failed]`. `df -h /` reported 571Mi available on a 1.8Ti volume (100% used). No test asserted anything false; the race-instrumented build had nowhere to write.
@@ -111,12 +119,14 @@
 
 ## Code review Info findings IN-01..IN-05 (195-REVIEW.md)
 
+- **Status:** acknowledged
 Recorded here because the iteration-2 re-review found no deferral record for
 any of them anywhere (IN-11, 195-REVIEW.iter2.md), and this repo's own history
 says an undocumented deferral becomes invisible debt.
 
 ### IN-01 — the job planner mutated its caller's task list — RESOLVED 2026-08-27
 
+- **Status:** resolved
 - **File:** `cmd/coherent_jobs.go`, `normalizeCoherentJobProposal`
 - **Was:** the proposal arrived by value, but a slice header copy still shares
   its backing array, so trimming task IDs in place rewrote the caller's own
@@ -126,6 +136,7 @@ says an undocumented deferral becomes invisible debt.
 
 ### IN-02 — an owner-facing sentence was capitalized by byte, not character — RESOLVED 2026-08-27
 
+- **Status:** resolved
 - **File:** `cmd/ceremony_team_checkin.go`, the team check-in summary
 - **Was:** `strings.ToUpper(s[:1]) + s[1:]` splits any character that takes more
   than one byte to store, printing rubbish. Every current sentence is plain
@@ -135,6 +146,7 @@ says an undocumented deferral becomes invisible debt.
 
 ### IN-03 — two workers with no task id compared equal — RESOLVED 2026-08-27
 
+- **Status:** resolved
 - **File:** `cmd/codex_build_worktree.go`, `worktreeOwnershipIdentity`
 - **Was:** ownership was keyed on the task id alone, so two different workers
   that both arrived without one were treated as the same owner and a genuine
@@ -145,6 +157,7 @@ says an undocumented deferral becomes invisible debt.
 
 ### IN-04 — recovery-job reuse is approximate — STILL OPEN
 
+- **Status:** acknowledged
 - **File:** `cmd/coherent_job_retry.go`, `findExistingBuildAttemptRetry` and
   `commitPartialBuildRetryPlan`
 - **Issue:** two separate approximations.
@@ -172,6 +185,7 @@ says an undocumented deferral becomes invisible debt.
 
 ### IN-05 — three finalize helpers each recompute the same two sets — STILL OPEN
 
+- **Status:** acknowledged
 - **File:** `cmd/codex_build_finalize.go`, `allSelectedBuildTasksCredited`,
   `unfinishedBuildTaskIDs`, `creditedBuildTaskIDs`
 - **Issue:** all three call `buildFullBuildTaskIDSet` + `completedBuildTaskIDs`
@@ -186,6 +200,7 @@ says an undocumented deferral becomes invisible debt.
 
 ## Open items carried out of the third review (195-REVIEW.iter3.md)
 
+- **Status:** acknowledged
 The closure review ended `status: clean` / shippable with four items it did not
 fix. Recorded here because "knowingly left" only counts when it is written in the
 record of what was knowingly left — the third review said outright that WR-15
@@ -194,6 +209,7 @@ omission.
 
 ### WR-15 — what a "nothing needed changing" report may claim (OWNER DECISION) — IMPLEMENTED 2026-08-27
 
+- **Status:** resolved
 - **Severity:** WARNING — a residual design point, not a defect in the fix.
 - **Where:** `cmd/coherent_job_receipts.go` (the no-change branch of the two-stage
   receipt boundary).
@@ -265,23 +281,27 @@ omission.
 
 ### IN-13 — the replay's existing-record branch has no assertion
 
+- **Status:** acknowledged
 - Cosmetic. `idempotentExternalPartialFinalizeResult`'s branch for an
   already-present recovery record is unasserted, so a future change could alter it
   without any test noticing.
 
 ### IN-14 — the ownership-key fallback collapses on two fully-anonymous dispatches
 
+- **Status:** acknowledged
 - The worktree ownership key falls back through task ID then worker name; two
   dispatches with BOTH empty would still collide. No runtime shape produces that
   today, which is why it is Info rather than a defect.
 
 ### IN-16 — worktree refusal messages went to stderr, not the owner-facing stream
 
+- **Status:** acknowledged
 - Carried from the second review as IN-12 and still unaddressed. Cosmetic, still
   visible to the owner, and no finding asked for the move in the first place.
 
 ### Also closed while recording these
 
+- **Status:** acknowledged
 `coalesceSequentialDispatches` and its only helper `dispatchesFormOneJob` were
 deleted (92 lines, zero callers anywhere — production or test), and the eight
 comments across `cmd/` that still cited the coalescer as the live grouping
