@@ -352,6 +352,7 @@ Long-lived items not tied to a milestone:
 | Claude/OpenCode `/ant-*` surfaces and runtime-native Codex share Go-owned lifecycle truth (Phase 199) | A 73-row coverage ledger and executable public journeys prove behavior and state effects without claiming native Codex `$ant-*` support | Good — shipped and UAT-verified |
 | Truthful registers over ticked boxes (Phase 204, 2026-09-15) | A requirement is ticked only when its own wording is true of the running program and a named test fails when the wiring is removed; the two truths that remained partial were accepted as deferred by owner override with the exact remaining limit named (WINDOWS.md entries 42 and 48) rather than rounded up | Good -- the post-closure review still caught a green-tested feature that was dead in production (the automatic hypothesis promoter, WINDOWS.md entry 44), which is exactly the failure this rule exists to surface |
 | Fixture dates read by the compiled binary must move with the clock (2026-09-15) | Two families of planning fixtures with literal September dates crossed production's seven-day candidate window mid-phase and turned fifteen tests red with no code change; in-process fixtures now pin the candidate clock, binary-facing fixtures derive their instants from the wall clock | Good -- both detonations fixed; rule recorded in the fixture comments |
+| v1.29 freeze verdict: keep going, by explicit owner override (2026-10-05) | 19 blockers in 11 days against a stopping rule of about two; neither counted project was finished without a bug report (UED-19 not met). The owner chose to keep investing, in his words "I just want to have it that it doesn't have any of these fucking issues again"; recorded as an override, never as the rule met | Override -- the count and definition are unchanged; see `.planning/decisions/2026-10-05-v1.29-freeze-verdict.md` |
 
 ## Context
 
@@ -371,13 +372,13 @@ These remain promising but are not the next best move:
 
 ## Next Move
 
-Plan Phase 204.2 — Codex Native Worker Lifecycle from its existing context. Phase 204.1 is verified and complete. Continue the inserted sequence through 204.5, then resume the remaining Phase 205 owner-only walkthrough and acceptance with the qualified candidate handoff.
+v1.29 "Use It Every Day" is complete (Phase 210 closed 2026-10-05 by owner override at 2/3: the count and verdict are recorded, but no counted project was finished without a bug report). The owner chooses the next milestone. The proposal waiting for that choice is `.planning/todos/pending/2026-10-04-helpers-only-when-they-earn-it.md`: helpers only when they earn it, judged against plain Claude with a stopwatch. The parked Codex phases (204.2-204.5) and Phase 205 remain parked.
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-*Last updated: 2026-09-16 after owner-requested Codex parity insertion before remaining Phase 205 acceptance*
+*Last updated: 2026-10-05 after Phase 210 (the two-week freeze) closed with the owner's verdict*
 
 ## Historical Milestone Briefs (superseded)
 

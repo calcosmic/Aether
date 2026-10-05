@@ -3,20 +3,20 @@ gsd_state_version: 1.0
 milestone: v1.29
 milestone_name: Use It Every Day
 current_phase: 210
-current_phase_name: Two-Week Freeze
-current_plan: 1
-total_plans_in_phase: 2
-status: executing
-stopped_at: Phase 210 trial running; resume fix ce44d325 suite-verified and installed 2026-10-03, ledger at 19 rows
-last_updated: "2026-10-05"
+status: completed
+stopped_at: Phase 210 complete — all phases complete
+last_updated: "2026-10-05T11:28:51.164Z"
 last_activity: 2026-10-05
-last_activity_desc: Fixed and installed three rough edges from the deck project's finish (seal handoff instructions, plain-English final question, finished projects no longer list old failures); full suite clean apart from the two known failures
+last_activity_desc: Phase 210 complete
+state_head: 765045db400d7f1686b7e5916bd390fcf876e48f
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 36
-  completed_plans: 34
-  percent: 80
+  completed_plans: 36
+  percent: 100
+total_plans_in_phase: 2
+current_plan: 1
 ---
 
 # Project State
@@ -26,9 +26,9 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-16)
 
 **Core value:** Aether should feel alive and truthful at runtime, not only look clever in wrappers or tests.
-**Current focus:** Phase 210 — Two-Week Freeze
+**Current focus:** v1.29 complete; the owner chooses what comes next
 **Active milestone:** v1.29 Use It Every Day, Phases 206-210. Phases 204.2-204.5 remain parked by the 2026-09-20 decision; Phase 205 acceptance was superseded on 2026-09-21. The older qualification and operator notes below are historical, not the next work.
-**Trial now:** Running 2026-09-25 through 2026-10-09 in French Fluency, with additions allowed as recorded in `210-FREEZE-START.md`. The owner answered on 2026-09-28: "You can look for yourself, we created a new deck" and, about the ledger, "i dunno". Read-only inspection corroborates French Essentials (41 source entries, installed 2026-09-25 per the project records) and French Basics (99 entries, installed 2026-09-27 per the records). The ledger still has 12 rows; its completeness is unknown, not owner-confirmed. The reply is recorded in the phase handoff. Plan 210-01's accuracy criterion remains unverified; no plan or requirement is newly marked complete.
+**Trial result:** Closed early on 2026-10-05 by the owner. 19 blockers counted; the owner answered "No" for both counted projects (UED-19 not met) and chose "Keep going", recorded as an explicit override of the stopping rule with his own reason. See `.planning/decisions/2026-10-05-v1.29-freeze-verdict.md` and `.planning/phases/210-two-week-freeze/210-FREEZE-REPORT.md`. Waiting for the next choice: `.planning/todos/pending/2026-10-04-helpers-only-when-they-earn-it.md`.
 **Previous milestone:** v1.27 The Queen Decides, the Program Checks — SHIPPED 2026-09-02 (48/48 requirements; audit `tech_debt`, no blockers)
 **Product version:** local stable v1.0.81 — installed-baseline routing, bookkeeping and the CalVault five-fix local binary repair (2026-09-18, SHA-256 `45663b7cc4ca018b5024ad78675f4255f894143b820484a8c2846c8270a7f816`; receipt `.planning/calvault-local-runtime-install-2026-09-18.md`). This does not qualify inserted Phase204.2 work or establish Phase 205 acceptance.
 **Bookkeeping repair:** current verification is persisted before reviewer launch; prior task evidence survives targeted rebuilding; latest terminal outcomes replace contradictory old outcomes. Normal/race regression checks and CalVault snapshot replay passed. Installed binary/hub versions and all five integrity checks passed. The real CalVault reviewer passed; phase 1 remains BUILT solely because its accepted criterion still requires appearance-preview.png despite recorded owner scope clarification. No false advancement or accepted-plan rewrite. See `.planning/bookkeeping-hotfix-2026-09-18.md` and its JSON receipt.
@@ -37,11 +37,11 @@ See: .planning/PROJECT.md (updated 2026-09-16)
 
 ## Current Position
 
-Phase: 210 (Two-Week Freeze) — TRIAL RUNNING
-Next phase: None scheduled; Plan 210-02 closes this trial on 2026-10-09 unless the owner explicitly ends it early
-Status: Trial running; 19 rows in the ledger; every fix to date is installed; ledger completeness still not owner-confirmed
-Plan: 1 of 2
-Last activity: 2026-10-04 — Installed three seal fixes (25c060b9, 71fb5f6a), the owner's seal ruling (b66b2889) command descriptions shown in menus (ce887007), and the four trial leftovers (6dacec69); post-trial proposal recorded
+Phase: 210
+Next phase: None scheduled; v1.29 is complete and the owner chooses the next milestone
+Status: All phases complete
+Plan: 2 of 2 complete
+Last activity: 2026-10-05 — Phase 210 complete
 
 ## Performance Metrics
 
@@ -860,7 +860,7 @@ flow. The Phase 198.2 rows describe the same owner-acknowledged field-use check.
 ## Session Continuity
 
 Last session: 2026-10-03
-Stopped at: Resume fix ce44d325 verified (full suite: only the two known failures), published from a throwaway worktree and installed 18:55, integrity 5/5; backup in ~/.aether-backups/pre-resume-fix-20261003T185516
+Stopped at: Phase 210 complete — all phases complete
 Resume file: .planning/phases/210-two-week-freeze/.continue-here.md
 
 Initial resume evidence (superseded by active execution below): HEAD 5f14b056 records wave 2 merged; 205-01 through 205-10 each have a SUMMARY, and 205-11 through 205-18 do not. GSD reports no interrupted agent and no structured handoff is present. The root .continue-here.md is a superseded May 2026 handoff, not the active resume point. On resumption the tracked checkout was clean; pre-existing .gsd/ files were untracked.
