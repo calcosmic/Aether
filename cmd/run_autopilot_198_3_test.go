@@ -763,3 +763,76 @@ func TestRunLiveLoopHasNoLegacyScannerOrWholeBuildRetry(t *testing.T) {
 		t.Fatalf("live run body has %d build invocation sites, want 1", strings.Count(runBody, "runAutopilotBuild("))
 	}
 }
+
+// Every run that ends while an owner check is still waiting issues that check
+// a fresh confirm code, so the saved codes must stay bounded however many runs
+// pass: only the newest few keep working and a long-forgotten one is refused.
+func TestRepeatedRunsKeepOnlyTheNewestConfirmCodes(t *testing.T) {
+	t.Setenv("AETHER_OUTPUT_MODE", "json")
+	saveGlobals(t)
+	resetRootCmd(t)
+	seedRunFixture(t, 1)
+	created, _, err := upsertAutopilotCheckpoint(PendingDecision{
+		Type: autopilotCheckpointTypeVisual, Description: "Phase 1: please visually confirm the user-interface changes look and behave correctly before the project is signed off.", Source: "test",
+	}, 1, "visual", checkpointTestGeneration(t, "run-visual-repeat", "run-visual-repeat-evidence"))
+	if err != nil {
+		t.Fatalf("persist visual checkpoint: %v", err)
+	}
+	state, err := loadCompatibilityColonyState()
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+
+	const runs = 40
+	if maxCheckpointCapabilityHashes >= runs/2 {
+		t.Fatalf("the test must run well past the limit (%d) to prove anything", maxCheckpointCapabilityHashes)
+	}
+	capabilityPattern := regexp.MustCompile(`--checkpoint-capability '([^']+)'`)
+	issued := make([]autopilotCheckpointReference, 0, runs)
+	for i := 0; i < runs; i++ {
+		open, issueErr := issueOpenCheckpointCapabilitiesFromStore(store, state)
+		if issueErr != nil || len(open) != 1 {
+			t.Fatalf("run %d: want one waiting check with a fresh code, got %d (%v)", i+1, len(open), issueErr)
+		}
+		reference := checkpointReference(open[0])
+		if !capabilityPattern.MatchString(reference.RecoveryCommand) {
+			t.Fatalf("run %d: confirm command carries no code: %+v", i+1, reference)
+		}
+		issued = append(issued, reference)
+	}
+
+	for _, decision := range loadPendingDecisionFile().Decisions {
+		if decision.ID != created.ID {
+			continue
+		}
+		if got := len(decision.CheckpointCapabilitySHA256s); got > maxCheckpointCapabilityHashes {
+			t.Fatalf("after %d runs the check keeps %d saved codes, want at most %d", runs, got, maxCheckpointCapabilityHashes)
+		}
+	}
+
+	confirm := func(reference autopilotCheckpointReference) error {
+		resetRootCmd(t)
+		stdout = &bytes.Buffer{}
+		stderr = &bytes.Buffer{}
+		rootCmd.SetArgs([]string{"decision-answer", "--question", reference.Question, "--answer", "confirmed",
+			"--phase", strconv.Itoa(reference.Phase), "--checkpoint-capability", capabilityPattern.FindStringSubmatch(reference.RecoveryCommand)[1]})
+		return rootCmd.Execute()
+	}
+	resolved := func() bool {
+		for _, decision := range loadPendingDecisionFile().Decisions {
+			if decision.ID == created.ID {
+				return decision.Resolved
+			}
+		}
+		t.Fatalf("checkpoint %s disappeared", created.ID)
+		return false
+	}
+
+	_ = confirm(issued[0])
+	if resolved() {
+		t.Fatalf("a code issued %d runs ago still confirmed the check", runs)
+	}
+	if err := confirm(issued[runs-1]); err != nil || !resolved() {
+		t.Fatalf("the newest confirm command must still confirm the check: %v %s %s", err, stdout.(*bytes.Buffer).String(), stderr.(*bytes.Buffer).String())
+	}
+}

@@ -711,6 +711,12 @@ func stableAutopilotCheckpointID(key string) string {
 	return "cp_" + key[len(key)-20:]
 }
 
+// maxCheckpointCapabilityHashes bounds the reissued confirm codes one waiting
+// owner check keeps. Every Autopilot run that ends while the check waits
+// issues a fresh code, so without a bound the saved list grew by one per run
+// and every old code stayed valid; only the newest few now keep working.
+const maxCheckpointCapabilityHashes = 8
+
 func appendCheckpointCapabilityHash(decision *PendingDecision, capabilityHash string) {
 	if decision == nil {
 		return
@@ -732,6 +738,9 @@ func appendCheckpointCapabilityHash(decision *PendingDecision, capabilityHash st
 		}
 	}
 	decision.CheckpointCapabilitySHA256s = append(decision.CheckpointCapabilitySHA256s, capabilityHash)
+	if extra := len(decision.CheckpointCapabilitySHA256s) - maxCheckpointCapabilityHashes; extra > 0 {
+		decision.CheckpointCapabilitySHA256s = append([]string(nil), decision.CheckpointCapabilitySHA256s[extra:]...)
+	}
 }
 
 func checkpointCapabilityMatches(decision PendingDecision, providedHash string) bool {
