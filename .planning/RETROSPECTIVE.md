@@ -152,10 +152,58 @@
 
 ---
 
+## Milestone: v1.29 — Use It Every Day
+
+**Shipped:** 2026-10-05
+**Phases:** 5 | **Plans:** 36 | **Requirements:** 19/20 (UED-19 not met; closed by owner override)
+
+### What Was Built
+
+- Screens reach the owner directly (a hook hands each drawn screen to Claude Code) plus a permanent status line from the one shared next-step decision
+- A messy practice project walked end to end by a real chat, as a release gate that catches reverted fixes
+- Refusals that name their way forward, with unattended self-recovery for the existing-survey dead end
+- `/ant-go` as one door that measures job size, and an owner-approved ten-command help screen
+- A two-week real-use freeze (closed early): 19 recorded stops in the owner's own projects, 18 fixed and installed, each reproduced in its real shape before fixing
+
+### What Worked
+
+- Real use found what 6,000+ tests did not: every one of the 19 stops was a real dead end, loop or false claim the suite had passed
+- Writing the stop down before fixing it kept the count honest, and recording each owner ruling as a chosen option kept the scope his
+- Reproducing the owner's exact shape first (for example a built phase whose check had stopped) turned guesses into fixes that held
+- Full suites in a throwaway checkout with a throwaway home, a fingerprint of the installed program before and after, and a backup before every install kept his machine safe through many republishes
+
+### What Was Inefficient
+
+- The "no new features" rule was bent four times by owner choice, so the freeze measured a changing program
+- `/ant-go`'s medium job measured 35 times slower and 16 times dearer than plain Claude; a stuck phase alone cost about a million helper tokens
+- Tests installed into the owner's real home twice before the leak was found and fixed
+- A parity test had silently checked nothing for every command until a layout change made it run; the stage closed four days early, so the newest fixes went in untried in real work
+- Closing ceremony (milestone audit choices, 57 open-artifact acknowledgements, archive path fallout in an inventory test) was heavy relative to the owner-facing result
+
+### Patterns Established
+
+- Reproduce with the owner's exact shape before fixing; write the blocker row before the fix
+- An owner override is recorded with the score unchanged and his reason beside it, never as the rule met
+- The finishing step lists reviewer suggestions and never edits the project; the program's own check failures never become rules for helpers
+- Install only after a clean full run in a throwaway copy, a backup, and the integrity check
+
+### Key Lessons
+
+- The owner values the memory and tracking; the helper ceremony is the cost. The next milestone should be judged by a stopwatch against plain Claude (proposal: `.planning/todos/pending/2026-10-04-helpers-only-when-they-earn-it.md`)
+- A check that cannot fail is a false certificate; look for tests that skip their own input
+- A real stop counted honestly is worth more than a green suite
+
+### Cost Observations
+
+- Not measured for the milestone as a whole. Measured points: the phase 209 timing report, and the Finish the Track deck at about 6.2M helper tokens for six phases
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Duration | Key Theme |
 |-----------|--------|-------|----------|------------|
+| v1.29 | 5 | 36 | 14 days | Use it every day: real-use stops counted and fixed |
 | v1.27 | 9 | 84 | 11 days | Proportionate teams, runtime truth, memory, overnight stamina |
 | v1.26 | 15/19 | 66 | 15 days | Hardening: remove until a small job costs a small amount |
 | v1.11 | 10 | 18 | 75 days | Unification and intelligence |
