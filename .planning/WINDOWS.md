@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 48
+open_count: 49
 waived_count: 0
 fixed_count: 42
-total_count: 90
-last_updated: 2026-10-05T12:00:00.000Z
+total_count: 91
+last_updated: 2026-10-05T14:00:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -107,6 +107,7 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 88 | 210 | unmet-truth | cmd/lifecycle_closeout.go |  | Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): after a check moved the project from phase 2 to phase 3, the closing card recommended '/ant-build 0 --force' while Next Up said '/ant-build 3'. The card looked up the build attempt of the phase the project now stood on, found none, and formatted the empty record's phase number (0) into a redo command, bypassing the shared next-step decision. | fixed | Fixed 6dacec69: a redo verdict with no recorded attempt never names a phase-0 command, and when the phase the project stands on has no attempt the card names the same shared next step as Next Up. Guarded by TestCloseoutWithNoAttemptToRedoNamesTheSharedNextStep and TestNoCloseoutRecommendsPhaseZero. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
 | 89 | 210 | unmet-truth | cmd/phase_end_signals.go |  | Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): a check failure's text ('criterion ... templates/back.html was not claimed') became an active REDIRECT injected into every later helper prompt. The automatic rule counted log rows, not occasions (one stopped check wrote eight rows at once), treated the program's own check failures as lessons, and pasted the raw message as the rule. | fixed | Fixed 6dacec69, with the owner's ruling of 2026-10-04: the program's own check failures never become a REDIRECT (they stay in the failure log for review), and failures are counted by separate occasion so one run's many rows count once. Helper failures of one kind on three separate occasions still produce one note. Guarded by TestCheckFailuresNeverBecomeARedirect and TestOneOccasionWithManyFailuresCountsOnce. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
 | 90 | 210 | unmet-truth | cmd/hook_cmds.go |  | Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while the owner's bug hunt (/ant-swarm the flags) had helpers running, the stop check demanded 'finish with aether continue, or run aether pause' on every turn. The owner's exact case was covered by 6ffac09c the same evening (a stopped check's report), but the stop check still had no notion of a bug hunt in flight. | fixed | Fixed 6dacec69: a bug hunt counts as in flight from its start record until its result is written, for at most an hour, and the stop check stands down while one runs; finished, abandoned and absent hunts still get the check. Guarded by TestHookStopLetsTheChatEndWhileABugHuntRuns. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
+| 91 | 210 | unmet-truth | cmd/compatibility_cmds.go |  | Phase 210 blocker 9 (French Basics, 2026-09-26), not fixed by the owner's choice on 2026-09-27 and filed when the freeze closed (2026-10-05): the owner typed '/ant-run 2' to restart at phase 2; aether run refused with 'Error: unknown command "2" for "aether run"' although the /ant-run wrapper passes its arguments straight through, and nothing on screen said how to pick a phase. | open |  | 2026-10-05T14:00:00.000Z |  |
 
 ````json
 [
@@ -1189,6 +1190,18 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "reason": "Fixed 6dacec69: a bug hunt counts as in flight from its start record until its result is written, for at most an hour, and the stop check stands down while one runs; finished, abandoned and absent hunts still get the check. Guarded by TestHookStopLetsTheChatEndWhileABugHuntRuns.",
     "recorded_at": "2026-10-05T12:00:00.000Z",
     "resolved_at": "2026-10-05T12:00:00.000Z"
+  },
+  {
+    "id": 91,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/compatibility_cmds.go",
+    "line": null,
+    "description": "Phase 210 blocker 9 (French Basics, 2026-09-26), not fixed by the owner's choice on 2026-09-27 and filed when the freeze closed (2026-10-05): the owner typed '/ant-run 2' to restart at phase 2; aether run refused with 'Error: unknown command \"2\" for \"aether run\"' although the /ant-run wrapper passes its arguments straight through, and nothing on screen said how to pick a phase.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-10-05T14:00:00.000Z",
+    "resolved_at": null
   }
 ]
 ````

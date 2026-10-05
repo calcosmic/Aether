@@ -126,3 +126,7 @@ and real use is what should find out whether it works. If he hits it, it counts 
   later helper received. Asked whether such check failures should ever become standing "never
   do this" rules, the owner chose "Never": they stay in the failure log for him to review;
   helper failures of one kind on three separate occasions can still produce a rule.
+- **2026-10-05, closed four days early, by the owner's choice.** He typed `/gsd-execute-phase 210`
+  on 5 October. Asked whether to wait for the 9th (so the last few days' fixes could be tried in
+  real work) or close now, he chose "Close the trial now". The count and verdict below therefore
+  cover 25 September to 5 October, not the full fortnight.

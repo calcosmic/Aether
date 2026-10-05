@@ -55,8 +55,8 @@ requirement is unmet (CLAUDE.md, Definition of Done). "Proof" names that command
 
 ### Two-week freeze (Phase 210)
 
-- [ ] **UED-19** — The owner completes one real piece of work start to finish in each real project without pasting a bug. Proof: the owner's own statement, recorded with dates and projects.
-- [ ] **UED-20** — The stopping rule is applied honestly: blockers hit during the freeze are counted and the count is reported. Proof: the refusal/bug log for the fortnight.
+- [ ] **UED-19** — The owner completes one real piece of work start to finish in each real project without pasting a bug. Proof: the owner's own statement, recorded with dates and projects. **Not met (2026-10-05):** held for no project; the owner answered "No" for French Fluency and "No" for the Finish the Track deck, and asked that Pocket-Chopper (GSD work) not count. Evidence: `.planning/phases/210-two-week-freeze/210-FREEZE-REPORT.md`, `.planning/decisions/2026-10-05-v1.29-freeze-verdict.md`.
+- [x] **UED-20** — The stopping rule is applied honestly: blockers hit during the freeze are counted and the count is reported. Proof: the refusal/bug log for the fortnight. **Applied 2026-10-05:** 19 blockers counted from the ledger (25 Sep to 5 Oct, closed early by the owner); the rule's limit (about two) was exceeded, and the owner chose "Keep going", recorded as an explicit override with his reason, not as the rule met. Evidence: `.planning/phases/210-two-week-freeze/210-FREEZE-REPORT.md`, `.planning/decisions/2026-10-05-v1.29-freeze-verdict.md`.
 
 ## Out of scope
 
