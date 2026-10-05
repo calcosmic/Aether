@@ -205,9 +205,9 @@ func TestThreeFailuresOfOneKindProduceOneRedirect(t *testing.T) {
 
 	newestMessage := "go test ./cmd/ -run TestExpireSignals failed: nil pointer dereference in expireSignalsByType"
 	seedMiddenEntries(t, s, []colony.MiddenEntry{
-		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "go test ./cmd/ -run TestA failed: assertion mismatch"},
-		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "go test ./cmd/ -run TestB failed: timeout"},
-		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: newestMessage},
+		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "go test ./cmd/ -run TestA failed: assertion mismatch"},
+		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "go test ./cmd/ -run TestB failed: timeout"},
+		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: newestMessage},
 	})
 
 	crossed := emitMiddenThresholdRedirect()
@@ -243,8 +243,8 @@ func TestTwoFailuresProduceNoRedirect(t *testing.T) {
 	store = s
 
 	seedMiddenEntries(t, s, []colony.MiddenEntry{
-		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "failure one"},
-		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "failure two"},
+		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "failure one"},
+		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "failure two"},
 	})
 
 	crossed := emitMiddenThresholdRedirect()
@@ -271,9 +271,9 @@ func TestFourthFailureReinforcesTheSameRedirect(t *testing.T) {
 
 	repeatedMessage := "go build ./cmd/aether failed: undefined symbol"
 	seedMiddenEntries(t, s, []colony.MiddenEntry{
-		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "unrelated first failure"},
-		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "unrelated second failure"},
-		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: repeatedMessage},
+		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "unrelated first failure"},
+		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "unrelated second failure"},
+		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: repeatedMessage},
 	})
 
 	if crossed := emitMiddenThresholdRedirect(); crossed != 1 {
@@ -285,10 +285,10 @@ func TestFourthFailureReinforcesTheSameRedirect(t *testing.T) {
 	// its content hash) stays stable and the writer reinforces instead of
 	// creating a second signal.
 	seedMiddenEntries(t, s, []colony.MiddenEntry{
-		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "unrelated first failure"},
-		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "unrelated second failure"},
-		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: repeatedMessage},
-		{ID: "m4", Timestamp: "2026-08-01T00:00:03Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: repeatedMessage},
+		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "unrelated first failure"},
+		{ID: "m2", Timestamp: "2026-08-01T00:00:01Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: "unrelated second failure"},
+		{ID: "m3", Timestamp: "2026-08-01T00:00:02Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: repeatedMessage},
+		{ID: "m4", Timestamp: "2026-08-01T00:00:03Z", Category: middenCategoryWorkerFailed, Source: "aether build", Message: repeatedMessage},
 	})
 
 	if crossed := emitMiddenThresholdRedirect(); crossed != 1 {
@@ -556,5 +556,71 @@ func TestExpiryStillSucceedsWhenTheHubIsUnwritable(t *testing.T) {
 	}
 	if promoted != 0 {
 		t.Fatalf("expireSignalsByType promoted = %d, want 0 (the hub write should have failed silently)", promoted)
+	}
+}
+
+// TestCheckFailuresNeverBecomeARedirect locks the owner's ruling of
+// 2026-10-04: the program's own check failures (a test exit code, an
+// artifact not claimed) are bookkeeping, not lessons about how to work. In
+// the Finish the Track deck one stopped check turned "templates/back.html was
+// not claimed" into a hard rule every later helper received. They stay in the
+// failure log for the owner to review and never become a REDIRECT, however
+// often they recur.
+func TestCheckFailuresNeverBecomeARedirect(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	seedMiddenEntries(t, s, []colony.MiddenEntry{
+		{ID: "m1", Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "criterion one: artifact templates/back.html was not claimed"},
+		{ID: "m2", Timestamp: "2026-08-02T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "criterion two: required tests check failed"},
+		{ID: "m3", Timestamp: "2026-08-03T00:00:00Z", Category: middenCategoryCheckFailed, Source: "aether continue", Message: "criterion three: artifact templates/front.html was not claimed"},
+	})
+
+	if crossed := emitMiddenThresholdRedirect(); crossed != 0 {
+		t.Fatalf("emitMiddenThresholdRedirect returned %d for check failures, want 0", crossed)
+	}
+	assertNoActiveRedirect(t, s)
+}
+
+// TestOneOccasionWithManyFailuresCountsOnce: a single run can log several
+// failures at once (the deck's stopped check wrote eight rows in one second).
+// "Three times" means three separate occasions, so many rows from one
+// occasion count once and produce no REDIRECT.
+func TestOneOccasionWithManyFailuresCountsOnce(t *testing.T) {
+	saveGlobals(t)
+	resetRootCmd(t)
+	s, tmpDir := newTestStore(t)
+	defer os.RemoveAll(tmpDir)
+	store = s
+
+	var entries []colony.MiddenEntry
+	for i := 0; i < 8; i++ {
+		entries = append(entries, colony.MiddenEntry{
+			ID: fmt.Sprintf("m%d", i), Timestamp: "2026-08-01T00:00:00Z", Category: middenCategoryWorkerFailed,
+			Source: "aether build", Message: fmt.Sprintf("helper %d timed out", i),
+		})
+	}
+	seedMiddenEntries(t, s, entries)
+
+	if crossed := emitMiddenThresholdRedirect(); crossed != 0 {
+		t.Fatalf("emitMiddenThresholdRedirect returned %d for one occasion, want 0", crossed)
+	}
+	assertNoActiveRedirect(t, s)
+}
+
+func assertNoActiveRedirect(t *testing.T, s interface {
+	LoadJSON(path string, data interface{}) error
+}) {
+	t.Helper()
+	var pf colony.PheromoneFile
+	if err := s.LoadJSON("pheromones.json", &pf); err == nil {
+		for _, sig := range pf.Signals {
+			if sig.Active && sig.Type == "REDIRECT" {
+				t.Fatalf("expected no active REDIRECT, found one: %+v", sig)
+			}
+		}
 	}
 }

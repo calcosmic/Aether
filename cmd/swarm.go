@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -35,6 +36,44 @@ type swarmDisplayFile struct {
 type swarmTimingFile struct {
 	SwarmID string `json:"swarm_id"`
 	StartAt string `json:"start_at"`
+}
+
+// swarmInFlightLimit bounds how long an unfinished bug hunt counts as running,
+// so one that crashed or was abandoned can never quiet the stop check for good.
+const swarmInFlightLimit = time.Hour
+
+// swarmRunInFlight reports whether a bug hunt has started (its timing record
+// exists) and not yet finished (no result.json or episode.json), within the
+// last swarmInFlightLimit.
+func swarmRunInFlight(now time.Time) bool {
+	if store == nil {
+		return false
+	}
+	runs, err := os.ReadDir(filepath.Join(store.BasePath(), "swarms"))
+	if err != nil {
+		return false
+	}
+	for _, run := range runs {
+		if !run.IsDir() {
+			continue
+		}
+		dir := filepath.Join(store.BasePath(), "swarms", run.Name())
+		if fileExists(filepath.Join(dir, "result.json")) || fileExists(filepath.Join(dir, "episode.json")) {
+			continue
+		}
+		var timing swarmTimingFile
+		if store.LoadJSON(filepath.ToSlash(filepath.Join("swarms", run.Name(), "timing.json")), &timing) != nil {
+			continue
+		}
+		started, err := time.Parse(time.RFC3339, strings.TrimSpace(timing.StartAt))
+		if err != nil {
+			continue
+		}
+		if age := now.Sub(started); age >= 0 && age < swarmInFlightLimit {
+			return true
+		}
+	}
+	return false
 }
 
 // --- swarm-findings-read ---

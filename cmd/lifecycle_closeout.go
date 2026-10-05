@@ -251,10 +251,24 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 		// the zero-value record; recommendedActionForWorkOutcome still
 		// returns a total, non-empty answer for every declared verdict.
 		phaseNum := projection.Phase.Value.CurrentNumber
-		_, attempt, _ := loadLatestBuildAttempt(phaseNum)
+		_, attempt, attemptFound := loadLatestBuildAttempt(phaseNum)
 		action, actionErr := recommendedActionForWorkOutcome(details.WorkOutcome, attempt)
 		if actionErr != nil {
 			return LifecycleCloseout{}, fmt.Errorf("lifecycle closeout recommended action: %w", actionErr)
+		}
+		// With no build attempt to redo for the phase the project now stands on
+		// (a check that moved the project forward), a redo recommendation has
+		// nothing to point at. The card then names the same shared next step
+		// the Next Up line shows, never a second answer (2026-10-02: the card
+		// said "build 0 --force" while Next Up said "build 3").
+		if !attemptFound && attemptRedoVerdict(details.WorkOutcome) {
+			if shared := strings.TrimSpace(projection.NextAction.RuntimeCommand); shared != "" {
+				action.Command = shared
+				action.Reason = "the work has moved on, so this is the same next step shown under Next Up."
+				if why := strings.TrimSpace(projection.NextAction.Reason); why != "" {
+					action.Reason = why
+				}
+			}
 		}
 		recommendedAction = &action
 		// Deduplicated against details.Evidence by shared evidence ID
@@ -327,6 +341,23 @@ func buildLifecycleCloseout(projection LifecycleProjection, command string, outc
 	return closeout, nil
 }
 
+// attemptRedoVerdict reports the verdicts whose recommendation redoes a
+// recorded build attempt, so they need one to point at.
+func attemptRedoVerdict(verdict colony.WorkOutcome) bool {
+	return verdict == colony.WorkOutcomePartial || verdict == colony.WorkOutcomeTimeout
+}
+
+// noAttemptToRedoAction is the recommendation when a redo verdict has no
+// recorded attempt: a phase number cannot be invented, so it points at the
+// project's own state rather than a command for phase 0.
+func noAttemptToRedoAction() LifecycleCloseoutRecommendedAction {
+	return LifecycleCloseoutRecommendedAction{
+		Command:      "aether status",
+		Reason:       "there is no recorded build to redo here, so the next step is to look at where the project stands.",
+		Alternatives: []string{},
+	}
+}
+
 // recommendedActionForWorkOutcome derives the ONE recommended next action
 // for a work verdict (D-07), total across colony.AllWorkOutcomes(): every
 // declared verdict returns a non-empty command and a non-empty one-sentence
@@ -356,6 +387,9 @@ func recommendedActionForWorkOutcome(verdict colony.WorkOutcome, attempt buildAt
 			Alternatives: []string{statusAlternative},
 		}, nil
 	case colony.WorkOutcomePartial:
+		if attempt.Phase < 1 {
+			return noAttemptToRedoAction(), nil
+		}
 		unfinished := uniqueSortedStrings(attempt.RecoveryTaskIDs)
 		command := buildUnfinishedRetryRedispatchCommand(attempt.Phase, unfinished)
 		reason := "only the unfinished tasks need to run again -- everything else already has credited evidence."
@@ -384,6 +418,9 @@ func recommendedActionForWorkOutcome(verdict colony.WorkOutcome, attempt buildAt
 			reason = "a completion packet was already staged before the timeout, so finalizing that staged evidence is the recorded evidence's own recommended path."
 		}
 		if command == "" {
+			if attempt.Phase < 1 {
+				return noAttemptToRedoAction(), nil
+			}
 			command = buildForceRedispatchCommand(attempt.Phase)
 		}
 		return LifecycleCloseoutRecommendedAction{

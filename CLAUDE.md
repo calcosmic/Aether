@@ -2347,10 +2347,14 @@ The system's pieces are now **connected**:
   (`TestWorkerLessonBecomesQueenFileWisdom`) -- and it never reaches that
   file without being genuinely handed to a helper and used first
   (`TestQueenPromotionNeverHappensWithoutRecordedUse`)
-- The failure log steers the colony automatically: three unacknowledged
-  failures of the same kind produce one "don't do this" note; two produce
-  none (`TestThreeFailuresOfOneKindProduceOneRedirect`,
-  `TestTwoFailuresProduceNoRedirect`)
+- The failure log steers the colony automatically: unacknowledged helper
+  failures of the same kind on three separate occasions produce one "don't
+  do this" note; two produce none (`TestThreeFailuresOfOneKindProduceOneRedirect`,
+  `TestTwoFailuresProduceNoRedirect`). Several failures logged by one run
+  count as one occasion (`TestOneOccasionWithManyFailuresCountsOnce`), and the
+  program's own check failures never become a note -- they stay in the log
+  for the owner to review (owner's ruling 2026-10-04,
+  `TestCheckFailuresNeverBecomeARedirect`)
 - Hive Brain crosses colony boundaries (domain-scoped wisdom -> colony-prime)
 - A strong-enough lesson reaches every other project on the machine at the
   end of every check, not only when a project is formally finished, under

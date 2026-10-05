@@ -325,6 +325,12 @@ func lifecycleStopBlockReason() string {
 	if ownerCheckpointOpenForPhase(state.CurrentPhase) {
 		return ""
 	}
+	// A bug hunt (/ant-swarm) whose helpers are still working is legitimate
+	// work in flight; demanding continue or pause would cut it off (Phase 210,
+	// 2026-10-02, Finish the Track deck).
+	if swarmRunInFlight(time.Now().UTC()) {
+		return ""
+	}
 	if allowStopAfterRecentResume() {
 		return ""
 	}

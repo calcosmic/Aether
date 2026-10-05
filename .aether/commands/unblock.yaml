@@ -5,6 +5,6 @@ runtime:
   command: "AETHER_OUTPUT_MODE=visual aether unblock $ARGUMENTS"
 guardrails:
   - "Do not write colony state files, session files, or pheromone files by hand from this command spec."
-  - "Do not re-implement gate evaluation or Fixer dispatch — `aether unblock` owns both."
+  - "Do not re-implement gate evaluation — `aether unblock` owns it. `aether unblock --dispatch` only prepares the Fixer's plan; start one `aether-fixer` helper with that plan verbatim and the stated mode, and report only what its own result says."
   - "For a blocker the screen marks as something a helper in Aether's own locked-down workspace could not do: ask the owner one plain yes/no question, showing exactly what you will do; on yes do exactly that step, inside this project folder only, then run the resolve command printed under it; on no leave it open. When nothing is left blocking, run /ant-continue, and if this came from /ant-run start /ant-run again so the remaining phases carry on."
   - "If docs and runtime disagree, runtime wins."

@@ -126,6 +126,12 @@ func emitMiddenThresholdRedirect() int {
 		if entry.Acknowledged != nil && *entry.Acknowledged {
 			continue
 		}
+		// The program's own check failures are bookkeeping, not lessons about
+		// how to work; they never become a rule every helper receives (owner's
+		// ruling, 2026-10-04). They stay in the log for the owner to review.
+		if entry.Category == middenCategoryCheckFailed {
+			continue
+		}
 		byCategory[entry.Category] = append(byCategory[entry.Category], entry)
 	}
 
@@ -138,7 +144,7 @@ func emitMiddenThresholdRedirect() int {
 	crossed := 0
 	for _, category := range categories {
 		entries := byCategory[category]
-		if len(entries) < middenAutoRedirectThreshold {
+		if distinctFailureOccasions(entries) < middenAutoRedirectThreshold {
 			continue
 		}
 		newest := entries[0]
@@ -158,6 +164,17 @@ func emitMiddenThresholdRedirect() int {
 		crossed++
 	}
 	return crossed
+}
+
+// distinctFailureOccasions counts separate occasions, not rows: one run can
+// log several failures in the same second (the Finish the Track deck's stopped
+// check wrote eight at once), and that is one occurrence, not eight.
+func distinctFailureOccasions(entries []colony.MiddenEntry) int {
+	seen := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		seen[entry.Timestamp] = true
+	}
+	return len(seen)
 }
 
 // runPheromoneOutcomeTuning is the ONE caller of

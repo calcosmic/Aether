@@ -1222,3 +1222,76 @@ func TestHookStopStillBlocksAPersonInTheSameState(t *testing.T) {
 		t.Fatalf("decision = %v, want block for a person", result["decision"])
 	}
 }
+
+// Phase 210 (2026-10-02, Finish the Track deck): the owner sent a bug hunt
+// ("/ant-swarm the flags") and, on every turn while its helpers ran, the stop
+// check demanded "finish with aether continue, or run aether pause". A bug
+// hunt in flight is legitimate work, not a walked-away build. It counts as in
+// flight from its start record until its result is written, for at most an
+// hour, so a crashed or abandoned hunt can never silence the check for good.
+func TestHookStopLetsTheChatEndWhileABugHuntRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		startedAgo  time.Duration
+		finished    bool
+		noHunt      bool
+		wantBlocked bool
+	}{
+		{name: "bug hunt running", startedAgo: 5 * time.Minute, wantBlocked: false},
+		{name: "bug hunt finished", startedAgo: 5 * time.Minute, finished: true, wantBlocked: true},
+		{name: "bug hunt abandoned hours ago", startedAgo: 3 * time.Hour, wantBlocked: true},
+		{name: "no bug hunt", noHunt: true, wantBlocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			saveGlobalsCmd(t)
+			resetRootCmd(t)
+			var buf bytes.Buffer
+			stdout = &buf
+			stderr = &bytes.Buffer{}
+
+			s, _ := newTestStoreCmd(t)
+			store = s
+			now := time.Now().UTC()
+			buildStarted := now.Add(-10 * time.Minute)
+			goal := "grow the deck"
+			state := colony.ColonyState{
+				Version:        "1.0",
+				Goal:           &goal,
+				State:          colony.StateBUILT,
+				CurrentPhase:   2,
+				BuildStartedAt: &buildStarted,
+				Plan: colony.Plan{Phases: []colony.Phase{
+					{ID: 1, Name: "Phase One", Status: colony.PhaseCompleted},
+					{ID: 2, Name: "Phase Two", Status: colony.PhaseInProgress},
+				}},
+			}
+			if err := s.SaveJSON("COLONY_STATE.json", state); err != nil {
+				t.Fatal(err)
+			}
+			if !tc.noHunt {
+				const huntID = "swarm-1791000000"
+				if err := initializeSwarmRun(huntID); err != nil {
+					t.Fatalf("start bug hunt: %v", err)
+				}
+				if err := s.SaveJSON("swarms/"+huntID+"/timing.json", swarmTimingFile{SwarmID: huntID, StartAt: now.Add(-tc.startedAgo).Format(time.RFC3339)}); err != nil {
+					t.Fatal(err)
+				}
+				if tc.finished {
+					if err := s.SaveJSON("swarms/"+huntID+"/result.json", map[string]string{"swarm_id": huntID}); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+
+			setHookStdin(t, `{"hook_event_name":"Stop","stop_hook_active":false}`)
+			rootCmd.SetArgs([]string{"hook-stop"})
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("hook-stop returned error: %v", err)
+			}
+			blocked := strings.Contains(buf.String(), `"decision":"block"`)
+			if blocked != tc.wantBlocked {
+				t.Fatalf("blocked = %v, want %v (output %q)", blocked, tc.wantBlocked, buf.String())
+			}
+		})
+	}
+}

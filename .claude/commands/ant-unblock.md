@@ -13,7 +13,7 @@ The input is: `$ARGUMENTS`
 ### Step 1: Route
 
 - `$ARGUMENTS` empty -> execute `aether unblock` and show the recovery summary as-is. This is read-only: it reports which gates are blocking and what each one needs.
-- `$ARGUMENTS` contains `--dispatch` -> execute `aether unblock $ARGUMENTS`. This spawns the Fixer to investigate and repair the failed gates.
+- `$ARGUMENTS` contains `--dispatch` -> execute `aether unblock $ARGUMENTS`. The CLI only prepares the Fixer's plan (a JSON packet with `"mode": "fixer_dispatch"`); it does not start anything. Then start one `aether-fixer` helper (use `aether-fixer` as the subagent type), give it that packet verbatim and the stated Fixer mode, and wait for its result before reporting.
 - Otherwise -> pass `$ARGUMENTS` through unchanged: the CLI owns `--phase`, `--dispatch`, and `--fixer-mode`.
 
 ### Step 1b: Steps a helper could not do
@@ -40,7 +40,7 @@ If the user asks to dispatch without naming a mode, say which mode will run befo
 
 ### Step 3: Report
 
-Relay the CLI's recovery summary. On a dispatch run, state which gates were addressed and whether they now pass. On CLI error, relay the message in one plain sentence.
+Relay the CLI's recovery summary. On a dispatch run, report only what the `aether-fixer` helper's own result says it addressed; a gate counts as passing only after `/ant-continue` checks it again. On CLI error, relay the message in one plain sentence.
 
 **Why the CLI:** gate results, blocker records, and Fixer dispatch all live in colony state. Hand-editing them desynchronises the gate ledger from what `/ant-continue` will re-check, so a "fixed" gate re-blocks on the next run.
 

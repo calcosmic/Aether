@@ -202,8 +202,11 @@ func dispatchFixer(phaseNum int, fixerMode string) error {
 	}
 
 	if shouldRenderVisualOutput(stderr) {
-		visualFprintf(stderr, "Fixer dispatched (attempt %d) -- %s mode\n", fileData.Attempts, fixerMode)
-		visualFprintf(stderr, "Investigating %d failed gate(s) in Phase %d\n", len(failedGates), phaseNum)
+		// This command only prepares the Fixer's plan; nothing has run yet. The
+		// chat starts the aether-fixer helper with the plan below (2026-10-02:
+		// the screen said "Fixer dispatched" and nothing ran).
+		visualFprintf(stderr, "Fixer plan ready (attempt %d) -- %s mode, covering %d failed check(s) in Phase %d\n", fileData.Attempts, fixerMode, len(failedGates), phaseNum)
+		visualFprintf(stderr, "Nothing has run yet: start the aether-fixer helper with this plan to carry it out.\n")
 	}
 	fmt.Fprintln(stdout, string(data))
 

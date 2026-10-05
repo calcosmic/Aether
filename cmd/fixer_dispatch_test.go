@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -565,5 +566,60 @@ func TestRecordFixerFailure(t *testing.T) {
 	}
 	if !found {
 		t.Error("recordFixerFailure: expected loop_break event to be emitted")
+	}
+}
+
+// TestFixerDispatchNeverClaimsAHelperRan: on 2026-10-02 the owner typed
+// /ant-unblock --dispatch and the screen said "Fixer dispatched", but nothing
+// ran until the chat started a Fixer by hand. dispatchFixer only prepares the
+// plan; the screen must say so, and every unblock wrapper must tell the chat
+// to start the aether-fixer helper with that plan instead of claiming the
+// command starts it.
+func TestFixerDispatchNeverClaimsAHelperRan(t *testing.T) {
+	repoRoot, err := repoRootForCommandSourceTest()
+	if err != nil {
+		t.Fatalf("failed to find repo root: %v", err)
+	}
+	t.Setenv("AETHER_OUTPUT_MODE", "visual")
+	saveGlobals(t)
+	resetRootCmd(t)
+
+	dataDir := setupBuildFlowTest(t)
+	root := filepath.Dir(filepath.Dir(dataDir))
+	withWorkingDir(t, root)
+
+	results := []GateCheckResult{
+		{Name: "gate1", Status: "failed", Detail: "tests broke", FixHint: "fix tests", Timestamp: "2026-05-01T10:00:00Z"},
+	}
+	data, _ := json.MarshalIndent(gateResultsFile{Results: results}, "", "  ")
+	if err := os.WriteFile(filepath.Join(dataDir, "gate-results-24.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write: %v", err)
+	}
+	var errBuf, outBuf bytes.Buffer
+	stderr = &errBuf
+	stdout = &outBuf
+	if err := dispatchFixer(24, "propose"); err != nil {
+		t.Fatalf("dispatchFixer: unexpected error: %v", err)
+	}
+	screen := strings.ToLower(errBuf.String() + outBuf.String())
+	if strings.Contains(screen, "fixer dispatched") {
+		t.Fatalf("screen claims a Fixer ran when only its plan was prepared:\n%s", screen)
+	}
+	if !strings.Contains(screen, "start") || !strings.Contains(screen, "fixer") {
+		t.Fatalf("screen does not say a Fixer still has to be started:\n%s", screen)
+	}
+
+	for _, rel := range []string{".claude/commands/ant/unblock.md", ".claude/commands/ant-unblock.md", ".opencode/commands/ant/unblock.md"} {
+		raw, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		text := string(raw)
+		if strings.Contains(text, "This spawns the Fixer") {
+			t.Errorf("%s still claims the command spawns the Fixer", rel)
+		}
+		if !strings.Contains(text, "aether-fixer") {
+			t.Errorf("%s never tells the chat to start the aether-fixer helper", rel)
+		}
 	}
 }
