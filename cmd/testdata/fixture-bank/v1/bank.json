@@ -50,6 +50,34 @@
       "content_digest": "05a7247fbe72f78026f116a442745d1febe625d833fa81dc3722fb82e92577f2"
     },
     {
+      "id": "fixture-05f9cb9740fa",
+      "title": "[broad-invariant] unmet-truth: cmd/hook_cmds.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while t",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/hook_cmds.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while the owner's bug hunt (/ant-swarm the flags) had helpers running, the stop check demanded 'finish with aether continue, or run aether pause' on every turn. The owner's exact case was covered by 6ffac09c the same evening (a stopped check's report), but the stop check still had no notion of a bug hunt in flight.",
+        "reference": "90"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/hook_cmds.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while the owner's bug hunt (/ant-swarm the flags) had helpers running, the stop check demanded 'finish with aether continue, or run aether pause' on every turn. The owner's exact case was covered by 6ffac09c the same evening (a stopped check's report), but the stop check still had no notion of a bug hunt in flight.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "90"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "05f9cb9740faab05abe11206f97a2dda3866db95151f5eb650039c13b310ce90",
+      "guard": {
+        "test": "TestHookStopLetsTheChatEndWhileABugHuntRuns",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-0b247f076d4e",
       "title": "[broad-invariant] unmet-truth: cmd/next_action.go. Phase 210 blockers 16 and 17 (Finish the Track deck, 2026-10-02",
       "failing_baseline": {
@@ -630,6 +658,34 @@
       }
     },
     {
+      "id": "fixture-54734cdcf839",
+      "title": "[broad-invariant] unmet-truth: cmd/fixer_dispatch.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): /a",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/fixer_dispatch.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): /ant-unblock --dispatch printed 'Fixer dispatched (attempt 0)' but no Fixer ran until the chat started one by hand. dispatchFixer only prepares a plan packet, the unblock wrapper said 'This spawns the Fixer' and never told the chat to start the aether-fixer helper, and the attempt counter was spent anyway.",
+        "reference": "87"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/fixer_dispatch.go. Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): /ant-unblock --dispatch printed 'Fixer dispatched (attempt 0)' but no Fixer ran until the chat started one by hand. dispatchFixer only prepares a plan packet, the unblock wrapper said 'This spawns the Fixer' and never told the chat to start the aether-fixer helper, and the attempt counter was spent anyway.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "87"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "54734cdcf839682fa7ee2b689b786773dc57b799b0c72ee6645107113203b139",
+      "guard": {
+        "test": "TestFixerDispatchNeverClaimsAHelperRan",
+        "package": "cmd"
+      }
+    },
+    {
       "id": "fixture-54a932a1f824",
       "title": "[broad-invariant] deviation: .planning/REQUIREMENTS.md. BIO-08 and CEC-07 are ready (every declaring plan has a SU",
       "failing_baseline": {
@@ -1094,6 +1150,34 @@
       "content_digest": "83a8113c2dd6eee64b080c2376f7b4aa167394d53adb29802fadc23969583bb7",
       "guard": {
         "test": "TestAetherCorpusCatchesAnUnregisteredFlag",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-83e78ad5b4d4",
+      "title": "[broad-invariant] unmet-truth: cmd/phase_end_signals.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02):",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/phase_end_signals.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): a check failure's text ('criterion ... templates/back.html was not claimed') became an active REDIRECT injected into every later helper prompt. The automatic rule counted log rows, not occasions (one stopped check wrote eight rows at once), treated the program's own check failures as lessons, and pasted the raw message as the rule.",
+        "reference": "89"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/phase_end_signals.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): a check failure's text ('criterion ... templates/back.html was not claimed') became an active REDIRECT injected into every later helper prompt. The automatic rule counted log rows, not occasions (one stopped check wrote eight rows at once), treated the program's own check failures as lessons, and pasted the raw message as the rule.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "89"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "83e78ad5b4d4a429ca4e76461a88bdd5b0e91ad68d4bbe973b9c76a6fa3c6171",
+      "guard": {
+        "test": "TestCheckFailuresNeverBecomeARedirect",
         "package": "cmd"
       }
     },
@@ -1710,6 +1794,34 @@
       "content_digest": "d1fc355e03e4fb78c2c00455f41db872d0c4eb9ee6173028fa78dfdb0837b47b",
       "guard": {
         "test": "TestMessyPracticeProjectBuilderNeverWritesIntoHome",
+        "package": "cmd"
+      }
+    },
+    {
+      "id": "fixture-d4a22342c478",
+      "title": "[broad-invariant] unmet-truth: cmd/lifecycle_closeout.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02)",
+      "failing_baseline": {
+        "description": "unmet-truth: cmd/lifecycle_closeout.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): after a check moved the project from phase 2 to phase 3, the closing card recommended '/ant-build 0 --force' while Next Up said '/ant-build 3'. The card looked up the build attempt of the phase the project now stood on, found none, and formatted the empty record's phase number (0) into a redo command, bypassing the shared next-step decision.",
+        "reference": "88"
+      },
+      "invariant": "The confirmed defect must not recur: unmet-truth: cmd/lifecycle_closeout.go. Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): after a check moved the project from phase 2 to phase 3, the closing card recommended '/ant-build 0 --force' while Next Up said '/ant-build 3'. The card looked up the build attempt of the phase the project now stood on, found none, and formatted the empty record's phase number (0) into a redo command, bypassing the shared next-step decision.",
+      "allowed_mutations": [
+        "wording",
+        "formatting",
+        "file_path",
+        "symbol_name"
+      ],
+      "provenance": [
+        {
+          "kind": "defect_register",
+          "identifier": "88"
+        }
+      ],
+      "privacy": "repo_local",
+      "severity": "medium",
+      "content_digest": "d4a22342c4781921f6825984a0aa59952441e975967bf4c481ed1f9bc79c18e2",
+      "guard": {
+        "test": "TestCloseoutWithNoAttemptToRedoNamesTheSharedNextStep",
         "package": "cmd"
       }
     },

@@ -121,3 +121,8 @@ and real use is what should find out whether it works. If he hits it, it counts 
   had checked it, so the project was marked verified with lines no reviewer saw. Offered (A)
   "just list it" or (B) "make the fix itself", the owner answered "A": during a seal the chat
   never changes the project's files; it lists each reviewer suggestion and he decides.
+- **2026-10-04, the program's own check failures never become rules.** In the Finish the Track
+  deck one stopped check turned "templates/back.html was not claimed" into a hard rule every
+  later helper received. Asked whether such check failures should ever become standing "never
+  do this" rules, the owner chose "Never": they stay in the failure log for him to review;
+  helper failures of one kind on three separate occasions can still produce a rule.

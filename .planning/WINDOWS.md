@@ -2,9 +2,9 @@
 schema_version: 1
 open_count: 48
 waived_count: 0
-fixed_count: 38
-total_count: 86
-last_updated: 2026-10-04T18:00:00.000Z
+fixed_count: 42
+total_count: 90
+last_updated: 2026-10-05T12:00:00.000Z
 ---
 
 # Broken Windows Ledger
@@ -103,6 +103,10 @@ Despite that real progress, this row stays open rather than being marked fixed, 
 | 84 | 210 | unmet-truth | cmd/status.go |  | Finish the Track deck seal, 2026-10-03 (not a blocker): after the project was finished and verified, status still listed 11 unacknowledged failures under NEEDS YOU and made midden-review the next step. They came from a phase 2 check that stopped and later passed. | fixed | Fixed 25c060b9: a project finished with a verified seal no longer raises old failures as waiting on the owner, in the warning or the next-step card; the entries stay untouched and midden-review still shows them. Projects still in progress or force-finished are unchanged. Guarded by TestFinishedProjectDoesNotListOldFailuresAsWaiting. | 2026-10-04T08:26:00.000Z | 2026-10-04T08:26:00.000Z |
 | 85 | 210 | unmet-truth | cmd/golden_workflow_test.go |  | TestGoldenContinueVisualOutput failed once in a full suite run on 2026-10-04 (line 42: got 'Tests passed (1s)', want 'Tests passed (under 1s)') and passed 3/3 alone; the golden check screen includes a measured duration, so a loaded machine can push the test step past one second. Nothing that day touched the check screen. Not fixed: not something the owner hit. | open |  | 2026-10-04T12:00:00.000Z |  |
 | 86 | 210 | unmet-truth | cmd/platform_sync.go | 903 | Reported 2026-10-04 (noted in another chat, not a blocker; to fix after the freeze): all 67 installed slash-command files (for example ~/.claude/commands/ant-build.md) start with the Aether-managed HTML comment line, with the YAML front matter after it. Claude Code reads a command's description only from front matter at the very top, so command menus and skill lists show the comment instead of the real description. Fixing it means moving that marker, and the marker on the first line is how update recognises a file it may overwrite (cmd/platform_sync.go) and what the source check expects (cmd/source_check.go), so both detectors and older installed files need handling together. | fixed | Fixed 2026-10-04: the Aether-managed marker now sits on the line after the front matter, so every command file starts with its description. Update and prune recognise the marker in either position (managedCommandMarkerLine), so files already installed in the old layout are still replaced and user-written files are never claimed; the source check accepts both. Proven on a copy of the real installed commands in a throwaway home: all 67 migrated, two decoy user files untouched. Also found: TestYAMLWrapperContract had silently skipped every command until now, which exposed the seal wrapper's description disagreeing with seal.yaml; aligned to the YAML. Guarded by TestManagedCommandFilesStartWithFrontMatter and TestManagedMarkerIsRecognisedInBothLayouts. | 2026-10-04T13:00:00.000Z | 2026-10-04T18:00:00.000Z |
+| 87 | 210 | unmet-truth | cmd/fixer_dispatch.go |  | Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): /ant-unblock --dispatch printed 'Fixer dispatched (attempt 0)' but no Fixer ran until the chat started one by hand. dispatchFixer only prepares a plan packet, the unblock wrapper said 'This spawns the Fixer' and never told the chat to start the aether-fixer helper, and the attempt counter was spent anyway. | fixed | Fixed 6dacec69: the screen says the Fixer plan is ready and that nothing has run yet; all three unblock wrappers and unblock.yaml tell the chat to start one aether-fixer helper with the packet verbatim and report only what its own result says. Guarded by TestFixerDispatchNeverClaimsAHelperRan. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
+| 88 | 210 | unmet-truth | cmd/lifecycle_closeout.go |  | Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): after a check moved the project from phase 2 to phase 3, the closing card recommended '/ant-build 0 --force' while Next Up said '/ant-build 3'. The card looked up the build attempt of the phase the project now stood on, found none, and formatted the empty record's phase number (0) into a redo command, bypassing the shared next-step decision. | fixed | Fixed 6dacec69: a redo verdict with no recorded attempt never names a phase-0 command, and when the phase the project stands on has no attempt the card names the same shared next step as Next Up. Guarded by TestCloseoutWithNoAttemptToRedoNamesTheSharedNextStep and TestNoCloseoutRecommendsPhaseZero. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
+| 89 | 210 | unmet-truth | cmd/phase_end_signals.go |  | Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): a check failure's text ('criterion ... templates/back.html was not claimed') became an active REDIRECT injected into every later helper prompt. The automatic rule counted log rows, not occasions (one stopped check wrote eight rows at once), treated the program's own check failures as lessons, and pasted the raw message as the rule. | fixed | Fixed 6dacec69, with the owner's ruling of 2026-10-04: the program's own check failures never become a REDIRECT (they stay in the failure log for review), and failures are counted by separate occasion so one run's many rows count once. Helper failures of one kind on three separate occasions still produce one note. Guarded by TestCheckFailuresNeverBecomeARedirect and TestOneOccasionWithManyFailuresCountsOnce. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
+| 90 | 210 | unmet-truth | cmd/hook_cmds.go |  | Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while the owner's bug hunt (/ant-swarm the flags) had helpers running, the stop check demanded 'finish with aether continue, or run aether pause' on every turn. The owner's exact case was covered by 6ffac09c the same evening (a stopped check's report), but the stop check still had no notion of a bug hunt in flight. | fixed | Fixed 6dacec69: a bug hunt counts as in flight from its start record until its result is written, for at most an hour, and the stop check stands down while one runs; finished, abandoned and absent hunts still get the check. Guarded by TestHookStopLetsTheChatEndWhileABugHuntRuns. | 2026-10-05T12:00:00.000Z | 2026-10-05T12:00:00.000Z |
 
 ````json
 [
@@ -1137,6 +1141,54 @@ Despite that real progress, this row stays open rather than being marked fixed, 
     "reason": "Fixed 2026-10-04: the Aether-managed marker now sits on the line after the front matter, so every command file starts with its description. Update and prune recognise the marker in either position (managedCommandMarkerLine), so files already installed in the old layout are still replaced and user-written files are never claimed; the source check accepts both. Proven on a copy of the real installed commands in a throwaway home: all 67 migrated, two decoy user files untouched. Also found: TestYAMLWrapperContract had silently skipped every command until now, which exposed the seal wrapper's description disagreeing with seal.yaml; aligned to the YAML. Guarded by TestManagedCommandFilesStartWithFrontMatter and TestManagedMarkerIsRecognisedInBothLayouts.",
     "recorded_at": "2026-10-04T13:00:00.000Z",
     "resolved_at": "2026-10-04T18:00:00.000Z"
+  },
+  {
+    "id": 87,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/fixer_dispatch.go",
+    "line": null,
+    "description": "Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): /ant-unblock --dispatch printed 'Fixer dispatched (attempt 0)' but no Fixer ran until the chat started one by hand. dispatchFixer only prepares a plan packet, the unblock wrapper said 'This spawns the Fixer' and never told the chat to start the aether-fixer helper, and the attempt counter was spent anyway.",
+    "status": "fixed",
+    "reason": "Fixed 6dacec69: the screen says the Fixer plan is ready and that nothing has run yet; all three unblock wrappers and unblock.yaml tell the chat to start one aether-fixer helper with the packet verbatim and report only what its own result says. Guarded by TestFixerDispatchNeverClaimsAHelperRan.",
+    "recorded_at": "2026-10-05T12:00:00.000Z",
+    "resolved_at": "2026-10-05T12:00:00.000Z"
+  },
+  {
+    "id": 88,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/lifecycle_closeout.go",
+    "line": null,
+    "description": "Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): after a check moved the project from phase 2 to phase 3, the closing card recommended '/ant-build 0 --force' while Next Up said '/ant-build 3'. The card looked up the build attempt of the phase the project now stood on, found none, and formatted the empty record's phase number (0) into a redo command, bypassing the shared next-step decision.",
+    "status": "fixed",
+    "reason": "Fixed 6dacec69: a redo verdict with no recorded attempt never names a phase-0 command, and when the phase the project stands on has no attempt the card names the same shared next step as Next Up. Guarded by TestCloseoutWithNoAttemptToRedoNamesTheSharedNextStep and TestNoCloseoutRecommendsPhaseZero.",
+    "recorded_at": "2026-10-05T12:00:00.000Z",
+    "resolved_at": "2026-10-05T12:00:00.000Z"
+  },
+  {
+    "id": 89,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/phase_end_signals.go",
+    "line": null,
+    "description": "Phase 210 blocker 18 (Finish the Track deck, 2026-10-02): a check failure's text ('criterion ... templates/back.html was not claimed') became an active REDIRECT injected into every later helper prompt. The automatic rule counted log rows, not occasions (one stopped check wrote eight rows at once), treated the program's own check failures as lessons, and pasted the raw message as the rule.",
+    "status": "fixed",
+    "reason": "Fixed 6dacec69, with the owner's ruling of 2026-10-04: the program's own check failures never become a REDIRECT (they stay in the failure log for review), and failures are counted by separate occasion so one run's many rows count once. Helper failures of one kind on three separate occasions still produce one note. Guarded by TestCheckFailuresNeverBecomeARedirect and TestOneOccasionWithManyFailuresCountsOnce.",
+    "recorded_at": "2026-10-05T12:00:00.000Z",
+    "resolved_at": "2026-10-05T12:00:00.000Z"
+  },
+  {
+    "id": 90,
+    "kind": "unmet-truth",
+    "phase": "210",
+    "file": "cmd/hook_cmds.go",
+    "line": null,
+    "description": "Phase 210 blocker 16 (Finish the Track deck, 2026-10-02): while the owner's bug hunt (/ant-swarm the flags) had helpers running, the stop check demanded 'finish with aether continue, or run aether pause' on every turn. The owner's exact case was covered by 6ffac09c the same evening (a stopped check's report), but the stop check still had no notion of a bug hunt in flight.",
+    "status": "fixed",
+    "reason": "Fixed 6dacec69: a bug hunt counts as in flight from its start record until its result is written, for at most an hour, and the stop check stands down while one runs; finished, abandoned and absent hunts still get the check. Guarded by TestHookStopLetsTheChatEndWhileABugHuntRuns.",
+    "recorded_at": "2026-10-05T12:00:00.000Z",
+    "resolved_at": "2026-10-05T12:00:00.000Z"
   }
 ]
 ````
